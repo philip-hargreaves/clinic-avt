@@ -115,6 +115,7 @@ bool WhisperTranscriber::SwitchDevice(std::string device,
         loader_ = [loader = by_device_, device = std::move(device)] { return loader(device); };
         switched_ = std::move(done);
         switching_ = true;
+        moving_ = true;
     }
     cv_.notify_all();
     return true;
@@ -201,6 +202,7 @@ void WhisperTranscriber::WorkerLoop() {
             switching_ = false;
             lock.unlock();
             const std::string error = LoadIfPending();
+            moving_ = false;
             if (done) done(error);
             lock.lock();
             if (clips_.empty()) continue;

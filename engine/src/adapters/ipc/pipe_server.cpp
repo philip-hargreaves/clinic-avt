@@ -101,7 +101,11 @@ PipeServer::Accept PipeServer::AwaitClient(std::chrono::milliseconds idle,
                 continue;
             }
             if (forever) continue;
-            if (busy && busy()) quiet_since = std::chrono::steady_clock::now();
+            // Busy never counts as idle, even when the idle limit is zero
+            if (busy && busy()) {
+                quiet_since = std::chrono::steady_clock::now();
+                continue;
+            }
             if (std::chrono::steady_clock::now() - quiet_since >= idle) {
                 CancelIoEx(pipe, &connect.ov);
                 DWORD ignored = 0;

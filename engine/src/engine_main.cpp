@@ -382,20 +382,24 @@ int main(int argc, char* argv[]) {
         clinicavt::ipc::RegisterGuidanceMethods(server, session_store, guidance_retriever,
                                                 guidance_lane, ingest);
         // A shell that closes ends its capture, and a reopened one picks this
-        // engine up again. A note model still loading keeps it here, since a
-        // load cannot be cancelled. Idle and alone, it leaves, at once when
-        // the shell asked it to
+        // engine up again. A note model still loading or speech recognition
+        // moving device keeps it here, since neither load can be cancelled.
+        // Idle and alone, it leaves, at once when the shell asked it to
         bool exit_asked = false;
         std::atomic<bool> asked_now{false};
         server.RegisterMethod("engine/exit", [&asked_now](const nlohmann::json&) {
             asked_now = true;
             return nlohmann::json::object();
         });
-        const auto loading = [&note_writer] {
-            return note_writer != nullptr &&
-                   note_writer->State().phase == clinicavt::note::NoteModelState::Phase::kLoading;
-        };
-        while (server.AwaitClient(exit_asked ? std::chrono::seconds(0) : kIdleExit, loading) ==
+        const auto busy =
+            [&note_writer,
+             whisper = dynamic_cast<clinicavt::asr::WhisperTranscriber*>(transcriber.get())] {
+                return (note_writer != nullptr &&
+                        note_writer->State().phase ==
+                            clinicavt::note::NoteModelState::Phase::kLoading) ||
+                       (whisper != nullptr && whisper->Moving());
+            };
+        while (server.AwaitClient(exit_asked ? std::chrono::seconds(0) : kIdleExit, busy) ==
                clinicavt::ipc::PipeServer::Accept::kClient) {
             asked_now = false;
             // Only a client that speaks decides. A stale dial that touches the
