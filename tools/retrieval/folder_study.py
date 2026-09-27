@@ -148,7 +148,7 @@ def load_queries() -> list[dict]:
         queries.append({"qid": row["qid"], "set": "folder-notes", "text": row["text"], "expected": expected})
     for path in sorted((REPO / "demo" / "reflections").glob("*.json")):
         queries.append({"qid": "gp-" + path.stem[:2], "set": "gp-notes", "text": read_json(path)["note"]})
-    # The hard case: musculoskeletal problems next door to the folder that none of it covers
+    # Musculoskeletal problems close to the folder's topics that it does not cover
     for row in read_jsonl(GOLD / "folder-notes" / "near-misses.jsonl"):
         queries.append({"qid": row["qid"], "set": "near-misses", "text": row["text"]})
     for row in read_jsonl(GOLD / "negatives" / "negatives.jsonl"):

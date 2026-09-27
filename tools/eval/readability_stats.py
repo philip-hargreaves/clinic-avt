@@ -3,7 +3,6 @@
 # turn-level identity between the two arms. Paired per consult; prints a markdown table
 # and writes JSON beside the transcripts.
 #   python tools/eval/readability_stats.py evalS16 evalC16
-import glob
 import json
 import os
 import statistics
@@ -11,17 +10,10 @@ import sys
 from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "perf-loop"))
-import score_gate  # noqa: E402  (normalise, reference, REFS, HERE)
+import score_gate  # noqa: E402
 
 TAGS = sys.argv[1:3] if len(sys.argv) >= 3 else ["evalS16", "evalC16"]
 OUT = os.path.join(score_gate.HERE, f"readability-{TAGS[0]}-vs-{TAGS[1]}.json")
-
-
-def load(tag, consult):
-    path = os.path.join(score_gate.HERE, "transcripts", f"{tag}-{consult}_mixed.json")
-    if not os.path.exists(path):
-        return None
-    return json.load(open(path, encoding="utf-8"))["turns"]
 
 
 def broken_bigrams(ref_words, hyp_words):
@@ -80,11 +72,9 @@ def identity(a, b):
 
 
 def main():
-    consults = sorted(os.path.basename(p)[:-len("_doctor.TextGrid")]
-                      for p in glob.glob(os.path.join(score_gate.REFS, "*_doctor.TextGrid")))
     rows = []
-    for consult in consults:
-        arms = {tag: load(tag, consult) for tag in TAGS}
+    for consult in score_gate.consults():
+        arms = {tag: score_gate.load_turns(tag, consult) for tag in TAGS}
         if any(v is None for v in arms.values()):
             continue
         ref_ivs, ref_words = score_gate.reference(consult)

@@ -12,24 +12,21 @@ identical ids, so only the changed ones run. Decoding mirrors NllbTranslator.
 import json
 import sys
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 
 import judge
+from common import APP_MODELS, LANGUAGES, ROOT, read_jsonl
 from tokenizer_parity import PLAIN, english
-from translate import LANGUAGES
 
-ROOT = Path(r"D:\clinicavt-mt")
-MODEL = Path(r"C:\dev\ambient\models\nllb-200-600m-int8")
+MODEL = APP_MODELS / "nllb-200-600m-int8"
 BEFORE = ROOT / "probe" / "tokenizers" / "bpe-shipped"
 OUT = ROOT / "results" / "plain-punctuation.jsonl"
-WEIGHT = {"critical": 25, "major": 5, "minor": 1}
 
 
 def translate():
     import openvino as ov
-    import openvino_tokenizers  # noqa: F401
+    import openvino_tokenizers  # noqa: F401  registers the tokenizer ops
 
     changed = sorted({t for t in english() if t.translate(PLAIN) != t})
     spec = json.load(open(MODEL / "languages.json", encoding="utf-8"))
@@ -90,14 +87,14 @@ def translate():
                        "before": decode(ids_before(text), target), "after": decode(ids_after(text), target)}
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
             print(language, "done", flush=True)
-    rows = [json.loads(line) for line in open(OUT, encoding="utf-8")]
+    rows = read_jsonl(OUT)
     print(len(changed), "sentences,", len(rows), "translations,",
           sum(r["before"] != r["after"] for r in rows), "differ")
 
 
 def tasks():
     by_language = defaultdict(list)
-    for row in map(json.loads, open(OUT, encoding="utf-8")):
+    for row in read_jsonl(OUT):
         if row["before"] != row["after"]:
             by_language[row["language"]].append(row)
     for language, rows in by_language.items():
@@ -115,7 +112,7 @@ def score():
             penalty = {}
             for letter, system in item["letters"].items():
                 errors = verdict["items"].get(number, {}).get(letter, {}).get("errors", [])
-                penalty[system] = sum(WEIGHT.get(e.get("severity"), 0) for e in errors) * 100 / item["words"]
+                penalty[system] = judge.penalty(errors, item["words"])
                 totals[system]["penalty"] += penalty[system]
                 totals[system]["critical"] += sum(e.get("severity") == "critical" for e in errors)
                 totals[system]["items"] += 1

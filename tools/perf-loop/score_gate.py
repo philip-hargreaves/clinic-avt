@@ -48,6 +48,20 @@ def parse_textgrid(path, speaker):
     return intervals
 
 
+def consults():
+    return sorted(os.path.basename(p)[:-len("_doctor.TextGrid")]
+                  for p in glob.glob(os.path.join(REFS, "*_doctor.TextGrid")))
+
+
+def load_turns(tag, consult):
+    # A sweep's saved turns for one consult; None when it has none
+    path = os.path.join(HERE, "transcripts", f"{tag}-{consult}_mixed.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)["turns"]
+
+
 def reference(consult):
     ivs = parse_textgrid(os.path.join(REFS, f"{consult}_doctor.TextGrid"), "doctor")
     ivs += parse_textgrid(os.path.join(REFS, f"{consult}_patient.TextGrid"), "patient")
@@ -125,11 +139,9 @@ def context(words, k, span=6):
 
 
 def score(tag, consult, ref_ivs, ref_words):
-    path = os.path.join(HERE, "transcripts", f"{tag}-{consult}_mixed.json")
-    if not os.path.exists(path):
+    turns = load_turns(tag, consult)
+    if turns is None:
         return None
-    data = json.load(open(path, encoding="utf-8"))
-    turns = data["turns"]
     hyp_words, hyp_speaker = [], []
     for t in turns:
         ws = normalise(t["text"])
@@ -173,11 +185,9 @@ def score(tag, consult, ref_ivs, ref_words):
 
 
 def main():
-    consults = sorted(os.path.basename(p)[:-len("_doctor.TextGrid")]
-                      for p in glob.glob(os.path.join(REFS, "*_doctor.TextGrid")))
     rows = []
     neg_out = []
-    for consult in consults:
+    for consult in consults():
         ref_ivs, ref_words = reference(consult)
         results = {tag: score(tag, consult, ref_ivs, ref_words) for tag in TAGS}
         if any(r is None for r in results.values()):

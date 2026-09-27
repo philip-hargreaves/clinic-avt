@@ -1,4 +1,5 @@
-# Every suite with nothing filtered out: engine, shell, client and contract. Run before a PR.
+# Every suite with nothing filtered out: engine, shell, client and contract, and the model
+# fetch tool. Run before a PR.
 #
 #   .\tools\run-gates.ps1 [-Build] [-WithMicrophone] [-List]
 #
@@ -18,9 +19,13 @@ $ctest = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\c
 if (-not (Test-Path $ctest)) { $ctest = (Get-Command ctest -ErrorAction SilentlyContinue).Source }
 if (-not $ctest) { throw 'ctest not found; install the CMake component or put ctest on PATH' }
 
-# A stray note host holds the GPU and fails everything after it
-foreach ($image in 'ClinicAVT.App', 'clinicavt_engine', 'clinicavt_note_host') {
-    Get-Process $image -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# The suites load real models, so they need the GPU to themselves. Nothing is killed: a
+# process stopped mid-GPU can wedge the driver, and a note host still here with its engine
+# gone already has, which only a restart clears
+$running = @(Get-Process 'ClinicAVT.App', 'clinicavt_engine', 'clinicavt_note_host' -ErrorAction SilentlyContinue)
+if ($running) {
+    $names = ($running | ForEach-Object { "$($_.ProcessName) $($_.Id)" }) -join ', '
+    throw "close the app and let its engine exit before the gates ($names still running)"
 }
 
 $results = [ordered]@{}
@@ -75,8 +80,14 @@ Invoke-Gate 'contract' {
     else { dotnet test "$root\app\ClinicAVT.Client.Tests" }
 }
 
-foreach ($image in 'clinicavt_engine', 'clinicavt_note_host') {
-    Get-Process $image -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Invoke-Gate 'fetch' {
+    if ($List) { dotnet test "$root\tools\ClinicAVT.FetchModels.Tests" -t }
+    else { dotnet test "$root\tools\ClinicAVT.FetchModels.Tests" }
+}
+
+$left = @(Get-Process 'clinicavt_engine', 'clinicavt_note_host' -ErrorAction SilentlyContinue)
+if ($left) {
+    Write-Warning "still running after the suites: $(($left | ForEach-Object { "$($_.ProcessName) $($_.Id)" }) -join ', ')"
 }
 
 Write-Host ''

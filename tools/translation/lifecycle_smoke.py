@@ -18,7 +18,6 @@ WORK = Path(sys.argv[1])
 WAV = sys.argv[2] if len(sys.argv) > 2 else None
 os.environ["PERF_DIR"] = str(WORK)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "perf-loop"))
-sys.argv = sys.argv[:1]  # the perf loop reads its own arguments on import
 import perf_loop as pl  # noqa: E402
 
 
@@ -56,9 +55,7 @@ def main():
     try:
         engine.new_log_lines()
         engine.request("demo/seed", None, 60)
-        sessions, _ = engine.request("session/list", None, 15)
-        rows = sessions.get("sessions", sessions) if isinstance(sessions, dict) else sessions
-        session = next(r["id"] for r in rows)
+        session = engine.request("session/list", None, 15)["sessions"][0]["id"]
         report["mem_before"] = settled(engine)
 
         t0 = time.perf_counter()

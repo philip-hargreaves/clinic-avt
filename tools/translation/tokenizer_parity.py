@@ -13,17 +13,18 @@ from pathlib import Path
 
 import numpy as np
 import openvino as ov
-import openvino_tokenizers  # noqa: F401
+import openvino_tokenizers  # noqa: F401  registers the tokenizer ops
+
+from common import ROOT
 
 SHEETS = Path(r"D:\dev\intelliscribe\bench\summarisation\notes\tier-accuracy-sheet")
-FLORES = Path(r"D:\clinicavt-mt\data\flores200_dataset\devtest\eng_Latn.devtest")
+FLORES = ROOT / "data" / "flores200_dataset" / "devtest" / "eng_Latn.devtest"
 PLAIN = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "-",
                        "\u2014": "-", "\u00a0": " ", "\u2026": "..."})
 UNK = 3
 
 
 def english() -> list[str]:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from translate import sentences
     texts = [s for p in sorted(SHEETS.glob("*.md")) for line in p.read_text(encoding="utf-8").split("\n")
              for s in sentences(line)]

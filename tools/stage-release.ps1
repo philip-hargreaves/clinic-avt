@@ -6,7 +6,7 @@
 # Model .cache dirs stay out: they are compiled blobs specific to this
 # machine's GPU and driver, and every machine rebuilds its own on first use.
 #
-#   stage-release.ps1 [-Out C:\dev\ambient\build\clinicavt]
+#   stage-release.ps1 [-Out <folder>]      default build\clinicavt
 param(
     [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\clinicavt")
 )

@@ -4,7 +4,6 @@
 #   python tools/eval/absorbed_answers.py evalS16 evalC16 [max_words=12]
 # ABSORBED_SUBSTANTIVE=1: only answers a professional transcriber would keep (a content
 # word, or a bare yes/no replying to the other speaker's question).
-import glob
 import json
 import os
 import sys
@@ -44,10 +43,9 @@ def substantive(words, prev_other_text):
 
 
 def load(tag, consult):
-    path = os.path.join(score_gate.HERE, "transcripts", f"{tag}-{consult}_mixed.json")
-    if not os.path.exists(path):
+    turns = score_gate.load_turns(tag, consult)
+    if turns is None:
         return None
-    turns = json.load(open(path, encoding="utf-8"))["turns"]
     return [(t["firstFrame"] / 16000.0, (t["firstFrame"] + t["frameCount"]) / 16000.0, t["speaker"],
              " ".join(score_gate.normalise(t["text"]))) for t in turns if t["text"].strip()]
 
@@ -89,11 +87,9 @@ def classify(ref_ivs, hyp):
 
 
 def main():
-    consults = sorted(os.path.basename(p)[:-len("_doctor.TextGrid")]
-                      for p in glob.glob(os.path.join(score_gate.REFS, "*_doctor.TextGrid")))
     tot = {t: Counter() for t in TAGS}
     per = []
-    for consult in consults:
+    for consult in score_gate.consults():
         arms = {t: load(t, consult) for t in TAGS}
         if any(v is None for v in arms.values()):
             continue

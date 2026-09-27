@@ -10,27 +10,23 @@ results/<set>/scores.json.
 """
 
 import json
-import os
 import re
 import sys
 import unicodedata
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
-REFERENCE = "nllb-600m-int8"
-LOW_RESOURCE = ("Urdu", "Punjabi", "Bengali", "Gujarati", "Somali")
+from common import LOW_RESOURCE, REFERENCE, ROOT, bootstrap_interval, read_jsonl
+
 SCRIPT = {"Urdu": "ARABIC", "Arabic": "ARABIC", "Punjabi": "GURMUKHI", "Bengali": "BENGALI",
           "Gujarati": "GUJARATI", "Polish": "LATIN", "Romanian": "LATIN", "Somali": "LATIN"}
-BOOTSTRAP = 2000
 
 
 def load(set_name: str) -> dict:
     rows = defaultdict(dict)
     for path in sorted((ROOT / "results" / set_name).glob("*.jsonl")):
-        for row in map(json.loads, open(path, encoding="utf-8")):
+        for row in read_jsonl(path):
             rows[path.stem][(row["id"], row["language"])] = row
     return rows
 
@@ -58,8 +54,7 @@ def refs(set_name: str):
                 mine = np.array([chrf.sentence_score(h, [r]).score for h, r in zip(hyp, ref)])
                 theirs = np.array([chrf.sentence_score(base[k]["translation"], [base[k]["reference"]]).score
                                    for k in keys])
-                draws = rng.integers(0, len(keys), size=(BOOTSTRAP, len(keys)))
-                low, high = np.percentile((mine - theirs)[draws].mean(axis=1), [2.5, 97.5])
+                low, high = bootstrap_interval(rng, mine - theirs)
                 entry["delta"] = [round(float(low), 2), round(float(high), 2)]
                 interval = f"{low:+.1f} to {high:+.1f}"
             table[f"{system}|{language}"] = entry

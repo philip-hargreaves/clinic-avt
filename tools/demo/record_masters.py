@@ -8,20 +8,17 @@ Runs the engine the app ships (its bin folder: models, corpora and store all res
 app), so close the app first; one model-loading job at a time.
 """
 
-import collections
-import ctypes
-import ctypes.wintypes
 import glob
 import json
-import msvcrt
 import os
-import struct
-import subprocess
 import sys
 import time
 import wave
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT, "tools", "common"))
+from engine_pipe import Engine  # noqa: E402
+
 APP_BIN = glob.glob(os.path.join(ROOT, "app", "ClinicAVT.App", "bin", "x64", "Debug", "net*", "win-x64"))
 ENGINE = os.path.join(APP_BIN[0], "clinicavt_engine.exe") if APP_BIN else ""
 TRACKS = os.path.join(ROOT, "demo", "tracks.json")
@@ -37,90 +34,11 @@ def log(line):
         f.write(f"{stamp} {line}\n")
 
 
-class Engine:
-    # One synchronous pipe handle: PeekNamedPipe says what is waiting and only that is read
-    def __init__(self):
-        self.pipe_name = f"LOCAL\\clinicavt-masters-{os.getpid()}"
-        self.notifications = collections.deque()
-        self.replies = {}
-        self.buf = b""
-        self.next_id = 0
-        self.stderr = open(os.path.join(ROOT, "build", "demo-masters-engine.log"), "wb")
-        self.proc = subprocess.Popen([ENGINE, self.pipe_name], stderr=self.stderr,
-                                     stdout=subprocess.DEVNULL, cwd=os.path.dirname(ENGINE))
-        for _ in range(600):
-            if self.proc.poll() is not None:
-                raise RuntimeError(f"engine exited {self.proc.returncode}")
-            try:
-                self.f = open("\\\\.\\pipe\\" + self.pipe_name, "r+b", buffering=0)
-                break
-            except OSError:
-                time.sleep(0.05)
-        else:
-            raise RuntimeError("pipe never appeared")
-        self.handle = msvcrt.get_osfhandle(self.f.fileno())
-
-    def _pump(self):
-        avail = ctypes.wintypes.DWORD(0)
-        if not ctypes.windll.kernel32.PeekNamedPipe(
-                ctypes.c_void_p(self.handle), None, 0, None, ctypes.byref(avail), None):
-            raise RuntimeError("pipe broke")
-        if avail.value == 0:
-            if self.proc.poll() is not None:
-                raise RuntimeError(f"engine exited {self.proc.returncode}")
-            return False
-        self.buf += self.f.read(min(avail.value, 1 << 20))
-        while len(self.buf) >= 4:
-            (length,) = struct.unpack("<I", self.buf[:4])
-            if len(self.buf) < 4 + length:
-                break
-            msg = json.loads(self.buf[4:4 + length])
-            self.buf = self.buf[4 + length:]
-            if msg.get("id") is not None and "method" not in msg:
-                self.replies[msg["id"]] = msg
-            else:
-                self.notifications.append(msg)
-        return True
-
-    def request(self, method, params=None, timeout=30.0):
-        self.next_id += 1
-        msg = {"jsonrpc": "2.0", "id": self.next_id, "method": method}
-        if params is not None:
-            msg["params"] = params
-        payload = json.dumps(msg).encode()
-        self.f.write(struct.pack("<I", len(payload)) + payload)
-        deadline = time.monotonic() + timeout
-        while self.next_id not in self.replies:
-            if not self._pump():
-                if time.monotonic() >= deadline:
-                    raise TimeoutError(f"{method} did not answer in {timeout} s")
-                time.sleep(0.005)
-        reply = self.replies.pop(self.next_id)
-        if "error" in reply:
-            raise RuntimeError(f"{method}: {reply['error']}")
-        return reply.get("result")
-
-    def wait_for(self, methods, timeout):
-        # Drains notifications until one of `methods` arrives; None on timeout
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            while self.notifications:
-                msg = self.notifications.popleft()
-                if msg.get("method") in methods:
-                    return msg
-            if not self._pump():
-                time.sleep(0.02)
-        return None
-
-    def close(self):
-        try:
-            self.f.close()
-        finally:
-            try:
-                self.proc.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-            self.stderr.close()
+def launch():
+    # The shipped layout: the engine finds its models, corpora and store beside itself
+    pipe = f"LOCAL\\clinicavt-masters-{os.getpid()}"
+    return Engine([ENGINE, pipe], pipe, os.path.join(ROOT, "build", "demo-masters-engine.log"),
+                  cwd=os.path.dirname(ENGINE))
 
 
 def wav_seconds(path):
@@ -183,14 +101,9 @@ def main():
     wanted = set(sys.argv[1:])
     if wanted:
         tracks = [t for t in tracks if t["name"] in wanted]
-    engine = Engine()
+    engine = launch()
     try:
-        for _ in range(600):
-            try:
-                engine.request("engine/echo", {"payload": "up"}, 2)
-                break
-            except (TimeoutError, RuntimeError):
-                time.sleep(0.1)
+        engine.wait_up()
         # The masters are written the way the app is set up to write
         prefs = {}
         if os.path.exists(PREFERENCES):

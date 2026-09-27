@@ -1,6 +1,6 @@
-# Stages the bundled demo recordings into demo/ beside the app: five PriMock
-# mixed consultations plus the manifest the demo tray reads. Wavs never enter
-# git; packaging copies demo/ into the release next to models/.
+# Rebuilds demo/ from the research repo: five PriMock mixed consultations plus
+# the manifest the demo tray reads. Only needed to repack the demo-tracks
+# weights pack; a checkout gets demo/ from fetch-models. Wavs never enter git.
 #
 #   stage-demo-tracks.ps1
 #   stage-demo-tracks.ps1 -Source D:\wavs -Root C:\out\demo

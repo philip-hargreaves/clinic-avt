@@ -7,10 +7,9 @@
 import argparse
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
-from common import NICE_JSON, NICE_MANIFEST, RESULTS, log, read_json, write_jsonl
+from common import NICE_JSON, NICE_MANIFEST, RESULTS, log, pdftotext, read_json, write_jsonl
 
 REC_PATTERN = re.compile(r"^(Recommendation\s+\d+[a-z]?|\d+\.\d+(\.\d+)*)\b", re.I)
 TARGET_WORDS = 300
@@ -58,36 +57,34 @@ def nice_chunks():
     log(f"fetch dates seen: {sorted(fetch_dates)}; stub or superseded files skipped: {skipped}; duplicate renderings skipped: {duplicates}")
 
 
-def pdf_text(pdf: Path, pdftotext: str) -> str:
-    return subprocess.run([pdftotext, str(pdf), "-"], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace").stdout
+def pdf_chunk(pdf: Path, n: int, buffer: list[str]) -> dict:
+    text = " ".join(buffer)
+    return {"id": f"{pdf.stem}-{n}", "code": pdf.stem, "title": pdf.stem, "number": "",
+            "section": "", "text": text, "text_prefixed": f"{pdf.stem}. " + text,
+            "url": pdf.name, "source": "pdf"}
 
 
-def pdf_chunks(pdf_dir: Path, pdftotext: str):
+def pdf_chunks(pdf_dir: Path, exe: str):
     for pdf in sorted(pdf_dir.glob("*.pdf")):
-        text = pdf_text(pdf, pdftotext)
+        text = pdftotext(pdf, exe)
         paragraphs = [re.sub(r"\s+", " ", p).strip() for p in re.split(r"\n\s*\n", text)]
         paragraphs = [p for p in paragraphs if len(p.split()) >= 5]
         if not paragraphs:
             log(f"{pdf.name}: no text layer")
             continue
-        buffer, n, page_guess = [], 0, 1
+        buffer, n = [], 0
         for para in paragraphs:
             starts_rec = bool(REC_PATTERN.match(para))
             words = len(para.split())
             if buffer and (starts_rec or sum(len(b.split()) for b in buffer) + words > MAX_WORDS
                            or sum(len(b.split()) for b in buffer) >= TARGET_WORDS):
                 n += 1
-                yield {"id": f"{pdf.stem}-{n}", "code": pdf.stem, "title": pdf.stem, "number": "",
-                       "section": "", "text": " ".join(buffer), "text_prefixed": f"{pdf.stem}. " + " ".join(buffer),
-                       "url": pdf.name, "source": "pdf"}
+                yield pdf_chunk(pdf, n, buffer)
                 buffer = []
             buffer.append(para)
         if buffer:
             n += 1
-            yield {"id": f"{pdf.stem}-{n}", "code": pdf.stem, "title": pdf.stem, "number": "",
-                   "section": "", "text": " ".join(buffer), "text_prefixed": f"{pdf.stem}. " + " ".join(buffer),
-                   "url": pdf.name, "source": "pdf"}
+            yield pdf_chunk(pdf, n, buffer)
         log(f"{pdf.name}: {n} chunks")
 
 

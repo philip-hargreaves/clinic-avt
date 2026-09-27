@@ -2,6 +2,8 @@
 
 import json
 import os
+import statistics
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -103,3 +105,18 @@ def latest_chunks() -> Path:
     if not files:
         raise SystemExit("no chunk file; run chunk.py first")
     return files[-1]
+
+
+def median_time(fn, repeats: int) -> float:
+    times = []
+    for _ in range(repeats):
+        t0 = time.perf_counter()
+        fn()
+        times.append(time.perf_counter() - t0)
+    return statistics.median(times)
+
+
+def pdftotext(pdf: Path, exe: str) -> str:
+    # Reading order. -layout interleaves columns
+    return subprocess.run([exe, str(pdf), "-"], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace").stdout

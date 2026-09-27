@@ -98,17 +98,12 @@ def main():
     mode = sys.argv[sys.argv.index("--mode") + 1] if "--mode" in sys.argv else "note"
     rm.LOG = os.path.join(ROOT, "build", f"folder-eval-{tag}.log")
     cases = [json.loads(line) for line in open(GOLD, encoding="utf-8")]
-    engine = rm.Engine()
+    engine = rm.launch()
     rows = []
     copy = None
     try:
         # A minute for the engine to answer at all, then four for the embedder to load
-        for _ in range(600):
-            try:
-                engine.request("engine/echo", {"payload": "up"}, 2)
-                break
-            except (TimeoutError, RuntimeError):
-                time.sleep(0.1)
+        engine.wait_up()
         for _ in range(240):
             msg = engine.wait_for({"guidance/model"}, 1)
             if msg and msg["params"].get("phase") == "ready":

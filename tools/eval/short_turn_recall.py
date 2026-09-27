@@ -2,7 +2,6 @@
 # of the right speaker overlaps in time. Turn-weighted and order-aware, so it sees the
 # absorbed-answer error class that word attribution (word-weighted) cannot. Paired per consult.
 #   python tools/eval/short_turn_recall.py evalS16 evalC16 [max_words=5]
-import glob
 import json
 import os
 import statistics
@@ -17,10 +16,9 @@ MIN_OVERLAP = 0.5  # of the reference turn's duration, covered by same-speaker h
 
 
 def load(tag, consult):
-    path = os.path.join(score_gate.HERE, "transcripts", f"{tag}-{consult}_mixed.json")
-    if not os.path.exists(path):
+    turns = score_gate.load_turns(tag, consult)
+    if turns is None:
         return None
-    turns = json.load(open(path, encoding="utf-8"))["turns"]
     return [(t["firstFrame"] / 16000.0, (t["firstFrame"] + t["frameCount"]) / 16000.0, t["speaker"])
             for t in turns if t["text"].strip()]
 
@@ -43,10 +41,8 @@ def recall(ref_ivs, hyp):
 
 
 def main():
-    consults = sorted(os.path.basename(p)[:-len("_doctor.TextGrid")]
-                      for p in glob.glob(os.path.join(score_gate.REFS, "*_doctor.TextGrid")))
     rows = []
-    for consult in consults:
+    for consult in score_gate.consults():
         arms = {t: load(t, consult) for t in TAGS}
         if any(v is None for v in arms.values()):
             continue

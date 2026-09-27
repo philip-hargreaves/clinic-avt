@@ -16,6 +16,6 @@ Rules
 
 - the engine reads a corpus only through `corpora/<id>/manifest.json`; nothing under `sources/` is indexed at runtime
 - corpus ids carry the fetch date
-- built corpora are not committed; an open corpus ships as a release asset through `weights/`
+- built corpora are not committed, and none ships through `weights/` yet
 - committed here: this file, and folders named in `.gitignore`; third-party material carries `LICENCE` and `ATTRIBUTION`
 - staged models live in `models/`, the harness in `tools/retrieval`, PR bodies in `internal/`

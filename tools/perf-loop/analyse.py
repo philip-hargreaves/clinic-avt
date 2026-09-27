@@ -64,8 +64,8 @@ def main():
 
     # Per track
     w("## Per track (median / p95 / max, seconds)\n")
-    w("| track | audio | n | finalise | note first token | note done | sheet done | stop to all done | live lag med | live lag p95 | turns |")
-    w("|---|---|---|---|---|---|---|---|---|---|---|")
+    w("| track | audio | n | finalise | note first token | note done | sheet done | stop to all done |")
+    w("|---|---|---|---|---|---|---|---|")
     by_track = collections.defaultdict(list)
     for r in ok:
         by_track[r["track"]].append(r)
@@ -75,10 +75,7 @@ def main():
           f"| {stats([r.get('note_first_token_s') for r in rs])} "
           f"| {stats([r.get('note_done_s') for r in rs])} "
           f"| {stats([r.get('patient_done_s') for r in rs])} "
-          f"| {stats([r.get('stop_to_all_done_s') for r in rs])} "
-          f"| {stats([r.get('lag_median_s') for r in rs])} "
-          f"| {stats([r.get('lag_p95_s') for r in rs])} "
-          f"| {stats([r.get('turns_live') for r in rs])} |")
+          f"| {stats([r.get('stop_to_all_done_s') for r in rs])} |")
     w("")
 
     # Finalise stages

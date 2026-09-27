@@ -10,12 +10,11 @@ import csv
 import difflib
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 import pypdfium2 as pdfium
 
-from common import CLIENT_PDFS, log, run_dir
+from common import CLIENT_PDFS, log, pdftotext, run_dir
 
 REC = re.compile(r"(^|\n)\s*(Recommendation\s+\d+[a-z]?\b|\d+\.\d+(\.\d+)?\s+[A-Z])")
 
@@ -35,12 +34,6 @@ def pdfium_text(path: Path) -> tuple[str, int, int]:
     return "\n".join(parts), chars, images
 
 
-def pdftotext_text(path: Path, exe: str) -> str:
-    # Reading order. -layout interleaves columns
-    return subprocess.run([exe, str(path), "-"], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace").stdout
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default=str(CLIENT_PDFS))
@@ -53,7 +46,7 @@ def main():
     rows = []
     for pdf in sorted(Path(args.dir).glob("*.pdf")):
         a, chars, images = pdfium_text(pdf)
-        b = pdftotext_text(pdf, args.pdftotext)
+        b = pdftotext(pdf, args.pdftotext)
         wa, wb = words(a), words(b)
         jaccard = len(set(w.lower() for w in wa) & set(w.lower() for w in wb)) / max(1, len(set(w.lower() for w in wa) | set(w.lower() for w in wb)))
         order = difflib.SequenceMatcher(None, [w.lower() for w in wa[:3000]], [w.lower() for w in wb[:3000]]).ratio()

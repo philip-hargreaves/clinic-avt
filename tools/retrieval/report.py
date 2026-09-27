@@ -420,18 +420,14 @@ def top_metrics(top_ids, expected):
 
 def union_rules(args):
     runs = args.runs
-    rows = {}
+    rows, labels = {}, []
     for run in runs:
-        config = read_json(RESULTS / run / "config.json")
-        label = f"{config.get('union', 'max')}"
+        label = read_json(RESULTS / run / "config.json").get("union", "max")
+        if label not in labels:
+            labels.append(label)
         for r in read_jsonl(RESULTS / run / "per_query.jsonl"):
             if r["mode"] == args.mode and r["hybrid"] == "off" and r["reranker"] == "none" and not r["negative"]:
                 rows.setdefault(r["set"], {}).setdefault(r["qid"], {})[label] = top_metrics([i for i, _ in r["top"]], set(r["expected_ids"]))
-    labels = []
-    for run in runs:
-        l = read_json(RESULTS / run / "config.json").get("union", "max")
-        if l not in labels:
-            labels.append(l)
     if args.mode == "both":
         # the whole-note query alone, from the first run's note-mode pass, as a reference row
         for r in read_jsonl(RESULTS / runs[0] / "per_query.jsonl"):

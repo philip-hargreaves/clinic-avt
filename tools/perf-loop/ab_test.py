@@ -1,9 +1,8 @@
 # Interleaved A/B/C test of Windows power throttling (EcoQoS) on the engine and
 # note host. Fresh engine per run; the throttling state is applied to both
 # processes and read back; CPU clocks are sampled during every finalise.
-import ctypes, ctypes.wintypes, json, os, re, statistics, sys, threading, time
+import ctypes, ctypes.wintypes, json, os, re, statistics, sys, time
 os.environ.setdefault("PERF_TAG", "-ab")
-sys.argv = sys.argv[:1]
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import perf_loop as pl
 
@@ -95,7 +94,7 @@ class ClockSampler:
 
 def run_one(index, condition, track, duration, rep):
     engine = pl.Engine(index)
-    engine.request("engine/echo", {"payload": "up"}, 10)
+    engine.wait_up()
     engine_set = set_throttling(engine.proc.pid, condition)
     host = {"pid": None, "set": None, "found_after_s": None}
     t_run = time.time()

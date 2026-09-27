@@ -1,19 +1,19 @@
 # Overnight 1x performance loop: drives the release engine over the pipe with
-# replayed consults at real-time speed and records per-phase timings, live
-# turn lag, engine memory and every engine death. Internal evidence tool.
-import collections
+# replayed consults at real-time speed and records per-phase timings, engine
+# memory and every engine death. Internal evidence tool.
 import ctypes
 import ctypes.wintypes
 import json
-import msvcrt
 import os
-import struct
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 
-ROOT = r"C:\dev\ambient"
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+from engine_pipe import Engine as PipeEngine, EngineDied  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # PERF_ENGINE: run a copied binary so rebuilds don't fight a live sweep.
 # PERF_ENGINE_ARGS: extra flags, e.g. "--asr-device NPU".
 ENGINE = os.environ.get("PERF_ENGINE",
@@ -46,8 +46,6 @@ TRACKS = [
     ("cfull_day3_consultation03.wav", 697),
 ]
 SAVE_DIR = os.path.join(HERE, "transcripts") if os.environ.get("PERF_SAVE") else None
-MAX_HOURS = float(sys.argv[1]) if len(sys.argv) > 1 else 8.0
-ONLY = sys.argv[2] if len(sys.argv) > 2 else None  # e.g. c02m to smoke-test
 # Sweeps: replay faster than real time (bit-identical transcript per SpeedParityTest)
 # over every wav in a directory, one engine for the lot
 SPEED = float(os.environ.get("PERF_SPEED", "1.0"))
@@ -147,150 +145,24 @@ def note_host_pids():
     return pids
 
 
-# --- Engine process + pipe client -------------------------------------------
+# --- Engine process ------------------------------------------------------------
 
-class EngineDied(Exception):
-    pass
-
-
-class Engine:
-    # One synchronous pipe handle serialises reads and writes, so a blocking
-    # read on another thread would stall every write. Single-threaded instead:
-    # PeekNamedPipe says how much is waiting and only that much is read.
-    def __init__(self, index):
+class Engine(PipeEngine):
+    # extra_args: positional arguments after the models root, e.g. a replay wav
+    def __init__(self, index, extra_args=()):
         self.index = index
-        self.pipe_name = f"LOCAL\\clinicavt-perf-{os.getpid()}-{index}"
-        self.log_path = os.path.join(LOGS, f"engine-{index:03d}.log")
-        self.log_offset = 0
-        self.notifications = collections.deque()
-        self.replies = {}
-        self.buf = b""
-        self.dead = False
-        self.next_id = 0
-        self.launched = now()
-        self.stderr = open(self.log_path, "wb")
-        self.proc = subprocess.Popen(
-            [ENGINE, *ENGINE_ARGS, self.pipe_name, STORE, MODELS],
-            stderr=self.stderr, stdout=subprocess.DEVNULL)
-        pipe = "\\\\.\\pipe\\" + self.pipe_name
-        for _ in range(600):
-            if self.proc.poll() is not None:
-                raise EngineDied(f"exited {self.proc.returncode} before the pipe appeared")
-            try:
-                self.f = open(pipe, "r+b", buffering=0)
-                break
-            except OSError:
-                time.sleep(0.05)
-        else:
-            raise EngineDied("pipe never appeared")
-        self.handle = msvcrt.get_osfhandle(self.f.fileno())
-        self.pipe_up = now()
+        pipe = f"LOCAL\\clinicavt-perf-{os.getpid()}-{index}"
+        super().__init__([ENGINE, *ENGINE_ARGS, pipe, STORE, MODELS, *extra_args], pipe,
+                         os.path.join(LOGS, f"engine-{index:03d}.log"))
 
-    def _available(self):
-        avail = ctypes.wintypes.DWORD(0)
-        ok = ctypes.windll.kernel32.PeekNamedPipe(
-            ctypes.c_void_p(self.handle), None, 0, None, ctypes.byref(avail), None)
-        if not ok:
-            self.dead = True
-            raise EngineDied(f"pipe broke (error {ctypes.GetLastError()})")
-        return avail.value
 
-    def _pump(self):
-        # Read what is waiting, parse whole frames; returns True if anything arrived
-        avail = self._available()
-        if avail == 0:
-            if self.proc.poll() is not None:
-                self.dead = True
-                raise EngineDied(f"engine exited {self.proc.returncode}")
-            return False
-        chunk = self.f.read(min(avail, 1 << 20))
-        if not chunk:
-            self.dead = True
-            raise EngineDied("pipe closed")
-        self.buf += chunk
-        t = now()
-        while len(self.buf) >= 4:
-            (length,) = struct.unpack("<I", self.buf[:4])
-            if len(self.buf) < 4 + length:
-                break
-            msg = json.loads(self.buf[4:4 + length])
-            self.buf = self.buf[4 + length:]
-            if msg.get("id") is not None and "method" not in msg:
-                self.replies[msg["id"]] = msg
-            else:
-                self.notifications.append((t, msg))
-        return True
-
-    def next_notification(self, timeout):
-        deadline = now() + timeout
-        while True:
-            if self.notifications:
-                return self.notifications.popleft()
-            if not self._pump():
-                if now() >= deadline:
-                    return None
-                time.sleep(0.005)
-
-    def request(self, method, params=None, timeout=15.0):
-        if self.dead:
-            raise EngineDied("connection lost")
-        self.next_id += 1
-        rid = self.next_id
-        msg = {"jsonrpc": "2.0", "id": rid, "method": method}
-        if params is not None:
-            msg["params"] = params
-        payload = json.dumps(msg).encode()
-        t0 = now()
-        try:
-            self.f.write(struct.pack("<I", len(payload)) + payload)
-        except OSError as e:
-            self.dead = True
-            raise EngineDied(f"write failed: {e}")
-        deadline = t0 + timeout
-        while rid not in self.replies:
-            if not self._pump():
-                if now() >= deadline:
-                    raise TimeoutError(f"{method} did not answer in {timeout} s")
-                time.sleep(0.005)
-        reply = self.replies.pop(rid)
-        if "error" in reply:
-            raise RuntimeError(f"{method}: {reply['error']}")
-        return reply.get("result"), now() - t0
-
-    def exit_code(self):
-        return self.proc.poll()
-
-    def new_log_lines(self):
-        with open(self.log_path, "rb") as f:
-            f.seek(self.log_offset)
-            data = f.read()
-            self.log_offset = f.tell()
-        return data.decode("utf-8", "replace").splitlines()
-
-    def close(self):
-        try:
-            self.f.close()
-        except Exception:
-            pass
-        if self.proc.poll() is None:
-            self.proc.terminate()
-            try:
-                self.proc.wait(10)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-        self.stderr.close()
+def timed(engine, method, params, timeout):
+    t0 = now()
+    result = engine.request(method, params, timeout)
+    return result, now() - t0
 
 
 # --- One replayed consultation -----------------------------------------------
-
-def percentile(values, p):
-    if not values:
-        return None
-    ordered = sorted(values)
-    k = (len(ordered) - 1) * p
-    lo, hi = int(k), min(int(k) + 1, len(ordered) - 1)
-    return round(ordered[lo] + (ordered[hi] - ordered[lo]) * (k - lo), 2)
-
 
 def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=None):
     path = os.path.join(AUDIO_DIR or os.path.join(HERE, "audio"), track)
@@ -301,7 +173,6 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         "track": track, "audio_s": duration, "outcome": "ok", "error": None,
         "mem_before": process_memory_mb(engine.proc.pid), "sys_before": system_memory_mb(),
     }
-    turns = []  # (wall_offset, first_frame, frame_count, speaker, text)
     levels = 0
     interrupted = None
     note_first = note_ready = patient_first = patient_ready = None
@@ -325,10 +196,6 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
             params = msg.get("params", {}) or {}
             if method == "audio.level":
                 levels += 1
-            elif method == "transcript.turn":
-                turns.append((t - t_start, params.get("firstFrame", 0),
-                              params.get("frameCount", 0), params.get("speaker", ""),
-                              len(params.get("text", ""))))
             elif method == "session/interrupted":
                 interrupted = params
             elif method == "note/partial":
@@ -360,8 +227,8 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
 
     try:
         t_start = now()
-        result, rtt = engine.request(
-            "session/start", {"replay": {"path": path, "speed": SPEED, "monitor": False}}, 30)
+        result, rtt = timed(
+            engine, "session/start", {"replay": {"path": path, "speed": SPEED, "monitor": False}}, 30)
         session_id = result.get("sessionId")
         rec["session_id"] = session_id
         rec["start_rtt_s"] = round(rtt, 3)
@@ -375,7 +242,7 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         # Stop blocks through finalise: its round trip is the finalise time
         t_stop = now()
         stop_probe = on_stop() if on_stop else None  # e.g. a clock sampler
-        _, stop_rtt = engine.request("session/stop", None, STOP_TIMEOUT)
+        _, stop_rtt = timed(engine, "session/stop", None, STOP_TIMEOUT)
         if stop_probe:
             rec["stop_probe"] = stop_probe()
         rec["stop_at_s"] = round(t_stop - t_start, 1)
@@ -405,7 +272,7 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
             rec["outcome"] = "note_failed" if note_failed else "patient_failed"
         # Engine-side numbers for this session (Take() resets them)
         try:
-            metrics, _ = engine.request("engine/metrics", None, 15)
+            metrics = engine.request("engine/metrics", None, 15)
             rec["metrics"] = {k: metrics.get(k) for k in (
                 "stageSeconds", "loadSeconds", "asrRealtimeFactor", "audioSeconds",
                 "lostFrames", "diarTicks", "turns", "clusters", "replaySpeed")}
@@ -418,9 +285,9 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         if SAVE_DIR:
             try:
                 os.makedirs(SAVE_DIR, exist_ok=True)
-                sealed, _ = engine.request("session/transcript", {"id": session_id}, 30)
-                stored_note, _ = engine.request("session/note", {"id": session_id}, 30)
-                stored_patient, _ = engine.request("session/patient", {"id": session_id}, 30)
+                sealed = engine.request("session/transcript", {"id": session_id}, 30)
+                stored_note = engine.request("session/note", {"id": session_id}, 30)
+                stored_patient = engine.request("session/patient", {"id": session_id}, 30)
                 base = os.path.join(SAVE_DIR, f"{TAG.lstrip('-') or 'run'}-{track.rsplit('.', 1)[0]}")
                 with open(base + ".json", "w", encoding="utf-8") as f:
                     json.dump({"turns": sealed.get("turns", []), "note": stored_note.get("text"),
@@ -449,14 +316,7 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         rec["outcome"] = "error"
         rec["error"] = f"{type(e).__name__}: {e}"
 
-    # Live lag: how far behind real time each turn arrived
-    lags = [round(w - (ff + fc) / 16000.0, 2) for w, ff, fc, _, _ in turns]
-    rec["turns_live"] = len(turns)
     rec["levels"] = levels
-    rec["lag_median_s"] = percentile(lags, 0.5)
-    rec["lag_p95_s"] = percentile(lags, 0.95)
-    rec["lag_max_s"] = max(lags) if lags else None
-    rec["speakers"] = sorted({s for _, _, _, s, _ in turns})
     # The engine's own finalise stage lines for this run
     stages = {}
     extra = []
@@ -475,8 +335,8 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         f.write(json.dumps(rec) + "\n")
     log(f"  {track:24s} {rec['outcome']:12s} finalise {rec.get('finalise_s')} s  "
         f"note {rec.get('note_first_token_s')}/{rec.get('note_done_s')} s  "
-        f"sheet {rec.get('patient_done_s')} s  lag med {rec['lag_median_s']} p95 {rec['lag_p95_s']}  "
-        f"turns {len(turns)}  ws {rec.get('mem_after', {}) and rec['mem_after'].get('ws_mb')} MB")
+        f"sheet {rec.get('patient_done_s')} s  "
+        f"ws {rec.get('mem_after', {}) and rec['mem_after'].get('ws_mb')} MB")
     return rec["outcome"]
 
 
@@ -496,23 +356,18 @@ def start_engine(index):
 def _start_engine(index):
     t0 = now()
     engine = Engine(index)
-    for _ in range(600):
-        try:
-            engine.request("engine/echo", {"payload": "up"}, 2)
-            break
-        except (TimeoutError, RuntimeError):
-            time.sleep(0.1)
+    engine.wait_up()
     echo_at = now() - t0
     # PERF_NOTE_TIER: the note model role to run, as the shell would configure it on connect
     tier = os.environ.get("PERF_NOTE_TIER")
     if tier:
-        result, _ = engine.request("note/tier", {"tier": tier}, 30)
+        result = engine.request("note/tier", {"tier": tier}, 30)
         event("note_tier", index=index, tier=tier, state=result.get("state"), model=result.get("id"))
         log(f"engine {index}: note tier {tier} -> {result.get('id')} ({result.get('state')})")
     # Readiness: the compile caches; loads still proceed in the background
     ready_at = None
     for _ in range(1200):
-        result, _ = engine.request("engine/readiness", None, 10)
+        result = engine.request("engine/readiness", None, 10)
         if result.get("ready"):
             ready_at = now() - t0
             break
@@ -524,11 +379,13 @@ def _start_engine(index):
 
 
 def main():
+    max_hours = float(sys.argv[1]) if len(sys.argv) > 1 else 8.0
+    only = sys.argv[2] if len(sys.argv) > 2 else None  # e.g. c02m to smoke-test
     os.makedirs(STORE, exist_ok=True)
     os.makedirs(LOGS, exist_ok=True)
-    tracks = [t for t in TRACKS if ONLY is None or t[0].startswith(ONLY)]
-    deadline = now() + MAX_HOURS * 3600
-    event("loop_started", max_hours=MAX_HOURS, tracks=[t[0] for t in tracks])
+    tracks = [t for t in TRACKS if only is None or t[0].startswith(only)]
+    deadline = now() + max_hours * 3600
+    event("loop_started", max_hours=max_hours, tracks=[t[0] for t in tracks])
     engine_index = 0
     engine = None
     cycle = 0

@@ -9,29 +9,21 @@ complete, and its scale differs by language. Compare systems within a language o
 
 import json
 import os
-import socket
-import sys
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
+from common import REFERENCE, ROOT, force_ipv4, bootstrap_interval, read_jsonl
+
 # Assembled by hand, since the HF cache's symlinks fail on exFAT
 CHECKPOINT = ROOT / "models-eval" / "wmt20-comet-qe-da" / "checkpoints" / "model.ckpt"
-REFERENCE = "nllb-600m-int8"
-BOOTSTRAP = 2000
 
-# IPv6 drops on this network
-_lookup = socket.getaddrinfo
-socket.getaddrinfo = lambda host, port, family=0, *rest, **more: _lookup(
-    host, port, socket.AF_INET, *rest, **more)
+force_ipv4()
 os.environ.setdefault("HF_HOME", str(ROOT / "hf-cache"))
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 
 def score_all():
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from translate import sentences
     from comet import load_from_checkpoint
     model = load_from_checkpoint(str(CHECKPOINT))
@@ -41,7 +33,7 @@ def score_all():
         target = out_dir / path.name
         if target.exists():
             continue
-        rows = [json.loads(line) for line in open(path, encoding="utf-8")]
+        rows = read_jsonl(path)
         pairs, owners = [], []
         for i, row in enumerate(rows):
             src, mt = sentences(row["source"]), sentences(row["translation"])
@@ -63,7 +55,7 @@ def score_all():
 def table():
     rows = defaultdict(dict)
     for path in sorted((ROOT / "results" / "comet").glob("*.jsonl")):
-        for r in map(json.loads, open(path, encoding="utf-8")):
+        for r in read_jsonl(path):
             if r["comet"] is not None:
                 rows[(path.stem, r["language"])][r["id"]] = r["comet"]
     rng = np.random.default_rng(7)
@@ -73,9 +65,7 @@ def table():
         shared = sorted(set(by_id) & set(base))
         interval = ""
         if system != REFERENCE and shared:
-            delta = np.array([by_id[i] - base[i] for i in shared])
-            draws = rng.integers(0, len(shared), size=(BOOTSTRAP, len(shared)))
-            low, high = np.percentile(delta[draws].mean(axis=1), [2.5, 97.5])
+            low, high = bootstrap_interval(rng, np.array([by_id[i] - base[i] for i in shared]))
             interval = f"{low:+.3f} to {high:+.3f}"
         mean = np.mean(list(by_id.values()))
         print(f"{system:<20} {language:<10}  {mean:8.3f}  {len(by_id):3d} | {interval}")

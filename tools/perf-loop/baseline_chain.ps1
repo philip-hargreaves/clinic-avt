@@ -1,7 +1,7 @@
 # Unattended chain, run detached (Start-Process) so no parent job watchdog ends it during
 # the 35B load: note-tier quality baseline generation, its metrics, then the load sweep.
 # Logs to build/perf-loop/baseline-chain.log.
-$log = "C:\dev\ambient\build\perf-loop\baseline-chain.log"
+$log = Join-Path $PSScriptRoot "..\..\build\perf-loop\baseline-chain.log"
 function Say($s) { $line = "$(Get-Date -Format 'HH:mm:ss') $s"; $line | Out-File -FilePath $log -Append -Encoding utf8 }
 $env:PYTHONIOENCODING = "utf-8"
 try {

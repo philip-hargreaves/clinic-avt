@@ -9,25 +9,19 @@ per item and language, and skips rows already there.
 """
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
-HERE = Path(__file__).resolve().parent
-CANDIDATES = json.load(open(HERE / "candidates.json", encoding="utf-8"))
-LANGUAGES = ["Urdu", "Punjabi", "Bengali", "Gujarati", "Polish", "Romanian", "Arabic", "Somali"]
+from common import LANGUAGES, ROOT, option, read_jsonl
+
+CANDIDATES = json.load(open(Path(__file__).with_name("candidates.json"), encoding="utf-8"))
 FLORES = {"Urdu": "urd_Arab", "Punjabi": "pan_Guru", "Bengali": "ben_Beng", "Gujarati": "guj_Gujr",
           "Polish": "pol_Latn", "Romanian": "ron_Latn", "Arabic": "arb_Arab", "Somali": "som_Latn"}
 TICO = {"Urdu": "ur", "Bengali": "bn", "Arabic": "ar", "Somali": "so"}
 SHEETS = Path(r"C:\dev\intelliscribe\bench\summarisation\notes\tier-accuracy-sheet")
 MAX_NEW_TOKENS = 256
 BATCH = 8
-
-
-def option(flag: str, default: str) -> str:
-    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
 
 
 def sentences(line: str) -> list[str]:
@@ -127,7 +121,7 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     done = set()
     if out.exists():
-        done = {(r["id"], r["language"]) for r in map(json.loads, open(out, encoding="utf-8"))}
+        done = {(r["id"], r["language"]) for r in read_jsonl(out)}
     items = [i for i in load_set(set_name, limit) if (i["id"], i["language"]) not in done]
     print(name, set_name, len(items), "to do,", len(done), "done", flush=True)
     if not items:

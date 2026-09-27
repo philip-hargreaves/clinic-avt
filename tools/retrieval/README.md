@@ -39,7 +39,7 @@ Every run writes `config.json` beside its outputs under `rag/results/<stamp>-<na
 
 ```
 shortlist.json      candidates: id, hf, role, licence, architecture, pooling, dims, max_length, instructions, export task
-common.py           paths, jsonl io, run directories
+common.py           paths, jsonl io, run directories, timing, pdftotext
 chunk.py            recommendation chunks from NICE JSON; heading chunks from PDF text
 gold.py             UCL mapping draft; unified query file from the five gold sets; wording-overlap check
 export.py           optimum-cli export with provenance.json (revision, hashes); an `onnx` field in the shortlist converts the repo's ONNX file instead

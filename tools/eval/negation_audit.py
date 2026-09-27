@@ -52,19 +52,13 @@ def pack(arm, per_pack):
 
 
 def merge(arm):
+    results = [r for f in sorted(glob.glob(os.path.join(OUT, f"{arm}-pack*-result.json")))
+               for r in json.load(open(f, encoding="utf-8"))]
     counts = {}
-    total = 0
-    for f in sorted(glob.glob(os.path.join(OUT, f"{arm}-pack*-result.json"))):
-        for r in json.load(open(f, encoding="utf-8")):
-            counts[r["class"]] = counts.get(r["class"], 0) + 1
-            total += 1
-    print(f"{arm}: {total} audited: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
-    flips = []
-    for f in sorted(glob.glob(os.path.join(OUT, f"{arm}-pack*-result.json"))):
-        for r in json.load(open(f, encoding="utf-8")):
-            if r["class"] == "flip":
-                flips.append(r)
-    for r in flips:
+    for r in results:
+        counts[r["class"]] = counts.get(r["class"], 0) + 1
+    print(f"{arm}: {len(results)} audited: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+    for r in (r for r in results if r["class"] == "flip"):
         print(f"  flip #{r['id']}: {r.get('why', '')}")
 
 
