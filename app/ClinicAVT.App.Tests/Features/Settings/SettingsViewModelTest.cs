@@ -411,6 +411,27 @@ public class SettingsViewModelTest
         Assert.Contains("no such device", settings.NoteModel.NoteModelStatus);
     }
 
+    // Refused while a note is being written: the resident model never changed, so nothing is
+    // sent again and the load that began optimistically ends
+    [Fact]
+    public void ARefusedSwitchEndsTheLoadWithoutAskingAgain()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        var status = TestSession.Status(engine);
+        var settings = new SettingsViewModel(preferences, client: new EngineApi(engine), session: new FakeSession(), status: status);
+        engine.Failing.Add("note/tier");
+
+        settings.NoteModel.NoteModelIndex = 0;
+
+        Assert.Single(engine.Requests, r => r.Method == "note/tier");
+        Assert.False(settings.NoteModel.ModelLoading);
+        Assert.True(settings.NoteModel.PickerEnabled);
+        Assert.Equal(1, settings.NoteModel.NoteModelIndex);
+        Assert.Equal("default", preferences.NoteTier);
+        Assert.StartsWith("Could not switch", settings.NoteModel.NoteModelStatus);
+    }
+
     [Fact]
     public void TheEngineIsAuthoritativeAboutWhatIsResident()
     {

@@ -193,8 +193,27 @@ public sealed partial class NoteModelSettings : ObservableObject
         }
         catch (Exception e)
         {
-            RevertTier(e.Message);
+            RefuseTier(e.Message);
         }
+    }
+
+    // The engine refused the request, so the resident model never changed: the selection goes
+    // back and the load that began optimistically ends. Nothing is sent again
+    private void RefuseTier(string reason)
+    {
+        var back = _revertTier;
+        _revertTier = null;
+        _status?.ApplyNoteModel("failed", firstUse: null);
+        NoteModelStatus = $"Could not switch: {reason}";
+        _status?.Append($"Could not switch note model: {reason}");
+        if (back is not null)
+        {
+            _noteTier = back;
+            PersistTier();
+            Reselect(back);
+        }
+
+        NoteModelEnabled = _tiers.Count > 1;
     }
 
     // A refused or failed switch reverts to the previous tier, once, and the
