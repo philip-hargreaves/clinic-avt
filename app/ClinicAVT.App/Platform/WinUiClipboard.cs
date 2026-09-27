@@ -39,4 +39,30 @@ public sealed class WinUiClipboard : IClipboard
 
         return false;
     }
+
+    // No Flush, so the secret leaves the clipboard when the app closes
+    public async Task<bool> CopySecretAsync(string text)
+    {
+        var options = new ClipboardContentOptions { IsAllowedInHistory = false, IsRoamable = false };
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            try
+            {
+                var data = new DataPackage();
+                data.SetText(text);
+                return Clipboard.SetContentWithOptions(data, options);
+            }
+            catch (Exception)
+            {
+                if (attempt == 5)
+                {
+                    return false;
+                }
+
+                await Task.Delay(80 * attempt);
+            }
+        }
+
+        return false;
+    }
 }

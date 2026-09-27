@@ -9,12 +9,19 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 /// </summary>
 public sealed class LiveSessionState : ISessionState
 {
-    public bool ConsultationActive { get; private set; }
+    private ConsultationViewModel? _session;
+
+    public bool ConsultationInProgress { get; private set; }
+
+    public string? ReviewedSessionId => _session?.ReviewedSessionId;
+
+    public Task EndReviewAsync() => _session?.EndReviewAsync() ?? Task.CompletedTask;
 
     public string SessionPhase { get; private set; } = "";
 
     public void Follow(ConsultationViewModel session)
     {
+        _session = session;
         Mirror(session);
         session.PropertyChanged += (_, e) => OnChanged(session, e);
     }
@@ -29,7 +36,7 @@ public sealed class LiveSessionState : ISessionState
 
     private void Mirror(ConsultationViewModel session)
     {
-        ConsultationActive = session.ConsultationActive;
+        ConsultationInProgress = session.ConsultationInProgress;
         SessionPhase = session.SessionPhase;
     }
 }

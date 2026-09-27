@@ -9,6 +9,11 @@ internal sealed class FakeTimeProvider : TimeProvider
 
     public override DateTimeOffset GetUtcNow() => Now;
 
+    /// <summary>The zone local time is read in, the machine's own when unset.</summary>
+    public TimeZoneInfo? Zone { get; set; }
+
+    public override TimeZoneInfo LocalTimeZone => Zone ?? base.LocalTimeZone;
+
     public override ITimer CreateTimer(
         TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
     {

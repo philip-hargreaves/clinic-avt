@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="ClinicAVT.App.Features.Backup.BackupDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ClinicAVT.App.Features.Backup"
+    Title="Back up consultations"
+    CloseButtonText="{x:Bind ViewModel.CloseText, Mode=OneWay}"
+    DefaultButton="None"
+    IsPrimaryButtonEnabled="{x:Bind ViewModel.PrimaryEnabled, Mode=OneWay}"
+    PrimaryButtonText="{x:Bind ViewModel.PrimaryText, Mode=OneWay}"
+    PrimaryButtonClick="OnPrimary"
+    Closing="OnClosing">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">620</x:Double>
+    </ContentDialog.Resources>
+
+    <!-- Scrolls so a large Windows text size never pushes a control out of reach -->
+    <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,12,0" Spacing="16">
+            <StackPanel Spacing="16" Visibility="{x:Bind ViewModel.InSetup, Mode=OneWay}">
+                <TextBlock Text="{x:Bind ViewModel.Caption}" TextWrapping="Wrap" />
+                <StackPanel Spacing="8">
+                    <ComboBox
+                        MinWidth="280"
+                        AutomationProperties.Name="Which consultations"
+                        Header="Which consultations"
+                        ItemsSource="{x:Bind ViewModel.PeriodOptions}"
+                        SelectedIndex="{x:Bind ViewModel.PeriodIndex, Mode=TwoWay}" />
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="12"
+                        Visibility="{x:Bind ViewModel.ChoosingDates, Mode=OneWay}">
+                        <CalendarDatePicker
+                            AutomationProperties.Name="First day"
+                            Date="{x:Bind ViewModel.ChosenFrom, Mode=TwoWay}"
+                            Header="First day" />
+                        <CalendarDatePicker
+                            AutomationProperties.Name="Last day"
+                            Date="{x:Bind ViewModel.ChosenTo, Mode=TwoWay}"
+                            Header="Last day" />
+                    </StackPanel>
+                    <TextBlock
+                        AutomationProperties.LiveSetting="Polite"
+                        Text="{x:Bind ViewModel.CountLine, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Bind ViewModel.Includes}" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Style="{ThemeResource BodyStrongTextBlockStyle}" Text="Password" />
+                    <RadioButton
+                        Content="Use a new password made of five words"
+                        GroupName="BackupPassword"
+                        IsChecked="{x:Bind ViewModel.UseGenerated, Mode=TwoWay}" />
+                    <StackPanel
+                        Margin="28,0,0,0"
+                        Spacing="8"
+                        Visibility="{x:Bind ViewModel.UseGenerated, Mode=OneWay}">
+                        <!-- Hyphens between the words, so Narrator reads them one by one -->
+                        <Border Padding="12,8" Style="{StaticResource InnerCardSurface}">
+                            <TextBlock
+                                AutomationProperties.Name="Password made of five words"
+                                IsTextSelectionEnabled="True"
+                                Style="{ThemeResource BodyLargeTextBlockStyle}"
+                                Text="{x:Bind ViewModel.Generated, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button
+                                AutomationProperties.Name="Copy password"
+                                Command="{x:Bind ViewModel.CopyCommand}"
+                                Content="Copy"
+                                Style="{ThemeResource AccentButtonStyle}" />
+                            <Button Command="{x:Bind ViewModel.NewPasswordCommand}" Content="New password" />
+                        </StackPanel>
+                        <TextBlock
+                            AutomationProperties.LiveSetting="Polite"
+                            Style="{StaticResource CaptionText}"
+                            Text="{x:Bind ViewModel.CopyLine, Mode=OneWay}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind local:BackupDialog.Shown(ViewModel.CopyLine), Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.PasswordNote}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <RadioButton
+                        Content="Use my own password"
+                        GroupName="BackupPassword"
+                        IsChecked="{x:Bind ViewModel.UseOwn, Mode=TwoWay}" />
+                    <StackPanel
+                        Margin="28,0,0,0"
+                        Spacing="8"
+                        Visibility="{x:Bind ViewModel.UseOwn, Mode=OneWay}">
+                        <TextBlock
+                            Text="{x:Bind ViewModel.SameAsLastLine}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind ViewModel.SameAsLastVisible, Mode=OneWay}" />
+                        <PasswordBox
+                            AutomationProperties.Name="Password"
+                            Header="Password, 12 characters or more"
+                            PasswordChanged="OnOwnChanged"
+                            PasswordRevealMode="Peek" />
+                        <PasswordBox
+                            AutomationProperties.Name="Type the password again"
+                            Header="Type it again"
+                            PasswordChanged="OnAgainChanged"
+                            PasswordRevealMode="Peek" />
+                        <TextBlock
+                            AutomationProperties.LiveSetting="Polite"
+                            Foreground="{ThemeResource CautionBrush}"
+                            Text="{x:Bind ViewModel.PasswordProblem, Mode=OneWay}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind local:BackupDialog.Shown(ViewModel.PasswordProblem), Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind ViewModel.PasswordNote}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.Working, Mode=OneWay}">
+                <ProgressBar Maximum="1" Value="{x:Bind ViewModel.Progress, Mode=OneWay}" />
+                <TextBlock
+                    AutomationProperties.LiveSetting="Polite"
+                    Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.Finished, Mode=OneWay}">
+                <TextBlock
+                    AutomationProperties.LiveSetting="Polite"
+                    Style="{ThemeResource BodyStrongTextBlockStyle}"
+                    Text="{x:Bind ViewModel.DoneLine, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+                <TextBlock Text="{x:Bind ViewModel.SavedLine, Mode=OneWay}" TextWrapping="Wrap" />
+                <StackPanel Margin="0,8,0,0" Spacing="8">
+                    <Button
+                        Command="{x:Bind ViewModel.AskRemoveCommand}"
+                        Content="Remove backed-up consultations"
+                        Visibility="{x:Bind ViewModel.CanRemove, Mode=OneWay}" />
+                    <Button Command="{x:Bind ViewModel.ShowInFolderCommand}" Content="Show in folder" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Spacing="12" Visibility="{x:Bind ViewModel.ConfirmingRemove, Mode=OneWay}">
+                <TextBlock
+                    Style="{ThemeResource BodyStrongTextBlockStyle}"
+                    Text="{x:Bind ViewModel.RemoveLine, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+                <CheckBox Content="{x:Bind ViewModel.ReflectionsTickText}" IsChecked="{x:Bind ViewModel.DeleteReflections, Mode=TwoWay}" />
+            </StackPanel>
+
+            <TextBlock
+                AutomationProperties.LiveSetting="Polite"
+                Style="{ThemeResource BodyStrongTextBlockStyle}"
+                Text="{x:Bind ViewModel.DoneLine, Mode=OneWay}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind ViewModel.RemovedStep, Mode=OneWay}" />
+
+            <!-- Words and an icon, never colour alone -->
+            <Grid ColumnSpacing="8" Visibility="{x:Bind local:BackupDialog.Shown(ViewModel.OneDriveLine), Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <FontIcon
+                    VerticalAlignment="Top"
+                    FontSize="16"
+                    Foreground="{ThemeResource CautionBrush}"
+                    Glyph="&#xE753;" />
+                <TextBlock
+                    Grid.Column="1"
+                    Text="{x:Bind ViewModel.OneDriveLine, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+            </Grid>
+
+            <Grid ColumnSpacing="8" Visibility="{x:Bind local:BackupDialog.Shown(ViewModel.Error), Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <FontIcon
+                    VerticalAlignment="Top"
+                    FontSize="16"
+                    Foreground="{ThemeResource CautionBrush}"
+                    Glyph="&#xE7BA;" />
+                <TextBlock
+                    Grid.Column="1"
+                    AutomationProperties.LiveSetting="Assertive"
+                    Text="{x:Bind ViewModel.Error, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

@@ -85,21 +85,24 @@ public class EngineStatusInShellTest
     }
 
     [Fact]
-    public async Task ConsultationActiveTracksTheSessionState()
+    public async Task InProgressLastsFromRecordUntilTheNoteIsWritten()
     {
         var (session, engine, _) = TestSession.Create();
-        Assert.False(session.ConsultationActive);
+        Assert.False(session.ConsultationInProgress);
 
         await session.StartRecordingAsync();
-        Assert.True(session.ConsultationActive);
+        Assert.True(session.ConsultationInProgress);
 
         await session.StopRecordingAsync();
-        Assert.True(session.ConsultationActive);
+        Assert.True(session.ConsultationInProgress);
 
+        // Written, it is only on screen for review
         engine.RaiseNotification("note/ready");
-        Assert.True(session.ConsultationActive);
+        Assert.False(session.ConsultationInProgress);
+        Assert.NotNull(session.ReviewedSessionId);
 
-        session.StartNewConsultation();
-        Assert.False(session.ConsultationActive);
+        await session.EndReviewAsync();
+        Assert.Null(session.ReviewedSessionId);
+        Assert.False(session.ConsultationInProgress);
     }
 }

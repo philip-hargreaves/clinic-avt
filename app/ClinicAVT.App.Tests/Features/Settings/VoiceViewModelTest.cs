@@ -80,7 +80,7 @@ public class VoiceViewModelTest
     {
         var engine = new FakeEngineClient { AnchorOrigin = "accrued", AnchorSessions = 4 };
         var status = TestSession.Status(engine);
-        var session = new FakeSession { ConsultationActive = true };
+        var session = new FakeSession { ConsultationInProgress = true };
         var voice = new VoiceViewModel(new EngineApi(engine), new FakeDialogService(), session, status);
         await voice.RefreshAsync();
 

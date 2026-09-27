@@ -147,7 +147,12 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public bool ModelsReady => Readiness.ModelsReady;
 
-    public bool ConsultationActive => State != SessionState.Idle;
+    public bool ConsultationInProgress => State is SessionState.Recording or SessionState.Finalising;
+
+    public string? ReviewedSessionId =>
+        State is SessionState.Review or SessionState.Refused ? Review.FinalisedSessionId : null;
+
+    public Task EndReviewAsync() => CloseReviewAsync();
 
     /// <summary>
     /// Finalising is the state worth splitting. Its stages differ by an order of magnitude,

@@ -116,6 +116,35 @@ public class SettingsViewModelTest
         Assert.Single(settings.Guidance.Documents);  // guideline documents are not consultations
     }
 
+    // A date cannot say what a backup holds, so the engine counts what is in no backup
+    [Fact]
+    public async Task DeleteAllSaysWhatNoBackupHoldsAndKeepsReflectionsUnlessTicked()
+    {
+        var preferences = TempPreferences();
+        var engine = new FakeEngineClient { StoredSessions = 40 };
+        var dialogs = new FakeDialogService();
+        var settings = new SettingsViewModel(preferences, status: TestSession.Status(engine),
+            client: new EngineApi(engine), dialogs: dialogs);
+
+        await settings.Privacy.DeleteAllConsultationsCommand.ExecuteAsync(null);
+        Assert.Equal("No consultations are backed up. This can't be undone.", dialogs.LastContent);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "archive/summary");
+        Assert.Contains("\"deleteReflections\":false", engine.Requests.Single(r => r.Method == "session/deleteAll").Params);
+
+        preferences.LastBackup = new LastBackup(
+            "2026-07-01T00:00:00Z", "2026-09-01T00:00:00Z", "2026-09-01T08:30:00Z", 32);
+        engine.Responses["archive/summary"] = new { consultations = 38, reflections = 12, unfinished = 0, uncovered = 6 };
+        dialogs.Ticked = true;
+        await settings.Privacy.DeleteAllConsultationsCommand.ExecuteAsync(null);
+
+        Assert.Equal("6 consultations aren't backed up. This can't be undone.", dialogs.LastContent);
+        var covered = JsonDocument.Parse(engine.Requests.Single(r => r.Method == "archive/summary").Params)
+            .RootElement.GetProperty("covered");
+        Assert.Equal("2026-09-01T08:30:00Z", covered.GetProperty("at").GetString());
+        Assert.Contains("\"deleteReflections\":true", engine.Requests.Last(r => r.Method == "session/deleteAll").Params);
+        Assert.Contains("Last backup: 1 Sep 2026, 32 consultations.", settings.Privacy.BackupDescription);
+    }
+
     // Everything that restarts or reconfigures the engine waits for the consultation to end
     [Fact]
     public async Task DuringAConsultationDeleteAllTheNpuToggleAndTheTierAreRefused()
@@ -124,7 +153,7 @@ public class SettingsViewModelTest
         var engine = TieredEngine();
         engine.StoredSessions = 3;
         var status = TestSession.Status(engine);
-        var settings = new SettingsViewModel(preferences, new FakeSession { ConsultationActive = true },
+        var settings = new SettingsViewModel(preferences, new FakeSession { ConsultationInProgress = true },
             status: status, client: new EngineApi(engine), dialogs: new FakeDialogService());
 
         await settings.Privacy.DeleteAllConsultationsCommand.ExecuteAsync(null);
@@ -140,6 +169,35 @@ public class SettingsViewModelTest
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
         Assert.Equal("default", preferences.NoteTier);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
+    }
+
+    // A finished consultation on screen is not in progress: nothing waits for it, and deleting
+    // everything closes its review first so the screen never shows erased data
+    [Fact]
+    public async Task AFinishedConsultationOnScreenBlocksNothingAndDeleteAllClosesItsReview()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        engine.StoredSessions = 3;
+        var status = TestSession.Status(engine);
+        var session = new FakeSession { ReviewedSessionId = "s1" };
+        var dialogs = new FakeDialogService();
+        var settings = new SettingsViewModel(preferences, session,
+            status: status, client: new EngineApi(engine), dialogs: dialogs);
+
+        await settings.Privacy.BackUpCommand.ExecuteAsync(null);
+        Assert.Equal(1, dialogs.BackupsRun);
+
+        settings.Appearance.NpuTranscription = true;
+        Assert.Contains(engine.Requests, r => r.Method == "asr/device");
+
+        settings.NoteModel.NoteModelIndex = 2;
+        Assert.Contains(engine.Requests, r => r.Method == "note/tier");
+
+        await settings.Privacy.DeleteAllConsultationsCommand.ExecuteAsync(null);
+        Assert.Equal(1, session.ReviewsEnded);
+        Assert.Contains(engine.Requests, r => r.Method == "session/deleteAll");
+        Assert.DoesNotContain("finish the consultation", status.LatestActivity);
     }
 
     [Fact]

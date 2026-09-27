@@ -158,8 +158,8 @@ public sealed partial class SessionRecorder : ObservableObject
         ClearPanes();
         _status.SetDecodeActive(false);
         _status.Append(detail is not null
-            ? $"Recording interrupted ({detail}) - session kept"
-            : "Recording interrupted - session kept");
+            ? $"Recording interrupted ({detail}) - consultation kept"
+            : "Recording interrupted - consultation kept");
     }
 
     /// <summary>Empties the note, the guidance and the page view.</summary>
@@ -309,7 +309,7 @@ public sealed partial class SessionRecorder : ObservableObject
             // The engine is up and cannot resume, or never answered
             State = SessionState.Idle;
             _status.SetMicVisible(false);
-            _status.Append("Could not resume - session kept");
+            _status.Append("Could not resume - consultation kept");
             _status.Log($"session/start failed: {e.Message}");
         }
         catch (Exception)
@@ -374,7 +374,7 @@ public sealed partial class SessionRecorder : ObservableObject
             State = SessionState.Idle;
             ClearPanes();
             _status.SetDecodeActive(false);
-            _status.Append("Stop failed - session kept");
+            _status.Append("Stop failed - consultation kept");
             return;
         }
 

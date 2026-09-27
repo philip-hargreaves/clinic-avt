@@ -275,6 +275,6 @@ public class SessionCommandsTest
         engine.SetConnected(true);
 
         Assert.Equal(SessionState.Idle, session.State);
-        Assert.Equal("Could not resume - session kept", session.Status.LatestActivity);
+        Assert.Equal("Could not resume - consultation kept", session.Status.LatestActivity);
     }
 }

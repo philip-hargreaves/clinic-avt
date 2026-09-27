@@ -1,10 +1,14 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using ClinicAVT.App.Core.Features.Appraisal;
+using ClinicAVT.App.Core.Features.Backup;
 using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Core.Features.Settings;
 using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Features.Appraisal;
+using ClinicAVT.App.Features.Backup;
 using ClinicAVT.App.Features.Settings;
 using ClinicAVT.Client;
 
@@ -12,7 +16,8 @@ namespace ClinicAVT.App.Platform;
 
 public sealed class WinUiDialogService(
     WindowAccessor window, IEngineApi engine, IUiDispatcher dispatcher, MicViewModel mic,
-    StatusBarViewModel status, IClipboard clipboard, IFilePicker picker) : IDialogService
+    StatusBarViewModel status, IClipboard clipboard, IFilePicker picker, ILauncher launcher,
+    AppPreferences preferences, TimeProvider clock, ISessionState session) : IDialogService
 {
     // Cancel is the safe default in every confirmation
     public async Task<bool> ConfirmAsync(string title, string content, string primary, string cancel)
@@ -27,6 +32,48 @@ public sealed class WinUiDialogService(
             DefaultButton = ContentDialogButton.Close,
         };
         return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    // The text scrolls, so a large Windows text size never pushes the tick box out of reach
+    public async Task<bool?> ConfirmWithOptionAsync(
+        string title, string content, string tick, string primary, string cancel)
+    {
+        var box = new CheckBox { Content = tick };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = window.XamlRoot,
+            Title = title,
+            Content = new ScrollViewer
+            {
+                Content = new StackPanel
+                {
+                    Spacing = 12,
+                    Children = { new TextBlock { Text = content, TextWrapping = TextWrapping.Wrap }, box },
+                },
+            },
+            PrimaryButtonText = primary,
+            CloseButtonText = cancel,
+            DefaultButton = ContentDialogButton.Close,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary ? box.IsChecked == true : null;
+    }
+
+    public async Task<bool> RunBackupAsync()
+    {
+        using var backup = new BackupViewModel(engine, picker, clipboard, launcher, preferences, dispatcher, clock,
+            session: session);
+        var dialog = new BackupDialog(backup) { XamlRoot = window.XamlRoot };
+        _ = backup.LoadAsync();
+        await dialog.ShowAsync();
+        return backup.RemovedAny;
+    }
+
+    public async Task<bool> RunRestoreAsync()
+    {
+        using var restore = new RestoreViewModel(engine, picker, preferences, dispatcher, clock);
+        var dialog = new RestoreDialog(restore) { XamlRoot = window.XamlRoot };
+        await dialog.ShowAsync();
+        return restore.RestoredAny;
     }
 
     // A fresh reading per dialog. The outcome says whether it produced a voiceprint

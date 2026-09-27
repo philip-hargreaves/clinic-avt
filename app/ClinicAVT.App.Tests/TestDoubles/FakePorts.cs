@@ -16,6 +16,30 @@ public sealed class FakeDialogService : IDialogService
         return Task.FromResult(Answer);
     }
 
+    /// <summary>The tick given back by a confirmation with a tick box.</summary>
+    public bool Ticked { get; set; }
+
+    /// <summary>The text of the last confirmation with a tick box.</summary>
+    public string LastContent { get; private set; } = "";
+
+    public Task<bool?> ConfirmWithOptionAsync(
+        string title, string content, string tick, string primary, string cancel = "Cancel")
+    {
+        LastContent = content;
+        OnConfirm?.Invoke();
+        return Task.FromResult<bool?>(Answer ? Ticked : null);
+    }
+
+    public int BackupsRun { get; private set; }
+
+    public Task<bool> RunBackupAsync()
+    {
+        BackupsRun++;
+        return Task.FromResult(false);
+    }
+
+    public Task<bool> RunRestoreAsync() => Task.FromResult(false);
+
     public Task<bool> RunEnrolmentAsync()
     {
         OnEnrolment?.Invoke();
@@ -39,7 +63,10 @@ public sealed class FakeFilePicker : IFilePicker
         return Task.FromResult(SavePath);
     }
 
-    public Task<string?> PickFileAsync(string extension) => Task.FromResult<string?>(null);
+    /// <summary>The file an open picker returns, null for a cancel.</summary>
+    public string? OpenPath { get; set; }
+
+    public Task<string?> PickFileAsync(string extension) => Task.FromResult(OpenPath);
 
     public Task<IReadOnlyList<string>> PickFilesAsync(IReadOnlyList<string> extensions) =>
         Task.FromResult(Files);
@@ -69,6 +96,15 @@ public sealed class FakeClipboard : IClipboard
     public Task<bool> CopyAsync(string text)
     {
         Copied.Add(text);
+        return Task.FromResult(true);
+    }
+
+    /// <summary>Secrets copied, kept apart from ordinary copies.</summary>
+    public List<string> Secrets { get; } = [];
+
+    public Task<bool> CopySecretAsync(string text)
+    {
+        Secrets.Add(text);
         return Task.FromResult(true);
     }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Hosting;
@@ -44,6 +45,8 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         public string? NoteDetail { get; init; }
 
         public string? NoteTier { get; init; }
+
+        public LastBackup? LastBackup { get; init; }
     }
 
     public const int CurrentSchema = 1;
@@ -109,6 +112,12 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// </summary>
     public string NoteTier { get; set; } = "default";
 
+    /// <summary>
+    /// The last backup that was made and checked, null before the first. Delete all states what it
+    /// does not hold, and the Back up dialog asks for the same password again.
+    /// </summary>
+    public LastBackup? LastBackup { get; set; }
+
     public static AppPreferences Load(string path, ILogger? logger = null) =>
         Load(new FilePreferencesStore(path), logger);
 
@@ -153,6 +162,10 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         preferences.NoteStyle = NoteOptions.Style(stored.NoteStyle).Value;
         preferences.NoteDetail = NoteOptions.Detail(stored.NoteDetail).Value;
         preferences.NoteTier = Known(stored.NoteTier, NoteTiers, "default");
+        preferences.LastBackup = stored.LastBackup is { From: not null, To: not null } last
+            && DateTimeOffset.TryParse(last.CreatedAt, CultureInfo.InvariantCulture, out _)
+                ? last
+                : null;
         return preferences;
     }
 
@@ -176,6 +189,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
                 NoteStyle = NoteStyle,
                 NoteDetail = NoteDetail,
                 NoteTier = NoteTier,
+                LastBackup = LastBackup,
             }));
         }
         catch (Exception e)

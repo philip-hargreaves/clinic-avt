@@ -9,6 +9,19 @@ public interface IDialogService
     /// <summary>True when the primary button was chosen. The other button cancels.</summary>
     Task<bool> ConfirmAsync(string title, string content, string primary, string cancel = "Cancel");
 
+    /// <summary>
+    /// A confirmation with one tick box, unticked at first. Null when cancelled, otherwise
+    /// whether the box was ticked.
+    /// </summary>
+    Task<bool?> ConfirmWithOptionAsync(
+        string title, string content, string tick, string primary, string cancel = "Cancel");
+
+    /// <summary>The Back up dialog. True when it removed consultations from this computer.</summary>
+    Task<bool> RunBackupAsync();
+
+    /// <summary>The Restore dialog. True when it added consultations.</summary>
+    Task<bool> RunRestoreAsync();
+
     /// <summary>The voice enrolment dialog. True when a print was made.</summary>
     Task<bool> RunEnrolmentAsync();
 
