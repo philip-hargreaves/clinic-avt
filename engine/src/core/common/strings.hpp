@@ -84,6 +84,20 @@ inline int WordCount(std::string_view s) {
     return words;
 }
 
+// CRLF and a lone CR to LF. A WinUI text box ends its lines with CR
+inline std::string UnixLines(std::string_view s) {
+    std::string out;
+    out.reserve(s.size());
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        if (s[i] != '\r') {
+            out.push_back(s[i]);
+        } else if (i + 1 >= s.size() || s[i + 1] != '\n') {
+            out.push_back('\n');
+        }
+    }
+    return out;
+}
+
 // A full stop, question or exclamation mark once trailing spaces, closing
 // quotes and brackets and any non-ASCII closer are set aside
 inline bool EndsSentence(std::string_view s) {
