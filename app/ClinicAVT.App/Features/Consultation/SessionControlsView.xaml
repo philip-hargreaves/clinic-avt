@@ -57,7 +57,9 @@
                     <FontIcon FontSize="32" Glyph="&#xE720;" />
                 </Button>
             </Grid>
+            <!-- Clear of the breathing ring -->
             <TextBlock
+                Margin="0,5,0,0"
                 HorizontalAlignment="Center"
                 Style="{StaticResource SubtitleTextBlockStyle}"
                 Text="{x:Bind ViewModel.StartLabel, Mode=OneWay}" />
