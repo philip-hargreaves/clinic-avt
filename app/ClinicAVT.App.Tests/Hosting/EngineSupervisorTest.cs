@@ -235,6 +235,50 @@ public class EngineSupervisorTest
         Assert.Single(h.Launcher.Launched);
     }
 
+    // A reopened app finds its old engine busy with a first compile: it holds the pipe but
+    // cannot be adopted until it finishes. The app waits for it instead of counting crashes
+    [Fact]
+    public void AnEngineThatCannotBeAdoptedYetIsWaitedForNotCounted()
+    {
+        var h = new Harness();
+        h.Launcher.NextDiesWith = EngineSupervisor.AlreadyServing;
+
+        h.Host.Start();
+        for (var i = 0; i < RestartPolicy.StormLimit * 3; i++)
+        {
+            Assert.Equal(EngineStatus.Restarting, h.Host.Status);
+            h.Launcher.NextDiesWith = EngineSupervisor.AlreadyServing;
+            h.Clock.Advance(EngineSupervisor.ServerWait);
+        }
+
+        Assert.Empty(h.Log.Reports);
+
+        h.Launcher.Serving = new FakeProcess(id: 4321);
+        h.Launcher.NextDiesWith = EngineSupervisor.AlreadyServing;
+        h.Clock.Advance(EngineSupervisor.ServerWait);
+
+        Assert.Equal(EngineStatus.Running, h.Host.Status);
+        Assert.Equal(4321, h.Host.EnginePid);
+        Assert.Empty(h.Log.Reports);
+    }
+
+    [Fact]
+    public void WaitingForAnotherEngineEndsAsACrashAfterTheLimit()
+    {
+        var h = new Harness();
+        h.Launcher.NextDiesWith = EngineSupervisor.AlreadyServing;
+        h.Host.Start();
+
+        while (h.Log.Reports.Count == 0)
+        {
+            h.Launcher.NextDiesWith = EngineSupervisor.AlreadyServing;
+            h.Clock.Advance(EngineSupervisor.ServerWait);
+        }
+
+        Assert.Equal(EngineSupervisor.AlreadyServing, h.Log.Reports[0].ExitCode);
+        Assert.True(h.Clock.Now >= DateTimeOffset.UnixEpoch + EngineSupervisor.ServerWaitLimit);
+    }
+
     [Fact]
     public void LaunchFailureIsAFault()
     {
