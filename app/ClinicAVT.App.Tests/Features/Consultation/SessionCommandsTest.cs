@@ -104,7 +104,7 @@ public class SessionCommandsTest
         Assert.False(controls.StartRecordingCommand.CanExecute(null));
         Assert.True(bar.ShowsSetup);
         Assert.False(bar.Busy, "the bar stands in for the ring");
-        Assert.Equal("Setting up for this computer · 0:00 · this can take a few minutes", bar.DisplayLabel);
+        Assert.Equal("First-time setup · 0:00 · optimising for your PC", bar.DisplayLabel);
         bar.SetMicVisible(true);
         Assert.False(bar.ShowsSetup, "the level meter has the bar's place");
         bar.SetMicVisible(false);
@@ -140,7 +140,7 @@ public class SessionCommandsTest
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "loading", firstUse = true }));
         Assert.False(session.ModelsReady);
-        Assert.StartsWith("Setting up for this computer", session.Status.DisplayLabel);
+        Assert.StartsWith("First-time setup", session.Status.DisplayLabel);
 
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "ready" }));

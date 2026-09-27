@@ -42,6 +42,28 @@ public class StatusBarMetricsTest
         Assert.Equal("Ready", status.DisplayLabel);
     }
 
+    // A first move to the NPU compiles for minutes. The line counts the time so it never looks hung
+    [Fact]
+    public void ADeviceMoveCountsItsTimeUntilTheOutcome()
+    {
+        var engine = new FakeEngineClient(autoNotify: false);
+        var clock = new FakeTimeProvider();
+        var status = new StatusBarViewModel(new EngineApi(engine), new InlineDispatcher(), clock);
+        status.SetEngineState(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
+        status.SetEngineReady(true);
+
+        status.BeginDeviceMove("Switching to the NPU · {time} · first time may take longer");
+        Assert.Equal("Switching to the NPU · 0:00 · first time may take longer", status.DisplayLabel);
+        clock.Advance(TimeSpan.FromSeconds(72));
+        Assert.Equal("Switching to the NPU · 1:12 · first time may take longer", status.DisplayLabel);
+        Assert.True(status.Busy);
+
+        status.EndDeviceMove();
+        status.Append("Ready");
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal("Ready", status.DisplayLabel);
+    }
+
     // At start the model list is fetched before the shell sends its saved tier, so it names the
     // engine's default. The lane's own messages name the model being loaded, from the start
     [Fact]

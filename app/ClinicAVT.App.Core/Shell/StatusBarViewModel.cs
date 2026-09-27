@@ -40,6 +40,8 @@ public sealed partial class StatusBarViewModel : ObservableObject
     // First-time setup holds recording while the models compile for this computer
     private bool _settingUp;
     private DateTimeOffset _setupSince;
+    private string? _moveLine;
+    private DateTimeOffset _moveSince;
     private ITimer? _tick;
     // The store stopped taking writes. It stays on the line until the next consultation starts
     private string _storageFault = "";
@@ -199,7 +201,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public bool ConsentVisible => _status == EngineStatus.Running && _ready && _sessionIdle && !_settingUp;
 
     public string SetupLine =>
-        $"Setting up for this computer · {SetupElapsed} · this can take a few minutes";
+        $"First-time setup · {SetupElapsed} · optimising for your PC";
 
     /// <summary>A note model is loading. Loads can take minutes, so the line counts the time.</summary>
     [ObservableProperty]
@@ -252,6 +254,26 @@ public sealed partial class StatusBarViewModel : ObservableObject
         Tick();
     }
 
+    /// <summary>
+    /// Speech recognition is moving device. A first move compiles for minutes, so the line counts
+    /// the time until the engine reports the outcome.
+    /// </summary>
+    public void BeginDeviceMove(string line)
+    {
+        _moveLine = line;
+        _moveSince = _time.GetUtcNow();
+        Append(MoveLine(0), busy: true);
+        Tick();
+    }
+
+    public void EndDeviceMove()
+    {
+        _moveLine = null;
+        Tick();
+    }
+
+    private string MoveLine(double seconds) => _moveLine!.Replace("{time}", Words.Clock(seconds), StringComparison.Ordinal);
+
     /// <summary>Recording is held while the models compile for this computer.</summary>
     public void SetSettingUp(bool settingUp)
     {
@@ -275,10 +297,10 @@ public sealed partial class StatusBarViewModel : ObservableObject
         OnPropertyChanged(nameof(ConsentVisible));
     }
 
-    // One clock for both counters, running only while one of them counts
+    // One clock for every counter, running only while one of them counts
     private void Tick()
     {
-        if (ModelLoading || _settingUp)
+        if (ModelLoading || _settingUp || _moveLine is not null)
         {
             _tick ??= _time.CreateTimer(
                 _ => _dispatcher.Post(OnTick), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
@@ -301,6 +323,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
         if (_settingUp)
         {
             SetupElapsed = Words.Clock((now - _setupSince).TotalSeconds);
+        }
+
+        if (_moveLine is not null)
+        {
+            Show(MoveLine((now - _moveSince).TotalSeconds), busy: true);
         }
     }
 
@@ -344,6 +371,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public void SetEngineReady(bool ready)
     {
         _ready = ready;
+        if (!ready)
+        {
+            EndDeviceMove();
+        }
+
         Recompute();
     }
 

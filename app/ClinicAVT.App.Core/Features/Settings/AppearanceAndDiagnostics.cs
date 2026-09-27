@@ -105,9 +105,9 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         _preferences.Update(p => p.NpuTranscription = value);
         if (_client.IsConnected())
         {
-            _status?.Append(value
-                ? "preparing the low-power model - the first switch can take a few minutes"
-                : "switching speech recognition to the GPU", busy: true);
+            _status?.BeginDeviceMove(value
+                ? "Switching to the NPU · {time} · first time may take longer"
+                : "Switching to the GPU · {time}");
             _ = MoveSpeechRecognitionAsync(value);
         }
     }
@@ -117,6 +117,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     {
         if (state.State == "ready")
         {
+            _status?.EndDeviceMove();
             _status?.Append("Ready");
         }
         else if (state.State == "failed")
@@ -144,6 +145,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         NpuTranscription = !npu;
         _reverting = false;
         _preferences.Update(p => p.NpuTranscription = !npu);
+        _status?.EndDeviceMove();
         _status?.Append($"Could not switch transcription device: {reason}");
     }
 
