@@ -6,7 +6,7 @@ RULES - follow exactly:
 - Name the problem or purpose as the note states it - never add a diagnosis the note does not contain.
 - Use British English.
 
-Examples of good titles: "Elbow swelling", "Diarrhoea and vomiting", "Medication review", "Chest pain follow-up".
+A good title is a short noun phrase, such as "Knee pain" or "Low mood".
 
 Output ONLY the title, nothing else.
 
