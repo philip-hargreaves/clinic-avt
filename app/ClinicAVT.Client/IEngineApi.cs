@@ -15,6 +15,9 @@ public interface IEngineApi
 
     Task<EngineReadiness> ReadinessAsync();
 
+    /// <summary>Asks the engine to leave once this shell disconnects, as soon as no load keeps it.</summary>
+    Task RequestExitAsync();
+
     Task<IReadOnlyList<ModelInfo>> ListModelsAsync();
 
     Task<EngineMetrics> MetricsAsync(TimeSpan? timeout = null);
@@ -61,6 +64,10 @@ public interface IEngineApi
     Task<int> DeleteAllSessionsAsync();
 
     Task<NoteTierState> SetNoteTierAsync(string tier);
+
+    /// <summary>Moves speech recognition to "GPU" or "NPU" in place. An asr/device
+    /// notification says when it is ready.</summary>
+    Task<AsrDeviceState> SetAsrDeviceAsync(string device);
 
     Task SetNoteOptionsAsync(string style, string detail);
 

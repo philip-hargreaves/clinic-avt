@@ -17,7 +17,7 @@ public class GuidanceContractTest
     [Fact]
     public async Task WithoutAnEmbedderTheFeatureSaysSoAndSearchesFailCleanly()
     {
-        var wav = SessionContractTest.WriteSilenceWav();
+        var wav = SilenceWav.Write();
         try
         {
             await using var engine =

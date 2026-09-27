@@ -14,6 +14,11 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="ClinicAVT.TestSupport" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\TestSupport\*.cs" LinkBase="Support" />
   </ItemGroup>
 
   <ItemGroup>

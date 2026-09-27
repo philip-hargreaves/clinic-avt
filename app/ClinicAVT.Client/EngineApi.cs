@@ -40,6 +40,8 @@ public sealed class EngineApi : IEngineApi
 
     public Task<EngineReadiness> ReadinessAsync() => ReplyAsync<EngineReadiness>("engine/readiness");
 
+    public Task RequestExitAsync() => CallAsync("engine/exit");
+
     public Task<IReadOnlyList<ModelInfo>> ListModelsAsync() =>
         ListAsync<ModelInfo>("engine/models", "models");
 
@@ -110,6 +112,9 @@ public sealed class EngineApi : IEngineApi
 
     public Task<NoteTierState> SetNoteTierAsync(string tier) =>
         ReplyAsync<NoteTierState>("note/tier", new { tier }, LongTimeout);
+
+    public Task<AsrDeviceState> SetAsrDeviceAsync(string device) =>
+        ReplyAsync<AsrDeviceState>("asr/device", new { device });
 
     public Task SetNoteOptionsAsync(string style, string detail) =>
         CallAsync("note/options", new { style, detail });

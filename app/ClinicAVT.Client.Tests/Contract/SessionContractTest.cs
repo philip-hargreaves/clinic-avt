@@ -17,41 +17,10 @@ public class SessionContractTest
     private static readonly string[] ExpectedNotifications =
         ["session/progress", "session/progress", "session/progress", "note/ready", "patient/ready"];
 
-    // Two seconds of PCM16 silence that sessions replay instead of a microphone
-    internal static string WriteSilenceWav()
-    {
-        const int frames = 2 * 16000;
-        var bytes = new byte[44 + frames * 2];
-        void Tag(int offset, string tag) =>
-            System.Text.Encoding.ASCII.GetBytes(tag).CopyTo(bytes, offset);
-        void U32(int offset, uint value) =>
-            BitConverter.GetBytes(value).CopyTo(bytes, offset);
-        void U16(int offset, ushort value) =>
-            BitConverter.GetBytes(value).CopyTo(bytes, offset);
-        Tag(0, "RIFF");
-        U32(4, (uint)(bytes.Length - 8));
-        Tag(8, "WAVE");
-        Tag(12, "fmt ");
-        U32(16, 16);
-        U16(20, 1);
-        U16(22, 1);
-        U32(24, 16000);
-        U32(28, 32000);
-        U16(32, 2);
-        U16(34, 16);
-        Tag(36, "data");
-        U32(40, (uint)(frames * 2));
-
-        var path = Path.Combine(
-            Path.GetTempPath(), $"clinicavt-silence-{Guid.NewGuid():N}.wav");
-        File.WriteAllBytes(path, bytes);
-        return path;
-    }
-
     [Fact]
     public async Task StopProducesTheNoteThenPatientNotifications()
     {
-        var wav = WriteSilenceWav();
+        var wav = SilenceWav.Write();
         try
         {
             await using var engine =
@@ -95,9 +64,12 @@ public class SessionContractTest
                             .Where(n => n is not ("audio.level" or "guidance/model"))
                             .ToArray());
                 }
+
+                await client.RequestAsync("engine/exit", null, Timeout);
             }
 
-            // Disconnect ends ServeOneClient, and supervised restarts rely on this exit
+            // Asked to leave, the engine goes once its shell disconnects. Unasked, it would
+            // wait for the shell to come back
             Assert.Equal(0, await engine.WaitForExitAsync(Timeout));
 
             // Of the two sessions, the cancelled one left nothing and the stopped
