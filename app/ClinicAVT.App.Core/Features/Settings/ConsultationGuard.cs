@@ -5,8 +5,7 @@ namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
 /// Settings that would disturb a consultation being recorded or finalised wait until it is over.
-/// A finished one on screen blocks nothing; the engine refuses, with its reason, anything that
-/// would disturb its own work still running, such as a sheet being written.
+/// The engine refuses, with its reason, anything that clashes with its own work still running.
 /// </summary>
 internal static class ConsultationGuard
 {

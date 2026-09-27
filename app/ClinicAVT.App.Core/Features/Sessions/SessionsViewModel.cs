@@ -23,7 +23,6 @@ public sealed partial class SessionsViewModel : ObservableObject
     private readonly ConsultationViewModel _consultation;
     private readonly IDialogService _dialogs;
     private readonly AppPreferences? _preferences;
-    private readonly ISessionState? _session;
 
     // Set while the list moves the selection itself, on a refresh or a rename, so the
     // reselection does not reopen the session
@@ -31,14 +30,13 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     public SessionsViewModel(
         IEngineApi engine, StatusBarViewModel status, ConsultationViewModel consultation,
-        IDialogService dialogs, AppPreferences? preferences = null, ISessionState? session = null)
+        IDialogService dialogs, AppPreferences? preferences = null)
     {
         _engine = engine;
         _status = status;
         _consultation = consultation;
         _dialogs = dialogs;
         _preferences = preferences;
-        _session = session;
         // The list is on screen while a recording ends, so it follows the store
         consultation.Recorder.Sealed += id => _ = RefreshAsync();
         // The line under the title names the note's style, which a rewrite changes
@@ -320,7 +318,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     [RelayCommand]
     private async Task BackUp()
     {
-        if (!_engine.Connected || Settings.ConsultationGuard.Blocks(_session, _status, "backing up"))
+        if (!_engine.Connected || Settings.ConsultationGuard.Blocks(_consultation, _status, "backing up"))
         {
             return;
         }

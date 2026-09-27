@@ -3,13 +3,9 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Common;
 
-/// <summary>The engine's reason for a refusal, in the words the rest of the app uses.</summary>
 public static partial class EngineWords
 {
-    /// <summary>
-    /// The engine's reason with its internal nouns swapped for the clinician's. Anything that is
-    /// not an engine refusal keeps its own message.
-    /// </summary>
+    /// <summary>The engine's reason for a refusal, its internal nouns swapped for the clinician's.</summary>
     public static string Reason(Exception e)
     {
         if (e is OperationCanceledException)

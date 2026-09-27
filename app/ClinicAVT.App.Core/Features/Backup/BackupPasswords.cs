@@ -53,10 +53,7 @@ public static class BackupPasswords
         return string.Join('-', chosen);
     }
 
-    /// <summary>
-    /// What is wrong with the clinician's own password, or empty when it will do. Nothing is said
-    /// about the second box until something is typed in it.
-    /// </summary>
+    /// <summary>What is wrong with the clinician's own password, or empty. The second box counts once typed in.</summary>
     public static string Problem(string password, string again)
     {
         if (password.Length == 0)
@@ -78,7 +75,6 @@ public static class BackupPasswords
         return again.Length > 0 && again != password ? "The two passwords do not match." : "";
     }
 
-    /// <summary>True when the clinician's own password can lock a backup.</summary>
     public static bool Acceptable(string password, string again) =>
         password.Length > 0 && again == password && Problem(password, again).Length == 0;
 

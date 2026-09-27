@@ -5,6 +5,13 @@ internal sealed class FakeTimeProvider : TimeProvider
 {
     private readonly List<FakeTimer> _timers = [];
 
+    /// <summary>9:00 UTC on 27 September 2026, read in London time.</summary>
+    public static FakeTimeProvider London() => new()
+    {
+        Now = new DateTimeOffset(2026, 9, 27, 9, 0, 0, TimeSpan.Zero),
+        Zone = TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time"),
+    };
+
     public DateTimeOffset Now { get; set; } = DateTimeOffset.UnixEpoch;
 
     public override DateTimeOffset GetUtcNow() => Now;

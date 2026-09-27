@@ -171,8 +171,7 @@ public class SettingsViewModelTest
         Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
     }
 
-    // A finished consultation on screen is not in progress: nothing waits for it, and deleting
-    // everything closes its review first so the screen never shows erased data
+    // Deleting everything closes the review first, so the screen never shows erased data
     [Fact]
     public async Task AFinishedConsultationOnScreenBlocksNothingAndDeleteAllClosesItsReview()
     {
@@ -234,7 +233,7 @@ public class SettingsViewModelTest
         engine.GuidanceDocuments.Add(Document(1, "Gout", "ready", 41));
         var settings = new SettingsViewModel(TempPreferences(), client: new EngineApi(engine));
 
-        Assert.Equal("1 document · all ready", settings.Guidance.DocumentsSummary);
+        Assert.Equal("1 document", settings.Guidance.DocumentsSummary);
         Assert.False(settings.Guidance.DocumentsExpanded);
 
         engine.RaiseNotification("guidance/document", Params(Document(2, "Letter", "failed", error: "password")));
@@ -666,7 +665,7 @@ public class SettingsViewModelTest
         engine.RaiseNotification("guidance/document", Params(Document(3, "PMR", "ready", 10)));
         Assert.Equal("10 passages · added 15 Sep 2026", row.Detail);
         Assert.False(row.Working);
-        Assert.EndsWith("all ready", settings.Guidance.DocumentsSummary);
+        Assert.DoesNotContain("·", settings.Guidance.DocumentsSummary);
 
         await settings.Guidance.RemoveDocumentCommand.ExecuteAsync(row);
         Assert.Equal(2, asked);

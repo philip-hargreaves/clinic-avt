@@ -5,8 +5,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Tests.TestDoubles;
 
 /// <summary>
-/// Test-double engine. After session/stop it pushes note/ready then
-/// patient/ready, like the real pipeline.
+/// Test-double engine. After session/stop or session/import it pushes note/ready then
+/// patient/ready, like the real pipeline. An import reports its finalise stages first.
 /// </summary>
 public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 {
@@ -28,6 +28,10 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 
     /// <summary>Every request, as (method, serialised params).</summary>
     public List<(string Method, string Params)> Requests { get; } = [];
+
+    /// <summary>The params of the last request for the method.</summary>
+    public JsonElement Sent(string method) =>
+        JsonDocument.Parse(Requests.Last(r => r.Method == method).Params).RootElement;
 
     /// <summary>A scripted reply per method, served before anything below.</summary>
     public Dictionary<string, object> Responses { get; } = [];
@@ -87,6 +91,34 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
             }
 
             return Task.FromResult(JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
+        }
+
+        if (method == "recording/inspect")
+        {
+            return Task.FromResult(JsonSerializer.SerializeToElement(
+                new { seconds = RecordingSeconds, recordedAt = RecordingRecordedAt }));
+        }
+
+        // The engine answers at once and finalises on its own thread, reporting its stages as
+        // session/stop does. Its end can arrive before the answer. HoldImport keeps it running
+        if (method == "session/import")
+        {
+            ImportRunning = true;
+            if (!HoldImport)
+            {
+                FinishImport();
+            }
+
+            return Task.FromResult(JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
+        }
+
+        // A held import stops at its next span and is erased
+        if (method == "session/cancel" && ImportRunning)
+        {
+            ImportRunning = false;
+            RaiseNotification("session/importFailed",
+                JsonSerializer.SerializeToElement(new { sessionId = "s1", error = "cancelled" }));
+            return Task.FromResult(Empty);
         }
 
         if (method == "engine/readiness")
@@ -338,6 +370,40 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 
         return Task.FromResult(Empty);
     }
+
+    /// <summary>Served by recording/inspect, the shape of the shared fixture.</summary>
+    public double RecordingSeconds { get; set; } = 760.4;
+
+    public string? RecordingRecordedAt { get; set; } = "2026-09-26T13:05:00Z";
+
+    /// <summary>The session/progress stages an import reports before it answers.</summary>
+    public List<string> ImportStages { get; } = ["transcript", "speakers", "turns"];
+
+    /// <summary>Leaves an import running until FinishImport or session/cancel.</summary>
+    public bool HoldImport { get; set; }
+
+    public bool ImportRunning { get; private set; }
+
+    /// <summary>Seals the import: its stages, session/imported, then the note.</summary>
+    public void FinishImport()
+    {
+        ImportRunning = false;
+        foreach (var stage in ImportStages)
+        {
+            RaiseNotification("session/progress", JsonSerializer.SerializeToElement(new { stage }));
+        }
+
+        RaiseNotification("session/imported", JsonSerializer.SerializeToElement(new { sessionId = "s1" }));
+        if (autoNotify)
+        {
+            _ = NotifySequenceAsync();
+        }
+    }
+
+    /// <summary>The import's pass has reached seconds of total.</summary>
+    public void ImportProgress(double seconds, double total) =>
+        RaiseNotification("session/importProgress",
+            JsonSerializer.SerializeToElement(new { sessionId = "s1", seconds, total }));
 
     /// <summary>Served by guidance/documents, empty by default.</summary>
     public List<object> GuidanceDocuments { get; } = [];

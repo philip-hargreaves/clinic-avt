@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
@@ -16,10 +17,7 @@ public enum BackupStep
     Removed,
 }
 
-/// <summary>
-/// The Back up dialog: which consultations, the password, where to save, then the engine writes
-/// and checks the file. A checked backup offers to remove exactly what it holds.
-/// </summary>
+/// <summary>The Back up dialog. A checked backup offers to remove exactly what it holds.</summary>
 public sealed partial class BackupViewModel : ObservableObject, IDisposable
 {
     private readonly IEngineApi _engine;
@@ -41,7 +39,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         AppPreferences? preferences = null, IUiDispatcher? dispatcher = null, TimeProvider? clock = null,
         Func<string, string?>? environment = null, ISessionState? session = null)
     {
-        _session = session;
         _engine = engine;
         _picker = picker;
         _clipboard = clipboard;
@@ -50,6 +47,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         _dispatcher = dispatcher;
         _clock = clock ?? TimeProvider.System;
         _environment = environment ?? Environment.GetEnvironmentVariable;
+        _session = session;
         HasLastBackup = preferences?.LastBackup is not null;
         // One password for every backup, so after the first the clinician's own comes first
         UseGenerated = !HasLastBackup;
@@ -94,9 +92,8 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     public string CloseText => Step switch
     {
-        BackupStep.Setup => "Cancel",
+        BackupStep.Setup or BackupStep.ConfirmRemove => "Cancel",
         BackupStep.Working => "",
-        BackupStep.ConfirmRemove => "Cancel",
         _ => "Done",
     };
 
@@ -108,7 +105,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
     /// <summary>True once consultations were removed, so the lists reload.</summary>
     public bool RemovedAny { get; private set; }
 
-    /// <summary>What went wrong, in plain words, under the step it happened in.</summary>
     [ObservableProperty]
     public partial string Error { get; private set; } = "";
 
@@ -205,7 +201,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     private TimeZoneInfo Zone => _clock.LocalTimeZone;
 
-    /// <summary>Counts the default period. The dialog calls it as it opens.</summary>
+    /// <summary>Counts the default period as the dialog opens.</summary>
     public Task LoadAsync() => CountAsync();
 
     [RelayCommand]
@@ -388,7 +384,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         Progress = 1;
         DoneLine = $"{Words.Count(done.Consultations, "consultation")} backed up and checked.";
         var createdAt = string.IsNullOrEmpty(done.CreatedAt)
-            ? _clock.GetUtcNow().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)
+            ? _clock.GetUtcNow().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
             : done.CreatedAt;
         _preferences.Update(p => p.LastBackup = new LastBackup(_sentFrom, _sentTo, createdAt, done.Consultations));
         Step = BackupStep.Done;

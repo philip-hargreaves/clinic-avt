@@ -44,7 +44,6 @@ public sealed record BackupPeriod(DateOnly? First, DateOnly? Last)
         };
     }
 
-    /// <summary>A chosen range that ends before it starts is no period at all.</summary>
     public bool Valid => First is null || Last is null || First <= Last;
 
     public string From(TimeZoneInfo zone) => First is { } day ? Utc(day, zone) : "";
@@ -70,7 +69,7 @@ public sealed record BackupPeriod(DateOnly? First, DateOnly? Last)
     public static BackupPeriod FromWire(string? from, string? to, TimeZoneInfo zone) =>
         new(LocalDay(from, zone), LocalDay(to, zone)?.AddDays(-1));
 
-    public static string Day(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+    private static string Day(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
 
     private static string MonthName(DateOnly day) => day.ToString("MMMM", CultureInfo.InvariantCulture);
 

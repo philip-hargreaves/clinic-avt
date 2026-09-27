@@ -3,7 +3,7 @@ using ClinicAVT.App.Core.Features.Settings;
 
 namespace ClinicAVT.App.Core.Features.Backup;
 
-/// <summary>What the backup and restore dialogs say, kept together so the wording stays one voice.</summary>
+/// <summary>The backup and restore dialogs' wording.</summary>
 public static class BackupWords
 {
     public const string Caption =

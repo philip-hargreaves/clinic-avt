@@ -17,8 +17,8 @@ public enum RestoreStep
 }
 
 /// <summary>
-/// The Restore dialog. The engine reads the whole file first and says what it holds and what is
-/// already here; only then does Restore add anything. Consultations already here are skipped.
+/// The Restore dialog. A dry run reads the whole file and counts before Restore adds anything.
+/// Consultations already here are skipped.
 /// </summary>
 public sealed partial class RestoreViewModel : ObservableObject, IDisposable
 {
@@ -96,7 +96,6 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(PrimaryEnabled))]
     public partial string Password { get; set; } = "";
 
-    /// <summary>What went wrong, in plain words, under the password.</summary>
     [ObservableProperty]
     public partial string Error { get; private set; } = "";
 
@@ -118,7 +117,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ChooseFile()
     {
-        if (await _picker.PickFileAsync(".clinicavt").ConfigureAwait(true) is { } path)
+        if (await _picker.PickFileAsync([".clinicavt"]).ConfigureAwait(true) is { } path)
         {
             Path = path;
             Error = "";

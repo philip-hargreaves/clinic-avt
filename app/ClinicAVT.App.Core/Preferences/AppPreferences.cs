@@ -112,10 +112,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// </summary>
     public string NoteTier { get; set; } = "default";
 
-    /// <summary>
-    /// The last backup that was made and checked, null before the first. Delete all states what it
-    /// does not hold, and the Back up dialog asks for the same password again.
-    /// </summary>
+    /// <summary>The last checked backup, null before the first.</summary>
     public LastBackup? LastBackup { get; set; }
 
     public static AppPreferences Load(string path, ILogger? logger = null) =>

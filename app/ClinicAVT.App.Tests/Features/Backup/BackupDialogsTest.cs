@@ -12,19 +12,9 @@ public class BackupDialogsTest
 {
     private static readonly string[] BackedUpIds = ["a1", "b2"];
 
-    private static readonly TimeZoneInfo London = TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time");
-
-    private static FakeTimeProvider Clock() =>
-        new() { Now = new DateTimeOffset(2026, 9, 27, 9, 0, 0, TimeSpan.Zero), Zone = London };
-
     private static AppPreferences TempPreferences() =>
         new(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
 
-    private static JsonElement Sent(FakeEngineClient engine, string method) =>
-        JsonDocument.Parse(engine.Requests.Last(r => r.Method == method).Params).RootElement;
-
-    // Move then empty: a first backup with the offered words, checked, then exactly what it
-    // holds removed, the reflections kept
     [Fact]
     public async Task AFirstBackupOffersAPasswordThenRemovesExactlyWhatItHolds()
     {
@@ -36,7 +26,7 @@ public class BackupDialogsTest
         var launcher = new FakeLauncher();
         var preferences = TempPreferences();
         using var backup = new BackupViewModel(new EngineApi(engine), picker, clipboard, launcher, preferences,
-            new InlineDispatcher(), Clock(),
+            new InlineDispatcher(), FakeTimeProvider.London(),
             name => name is "OneDriveCommercial" or "OneDrive" ? @"C:\Users\gp\OneDrive - NHS" : null);
         await backup.LoadAsync();
 
@@ -58,7 +48,7 @@ public class BackupDialogsTest
         await backup.PrimaryCommand.ExecuteAsync(null);
 
         Assert.Equal(["ClinicAVT backup 27 Sep 2026"], picker.SuggestedNames);
-        var sent = Sent(engine, "archive/backup");
+        var sent = engine.Sent("archive/backup");
         Assert.Equal(("", "", chosen), (sent.GetProperty("from").GetString(), sent.GetProperty("to").GetString(),
             sent.GetProperty("password").GetString()));
         Assert.True(backup.BlocksClose);
@@ -89,14 +79,13 @@ public class BackupDialogsTest
         Assert.False(backup.DeleteReflections);  // off unless ticked
 
         await backup.PrimaryCommand.ExecuteAsync(null);
-        var removed = Sent(engine, "session/remove");
+        var removed = engine.Sent("session/remove");
         Assert.Equal(BackedUpIds, removed.GetProperty("ids").EnumerateArray().Select(i => i.GetString()));
         Assert.False(removed.GetProperty("deleteReflections").GetBoolean());
         Assert.Equal("2 consultations removed from this computer.", backup.DoneLine);
         Assert.True(backup.RemovedAny);
     }
 
-    // One password for every backup: after the first, the clinician's own comes first
     [Fact]
     public async Task AnOwnPasswordIsCheckedAndALaterBackupOffersItFirst()
     {
@@ -105,7 +94,7 @@ public class BackupDialogsTest
         var preferences = TempPreferences();
         preferences.LastBackup = new LastBackup("", "", "2026-08-31T17:00:00Z", 40);
         using var backup = new BackupViewModel(new EngineApi(engine), new FakeFilePicker(), new FakeClipboard(),
-            new FakeLauncher(), preferences, new InlineDispatcher(), Clock());
+            new FakeLauncher(), preferences, new InlineDispatcher(), FakeTimeProvider.London());
         backup.PeriodIndex = 1;
 
         Assert.Equal("Last month (August)", backup.PeriodOptions[1]);
@@ -127,17 +116,16 @@ public class BackupDialogsTest
         // August in London starts at 23:00 UTC the day before
         var picker = new FakeFilePicker { SavePath = @"E:\b.clinicavt" };
         using var saving = new BackupViewModel(new EngineApi(engine), picker, new FakeClipboard(),
-            new FakeLauncher(), preferences, new InlineDispatcher(), Clock())
+            new FakeLauncher(), preferences, new InlineDispatcher(), FakeTimeProvider.London())
         { PeriodIndex = 1, OwnPassword = "harbour lights at dusk", OwnAgain = "harbour lights at dusk" };
         await saving.PrimaryCommand.ExecuteAsync(null);
-        var sent = Sent(engine, "archive/backup");
+        var sent = engine.Sent("archive/backup");
         Assert.Equal("2026-07-31T23:00:00Z", sent.GetProperty("from").GetString());
         Assert.Equal("2026-08-31T23:00:00Z", sent.GetProperty("to").GetString());
         Assert.Equal(["ClinicAVT backup 1 Aug to 31 Aug 2026"], picker.SuggestedNames);
         Assert.Equal("", saving.OneDriveLine);
     }
 
-    // Failures reach the dialog in plain words, never the engine's own nouns
     [Fact]
     public async Task FailuresComeBackInPlainWordsAndLeaveTheDialogReadyToTryAgain()
     {
@@ -145,7 +133,7 @@ public class BackupDialogsTest
         engine.Responses["archive/summary"] = new { consultations = 3, reflections = 0, unfinished = 0, uncovered = 3 };
         using var backup = new BackupViewModel(new EngineApi(engine),
             new FakeFilePicker { SavePath = @"E:\b.clinicavt" }, new FakeClipboard(), new FakeLauncher(),
-            dispatcher: new InlineDispatcher(), clock: Clock());
+            dispatcher: new InlineDispatcher(), clock: FakeTimeProvider.London());
         await backup.LoadAsync();
 
         engine.FailNext = method => method == "archive/backup"
@@ -185,7 +173,7 @@ public class BackupDialogsTest
         var picker = new FakeFilePicker { OpenPath = @"E:\ClinicAVT backup 1 Jul to 30 Sep 2026.clinicavt" };
         var preferences = TempPreferences();
         using var restore = new RestoreViewModel(new EngineApi(engine), picker, preferences,
-            new InlineDispatcher(), Clock());
+            new InlineDispatcher(), FakeTimeProvider.London());
 
         // Restoring onto a computer set to keep nothing would override that choice
         await restore.ChooseFileCommand.ExecuteAsync(null);
@@ -194,14 +182,14 @@ public class BackupDialogsTest
         Assert.False(restore.PrimaryEnabled);
         preferences.KeepConsultations = true;
         using var allowed = new RestoreViewModel(new EngineApi(engine), picker, preferences,
-            new InlineDispatcher(), Clock());
+            new InlineDispatcher(), FakeTimeProvider.London());
         await allowed.ChooseFileCommand.ExecuteAsync(null);
         allowed.Password = "maple-orbit-fender-quill-harbor";
         Assert.Equal("ClinicAVT backup 1 Jul to 30 Sep 2026.clinicavt", allowed.FileName);
         Assert.True(allowed.PrimaryEnabled);
 
         await allowed.PrimaryCommand.ExecuteAsync(null);
-        Assert.True(Sent(engine, "archive/restore").GetProperty("dryRun").GetBoolean());
+        Assert.True(engine.Sent("archive/restore").GetProperty("dryRun").GetBoolean());
         engine.RaiseNotification("archive/failed", Params(new { job = "restore", code = "wrong-password" }));
         Assert.Equal("The password does not match this backup.", allowed.Error);
         Assert.Equal(RestoreStep.Choose, allowed.Step);
@@ -223,7 +211,7 @@ public class BackupDialogsTest
         Assert.Equal("Restore", allowed.PrimaryText);
 
         await allowed.PrimaryCommand.ExecuteAsync(null);
-        Assert.False(Sent(engine, "archive/restore").GetProperty("dryRun").GetBoolean());
+        Assert.False(engine.Sent("archive/restore").GetProperty("dryRun").GetBoolean());
         engine.RaiseNotification("archive/progress", Params(new { job = "restore", phase = "writing", done = 3, total = 33 }));
         Assert.Equal("Restoring 3 of 33 consultations…", allowed.ProgressText);
         engine.RaiseNotification("archive/done", Params(new
@@ -237,9 +225,9 @@ public class BackupDialogsTest
         }));
         Assert.Equal("33 consultations restored.", allowed.DoneLine);
 
-        // A backup already restored has nothing to add: one line, and nothing to press but Close
+        // A backup already restored has nothing to add
         using var again = new RestoreViewModel(new EngineApi(engine), picker, preferences,
-            new InlineDispatcher(), Clock());
+            new InlineDispatcher(), FakeTimeProvider.London());
         await again.ChooseFileCommand.ExecuteAsync(null);
         again.Password = "maple-orbit-fender-quill-harbor";
         await again.PrimaryCommand.ExecuteAsync(null);

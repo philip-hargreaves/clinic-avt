@@ -110,27 +110,19 @@ public sealed partial class PrivacySettings : ObservableObject
             : "No backup yet.");
 
     [RelayCommand]
-    private async Task BackUp()
-    {
-        if (_dialogs is null || !_client.IsConnected()
-            || ConsultationGuard.Blocks(_session, _status, "backing up"))
-        {
-            return;
-        }
-
-        await _dialogs.RunBackupAsync().ConfigureAwait(true);
-    }
+    private Task BackUp() => RunDialogAsync("backing up", dialogs => dialogs.RunBackupAsync());
 
     [RelayCommand]
-    private async Task Restore()
+    private Task Restore() => RunDialogAsync("restoring", dialogs => dialogs.RunRestoreAsync());
+
+    private async Task RunDialogAsync(string action, Func<IDialogService, Task> run)
     {
-        if (_dialogs is null || !_client.IsConnected()
-            || ConsultationGuard.Blocks(_session, _status, "restoring"))
+        if (_dialogs is null || !_client.IsConnected() || ConsultationGuard.Blocks(_session, _status, action))
         {
             return;
         }
 
-        await _dialogs.RunRestoreAsync().ConfigureAwait(true);
+        await run(_dialogs).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -182,10 +174,7 @@ public sealed partial class PrivacySettings : ObservableObject
         }).ConfigureAwait(true);
     }
 
-    /// <summary>
-    /// How much of the store the last checked backup holds. The engine counts, since only it
-    /// sees consultations recorded or edited since.
-    /// </summary>
+    // The engine counts, since only it sees consultations recorded or edited after the backup
     private async Task<string> CoverageLineAsync(IEngineApi client)
     {
         if (_preferences?.LastBackup is not { } last)

@@ -18,7 +18,6 @@ public sealed partial class BackupDialog : ContentDialog
 
     public BackupViewModel ViewModel { get; }
 
-    /// <summary>A line that shows only when it has something to say.</summary>
     public static Visibility Shown(string text) =>
         string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
 
