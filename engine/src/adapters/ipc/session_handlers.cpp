@@ -1,6 +1,9 @@
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 
@@ -8,6 +11,10 @@
 #include "adapters/demo/sample_year.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/translate/translate_lane.hpp"
+#include "core/archive/record_rules.hpp"
+#include "core/common/iso8601.hpp"
+#include "core/common/strings.hpp"
+#include "core/common/utf8.hpp"
 #include "core/note/summary_scrub.hpp"
 
 namespace clinicavt::ipc {
@@ -131,21 +138,19 @@ std::variant<json, Error> HandleSessionRemove(clinicavt::store::ISessionStore& s
     if (!listed) return InvalidParams("ids must be a list of session ids");
     if (archive_busy) return SessionError(kArchiveRunning);
     std::size_t removed = 0;
-    try {
-        for (const auto& id : params["ids"]) {
-            try {
-                if (*delete_reflections) {
-                    sessions.Delete(id.get<std::string>());
-                } else {
-                    sessions.Clear(id.get<std::string>());
-                }
-                removed += 1;
-            } catch (const clinicavt::store::StoreError& e) {
-                if (e.Code() != clinicavt::store::StoreCode::kNotFound) throw;
+    for (const auto& id : params["ids"]) {
+        try {
+            if (*delete_reflections) {
+                sessions.Delete(id.get<std::string>());
+            } else {
+                sessions.Clear(id.get<std::string>());
             }
+            removed += 1;
+        } catch (const clinicavt::store::StoreError& e) {
+            if (e.Code() != clinicavt::store::StoreCode::kNotFound) return SessionError(e.what());
+        } catch (const std::exception& e) {
+            return SessionError(e.what());
         }
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
     }
     return json{{"removed", removed}};
 }
@@ -235,14 +240,16 @@ std::variant<json, Error> HandleReflectionUpdate(clinicavt::store::ISessionStore
             if (!objects) return InvalidParams("references must be an array of objects");
         }
         if (params.contains("summary")) {
-            sessions.EditDocument(
-                session, DocumentKind::kSummary,
-                clinicavt::note::ScrubSummary(params["summary"].get<std::string>()));
+            sessions.EditDocument(session, DocumentKind::kSummary,
+                                  clinicavt::note::ScrubSummary(clinicavt::strings::UnixLines(
+                                      params["summary"].get<std::string>())));
         }
         const auto stored = sessions.ReadDocument(session, DocumentKind::kReflection);
         json answers = AnswersFrom(stored.text);
         for (const char* key : kAnswers) {
-            if (params.contains(key)) answers[key] = params[key];
+            if (params.contains(key)) {
+                answers[key] = clinicavt::strings::UnixLines(params[key].get<std::string>());
+            }
         }
         if (params.contains("references")) {
             answers["references"] = json::array();
@@ -314,7 +321,8 @@ auto EditDocument(clinicavt::store::ISessionStore& sessions, clinicavt::store::D
             if (!params.contains("text") || !params["text"].is_string()) {
                 return InvalidParams("text must be a string");
             }
-            sessions.EditDocument(id, kind, params["text"].get<std::string>());
+            sessions.EditDocument(id, kind,
+                                  clinicavt::strings::UnixLines(params["text"].get<std::string>()));
             return json::object();
         });
     };
@@ -344,7 +352,120 @@ std::variant<clinicavt::note::NoteOptions, Error> NoteOptionsFrom(const json& pa
     return options;
 }
 
+Notify QueueTo(PipeServer& server) {
+    return [&server](const std::string& method, json params) {
+        server.QueueNotification(method, std::move(params));
+    };
+}
+
+// The note and patient lanes announce themselves when a writer is wired. Without one the stubs
+// keep the contract for CI
+void StubDocuments(const Notify& notify) {
+    notify("note/ready", json::object());
+    notify("patient/ready", json::object());
+}
+
+std::optional<std::filesystem::path> RecordingPath(const json& params) {
+    if (!params.contains("path") || !params["path"].is_string() ||
+        params["path"].get_ref<const std::string&>().empty()) {
+        return std::nullopt;
+    }
+    return clinicavt::utf8::ToPath(params["path"].get_ref<const std::string&>());
+}
+
+// The reader's reason is plain words. Any other failure may name the file
+template <class Read>
+auto ReadRecording(Read read) -> std::variant<decltype(read()), Error> {
+    try {
+        return read();
+    } catch (const clinicavt::audio::RecordingError& e) {
+        return SessionError(e.what());
+    } catch (const std::exception&) {
+        return SessionError("the recording could not be read");
+    }
+}
+
 }  // namespace
+
+json ImportProgressJson(const std::string& id, double seconds, double total) {
+    const auto tenths = [](double value) { return std::round(value * 10.0) / 10.0; };
+    return json{{"sessionId", id}, {"seconds", tenths(seconds)}, {"total", tenths(total)}};
+}
+
+std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
+                                                 const json& params) {
+    const auto path = RecordingPath(params);
+    if (!path) return InvalidParams("path must be a file path");
+    const auto info = ReadRecording([&] { return reader.Inspect(*path); });
+    if (std::holds_alternative<Error>(info)) return std::get<Error>(info);
+    const auto& recording = std::get<clinicavt::audio::RecordingInfo>(info);
+    return json{{"seconds", recording.seconds},
+                {"recordedAt", clinicavt::Iso8601(recording.recorded_at)}};
+}
+
+std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
+                                              clinicavt::session::SessionController& controller,
+                                              bool playback_active,
+                                              clinicavt::translate::ITranslator* translator,
+                                              const Notify& push, const json& params) {
+    const auto path = RecordingPath(params);
+    if (!path) return InvalidParams("path must be a file path");
+    // Stores order times as text and restore accepts only this form
+    if (!params.contains("startedAt") || !params["startedAt"].is_string() ||
+        !clinicavt::archive::IsIso8601(params["startedAt"].get<std::string>())) {
+        return InvalidParams("startedAt must be UTC to the second, as 2026-09-26T13:05:00Z");
+    }
+    const std::string started_at = params["startedAt"].get<std::string>();
+    if (params.contains("retain") && !params["retain"].is_boolean()) {
+        return InvalidParams("retain must be true or false");
+    }
+    if (started_at > clinicavt::Iso8601Now()) {
+        return SessionError("the recording's date and time are in the future");
+    }
+    if (playback_active) return SessionError("a playback is running");
+    if (controller.Running()) return SessionError("a session is running");
+    // A file that cannot be opened is refused here. Its decode runs on the import's thread
+    const auto readable = ReadRecording([&] { return reader.Inspect(*path); });
+    if (std::holds_alternative<Error>(readable)) return std::get<Error>(readable);
+    // The whole recording and its finalise need the memory
+    if (translator != nullptr) translator->Release();
+    const auto read = [&reader, file = *path] {
+        try {
+            return reader.Decode(file);
+        } catch (const clinicavt::audio::RecordingError&) {
+            throw;
+        } catch (const std::exception&) {
+            throw std::runtime_error("the recording could not be read");
+        }
+    };
+    const bool stubs = !controller.HasNoteWriter();
+    clinicavt::session::ImportReport report{
+        .progress =
+            [push, percent = std::make_shared<int>(-1)](const std::string& id, double seconds,
+                                                        double total) {
+                // One notification per whole percent, so a long file never floods the pipe
+                const int now = total > 0 ? static_cast<int>(100.0 * seconds / total) : 0;
+                if (now <= *percent) return;
+                *percent = now;
+                push("session/importProgress", ImportProgressJson(id, seconds, total));
+            },
+        .done =
+            [push, stubs](const std::string& id, const std::string& error) {
+                if (!error.empty()) {
+                    push("session/importFailed", json{{"sessionId", id}, {"error", error}});
+                    return;
+                }
+                push("session/imported", json{{"sessionId", id}});
+                if (stubs) StubDocuments(push);
+            }};
+    const auto id =
+        controller.Import(read, started_at, params.value("retain", true), std::move(report));
+    if (id.empty()) {
+        return SessionError(
+            "a session or a voice enrolment is running, or the session could not be stored");
+    }
+    return json{{"sessionId", id}};
+}
 
 void RegisterSessionMethods(PipeServer& server, const EngineServices& services) {
     auto& controller = services.controller;
@@ -589,20 +710,30 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         controller.Close();
         return json::object();
     });
-    // The note and patient lanes announce themselves when a writer is
-    // wired. Without one the stubs keep the contract for CI
-    server.RegisterMethod("session/stop", [&server, &controller, playback](const json&) {
-        if (playback != nullptr && playback->Active()) {
-            playback->Stop();
-            return json{{"sessionId", playback->Current()}};
-        }
-        controller.Stop();
-        if (!controller.HasNoteWriter()) {
-            server.QueueNotification("note/ready", json::object());
-            server.QueueNotification("patient/ready", json::object());
-        }
-        return json{{"sessionId", controller.LastFinalised()}};
-    });
+    server.RegisterMethod(
+        "session/stop", [&server, &controller, playback](const json&) -> std::variant<json, Error> {
+            if (playback != nullptr && playback->Active()) {
+                playback->Stop();
+                return json{{"sessionId", playback->Current()}};
+            }
+            // Stop would wait out the import, holding every request behind it
+            if (controller.Importing()) return SessionError("an import is running");
+            controller.Stop();
+            if (!controller.HasNoteWriter()) StubDocuments(QueueTo(server));
+            return json{{"sessionId", controller.LastFinalised()}};
+        });
+    if (services.recordings != nullptr) {
+        auto& reader = *services.recordings;
+        server.RegisterMethod("recording/inspect", [&reader](const json& params) {
+            return HandleRecordingInspect(reader, params);
+        });
+        server.RegisterMethod("session/import", [&server, &controller, &reader, playback,
+                                                 translator](const json& params) {
+            return HandleSessionImport(reader, controller,
+                                       playback != nullptr && playback->Active(), translator,
+                                       PushTo(server), params);
+        });
+    }
 }
 
 }  // namespace clinicavt::ipc

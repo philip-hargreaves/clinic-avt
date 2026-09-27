@@ -15,6 +15,7 @@
 #include "ports/document_ingest.hpp"
 #include "ports/guidance_lane.hpp"
 #include "ports/note_lane.hpp"
+#include "ports/recording_reader.hpp"
 
 namespace clinicavt::models {
 class OvRuntime;
@@ -110,6 +111,22 @@ inline Notify PushTo(PipeServer& server) {
         server.PushNotification(method, std::move(params));
     };
 }
+
+// recording/inspect: a recording's length and date for the import dialog. Nothing is kept
+std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
+                                                 const json& params);
+// session/import: answers the new session's id at once, then finalises it on the import's
+// thread, pushing session/importProgress and session/imported or session/importFailed from there.
+// Refused as session/start is, during playback, and for a file the reader cannot open. No error
+// carries the path
+std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
+                                              clinicavt::session::SessionController& controller,
+                                              bool playback_active,
+                                              clinicavt::translate::ITranslator* translator,
+                                              const Notify& push, const json& params);
+// session/importProgress: seconds of the recording transcribed, of total, to a tenth
+json ImportProgressJson(const std::string& id, double seconds, double total);
+
 // guidance/corpora: whether the embedder is loading, ready or unavailable, and
 // every corpus directory. guidance/model carries the state alone once loading ends
 json GuidanceCorporaJson(const clinicavt::guidance::Readiness& readiness,
@@ -192,7 +209,8 @@ struct EngineServices {
     std::filesystem::path demo_dir;
     clinicavt::session::Playback* playback = nullptr;
     AsrSwitch switch_asr;
-    clinicavt::archive::ArchiveLane* archive_lane = nullptr;  // deletes are refused while it runs
+    clinicavt::archive::ArchiveLane* archive_lane = nullptr;   // deletes are refused while it runs
+    clinicavt::audio::IRecordingReader* recordings = nullptr;  // import is absent without it
 };
 
 // engine/*, note/tier, anchor/* and audio/inputs

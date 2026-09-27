@@ -19,3 +19,9 @@
 *.msix binary
 *.appx binary
 *.clinicavt binary
+*.m4a binary
+*.mp3 binary
+*.wma binary
+*.flac binary
+*.aac binary
+*.wav binary

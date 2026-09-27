@@ -17,6 +17,7 @@
 
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/vad/passthrough_vad.hpp"
+#include "ports/recording_reader.hpp"
 
 namespace clinicavt::session {
 namespace {
@@ -292,6 +293,7 @@ struct FakeSessionStore : store::ISessionStore {
     std::function<void(const store::StoreError&)> on_fault;
 
     bool last_retain = true;
+    std::string last_started_at;
     std::string last_device_id;
     std::string last_device_name;
 
@@ -318,6 +320,7 @@ struct FakeSessionStore : store::ISessionStore {
         if (refuse_begin) throw std::runtime_error("store is broken");
         EXPECT_EQ(meta.sample_rate, kSampleRate);
         last_retain = meta.retain;
+        last_started_at = meta.started_at;
         last_device_id = meta.device_id;
         last_device_name = meta.device_name;
         const auto id = "s" + std::to_string(++begins);
@@ -624,9 +627,23 @@ struct FakeDiariser : diar::IDiariser {
         cut_points.insert(cut_points.end(), cuts.begin(), cuts.end());
     }
 
-    void Settle(std::span<const float> audio, const diar::DecodeClipFn&) override {
+    // With decode_halves the catch-up decodes the audio in two halves, as far as stop allows.
+    // mid_settle runs between them
+    bool decode_halves = false;
+    std::function<void()> mid_settle;
+
+    void Settle(std::span<const float> audio, const diar::DecodeClipFn& decode,
+                const diar::StopFn& stop) override {
         ++settles;
         settled_frames = audio.size();
+        if (!decode_halves) return;
+        const std::size_t half = audio.size() / 2;
+        for (const auto& [first, end] :
+             {std::pair{std::size_t{0}, half}, std::pair{half, audio.size()}}) {
+            if (stop()) return;
+            (void)decode(audio.subspan(first, end - first), first);
+            if (first == 0 && mid_settle) mid_settle();
+        }
     }
 
     std::vector<asr::Turn> SpeculativeTranscript() override {
@@ -1563,6 +1580,235 @@ TEST(SessionController, AnEnrolmentThatDoesNotCompleteLeavesTheAnchorAlone) {
     EXPECT_FALSE(std::get<0>(*done));
     EXPECT_EQ(std::get<1>(*done), "microphone unplugged");
     EXPECT_TRUE(rig.diariser.replaced.empty());
+}
+
+// Import
+
+// What an import reported from its thread
+struct ImportLog {
+    std::mutex mutex;
+    std::vector<double> seconds;
+    double total = 0;
+    std::optional<std::pair<store::SessionId, std::string>> done;
+
+    ImportReport Report() {
+        return {.progress =
+                    [this](const store::SessionId&, double at, double of) {
+                        const std::lock_guard<std::mutex> lock(mutex);
+                        seconds.push_back(at);
+                        total = of;
+                    },
+                .done =
+                    [this](const store::SessionId& id, const std::string& error) {
+                        const std::lock_guard<std::mutex> lock(mutex);
+                        done.emplace(id, error);
+                    }};
+    }
+
+    bool Wait() {
+        return WaitFor([this] {
+            const std::lock_guard<std::mutex> lock(mutex);
+            return done.has_value();
+        });
+    }
+};
+
+std::function<std::vector<float>()> Reads(std::vector<float> recording) {
+    return [recording = std::move(recording)] { return recording; };
+}
+
+TEST(SessionController, AnImportFinalisesAsAStopDoesButNeverTeachesThePrint) {
+    Rig rig;
+    rig.diariser.clusters = 2;
+    rig.diariser.similarities = {0.2, 0.8};
+    rig.diariser.decode_halves = true;
+    const std::vector<float> recording(kTwoTurnFrames, 0.1F);
+    ImportLog log;
+    {
+        auto controller = rig.Make(Script::kNeverAudio, {.writer = true});
+        EXPECT_EQ(controller.Import(Reads(recording), "2026-09-26T13:05:00Z", false, log.Report()),
+                  "s1")
+            << "the session is begun before the answer";
+        ASSERT_TRUE(log.Wait());
+        EXPECT_EQ(log.done, (std::pair<store::SessionId, std::string>{"s1", ""}));
+        EXPECT_FALSE(controller.Running()) << "the slot is free once done is reported";
+        EXPECT_FALSE(controller.Importing());
+        EXPECT_EQ(controller.LastFinalised(), "s1");
+        ASSERT_TRUE(rig.events.WaitForNote());
+        EXPECT_EQ(rig.events.note_ready, "the clinical note");
+    }
+
+    EXPECT_EQ(log.seconds, (std::vector<double>{0.4, 0.8})) << "each span's end, in order";
+    EXPECT_DOUBLE_EQ(log.total, 0.8);
+    EXPECT_EQ(rig.store.last_started_at, "2026-09-26T13:05:00Z");
+    EXPECT_FALSE(rig.store.last_retain);
+    EXPECT_EQ(rig.store.sweeps, 1) << "the previous consultation is left, as at start";
+    EXPECT_TRUE(rig.store.frames.empty()) << "the file is the durable copy, nothing is appended";
+    EXPECT_EQ(rig.store.Calls(),
+              (std::vector<std::string>{"begin s1", "replace s1", "finalise s1", "note s1"}));
+    EXPECT_EQ(rig.events.progress, (std::vector<std::string>{"transcript", "speakers", "turns"}))
+        << "the transcript stage shows while the whole file decodes";
+    EXPECT_EQ(rig.diariser.advances.load(), 0) << "no capture ticks";
+    EXPECT_EQ(rig.diariser.settles, 1) << "the clip cuts come from the settle pass";
+    EXPECT_EQ(rig.diariser.settled_frames, recording.size());
+    EXPECT_EQ(rig.diariser.audio_frames, recording.size());
+    EXPECT_GE(rig.writer.prepares.load(), 1) << "the note model warms alongside the finalise";
+
+    ASSERT_EQ(rig.store.turns.size(), 2u);
+    EXPECT_EQ(rig.store.turns[0].speaker, "patient");
+    EXPECT_EQ(rig.store.turns[1].speaker, "doctor") << "the print still names the roles";
+    EXPECT_EQ(rig.diariser.voiceprint_cluster, -1);
+    EXPECT_EQ(rig.diariser.accruals.load(), 0) << "an accepted note teaches the print nothing";
+}
+
+TEST(SessionController, AnImportIsRefusedWhileTheMicrophoneIsInUse) {
+    Rig rig;
+    const std::vector<float> recording(kTwoTurnFrames, 0.1F);
+    auto controller = rig.Make(Script::kStreamUntilStopped);
+
+    ASSERT_TRUE(controller.Start());
+    EXPECT_EQ(controller.Import(Reads(recording), "", true, {}), "")
+        << "a consultation is recording";
+    EXPECT_TRUE(controller.Running());
+    controller.Stop();
+
+    ASSERT_TRUE(controller.StartEnrolment(2.0, {}, 0.1));
+    EXPECT_EQ(controller.Import(Reads(recording), "", true, {}), "") << "an enrolment is recording";
+    controller.CancelEnrolment();
+    ASSERT_TRUE(WaitEnrol(rig).has_value());
+
+    rig.store.refuse_begin = true;
+    EXPECT_EQ(controller.Import(Reads(recording), "", true, {}), "") << "the store refused";
+    rig.store.refuse_begin = false;
+    ImportLog log;
+    EXPECT_EQ(controller.Import(Reads(recording), "", true, log.Report()), "s2")
+        << "and a refusal leaves the slot free";
+    ASSERT_TRUE(log.Wait());
+    EXPECT_EQ(rig.store.begins, 2) << "no refusal began a session";
+    EXPECT_EQ(rig.store.last_started_at, "") << "empty dates it now";
+}
+
+TEST(SessionController, WhileAnImportRunsTheSlotIsItsAndStopWaitsForIt) {
+    Rig rig;
+    rig.diariser.decode_halves = true;
+    std::atomic<bool> midway{false};
+    std::atomic<bool> release{false};
+    rig.diariser.mid_settle = [&] {
+        midway = true;
+        (void)WaitFor([&] { return release.load(); });
+    };
+    ImportLog log;
+    auto controller = rig.Make(Script::kStreamUntilStopped, {.writer = true});
+    ASSERT_EQ(
+        controller.Import(Reads(std::vector<float>(kTwoTurnFrames, 0.1F)), "", true, log.Report()),
+        "s1");
+    ASSERT_TRUE(WaitFor([&] { return midway.load(); }));
+
+    EXPECT_TRUE(controller.Importing());
+    EXPECT_TRUE(controller.Busy()) << "a note model switch and a delete wait";
+    EXPECT_FALSE(controller.Start()) << "the slot is the import's";
+    EXPECT_EQ(controller.Import(Reads(std::vector<float>(kTwoTurnFrames, 0.1F)), "", true, {}), "");
+    EXPECT_FALSE(controller.StartEnrolment(2.0, {}, 0.1));
+    EXPECT_FALSE(controller.Open("s1")) << "nor can a review open meanwhile";
+
+    // A closing shell stops the controller: the import finishes and is kept
+    std::thread closing([&] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        release = true;
+    });
+    controller.Stop();
+    closing.join();
+    {
+        const std::lock_guard<std::mutex> lock(log.mutex);
+        ASSERT_TRUE(log.done.has_value()) << "Stop returned only once the import was done";
+        EXPECT_EQ(log.done->second, "");
+    }
+    const auto calls = rig.store.Calls();
+    EXPECT_NE(std::find(calls.begin(), calls.end(), "finalise s1"), calls.end());
+}
+
+TEST(SessionController, ACancelledImportIsErasedAndFreesTheSlotAtOnce) {
+    Rig rig;
+    rig.diariser.decode_halves = true;
+    std::atomic<bool> midway{false};
+    std::atomic<bool> cancelled{false};
+    rig.diariser.mid_settle = [&] {
+        midway = true;
+        (void)WaitFor([&] { return cancelled.load(); });
+    };
+    ImportLog log;
+    auto controller = rig.Make(Script::kStreamUntilStopped, {.writer = true});
+    ASSERT_EQ(
+        controller.Import(Reads(std::vector<float>(kTwoTurnFrames, 0.1F)), "", true, log.Report()),
+        "s1");
+    ASSERT_TRUE(WaitFor([&] { return midway.load(); }));
+    controller.Cancel();
+    EXPECT_TRUE(controller.Importing()) << "the import's own thread erases it";
+    cancelled = true;
+    ASSERT_TRUE(log.Wait());
+
+    EXPECT_EQ(log.done, (std::pair<store::SessionId, std::string>{"s1", kImportCancelled}));
+    EXPECT_EQ(log.seconds, (std::vector<double>{0.4})) << "the second half never decoded";
+    EXPECT_EQ(rig.store.Calls(), (std::vector<std::string>{"begin s1", "cancel s1"}));
+    EXPECT_EQ(controller.LastFinalised(), "");
+    EXPECT_EQ(rig.events.progress, (std::vector<std::string>{"transcript"}))
+        << "no speakers or note follow";
+    EXPECT_FALSE(controller.Busy());
+
+    // The cancel belonged to the import: the next recording stops and is kept
+    ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(rig.WaitForFrames(1));
+    controller.Stop();
+    EXPECT_EQ(controller.LastFinalised(), "s2");
+}
+
+TEST(SessionController, AnImportWhoseFileCannotBeReadEndsWithTheReadersReason) {
+    Rig rig;
+    ImportLog log;
+    auto controller = rig.Make(Script::kNeverAudio);
+    const auto unreadable = []() -> std::vector<float> {
+        throw audio::RecordingError("this file is not a sound recording");
+    };
+    ASSERT_EQ(controller.Import(unreadable, "", true, log.Report()), "s1");
+    ASSERT_TRUE(log.Wait());
+
+    EXPECT_EQ(log.done, (std::pair<store::SessionId, std::string>{
+                            "s1", "this file is not a sound recording"}));
+    EXPECT_EQ(rig.store.Calls(), (std::vector<std::string>{"begin s1", "cancel s1"}));
+    EXPECT_FALSE(controller.Running());
+    EXPECT_TRUE(log.seconds.empty());
+}
+
+// Every decode leaves a chunk edge behind, as whisper's worker does
+struct CuttingTranscriber : asr::ScriptedTranscriber {
+    std::vector<asr::Turn> DecodeClipChunks(std::span<const float> frames,
+                                            std::uint64_t first_frame) override {
+        clip_cuts.push_back(first_frame + frames.size() / 2);
+        return ScriptedTranscriber::DecodeClipChunks(frames, first_frame);
+    }
+};
+
+TEST(SessionController, NothingOneFinaliseLeavesBehindReachesTheNextSession) {
+    Rig rig;
+    CuttingTranscriber transcriber;
+    SessionController controller(FactoryFor(Script::kStreamUntilStopped), rig.events, rig.store,
+                                 transcriber, rig.vad, rig.diariser, kTestSettle,
+                                 LevelMeter::kWindowFrames, nullptr, &rig.registry);
+
+    ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(rig.WaitForFrames(kTwoTurnFrames));
+    ASSERT_TRUE(WaitFor([&] { return rig.diariser.advances.load() >= 1; }));
+    controller.Stop();
+    ASSERT_FALSE(rig.store.turns.empty()) << "the finalise decoded its turns, leaving edges";
+
+    ImportLog log;
+    ASSERT_EQ(
+        controller.Import(Reads(std::vector<float>(kTwoTurnFrames, 0.1F)), "", true, log.Report()),
+        "s2");
+    ASSERT_TRUE(log.Wait());
+    EXPECT_TRUE(rig.diariser.cut_points.empty())
+        << "the last finalise's chunk edges are not cut points in this recording";
+    EXPECT_EQ(rig.registry.Take().diar_ticks, 0) << "capture ticks count per session";
 }
 
 }  // namespace

@@ -135,6 +135,14 @@ add_executable(capture_tests
 target_link_libraries(capture_tests PRIVATE
     clinicavt_audio clinicavt_warnings GTest::gtest_main)
 
+# Imported recordings decode through Media Foundation, which some Windows editions lack
+add_executable(recording_tests
+    adapters/audio/media_foundation_reader_test.cpp)
+target_compile_definitions(recording_tests PRIVATE
+    CLINICAVT_RECORDING_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/recordings")
+target_link_libraries(recording_tests PRIVATE
+    clinicavt_audio clinicavt_warnings GTest::gtest_main)
+
 # Same mechanism for tests needing the Intel GPU
 add_executable(gpu_tests
     adapters/models/ov_runtime_test.cpp)
@@ -176,5 +184,6 @@ include(GoogleTest)
 # Cold CI runners can take >5 s (the default) just to start a fresh exe
 gtest_discover_tests(engine_tests DISCOVERY_TIMEOUT 60)
 gtest_discover_tests(capture_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS microphone)
+gtest_discover_tests(recording_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS mediafoundation)
 gtest_discover_tests(gpu_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS gpu)
 gtest_discover_tests(models_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS models)

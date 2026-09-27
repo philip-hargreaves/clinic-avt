@@ -36,8 +36,9 @@ class SpeakerDiariser : public IDiariser {
         worker_.Advance(audio, decode);
     }
 
-    void Settle(std::span<const float> audio, const DecodeClipFn& decode) override {
-        worker_.Advance(audio, decode, std::numeric_limits<int>::max());
+    void Settle(std::span<const float> audio, const DecodeClipFn& decode,
+                const StopFn& stop) override {
+        worker_.Advance(audio, decode, std::numeric_limits<int>::max(), stop);
     }
 
     TurnTexts TakeTurnTexts() override {

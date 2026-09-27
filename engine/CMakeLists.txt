@@ -241,12 +241,15 @@ target_link_libraries(clinicavt_diarisation
 
 add_library(clinicavt_audio STATIC
     src/adapters/audio/capture_devices.cpp
+    src/adapters/audio/media_foundation_reader.cpp
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wasapi_player.cpp
     src/adapters/audio/wav_source.cpp)
 target_link_libraries(clinicavt_audio
     PUBLIC clinicavt_core
-    PRIVATE clinicavt_warnings ole32 advapi32)
+    PRIVATE clinicavt_warnings ole32 advapi32 mfplat mfreadwrite mfuuid delayimp)
+# Windows N editions and Server may lack Media Foundation; the engine must still start there
+target_link_options(clinicavt_audio INTERFACE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll)
 
 add_executable(clinicavt_engine src/engine_main.cpp)
 target_link_libraries(clinicavt_engine PRIVATE

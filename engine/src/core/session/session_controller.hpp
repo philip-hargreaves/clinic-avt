@@ -1,9 +1,11 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -26,6 +28,16 @@
 #include "ports/transcriber.hpp"
 
 namespace clinicavt::session {
+
+// An import's reports, from its own thread: seconds of the recording transcribed so far, then
+// the outcome, an empty error once sealed and stored, otherwise the reason it was erased
+struct ImportReport {
+    std::function<void(const store::SessionId&, double seconds, double total)> progress;
+    std::function<void(const store::SessionId&, const std::string& error)> done;
+};
+
+// The error an import cancelled by Cancel ends with
+inline constexpr const char* kImportCancelled = "cancelled";
 
 // One session at a time. Every ending has a storage outcome: Stop
 // finalises, Cancel erases, an interruption abandons recoverable
@@ -53,17 +65,23 @@ class SessionController {
     bool Start(std::optional<ReplaySpec> replay = std::nullopt,
                const store::SessionId& resume_from = {}, bool retain = true,
                const MicSelection& mic = {});
+    // A recording made elsewhere, dated started_at (empty: now). Returns the begun session's id,
+    // then decodes and finalises it as Stop does on the import's thread, without teaching the
+    // print. Empty while a session or an enrolment runs, or when the store refuses
+    store::SessionId Import(std::function<std::vector<float>()> read, const std::string& started_at,
+                            bool retain, ImportReport report);
+    bool Importing() const;
     // Idempotent. A stop is the user's, so it never counts as an interruption.
-    // The recording is kept
+    // The recording is kept, and an import runs to its end first
     void Stop();
-    // Idempotent. The recording is erased
+    // Idempotent. The recording is erased. An import stops at its next span and is erased
+    // on its own thread
     void Cancel();
     // Holds the source's delivery. Stop and cancel always win
     void SetPaused(bool paused);
     void SetMonitor(bool monitor);
     bool Running() const;
-    // Capturing, or still writing the consultation's note, sheet or case summary. A note model
-    // switch or a delete is refused meanwhile
+    // Capturing, or still writing the consultation's note, sheet or case summary
     bool Busy() const;
     // Evaluation only: the print never learns, so a held-out run is reproducible
     void FreezeAnchor();
@@ -114,11 +132,21 @@ class SessionController {
         void OnEnd(const audio::SourceEnd& end) override;
     };
 
+    // Takes the one session slot with every per-session reset. False while a session or an
+    // enrolment runs
+    bool Claim();
+    // Leaves the previous consultation and begins the stored session, answering with
+    // resumed_from's stored audio. Nullopt, the claim released, when the store refuses
+    std::optional<std::vector<float>> BeginStored(const store::SessionMeta& meta,
+                                                  const store::SessionId& resumed_from);
     void GuardedRun();
     void DiarLoop();
     void JoinDiarThread();
     void EndCapture();
-    void FinishSession(Outcome outcome);
+    void RunImport(const std::function<std::vector<float>()>& read, const ImportReport& report);
+    // learn false keeps the print from accruing this session. Answers the outcome reached,
+    // which a cancelled import turns from kFinalise to kCancel
+    Outcome FinishSession(Outcome outcome, bool learn = true);
     std::string StoredNote(const store::SessionId& id) const;
 
     SourceFactory factory_;
@@ -135,6 +163,12 @@ class SessionController {
     std::unique_ptr<audio::IAudioSource> source_;
     std::thread worker_;
     std::thread diar_thread_;
+    // Started and joined on the RPC thread
+    std::thread import_thread_;
+    bool importing_ = false;  // under mutex_
+    std::atomic<bool> import_cancel_{false};
+    // Set on the import thread for its finalise
+    std::function<void(double seconds)> import_progress_;
     bool diar_stop_ = false;  // under mutex_
     int diar_ticks_ = 0;      // under mutex_, diagnostics
     audio::LevelMeter meter_;

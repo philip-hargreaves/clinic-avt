@@ -42,7 +42,7 @@ jobs:
         run: dotnet build clinicavt.slnx
       # This job has no engine binary; the contract job runs what needs one.
       - name: Test client
-        run: dotnet test app/ClinicAVT.Client.Tests --no-build --filter "Requires!=Engine" --blame-hang-timeout 120s
+        run: dotnet test app/ClinicAVT.Client.Tests --no-build --filter "Requires!=Engine&Requires!=MediaFoundation" --blame-hang-timeout 120s
       - name: Test app view models
         run: dotnet test app/ClinicAVT.App.Tests --no-build --filter "Requires!=Engine&Requires!=EngineSlow&Requires!=CrashBattery&Requires!=Processes" --blame-hang-timeout 120s
       # Spawns stand-in processes (ping.exe): real supervision, no engine
@@ -89,7 +89,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       fail-fast: false
-      # ci presets skip microphone-labelled tests; runners have no audio
+      # CI presets skip microphone and Media Foundation tests
       matrix:
         preset: [ci-dev, ci-release]
     steps:

@@ -30,8 +30,9 @@ class DeferredDiariser : public IDiariser {
         inner_.Get().Advance(audio, decode);
     }
 
-    void Settle(std::span<const float> audio, const DecodeClipFn& decode) override {
-        inner_.Get().Settle(audio, decode);
+    void Settle(std::span<const float> audio, const DecodeClipFn& decode,
+                const StopFn& stop) override {
+        inner_.Get().Settle(audio, decode, stop);
     }
 
     TurnTexts TakeTurnTexts() override {

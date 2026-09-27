@@ -79,9 +79,9 @@ class CaptureStage {
     CaptureStage(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder);
 
     // Takes the audio so far. decode re-transcribes a clip, at most budget spans
-    // per call so a stop never waits long behind speculation
+    // per call so a stop never waits long behind speculation. stop ends the pass early
     void Advance(std::span<const float> audio, const DecodeClipFn& decode,
-                 int budget = kSpeculateBudget);
+                 int budget = kSpeculateBudget, const StopFn& stop = {});
 
     // The audio has ended: pad the final hop and segment the tail
     void Finish(std::span<const float> audio);
@@ -90,7 +90,9 @@ class CaptureStage {
         return !state_.vad_probabilities.empty();
     }
 
+    // The next session's VAD starts fresh, as the first one does
     CaptureDiarisation Take() {
+        vad_.Reset();
         overlap_cache_.clear();
         speculation_ = {};
         return std::exchange(state_, {});
