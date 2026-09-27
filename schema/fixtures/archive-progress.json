@@ -1,0 +1,10 @@
+{
+    "jsonrpc": "2.0",
+    "method": "archive/progress",
+    "params": {
+        "job": "backup",
+        "phase": "writing",
+        "done": 12,
+        "total": 38
+    }
+}

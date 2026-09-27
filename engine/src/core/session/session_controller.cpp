@@ -149,6 +149,10 @@ bool SessionController::Running() const {
     return running_ && !ended_;
 }
 
+bool SessionController::Busy() const {
+    return Running() || note_lane_.Busy();
+}
+
 void SessionController::FreezeAnchor() {
     learn_anchor_ = false;
 }
@@ -199,7 +203,8 @@ void SessionController::Close() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (note_lane_.Refused()) {
-            refused = std::exchange(last_finalised_, {});
+            // Only a fresh capture too short for a note goes. A reviewed session is a kept record
+            if (!reviewing_) refused = std::exchange(last_finalised_, {});
             note_lane_.ClearRefusal();
         }
         if (reviewing_) {
@@ -246,6 +251,10 @@ bool SessionController::RegenerateNote(note::NoteOptions options) {
     try {
         turns = store_.ReadTurns(id);
     } catch (...) {
+        return false;
+    }
+    // A session restored without its transcript has nothing to write from
+    if (turns.empty()) {
         return false;
     }
     note_lane_.SetOptions(std::move(options));

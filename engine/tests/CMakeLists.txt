@@ -88,12 +88,16 @@ add_executable(engine_tests
     adapters/diarisation/speaker_clustering_test.cpp
     adapters/storage/store_recovery_test.cpp
     adapters/audio/wav_source_test.cpp
-    adapters/transcription/whisper_worker_test.cpp)
+    adapters/transcription/whisper_worker_test.cpp
+    adapters/archive/archive_file_test.cpp
+    adapters/ipc/archive_handlers_test.cpp
+    core/archive/backup_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
     CLINICAVT_CMAKE_VERSION="${clinicavt_VERSION}"
     CLINICAVT_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/schema/fixtures"
     CLINICAVT_GUIDANCE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/guidance"
     CLINICAVT_DEMO_DIR="${clinicavt_SOURCE_DIR}/demo/reflections"
+    CLINICAVT_ARCHIVE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/archive"
     CLINICAVT_CRASH_HELPER="$<TARGET_FILE:store_crash_helper>")
 
 # The recovery test's kill victim
@@ -120,7 +124,7 @@ target_compile_definitions(engine_tests PRIVATE
     CLINICAVT_FAKE_INGEST_HOST="$<TARGET_FILE:fake_ingest_host>"
     CLINICAVT_INGEST_HOST="$<TARGET_FILE:clinicavt_ingest_host>")
 target_link_libraries(engine_tests PRIVATE
-    clinicavt_ipc clinicavt_audio clinicavt_corpus clinicavt_diarisation clinicavt_guidance
+    clinicavt_archive clinicavt_ipc clinicavt_audio clinicavt_corpus clinicavt_diarisation clinicavt_guidance
     clinicavt_guidance_record clinicavt_models clinicavt_note clinicavt_storage clinicavt_transcription
     clinicavt_warnings openvino::genai GTest::gtest_main)
 

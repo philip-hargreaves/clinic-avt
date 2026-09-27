@@ -4,15 +4,18 @@
 #include <optional>
 #include <stdexcept>
 
+#include "adapters/archive/archive_lane.hpp"
 #include "adapters/demo/sample_year.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/translate/translate_lane.hpp"
 #include "core/note/summary_scrub.hpp"
 
 namespace clinicavt::ipc {
+// A cleared session is an appraisal entry, listed by reflection/list alone
 json HandleSessionList(clinicavt::store::ISessionStore& sessions) {
     json list = json::array();
     for (const auto& session : sessions.ListSessions()) {
+        if (session.cleared) continue;
         list.push_back({{"id", session.id},
                         {"startedAt", session.started_at},
                         {"endedAt", session.ended_at},
@@ -91,10 +94,60 @@ std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& s
     });
 }
 
+namespace {
+
+constexpr const char* kArchiveRunning = "a backup or restore is running";
+
+// deleteReflections: false, or absent, keeps each appraisal entry with its case summary
+std::optional<bool> DeleteReflections(const json& params) {
+    if (!params.is_object() || !params.contains("deleteReflections")) return false;
+    if (!params["deleteReflections"].is_boolean()) return std::nullopt;
+    return params["deleteReflections"].get<bool>();
+}
+
+}  // namespace
+
 std::variant<json, Error> HandleSessionDeleteAll(clinicavt::store::ISessionStore& sessions,
-                                                 bool session_active) {
+                                                 const json& params, bool session_active,
+                                                 bool archive_busy) {
+    const auto delete_reflections = DeleteReflections(params);
+    if (!delete_reflections) return InvalidParams("deleteReflections must be true or false");
     if (session_active) return SessionError("finish the consultation first");
-    return json{{"removed", sessions.DeleteAll()}};
+    if (archive_busy) return SessionError(kArchiveRunning);
+    try {
+        return json{{"removed", sessions.DeleteAll(!*delete_reflections)}};
+    } catch (const std::exception& e) {
+        return SessionError(e.what());
+    }
+}
+
+std::variant<json, Error> HandleSessionRemove(clinicavt::store::ISessionStore& sessions,
+                                              const json& params, bool archive_busy) {
+    const auto delete_reflections = DeleteReflections(params);
+    if (!delete_reflections) return InvalidParams("deleteReflections must be true or false");
+    const bool listed = params.is_object() && params.contains("ids") && params["ids"].is_array() &&
+                        std::all_of(params["ids"].begin(), params["ids"].end(),
+                                    [](const json& id) { return id.is_string(); });
+    if (!listed) return InvalidParams("ids must be a list of session ids");
+    if (archive_busy) return SessionError(kArchiveRunning);
+    std::size_t removed = 0;
+    try {
+        for (const auto& id : params["ids"]) {
+            try {
+                if (*delete_reflections) {
+                    sessions.Delete(id.get<std::string>());
+                } else {
+                    sessions.Clear(id.get<std::string>());
+                }
+                removed += 1;
+            } catch (const clinicavt::store::StoreError& e) {
+                if (e.Code() != clinicavt::store::StoreCode::kNotFound) throw;
+            }
+        }
+    } catch (const std::exception& e) {
+        return SessionError(e.what());
+    }
+    return json{{"removed", removed}};
 }
 
 namespace {
@@ -214,6 +267,11 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore
     return WithSession(params, [&](const std::string& id) {
         sessions.DeleteDocument(id, DocumentKind::kReflection);
         sessions.DeleteDocument(id, DocumentKind::kSummary);
+        // A cleared consultation was kept only for its appraisal entry, so it goes with it
+        if (sessions.ReadTurns(id).empty() &&
+            sessions.ReadDocument(id, DocumentKind::kNote).revision == 0) {
+            sessions.Delete(id);
+        }
         return json::object();
     });
 }
@@ -262,6 +320,16 @@ auto EditDocument(clinicavt::store::ISessionStore& sessions, clinicavt::store::D
     };
 }
 
+// A stored session whose transcript has no turns, as one restored without it
+bool NoTranscript(clinicavt::store::ISessionStore& sessions, const std::string& id) {
+    if (id.empty()) return false;
+    try {
+        return sessions.ReadTurns(id).empty();
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
 // Checks style and detail as the shell sends them. confirmed says the
 // clinician insists it was a consultation
 std::variant<clinicavt::note::NoteOptions, Error> NoteOptionsFrom(const json& params) {
@@ -285,6 +353,10 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     auto* const translate_lane = services.translate_lane;
     const auto demo_dir = services.demo_dir;
     auto* const playback = services.playback;
+    auto* const archive_lane = services.archive_lane;
+    const auto archive_busy = [archive_lane] {
+        return archive_lane != nullptr && archive_lane->Busy();
+    };
     server.RegisterMethod("session/list",
                           [&sessions](const json&) { return HandleSessionList(sessions); });
     server.RegisterMethod("session/transcript", [&sessions](const json& params) {
@@ -339,13 +411,24 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                 });
         });
     }
-    server.RegisterMethod("session/delete", [&sessions](const json& params) {
-        return HandleSessionDelete(sessions, params);
-    });
+    server.RegisterMethod(
+        "session/delete",
+        [&sessions, &controller, archive_busy](const json& params) -> std::variant<json, Error> {
+            if (archive_busy()) return SessionError(kArchiveRunning);
+            if (controller.Busy()) return SessionError("finish the consultation first");
+            return HandleSessionDelete(sessions, params);
+        });
     // The shell confirms first
-    server.RegisterMethod("session/deleteAll", [&sessions, &controller](const json&) {
-        return HandleSessionDeleteAll(sessions, controller.Running());
-    });
+    server.RegisterMethod(
+        "session/deleteAll", [&sessions, &controller, archive_busy](const json& params) {
+            return HandleSessionDeleteAll(sessions, params, controller.Busy(), archive_busy());
+        });
+    server.RegisterMethod(
+        "session/remove",
+        [&sessions, &controller, archive_busy](const json& params) -> std::variant<json, Error> {
+            if (controller.Busy()) return SessionError("finish the consultation first");
+            return HandleSessionRemove(sessions, params, archive_busy());
+        });
     server.RegisterMethod("reflection/get", [&sessions](const json& params) {
         return HandleReflectionGet(sessions, params);
     });
@@ -360,8 +443,13 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     server.RegisterMethod("demo/seed", [&sessions, demo_dir](const json&) {
         return HandleDemoSeed(sessions, demo_dir);
     });
-    server.RegisterMethod("demo/clear",
-                          [&sessions](const json&) { return HandleDemoClear(sessions); });
+    server.RegisterMethod(
+        "demo/clear",
+        [&sessions, &controller, archive_busy](const json&) -> std::variant<json, Error> {
+            if (archive_busy()) return SessionError(kArchiveRunning);
+            if (controller.Busy()) return SessionError("finish the consultation first");
+            return HandleDemoClear(sessions);
+        });
     // Written on the note lane and delivered as reflection/summary
     server.RegisterMethod(
         "reflection/summary", [&controller](const json& params) -> std::variant<json, Error> {
@@ -432,10 +520,14 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
             return json::object();
         });
     server.RegisterMethod(
-        "note/regenerate", [&controller](const json& params) -> std::variant<json, Error> {
+        "note/regenerate",
+        [&controller, &sessions](const json& params) -> std::variant<json, Error> {
             const auto options = NoteOptionsFrom(params);
             if (std::holds_alternative<Error>(options)) return std::get<Error>(options);
             if (!controller.RegenerateNote(std::get<clinicavt::note::NoteOptions>(options))) {
+                if (NoTranscript(sessions, controller.LastFinalised())) {
+                    return SessionError("this consultation has no transcript to write a note from");
+                }
                 return SessionError("no finalised session, or a note is already being written");
             }
             return json::object();

@@ -42,7 +42,10 @@ class SqliteSessionStore : public ISessionStore {
     void EraseUnretained() override;
     SessionId Seed(const SessionSeed& seed) override;
     std::size_t ClearDemo() override;
-    std::size_t DeleteAll() override;
+    std::size_t DeleteAll(bool keep_reflections = false) override;
+    void Clear(const SessionId& id) override;
+    SessionRecord ReadRecord(const SessionId& id) override;
+    AddOutcome AddRecord(const SessionRecord& record) override;
     void SetFaultListener(std::function<void(const StoreError&)> listener) override;
 
     // Test hook: a small cap makes the next commit fail with a full disk. 0 lifts it
@@ -76,7 +79,17 @@ class SqliteSessionStore : public ISessionStore {
     void InsertTurn(const SessionId& id, std::int64_t seq, const ChunkCipher& cipher,
                     const asr::Turn& turn);
     void WriteDocument(const SessionId& id, DocumentKind kind, const Document& document);
+    // One document row at the given sequence, inside the caller's transaction
+    void WriteDocumentRow(const SessionId& id, DocumentKind kind, const ChunkCipher& cipher,
+                          std::int64_t seq, const Document& document);
     Document ReadDocumentLocked(const SessionId& id, DocumentKind kind);
+    // The row as stored, nullopt when the session has no such document
+    std::optional<Document> ReadDocumentRow(const SessionId& id, DocumentKind kind,
+                                            const ChunkCipher& cipher);
+    std::vector<asr::Turn> ReadTurnsLocked(const SessionId& id, const ChunkCipher& cipher);
+    // AddRecord onto an id already stored, inside its transaction
+    AddOutcome CompleteLocked(const SessionRecord& record);
+    void ClearLocked(const SessionId& id);    // Clear inside the caller's transaction
     void Erase(const SessionId& id);          // key row and everything under the session
     std::size_t EraseWhere(Db::Stmt& erase);  // steps a delete, checkpoints, counts
     void Checkpoint();                        // after an erase, so no page image outlives it

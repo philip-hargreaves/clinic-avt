@@ -18,3 +18,4 @@
 *.cer binary
 *.msix binary
 *.appx binary
+*.clinicavt binary

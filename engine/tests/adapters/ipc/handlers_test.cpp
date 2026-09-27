@@ -236,8 +236,10 @@ struct SessionStoreFixture {
         std::filesystem::remove_all(root, ignored);
     }
 
+    // With a turn, as a finished consultation has, so it is not taken for a cleared one
     std::string AddFinalisedSession() const {
         const auto id = store->Begin({16000, "", ""});
+        store->ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "", "how is the elbow"}});
         store->Finalise(id);
         return id;
     }
@@ -267,7 +269,8 @@ TEST(Handlers, WhatWouldDisturbARunningConsultationIsRefused) {
         {"asr/device",
          [&] { return HandleAsrDevice(switcher, true, json{{"device", "GPU"}}, [](json) {}); }},
         {"anchor/clear", [&] { return HandleAnchorClear(anchors, true); }},
-        {"session/deleteAll", [&] { return HandleSessionDeleteAll(*fixture.store, true); }},
+        {"session/deleteAll",
+         [&] { return HandleSessionDeleteAll(*fixture.store, json::object(), true, false); }},
     };
     for (const auto& c : cases) {
         SCOPED_TRACE(c.method);
@@ -425,7 +428,8 @@ TEST(Handlers, TheSampleYearSeedsOnceAndClearsCleanly) {
 
     // One erase removes samples and real sessions alike
     ASSERT_TRUE(std::holds_alternative<json>(HandleDemoSeed(*fixture.store, CLINICAVT_DEMO_DIR)));
-    const auto erased = HandleSessionDeleteAll(*fixture.store, false);
+    const auto erased =
+        HandleSessionDeleteAll(*fixture.store, json{{"deleteReflections", true}}, false, false);
     ASSERT_TRUE(std::holds_alternative<json>(erased));
     EXPECT_EQ(ResultOf(erased)["removed"], 9);
     EXPECT_EQ(HandleSessionList(*fixture.store)["sessions"].size(), 0u);
@@ -719,6 +723,8 @@ TEST(Handlers, GuidanceReadyMatchesTheFixture) {
     request.on_ready(results);
     json expected = LoadFixture("guidance-ready.json");
     expected["params"]["id"] = id;
+    // A revision is opaque: the stored note's own, not the fixture's example
+    expected["params"]["noteRevision"] = note.revision;
     ASSERT_EQ(sent.all.size(), 1u);
     EXPECT_EQ(expected["method"], sent.all[0].first);
     EXPECT_EQ(sent.all[0].second, expected["params"]);
@@ -1074,7 +1080,9 @@ TEST(Handlers, SessionGuidanceReadsTheStoredRecordAndItsStaleness) {
               (json{{"guidance", nullptr}}));
 
     fixture.store->SaveDocument(id, clinicavt::store::DocumentKind::kNote, {.text = "note"});
-    const json expected = LoadFixture("session-guidance.json")["result"];
+    json expected = LoadFixture("session-guidance.json")["result"];
+    expected["guidance"]["noteRevision"] =
+        fixture.store->ReadDocument(id, clinicavt::store::DocumentKind::kNote).revision;
     json record = expected["guidance"];
     record.erase("stale");
     fixture.store->SaveDocument(id, clinicavt::store::DocumentKind::kGuidance,

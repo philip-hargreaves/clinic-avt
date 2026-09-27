@@ -25,6 +25,10 @@ class ITranslator;
 class TranslateLane;
 }  // namespace clinicavt::translate
 
+namespace clinicavt::archive {
+class ArchiveLane;
+}  // namespace clinicavt::archive
+
 namespace clinicavt::ipc {
 
 std::variant<json, Error> HandleHello(const json& params);
@@ -73,9 +77,25 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore
 json HandleReflectionList(clinicavt::store::ISessionStore& sessions);
 std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
                                               const json& params);
-// One crypto-erase of everything stored, refused while a consultation records
+// One crypto-erase of everything stored, refused while a consultation records or a backup
+// runs. Without deleteReflections a session with an appraisal entry is cleared to it instead
 std::variant<json, Error> HandleSessionDeleteAll(clinicavt::store::ISessionStore& sessions,
-                                                 bool session_active);
+                                                 const json& params, bool session_active,
+                                                 bool archive_busy);
+// session/remove: clears or erases the given sessions as Delete all does, once a backup holds
+// them. An id already gone is not counted
+std::variant<json, Error> HandleSessionRemove(clinicavt::store::ISessionStore& sessions,
+                                              const json& params, bool archive_busy);
+
+// archive/summary: what a backup of the period would hold, and how many consultations the last
+// backup (covered) does not. archive/backup and archive/restore start a job on the lane,
+// refused while a consultation records or another job runs
+std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionStore& sessions,
+                                               const json& params);
+std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& lane,
+                                              bool session_active, const json& params);
+std::variant<json, Error> HandleArchiveRestore(clinicavt::archive::ArchiveLane& lane,
+                                               bool session_active, const json& params);
 
 // Seed data from demo_dir, a no-op while present. Clearing leaves real sessions untouched
 std::variant<json, Error> HandleDemoSeed(clinicavt::store::ISessionStore& sessions,
@@ -172,16 +192,20 @@ struct EngineServices {
     std::filesystem::path demo_dir;
     clinicavt::session::Playback* playback = nullptr;
     AsrSwitch switch_asr;
+    clinicavt::archive::ArchiveLane* archive_lane = nullptr;  // deletes are refused while it runs
 };
 
 // engine/*, note/tier, anchor/* and audio/inputs
 void RegisterEngineMethods(PipeServer& server, const EngineServices& services);
 // session/*, note/*, patient/*, reflection/*, demo/* and translate/*
 void RegisterSessionMethods(PipeServer& server, const EngineServices& services);
+// archive/*, with the archive lane present
+void RegisterArchiveMethods(PipeServer& server, const EngineServices& services);
 
 inline void RegisterMethods(PipeServer& server, const EngineServices& services) {
     RegisterEngineMethods(server, services);
     RegisterSessionMethods(server, services);
+    if (services.archive_lane != nullptr) RegisterArchiveMethods(server, services);
 }
 
 }  // namespace clinicavt::ipc

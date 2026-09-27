@@ -62,6 +62,9 @@ class SessionController {
     void SetPaused(bool paused);
     void SetMonitor(bool monitor);
     bool Running() const;
+    // Capturing, or still writing the consultation's note, sheet or case summary. A note model
+    // switch or a delete is refused meanwhile
+    bool Busy() const;
     // Evaluation only: the print never learns, so a held-out run is reproducible
     void FreezeAnchor();
 
@@ -80,8 +83,8 @@ class SessionController {
     // recording or writing
     bool Open(const store::SessionId& id);
     // Leaving the consultation: ends a review (regenerate refuses until the
-    // next finalise or open), deletes a session that ended in a refusal, and
-    // erases what was recorded with retain off
+    // next finalise or open), deletes a just-recorded session that ended in a
+    // refusal (never a reviewed one), and erases what was recorded with retain off
     void Close();
     // The recording session's id, so the shell can resume it after a crash
     store::SessionId CurrentSession() const;
@@ -90,7 +93,7 @@ class SessionController {
     void SetNoteOptions(note::NoteOptions options);
     bool HasNoteWriter() const;
     // Rewrites the last finalised session's note. False when busy, so the RPC
-    // thread never blocks on the lane
+    // thread never blocks on the lane, or when the stored transcript has no turns
     bool RegenerateNote(note::NoteOptions options);
     // Case summary from the stored note, edits included, for any stored
     // session. False when busy or without a note

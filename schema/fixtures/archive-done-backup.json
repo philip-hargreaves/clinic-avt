@@ -1,0 +1,15 @@
+{
+    "jsonrpc": "2.0",
+    "method": "archive/done",
+    "params": {
+        "job": "backup",
+        "dryRun": false,
+        "consultations": 38,
+        "reflections": 12,
+        "skipped": 0,
+        "from": "2026-07-01T00:00:00Z",
+        "to": "2026-10-01T00:00:00Z",
+        "createdAt": "2026-09-30T17:42:10Z",
+        "ids": ["a1b2c3d4e5f60718293a4b5c6d7e8f90", "0f1e2d3c4b5a69788796a5b4c3d2e1f0"]
+    }
+}

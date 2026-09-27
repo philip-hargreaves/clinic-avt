@@ -454,8 +454,18 @@ struct FakeSessionStore : store::ISessionStore {
         return 0;
     }
 
-    std::size_t DeleteAll() override {
+    std::size_t DeleteAll(bool) override {
         return 0;
+    }
+
+    void Clear(const store::SessionId&) override {}
+
+    store::SessionRecord ReadRecord(const store::SessionId& id) override {
+        throw store::StoreError(store::StoreCode::kNotFound, "no session " + id);
+    }
+
+    store::AddOutcome AddRecord(const store::SessionRecord&) override {
+        return store::AddOutcome::kSkipped;
     }
 };
 
@@ -1093,9 +1103,13 @@ TEST(SessionController, StopWritesTheNoteThenTheSheetThenTheTitle) {
 
         ASSERT_TRUE(rig.events.WaitUntil([&] { return !rig.events.note_partials.empty(); }));
         EXPECT_EQ(rig.diariser.accruals.load(), 0) << "the print waits for an accepted note";
+        EXPECT_FALSE(controller.Running());
+        EXPECT_TRUE(controller.Busy()) << "capture is over but the note is still being written";
         rig.writer.block = false;
         ASSERT_TRUE(rig.events.WaitForNote());
         EXPECT_EQ(controller.LastFinalised(), "s1");
+        EXPECT_TRUE(WaitFor([&] { return !controller.Busy(); }))
+            << "free once note and sheet are done";
     }  // the controller joins the lane, so the sheet and the title are done
 
     EXPECT_EQ(rig.events.note_partials,
@@ -1317,6 +1331,7 @@ TEST(SessionController, RegenerateAndOpenAreRefusedWhenTheyCannotRun) {
     EXPECT_EQ(controller.LastFinalised(), "s1") << "a finalise sets its own target";
 
     rig.events.ResetNote();
+    rig.store.turns = {{0, 16000, "doctor", "words"}};  // regenerate needs a stored transcript
     ASSERT_TRUE(WaitFor([&] { return controller.RegenerateNote({"soap", "concise"}); }));
     ASSERT_TRUE(rig.events.WaitForNote());
     ASSERT_EQ(rig.writer.calls.size(), 2u);
@@ -1461,6 +1476,32 @@ TEST(SessionController, AnInsistedRewriteIsDeliveredAndTheSessionKept) {
     for (const auto& call : rig.store.Calls()) {
         EXPECT_NE(call, "delete s1") << "the clinician insisted, so the session stays";
     }
+}
+
+// A restored consultation may come without its transcript, and a review is a kept record
+TEST(SessionController, AReviewedSessionIsNeverRewrittenFromNothingNorErasedByARefusal) {
+    Rig rig;
+    rig.writer.result = "NOT A CONSULTATION: a cooking video";
+    auto controller = rig.Make(Script::kStreamUntilStopped, {.writer = true});
+
+    ASSERT_TRUE(controller.Open("past"));
+    EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"})) << "no transcript to write from";
+    EXPECT_TRUE(rig.writer.calls.empty());
+
+    rig.store.turns = {
+        {0, 16000 * 30, "doctor", "a stored consultation with enough words to note"}};
+    ASSERT_TRUE(controller.RegenerateNote({"prose", "standard"}));
+    ASSERT_TRUE(rig.events.WaitForNote());
+    {
+        const std::lock_guard<std::mutex> lock(rig.events.mutex);
+        EXPECT_EQ(rig.events.note_refused, "a cooking video");
+    }
+
+    controller.Close();
+    for (const auto& call : rig.store.Calls()) {
+        EXPECT_NE(call, "delete past") << "a refused rewrite never erases the reviewed session";
+    }
+    EXPECT_TRUE(controller.LastFinalised().empty()) << "leaving still ends the review";
 }
 
 // Enrolment

@@ -1,0 +1,13 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 35,
+        "method": "session/deleteAll",
+        "params": { "deleteReflections": false }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 35,
+        "result": { "removed": 40 }
+    }
+}

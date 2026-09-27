@@ -184,7 +184,7 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
                         {"strayNoteHost", stray_note_host}};
         });
     server.RegisterMethod("note/tier", [note_lane, &controller](const json& params) {
-        return HandleNoteTier(note_lane, controller.Running(), params);
+        return HandleNoteTier(note_lane, controller.Busy(), params);
     });
     server.RegisterMethod(
         "asr/device", [switcher = services.switch_asr, &controller, &server](const json& params) {

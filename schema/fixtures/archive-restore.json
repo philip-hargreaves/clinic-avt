@@ -1,0 +1,17 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 33,
+        "method": "archive/restore",
+        "params": {
+            "path": "E:\\ClinicAVT backup 1 Jul - 30 Sep 2026.clinicavt",
+            "password": "maple-orbit-fender-quill-harbor",
+            "dryRun": true
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 33,
+        "result": {}
+    }
+}

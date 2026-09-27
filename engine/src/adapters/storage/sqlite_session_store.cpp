@@ -1,5 +1,7 @@
 #include "adapters/storage/sqlite_session_store.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstdio>
 #include <format>
 #include <nlohmann/json.hpp>
@@ -8,6 +10,7 @@
 #include <utility>
 
 #include "adapters/storage/store_migrations.hpp"
+#include "core/archive/record_rules.hpp"
 #include "core/common/iso8601.hpp"
 
 namespace clinicavt::store {
@@ -43,11 +46,24 @@ KindSpec SpecFor(DocumentKind kind) {
     throw std::invalid_argument("unknown document kind");
 }
 
+// What a cleared session keeps: the appraisal entry and the line that names it
+constexpr std::array kKeptOnClear{DocumentKind::kLabel, DocumentKind::kSummary,
+                                  DocumentKind::kReflection};
+
 std::string RandomId() {
     std::random_device device;
     std::string id;
     for (int i = 0; i < 4; ++i) id += std::format("{:08x}", device());
     return id;
+}
+
+// A new document slot starts at a random sequence below 2^62, so a slot deleted and written
+// again never seals under an IV its earlier content used
+std::int64_t FreshSlotSequence() {
+    std::random_device device;
+    const std::uint64_t high = device();
+    const std::uint64_t low = device();
+    return static_cast<std::int64_t>(((high << 32 | low) >> 2) | 1);
 }
 
 std::span<const std::uint8_t> AsBytes(std::span<const float> frames) {
@@ -262,7 +278,12 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
         "  (SELECT max(first_frame + frame_count) FROM chunks c WHERE c.session_id = s.id)),"
         " EXISTS(SELECT 1 FROM documents r WHERE r.session_id = s.id"
         "  AND r.kind IN ('reflection', 'summary')),"
-        " s.demo, l.seq"
+        " s.demo, l.seq,"
+        // Cleared: only an appraisal entry remains
+        " s.state = 'finalised' AND NOT EXISTS(SELECT 1 FROM turns u WHERE u.session_id = s.id)"
+        "  AND NOT EXISTS(SELECT 1 FROM documents n WHERE n.session_id = s.id AND n.kind = 'note'),"
+        " (SELECT max(COALESCE(max(w.generated_at), ''), COALESCE(max(w.edited_at), ''))"
+        "  FROM documents w WHERE w.session_id = s.id)"
         " FROM sessions s"
         " LEFT JOIN session_keys k ON k.session_id = s.id"
         " LEFT JOIN documents l ON l.session_id = s.id AND l.kind = 'label'"
@@ -291,6 +312,8 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
         }
         summary.has_reflection = select.ColumnInt64(9) != 0;
         summary.demo = select.ColumnInt64(10) != 0;
+        summary.cleared = select.ColumnInt64(12) != 0;
+        summary.written_at = select.ColumnText(13);
         sessions.push_back(std::move(summary));
     }
     return sessions;
@@ -321,11 +344,203 @@ SessionId SqliteSessionStore::Seed(const SessionSeed& seed) {
     return id;
 }
 
-std::size_t SqliteSessionStore::DeleteAll() {
+std::size_t SqliteSessionStore::DeleteAll(bool keep_reflections) {
     std::lock_guard<std::mutex> lock(mutex_);
-    Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE id <> ?");
-    erase.BindText(1, open_.has_value() ? open_->id : std::string());
-    return EraseWhere(erase);
+    const std::string live = open_.has_value() ? open_->id : std::string();
+    if (!keep_reflections) {
+        Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE id <> ?");
+        erase.BindText(1, live);
+        return EraseWhere(erase);
+    }
+
+    // A session already cleared holds nothing more to remove, so it is not counted again
+    std::vector<SessionId> to_clear;
+    {
+        Db::Stmt select = db_.Prepare(
+            "SELECT s.id FROM sessions s WHERE s.id <> ? AND s.state = 'finalised'"
+            " AND EXISTS(SELECT 1 FROM documents a WHERE a.session_id = s.id"
+            "  AND a.kind IN ('reflection', 'summary'))"
+            " AND (EXISTS(SELECT 1 FROM turns t WHERE t.session_id = s.id)"
+            "  OR EXISTS(SELECT 1 FROM chunks c WHERE c.session_id = s.id)"
+            "  OR EXISTS(SELECT 1 FROM documents d WHERE d.session_id = s.id"
+            "   AND d.kind NOT IN ('reflection', 'summary', 'label')))");
+        select.BindText(1, live);
+        while (select.Step()) to_clear.push_back(select.ColumnText(0));
+    }
+    Db::Transaction txn(db_);
+    for (const SessionId& id : to_clear) ClearLocked(id);
+    Db::Stmt erase = db_.Prepare(
+        "DELETE FROM sessions WHERE id <> ? AND NOT (state = 'finalised'"
+        " AND EXISTS(SELECT 1 FROM documents a WHERE a.session_id = sessions.id"
+        "  AND a.kind IN ('reflection', 'summary')))");
+    erase.BindText(1, live);
+    erase.Step();
+    const auto affected =
+        to_clear.size() + static_cast<std::size_t>(db_.QueryInt64("SELECT changes()"));
+    txn.Commit();
+    if (affected > 0) {
+        db_.Exec("PRAGMA incremental_vacuum");
+        Checkpoint();
+    }
+    return affected;
+}
+
+void SqliteSessionStore::Clear(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Db::Transaction txn(db_);
+    ClearLocked(id);
+    txn.Commit();
+    db_.Exec("PRAGMA incremental_vacuum");
+    Checkpoint();
+}
+
+// The kept documents are resealed under a fresh key and the old key row goes, so whatever the
+// erased rows leave in free pages is noise, as after Delete
+void SqliteSessionStore::ClearLocked(const SessionId& id) {
+    const ChunkCipher previous = CipherFor(id);
+    {
+        Db::Stmt state = db_.Prepare("SELECT state FROM sessions WHERE id = ?");
+        state.BindText(1, id);
+        state.Step();
+        if (state.ColumnText(0) != "finalised") {
+            throw StoreError(StoreCode::kBusy, id + " was never finalised");
+        }
+    }
+    std::vector<std::pair<DocumentKind, Document>> kept;
+    bool appraisal = false;
+    for (const DocumentKind kind : kKeptOnClear) {
+        if (auto document = ReadDocumentRow(id, kind, previous)) {
+            appraisal = appraisal || kind != DocumentKind::kLabel;
+            kept.emplace_back(kind, std::move(*document));
+        }
+    }
+    auto erase = [&](const char* sql) {
+        Db::Stmt statement = db_.Prepare(sql);
+        statement.BindText(1, id);
+        statement.Step();
+    };
+    if (!appraisal) {
+        erase("DELETE FROM sessions WHERE id = ?");
+        return;
+    }
+    erase("DELETE FROM chunks WHERE session_id = ?");
+    erase("DELETE FROM turns WHERE session_id = ?");
+    erase("DELETE FROM documents WHERE session_id = ?");
+    erase("DELETE FROM session_keys WHERE session_id = ?");
+    const ChunkCipher fresh = ChunkCipher::Generate();
+    InsertKey(id, fresh.Wrapped());
+    // A fresh key, so each slot keeps its sequence without repeating an IV
+    for (const auto& [kind, document] : kept) {
+        WriteDocumentRow(id, kind, fresh, document.revision, document);
+    }
+}
+
+SessionRecord SqliteSessionStore::ReadRecord(const SessionId& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const ChunkCipher cipher = CipherFor(id);
+    SessionRecord record;
+    {
+        Db::Stmt select = db_.Prepare(
+            "SELECT state, started_at, ended_at, sample_rate, device_id, device_name, lost_frames"
+            " FROM sessions WHERE id = ?");
+        select.BindText(1, id);
+        select.Step();
+        if (select.ColumnText(0) != "finalised") {
+            throw StoreError(StoreCode::kBusy, id + " was never finalised");
+        }
+        record.id = id;
+        record.started_at = select.ColumnText(1);
+        record.ended_at = select.ColumnText(2);
+        record.sample_rate = static_cast<int>(select.ColumnInt64(3));
+        record.device_id = select.ColumnText(4);
+        record.device_name = select.ColumnText(5);
+        record.lost_frames = static_cast<std::uint64_t>(select.ColumnInt64(6));
+    }
+    record.turns = ReadTurnsLocked(id, cipher);
+    for (const DocumentKind kind : kDocumentKinds) {
+        if (auto document = ReadDocumentRow(id, kind, cipher)) {
+            record.documents.push_back({kind, std::move(*document)});
+        }
+    }
+    return record;
+}
+
+// The existence check is the insert itself, inside the transaction
+AddOutcome SqliteSessionStore::AddRecord(const SessionRecord& record) {
+    if (!archive::ValidRecord(record)) {
+        throw StoreError(StoreCode::kOther, "the record is not one this store could hold");
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    Db::Transaction txn(db_);
+    Db::Stmt insert = db_.Prepare(
+        "INSERT INTO sessions(id, started_at, ended_at, state, sample_rate, device_id,"
+        " device_name, lost_frames, retain, demo) VALUES(?, ?, ?, 'finalised', ?, ?, ?, ?, 1, 0)"
+        " ON CONFLICT(id) DO NOTHING");
+    insert.BindText(1, record.id);
+    insert.BindText(2, record.started_at);
+    insert.BindText(3, record.ended_at);
+    insert.BindInt64(4, record.sample_rate);
+    insert.BindTextOrNull(5, record.device_id);
+    insert.BindTextOrNull(6, record.device_name);
+    insert.BindInt64(7, static_cast<std::int64_t>(record.lost_frames));
+    insert.Step();
+    if (db_.QueryInt64("SELECT changes()") == 0) {
+        const AddOutcome outcome = CompleteLocked(record);
+        if (outcome == AddOutcome::kCompleted) txn.Commit();
+        return outcome;
+    }
+
+    const ChunkCipher cipher = ChunkCipher::Generate();
+    InsertKey(record.id, cipher.Wrapped());
+    std::int64_t seq = 0;
+    for (const asr::Turn& turn : record.turns) {
+        InsertTurn(record.id, seq, cipher, turn);
+        seq += 1;
+    }
+    // A fresh key, so the stored revisions serve as sequences without repeating an IV
+    for (const RecordDocument& entry : record.documents) {
+        WriteDocumentRow(record.id, entry.kind, cipher, entry.document.revision, entry.document);
+    }
+    txn.Commit();
+    return AddOutcome::kAdded;
+}
+
+// A cleared session, the same consultation, takes back its transcript and every document it
+// lacks; what it kept stays as it is
+AddOutcome SqliteSessionStore::CompleteLocked(const SessionRecord& record) {
+    {
+        Db::Stmt cleared = db_.Prepare(
+            "SELECT s.state = 'finalised'"
+            " AND NOT EXISTS(SELECT 1 FROM turns t WHERE t.session_id = s.id)"
+            " AND NOT EXISTS(SELECT 1 FROM documents n WHERE n.session_id = s.id"
+            "  AND n.kind = 'note')"
+            " FROM sessions s WHERE s.id = ?");
+        cleared.BindText(1, record.id);
+        if (!cleared.Step() || cleared.ColumnInt64(0) == 0) return AddOutcome::kSkipped;
+    }
+    const ChunkCipher cipher = CipherFor(record.id);
+    bool added = false;
+    // Clear wrote only its kept kinds under this fresh key, so any other kind can seal at the
+    // record's revision. Turns have no revision to keep and start at a random sequence
+    std::int64_t seq = FreshSlotSequence();
+    for (const asr::Turn& turn : record.turns) {
+        InsertTurn(record.id, seq, cipher, turn);
+        seq += 1;
+        added = true;
+    }
+    for (const RecordDocument& entry : record.documents) {
+        Db::Stmt held = db_.Prepare("SELECT 1 FROM documents WHERE session_id = ? AND kind = ?");
+        held.BindText(1, record.id);
+        held.BindText(2, SpecFor(entry.kind).name);
+        if (held.Step()) continue;
+        // A kept kind missing now was deleted after the clear, and its slot may have sealed at
+        // the record's revision under this key: it starts afresh like any new slot
+        const bool kept = std::ranges::find(kKeptOnClear, entry.kind) != kKeptOnClear.end();
+        WriteDocumentRow(record.id, entry.kind, cipher,
+                         kept ? FreshSlotSequence() : entry.document.revision, entry.document);
+        added = true;
+    }
+    return added ? AddOutcome::kCompleted : AddOutcome::kSkipped;
 }
 
 std::size_t SqliteSessionStore::ClearDemo() {
@@ -363,18 +578,25 @@ void SqliteSessionStore::InsertKey(const SessionId& id, std::span<const std::uin
 void SqliteSessionStore::WriteDocument(const SessionId& id, DocumentKind kind,
                                        const Document& document) {
     const ChunkCipher cipher = CipherFor(id);
-    const KindSpec spec = SpecFor(kind);
 
     Db::Transaction txn(db_);
     // The slot's next sequence: a rewrite never reseals under a used IV
-    std::int64_t seq = 1;
+    std::int64_t seq = FreshSlotSequence();
     {
         Db::Stmt previous =
             db_.Prepare("SELECT seq FROM documents WHERE session_id = ? AND kind = ?");
         previous.BindText(1, id);
-        previous.BindText(2, spec.name);
+        previous.BindText(2, SpecFor(kind).name);
         if (previous.Step()) seq = previous.ColumnInt64(0) + 1;
     }
+    WriteDocumentRow(id, kind, cipher, seq, document);
+    txn.Commit();
+}
+
+void SqliteSessionStore::WriteDocumentRow(const SessionId& id, DocumentKind kind,
+                                          const ChunkCipher& cipher, std::int64_t seq,
+                                          const Document& document) {
+    const KindSpec spec = SpecFor(kind);
     const std::vector<std::uint8_t> sealed =
         cipher.Seal(spec.domain, id, static_cast<std::uint64_t>(seq), AsBytes(document.text));
     Db::Stmt replace = db_.Prepare(
@@ -397,7 +619,6 @@ void SqliteSessionStore::WriteDocument(const SessionId& id, DocumentKind kind,
         options.BindText(3, document.detail);
         options.Step();
     }
-    txn.Commit();
 }
 
 void SqliteSessionStore::SaveDocument(const SessionId& id, DocumentKind kind,
@@ -434,27 +655,30 @@ void SqliteSessionStore::DeleteDocument(const SessionId& id, DocumentKind kind) 
 
 Document SqliteSessionStore::ReadDocumentLocked(const SessionId& id, DocumentKind kind) {
     const ChunkCipher cipher = CipherFor(id);
+    return ReadDocumentRow(id, kind, cipher).value_or(Document{});
+}
+
+std::optional<Document> SqliteSessionStore::ReadDocumentRow(const SessionId& id, DocumentKind kind,
+                                                            const ChunkCipher& cipher) {
     const KindSpec spec = SpecFor(kind);
-    Document document;
     Db::Stmt select = db_.Prepare(
         "SELECT d.language, d.payload, d.generated_at, d.edited_at, o.style, o.detail, d.seq"
         " FROM documents d LEFT JOIN note_options o ON o.session_id = d.session_id"
         " WHERE d.session_id = ? AND d.kind = ?");
     select.BindText(1, id);
     select.BindText(2, spec.name);
-    if (select.Step()) {
-        const auto plain =
-            cipher.Open(spec.domain, id, static_cast<std::uint64_t>(select.ColumnInt64(6)),
-                        select.ColumnBlob(1));
-        document.text.assign(plain.begin(), plain.end());
-        document.language = select.ColumnText(0);
-        document.generated_at = select.ColumnText(2);
-        document.edited_at = select.ColumnText(3);
-        document.revision = select.ColumnInt64(6);
-        if (kind == DocumentKind::kNote) {
-            document.style = select.ColumnText(4);
-            document.detail = select.ColumnText(5);
-        }
+    if (!select.Step()) return std::nullopt;
+    Document document;
+    const auto plain = cipher.Open(
+        spec.domain, id, static_cast<std::uint64_t>(select.ColumnInt64(6)), select.ColumnBlob(1));
+    document.text.assign(plain.begin(), plain.end());
+    document.language = select.ColumnText(0);
+    document.generated_at = select.ColumnText(2);
+    document.edited_at = select.ColumnText(3);
+    document.revision = select.ColumnInt64(6);
+    if (kind == DocumentKind::kNote) {
+        document.style = select.ColumnText(4);
+        document.detail = select.ColumnText(5);
     }
     return document;
 }
@@ -462,6 +686,11 @@ Document SqliteSessionStore::ReadDocumentLocked(const SessionId& id, DocumentKin
 std::vector<asr::Turn> SqliteSessionStore::ReadTurns(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     const ChunkCipher cipher = CipherFor(id);
+    return ReadTurnsLocked(id, cipher);
+}
+
+std::vector<asr::Turn> SqliteSessionStore::ReadTurnsLocked(const SessionId& id,
+                                                           const ChunkCipher& cipher) {
     Db::Stmt select = db_.Prepare(
         "SELECT seq, first_frame, frame_count, payload FROM turns WHERE session_id = ?"
         " ORDER BY seq");
