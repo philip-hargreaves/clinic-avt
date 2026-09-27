@@ -1,9 +1,4 @@
-using ClinicAVT.App.Core.Hosting;
-using ClinicAVT.App.Platform;
 using ClinicAVT.App.Tests.Support;
-using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
-using static ClinicAVT.App.Tests.Support.Waits;
 
 namespace ClinicAVT.App.Tests.Features.Consultation;
 
@@ -38,51 +33,24 @@ public class SpeedParityTest
 
     private static async Task<List<string>> ReplayAsync(string track, double speed, int waitSeconds)
     {
-        var pipeName = $"LOCAL\\clinicavt-parity-{Guid.NewGuid():N}";
-        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(directory);
-        var models = FindModels();
-        using var launcher = new ProcessEngineLauncher(
-            FindEngine(),
-            $"{pipeName} \"{Path.Combine(directory, "store")}\""
-                + (models is null ? "" : $" \"{models}\""));
-        using var host = new EngineSupervisor(
-            launcher, new FakeSession(), TimeProvider.System,
-            new FileCrashLog(Path.Combine(directory, "crashes.jsonl")));
-        await using var connection = new EngineConnection(host, async (pid, ct) =>
-            await PipeTransport.ConnectAsync(pipeName, Timeout, pid, ct));
-        try
-        {
-            host.Start();
-            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
-            await connection.RequestAsync(
-                "session/start", new { replay = new { path = track, speed, monitor = false } }, Timeout);
-            await Task.Delay(TimeSpan.FromSeconds(waitSeconds));
-            var stop = await connection.RequestAsync(
-                "session/stop", null, TimeSpan.FromSeconds(180));
-            var id = stop.GetProperty("sessionId").GetString();
-            var transcript = await connection.RequestAsync(
-                "session/transcript", new { id }, Timeout);
-            return transcript.GetProperty("turns").EnumerateArray()
-                .Select(t => $"{t.GetProperty("speaker").GetString()}: {t.GetProperty("text").GetString()}")
-                .ToList();
-        }
-        finally
-        {
-            host.Shutdown();
-            try
-            {
-                Directory.Delete(directory, recursive: true);
-            }
-            catch (IOException)
-            {
-            }
-        }
+        await using var engine = await RealEngine.StartAsync("parity");
+        var connection = engine.Connection;
+        await connection.RequestAsync(
+            "session/start", new { replay = new { path = track, speed, monitor = false } }, Timeout);
+        await Task.Delay(TimeSpan.FromSeconds(waitSeconds));
+        var stop = await connection.RequestAsync(
+            "session/stop", null, TimeSpan.FromSeconds(180));
+        var id = stop.GetProperty("sessionId").GetString();
+        var transcript = await connection.RequestAsync(
+            "session/transcript", new { id }, Timeout);
+        return transcript.GetProperty("turns").EnumerateArray()
+            .Select(t => $"{t.GetProperty("speaker").GetString()}: {t.GetProperty("text").GetString()}")
+            .ToList();
     }
 
     private static string? FindTrack()
     {
-        var models = FindModels();
+        var models = EnginePath.FindModels();
         if (models is null)
         {
             return null;
@@ -92,8 +60,4 @@ public class SpeedParityTest
             Path.GetDirectoryName(models)!, "demo", "day2_consultation02_mixed.wav");
         return File.Exists(track) ? track : null;
     }
-
-    private static string? FindModels() => EnginePath.FindModels();
-
-    private static string FindEngine() => EnginePath.Find();
 }

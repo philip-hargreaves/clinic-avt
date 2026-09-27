@@ -15,7 +15,7 @@ struct Turn {
 };
 
 // The text of a decode: its chunks joined
-inline std::string JoinedText(const std::vector<Turn>& chunks) {
+inline std::string JoinedText(std::span<const Turn> chunks) {
     std::string text;
     for (const auto& chunk : chunks) {
         if (chunk.text.empty()) continue;
@@ -35,11 +35,6 @@ class ITranscriber {
     // empty when unsupported (a re-split then keeps the original turn)
     virtual std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
                                                std::uint64_t first_frame) = 0;
-
-    // The same decode as one text
-    std::string DecodeClip(std::span<const float> frames, std::uint64_t first_frame) {
-        return JoinedText(DecodeClipChunks(frames, first_frame));
-    }
 
     // Chunk edges (absolute frames, inside the clip) from every decode since
     // the last call. The diariser takes them as cut points. Empty when

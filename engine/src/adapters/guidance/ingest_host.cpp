@@ -114,8 +114,6 @@ std::vector<Page> PagesOf(json root) {
         }
         page.width = static_cast<float>(width);
         page.height = static_cast<float>(height);
-        page.rotation = p.value("rotation", 0);
-        page.images = p.value("images", 0);
         const auto& lines = p.at("lines");
         if (!lines.is_array() || lines.size() > kMaxLinesPerPage) {
             throw HostError("badOutput", "lines missing or too many");
@@ -182,7 +180,7 @@ std::string IngestHost::Run(std::span<const std::uint8_t> document,
     if (outcome.timed_out) throw HostError("timeout", "ingest host ran out of time");
     if (outcome.bounded) throw HostError("outputBound", "ingest host wrote too much");
     switch (outcome.exit) {
-        case 0:
+        case ingest_exit::kOk:
             return outcome.output;
         case ingest_exit::kCannotOpen:
             throw HostError("cannotOpen", "not a PDF this reader can open");

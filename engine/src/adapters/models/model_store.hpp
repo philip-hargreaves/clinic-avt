@@ -9,13 +9,11 @@
 
 namespace clinicavt::models {
 
-// Streaming SHA-256 as lowercase hex, shared by verification and test tooling
-std::string Sha256File(const std::filesystem::path& path);
-
 struct ModelInfo {
     std::string id;
-    std::string name;           // display name, the id when the manifest has none
-    std::string task;           // asr | vad | diarisation | notes
+    std::string name;  // display name, the id when the manifest has none
+    // asr | vad | diarisation | segmentation | note | translation | embedding
+    std::string task;
     std::string tier;           // default | accuracy | constrained
     std::string device;         // GPU | CPU | NPU
     std::string licence;        // SPDX id
@@ -28,7 +26,8 @@ struct ModelInfo {
 
 // Per-model manifest.json dirs under one root. Parsing fails closed. A load
 // checks presence and size only. Integrity is established at delivery (fetch,
-// staging, package signature). Hashes serve the tools. No OpenVINO here
+// staging, package signature). Hashes are provenance; the embedding model's
+// weight hash is its revision. No OpenVINO here
 class ModelStore {
    public:
     explicit ModelStore(const std::filesystem::path& root);
@@ -43,11 +42,18 @@ class ModelStore {
     // Throws naming the first file missing or of the wrong size. Reads no bytes
     void Verify(const ModelInfo& model) const;
 
-    // Full SHA-256 check, for tooling. Throws naming the first mismatch
-    void VerifyHashes(const ModelInfo& model) const;
-
    private:
     std::vector<ModelInfo> models_;
 };
+
+// OpenVINO's compile cache, beside the weights
+inline std::filesystem::path CacheDir(const ModelInfo& info) {
+    return info.dir / ".cache";
+}
+
+// True once the model has been compiled on this machine
+inline bool Compiled(const ModelInfo& info) {
+    return std::filesystem::exists(CacheDir(info));
+}
 
 }  // namespace clinicavt::models

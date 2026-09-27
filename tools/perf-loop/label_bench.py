@@ -7,9 +7,11 @@ import sys
 
 import openvino_genai as og
 
-MODEL = r"C:\dev\ambient\models\qwen3.5-9b-int4"
-PROMPT = open(r"C:\dev\ambient\prompts\label.md", encoding="utf-8").read()
-HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MODEL = os.path.join(ROOT, "models", "qwen3.5-9b-int4")
+PROMPT = open(os.path.join(ROOT, "prompts", "label.md"), encoding="utf-8").read()
+# Reads the transcripts perf_loop.py saves with PERF_SAVE and writes the titles beside them
+HERE = os.environ.get("PERF_DIR", os.path.join(ROOT, "build", "perf-loop"))
 
 
 def main():

@@ -9,28 +9,11 @@
 namespace clinicavt::guidance {
 namespace {
 
-// Whitespace runs to one space
-std::string Collapse(std::string_view s) {
-    std::string out;
-    bool space = true;
-    for (unsigned char c : s) {
-        if (std::isspace(c)) {
-            if (!space) out.push_back(' ');
-            space = true;
-        } else {
-            out.push_back(static_cast<char>(c));
-            space = false;
-        }
-    }
-    if (!out.empty() && out.back() == ' ') out.pop_back();
-    return out;
-}
-
 std::vector<std::string> Paragraphs(const std::string& text) {
     std::vector<std::string> out;
     std::string current;
     auto flush = [&] {
-        const auto para = Collapse(current);
+        const auto para = strings::Squeeze(current);
         if (strings::WordCount(para) >= kMinParagraphWords) out.push_back(para);
         current.clear();
     };

@@ -41,10 +41,11 @@ double SecondsSince(std::chrono::steady_clock::time_point t0) {
 
 struct NllbTranslator::Impl {
     Impl(const models::ModelStore& model_store, models::OvRuntime& ov)
-        : store(model_store), runtime(ov) {}
+        : store(model_store), runtime(ov), info(store.Resolve("translation", "default")) {}
 
     const models::ModelStore& store;
     models::OvRuntime& runtime;
+    const models::ModelInfo& info;
     nlohmann::json languages;
     std::int64_t eos = 2;
     std::int64_t decoder_start = 2;
@@ -72,11 +73,9 @@ struct NllbTranslator::Impl {
 
     void LoadAndWarm() {
         const auto t0 = std::chrono::steady_clock::now();
-        const models::ModelInfo& info = store.Resolve("translation", "default");
-        encoder = runtime.Load(store, "translation", "default", "openvino_encoder_model.xml")
-                      .model.create_infer_request();
-        decoder = runtime.Load(store, "translation", "default", "openvino_decoder_model.xml")
-                      .model.create_infer_request();
+        store.Verify(info);
+        encoder = runtime.Load(info, "openvino_encoder_model.xml").model.create_infer_request();
+        decoder = runtime.Load(info, "openvino_decoder_model.xml").model.create_infer_request();
         if (!extension) {
             core.add_extension("openvino_tokenizers.dll");
             extension = true;
@@ -225,8 +224,7 @@ struct NllbTranslator::Impl {
 
 NllbTranslator::NllbTranslator(const models::ModelStore& store, models::OvRuntime& runtime)
     : impl_(new Impl(store, runtime)) {
-    const models::ModelInfo& info = store.Resolve("translation", "default");
-    impl_->languages = LoadLanguages(info.dir);
+    impl_->languages = LoadLanguages(impl_->info.dir);
     const auto& special = impl_->languages.at("special");
     impl_->eos = special.at("eos").get<std::int64_t>();
     impl_->decoder_start = special.at("decoderStart").get<std::int64_t>();

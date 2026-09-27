@@ -3,14 +3,18 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Core.Hosting;
 
 /// <summary>
-/// Runs the engine and applies RestartPolicy when it dies unexpectedly.
-/// Status events are raised outside the lock, after the state has settled.
+/// Runs the engine and applies RestartPolicy when it dies unexpectedly. It never kills the
+/// engine: releasing it asks it to leave. Status events are raised outside the lock, after the
+/// state has settled.
 /// </summary>
 public sealed class EngineSupervisor(
     IEngineLauncher launcher, ISessionState session, TimeProvider clock, ICrashLog crashLog,
-    Func<string?>? methodInFlight = null)
+    Func<string?>? methodInFlight = null, Func<Task>? askToExit = null)
     : IEngineHost, IDisposable
 {
+    /// <summary>The engine's exit code when another engine already serves the pipe.</summary>
+    public const int AlreadyServing = 3;
+
     private readonly object _gate = new();
     private readonly List<DateTimeOffset> _crashes = [];
     private IEngineProcess? _process;
@@ -20,8 +24,6 @@ public sealed class EngineSupervisor(
     public event Action<EngineStatus>? StatusChanged;
 
     public EngineStatus Status { get; private set; } = EngineStatus.Stopped;
-
-    public EngineFault? Fault { get; private set; }
 
     public int? EnginePid
     {
@@ -45,7 +47,6 @@ public sealed class EngineSupervisor(
             }
 
             CancelRelaunchLocked();
-            Fault = null;
             _crashes.Clear();
             LaunchLocked(changes);
         }
@@ -53,7 +54,36 @@ public sealed class EngineSupervisor(
         Raise(changes);
     }
 
-    public void Shutdown()
+    public async Task ReleaseAsync()
+    {
+        var process = await LetGoAsync().ConfigureAwait(false);
+        launcher.Release();
+        process?.Dispose();
+    }
+
+    // Stops watching. Whatever owns the launcher decides whether the engine outlives it
+    public void Dispose() => Detach()?.Dispose();
+
+    // Asks while the connection is still up. Stopped then drops it, and the
+    // engine, alone, leaves
+    private async Task<IEngineProcess?> LetGoAsync()
+    {
+        if (askToExit is not null && Status == EngineStatus.Running)
+        {
+            try
+            {
+                await askToExit().ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // An engine that cannot be asked still leaves once idle and alone
+            }
+        }
+
+        return Detach();
+    }
+
+    private IEngineProcess? Detach()
     {
         IEngineProcess? process;
         var changes = new List<EngineStatus>();
@@ -61,22 +91,18 @@ public sealed class EngineSupervisor(
         {
             if (Status == EngineStatus.Stopped)
             {
-                return;
+                return null;
             }
 
             CancelRelaunchLocked();
             process = _process;
             _process = null;
-            Fault = null;
             SetStatusLocked(EngineStatus.Stopped, changes);
         }
 
-        process?.Kill();
-        process?.Dispose();
         Raise(changes);
+        return process;
     }
-
-    public void Dispose() => Shutdown();
 
     private void LaunchLocked(List<EngineStatus> changes)
     {
@@ -87,7 +113,6 @@ public sealed class EngineSupervisor(
         }
         catch (Exception)
         {
-            Fault = new EngineFault(EngineFaultKind.LaunchFailed);
             SetStatusLocked(EngineStatus.Faulted, changes);
             return;
         }
@@ -127,12 +152,19 @@ public sealed class EngineSupervisor(
         var exitCode = process.ExitCode;
         process.Dispose();
 
-        // Exit 0 is the engine leaving on request. Counting it as a crash would
-        // burn restart budget and race a settings-driven Shutdown/Start with a
-        // spurious relaunch
-        if (exitCode == 0)
+        // An engine a closed app left to finish a load still serves the pipe. It is taken
+        // over rather than counted as a crash
+        if (exitCode == AlreadyServing && launcher.Adopt() is { } running)
         {
-            SetStatusLocked(EngineStatus.Stopped, changes);
+            _process = running;
+            _launchedAt = clock.GetUtcNow();
+            running.Exited += () => OnExited(running);
+            SetStatusLocked(EngineStatus.Running, changes);
+            if (running.HasExited)
+            {
+                HandleExitLocked(running, changes);
+            }
+
             return;
         }
 
@@ -147,7 +179,6 @@ public sealed class EngineSupervisor(
 
         if (action == RecoveryAction.GiveUp)
         {
-            Fault = new EngineFault(EngineFaultKind.CrashLoop, exitCode);
             SetStatusLocked(EngineStatus.Faulted, changes);
             return;
         }

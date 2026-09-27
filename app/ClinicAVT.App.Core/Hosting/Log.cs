@@ -20,9 +20,6 @@ public static partial class Log
     [LoggerMessage(Level = LogLevel.Warning, Message = "preferences not saved: {Message}")]
     public static partial void PreferencesNotSaved(this ILogger logger, string message);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "{From} moved to {Folder}")]
-    public static partial void FolderMoved(this ILogger logger, string from, string folder);
-
     [LoggerMessage(Level = LogLevel.Error, Message = "startup task {Task} failed")]
     public static partial void StartupTaskFailed(this ILogger logger, Exception exception, string task);
 

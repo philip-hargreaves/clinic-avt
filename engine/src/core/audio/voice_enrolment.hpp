@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
-#include <mutex>
 #include <span>
 #include <string>
 #include <vector>

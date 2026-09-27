@@ -13,9 +13,8 @@ namespace ClinicAVT.App.Composition;
 internal static class StartupTasks
 {
     public static IServiceCollection AddStartupTasks(
-        this IServiceCollection services, AppPaths paths, IReadOnlyList<(string From, string To)> moved)
+        this IServiceCollection services, AppPaths paths)
     {
-        services.AddSingleton<IStartupTask>(sp => new ReportEarlierNames(moved, sp.GetRequiredService<ILogger<ReportEarlierNames>>()));
         services.AddSingleton<IStartupTask>(_ => new RegisterCrashDumps(paths));
         services.AddSingleton<IStartupTask, AttachSessionState>();
         services.AddSingleton<IStartupTask, ApplySavedPreferences>();
@@ -24,27 +23,6 @@ internal static class StartupTasks
         services.AddSingleton<IStartupTask, RequestMicrophoneAccess>();
         services.AddSingleton<StartupRunner>();
         return services;
-    }
-
-    // Logs what the folder migration moved and drops the crash-dump registrations of the
-    // former executables
-    private sealed class ReportEarlierNames(IReadOnlyList<(string From, string To)> moved, ILogger logger) : IStartupTask
-    {
-        public string Name => "report earlier names";
-
-        public StartupStage Stage => StartupStage.BeforeWindow;
-
-        public void Run()
-        {
-            foreach (var (from, to) in moved)
-            {
-                logger.FolderMoved(from, to);
-            }
-
-            CrashDumps.Unregister(
-                Microsoft.Win32.Registry.CurrentUser,
-                "sotto_engine.exe", "sotto_note_host.exe", "ambient_engine.exe", "ambient_note_host.exe");
-        }
     }
 
     // The engine host reads the session through LiveSessionState, which follows the view model

@@ -9,30 +9,25 @@ results/<set>/<model>.jsonl with seconds per item, resuming rows already there.
 """
 
 import json
-import os
 import random
-import sys
 import time
-from pathlib import Path
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
-HERE = Path(__file__).resolve().parent
-MODELS = Path(r"C:\dev\ambient\models")
+from common import APP_MODELS, ROOT, option, read_jsonl
+
 SYSTEM = ("You are a professional medical translator. "
           "Translate the user's sentence from English into {language}. "
           "Reply with the translation only: no notes, no alternatives, no English.")
 
 
 def main():
-    sys.path.insert(0, str(HERE))
-    from translate import load_set, option, sentences
+    from translate import load_set, sentences
     import openvino_genai as genai
     model, count = option("--model", "qwen3.5-4b-int4"), int(option("--sheets", "12"))
     set_name, limit = option("--set", "sheets"), int(option("--limit", "300"))
     out = ROOT / "results" / set_name / f"{model}.jsonl"
     done = set()
     if out.exists():
-        done = {(r["id"], r["language"]) for r in map(json.loads, open(out, encoding="utf-8"))}
+        done = {(r["id"], r["language"]) for r in read_jsonl(out)}
     if set_name == "sheets":
         # The same 12 sheets the judge saw
         all_ids = sorted({s["id"] for s in load_set("sheets", 100)})
@@ -44,7 +39,7 @@ def main():
     print(model, set_name, len(items), "to do", flush=True)
 
     started = time.time()
-    pipe = genai.LLMPipeline(str(MODELS / model), "GPU")
+    pipe = genai.LLMPipeline(str(APP_MODELS / model), "GPU")
     config = genai.GenerationConfig()
     config.max_new_tokens = 256
     config.do_sample = False

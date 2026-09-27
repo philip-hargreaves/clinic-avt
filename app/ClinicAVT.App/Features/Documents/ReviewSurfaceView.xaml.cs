@@ -38,19 +38,15 @@ public sealed partial class ReviewSurfaceView : UserControl
 
     public ReviewSurfaceView(
         TranscriptPaneView transcript, NoteEditorView note, PatientEditorView patient,
-        ConsultationViewModel consultation, PageView page)
+        GuidanceSectionView guidance, ConsultationViewModel consultation, PageView page)
     {
         _transcript = transcript;
         _note = note;
         _patient = patient;
-        _guidance = note.Guidance;
+        _guidance = guidance;
         _page = page;
         _pageView = consultation.PageView;
         InitializeComponent();
-        // The selectors name the sections, so the views drop their own headings
-        _note.PlaceGuidance(below: false);
-        _guidance.ShowHeading(false);
-        _transcript.ShowHeading(false);
 
         NarrowTabs.Add("Clinical note", _narrow[0]);
         NarrowTabs.Add("Patient information", _narrow[1]);

@@ -5,7 +5,7 @@
 namespace clinicavt::models {
 
 ov::AnyMap CompileProperties(const ModelInfo& info) {
-    ov::AnyMap map{{"CACHE_DIR", (info.dir / ".cache").string()}};
+    ov::AnyMap map{{"CACHE_DIR", CacheDir(info).string()}};
     for (const auto& [key, value] : info.properties.items()) {
         if (value.is_boolean()) {
             map[key] = value.get<bool>();
@@ -60,7 +60,10 @@ LoadedModel OvRuntime::Load(const ModelStore& store, std::string_view task, std:
                             const std::string& xml_name) {
     const ModelInfo& info = store.Resolve(task, tier);
     store.Verify(info);
+    return Load(info, xml_name);
+}
 
+LoadedModel OvRuntime::Load(const ModelInfo& info, const std::string& xml_name) {
     const auto xml = info.dir / xml_name;
     if (!std::filesystem::exists(xml)) {
         throw std::runtime_error(info.id + ": no such model file " + xml_name);
@@ -68,12 +71,9 @@ LoadedModel OvRuntime::Load(const ModelStore& store, std::string_view task, std:
 
     LoadedModel loaded;
     loaded.device = ResolveDevice(info.device);
-    const auto start = std::chrono::steady_clock::now();
     // Same convention as the whisper pipeline: first launch compiles and
     // exports, every later launch imports the cached blob
     loaded.model = core_.compile_model(xml.string(), loaded.device, CompileProperties(info));
-    loaded.load_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start);
     return loaded;
 }
 

@@ -137,9 +137,10 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
 
     // The catalog finds the crashed session
     SqliteSessionStore reopened(root.path, std::chrono::hours(1));
-    const auto recoverable = reopened.ScanRecoverable();
-    ASSERT_EQ(recoverable.size(), 1u);
-    EXPECT_EQ(recoverable[0].id, session_id);
+    const auto listed = reopened.ListSessions();
+    ASSERT_EQ(listed.size(), 1u);
+    EXPECT_EQ(listed[0].id, session_id);
+    EXPECT_EQ(listed[0].state, "recording");
 
     // Every acked chunk survived the kill, decrypts, and carries the exact
     // frames that were appended
@@ -172,7 +173,7 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
     }
     EXPECT_GE(expected_seq, acked) << "an acked commit was lost";
 
-    // Turns commit synchronously, so every one before the kill survives too
+    // Turns commit synchronously, so those written before the kill survive too
     Db::Stmt turns = db.Prepare("SELECT seq, payload FROM turns WHERE session_id = ? ORDER BY seq");
     turns.BindText(1, session_id);
     std::int64_t turn_seq = 0;
@@ -202,7 +203,6 @@ TEST(StoreRecovery, AHardKillAfterCancelLeavesNothing) {
     }
 
     SqliteSessionStore reopened(root.path, std::chrono::hours(1));
-    EXPECT_TRUE(reopened.ScanRecoverable().empty());
     EXPECT_TRUE(reopened.ListSessions().empty());
     Db db(root.path / "clinicavt.db");
     EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM session_keys"), 0) << "the key went first";

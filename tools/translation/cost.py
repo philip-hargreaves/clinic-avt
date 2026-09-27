@@ -8,16 +8,12 @@ working set after warming. Writes results/cost.json.
 """
 
 import json
-import os
 import subprocess
 import sys
 import time
-from pathlib import Path
 
-from translate import option
+from common import ROOT, option
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
-HERE = Path(__file__).resolve().parent
 PYTHON = sys.executable
 LANGUAGES = ["Urdu", "Polish"]
 
@@ -25,10 +21,9 @@ LANGUAGES = ["Urdu", "Polish"]
 def measure(name: str, threads: int, count: int) -> dict:
     """Runs in the child process."""
     import psutil
-    sys.path.insert(0, str(HERE))
     from translate import Translator, load_set
     started = time.time()
-    # Python import time, which the engine does not pay
+    # Imported only to time them: Python import cost, which the engine does not pay
     import optimum.intel  # noqa: F401
     import transformers  # noqa: F401
     imports = time.time() - started

@@ -15,6 +15,15 @@ std::size_t Digits(std::string_view s, std::size_t at) {
     return n;
 }
 
+// s opens with the lower-case prefix, in any case, and runs on past it
+bool OpensWithNoCase(std::string_view s, std::string_view prefix) {
+    if (s.size() <= prefix.size()) return false;
+    for (std::size_t i = 0; i < prefix.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(s[i])) != prefix[i]) return false;
+    }
+    return true;
+}
+
 // A mark ends the text or gives way to a space or colon
 bool MarkEnds(std::string_view s, std::size_t at) {
     return at >= s.size() || s[at] == ' ' || s[at] == ':';
@@ -44,10 +53,7 @@ std::size_t NumberedMark(std::string_view s) {
 // "Recommendation 3", "Recommendation 2a", any case
 std::size_t WordMark(std::string_view s) {
     static constexpr std::string_view kWord = "recommendation ";
-    if (s.size() <= kWord.size()) return 0;
-    for (std::size_t i = 0; i < kWord.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(s[i])) != kWord[i]) return 0;
-    }
+    if (!OpensWithNoCase(s, kWord)) return 0;
     auto end = kWord.size() + Digits(s, kWord.size());
     if (end == kWord.size()) return 0;
     if (end < s.size() && std::islower(static_cast<unsigned char>(s[end]))) ++end;
@@ -97,13 +103,11 @@ bool DateTagAt(std::string_view s, std::size_t at, std::size_t& end) {
 }  // namespace
 
 std::string LeadingNumber(const std::string& paragraph) {
-    std::size_t i = 0;
-    while (i < paragraph.size() && std::isdigit(static_cast<unsigned char>(paragraph[i]))) ++i;
+    const std::size_t i = Digits(paragraph, 0);
     if (i == 0 || i >= paragraph.size() || paragraph[i] != '.') return "";
     std::size_t end = i;
     while (end < paragraph.size() && paragraph[end] == '.') {
-        std::size_t k = end + 1;
-        while (k < paragraph.size() && std::isdigit(static_cast<unsigned char>(paragraph[k]))) ++k;
+        const std::size_t k = end + 1 + Digits(paragraph, end + 1);
         if (k == end + 1) break;
         end = k;
     }
@@ -115,10 +119,7 @@ std::string LeadingNumber(const std::string& paragraph) {
 bool StartsRecommendation(const std::string& paragraph) {
     if (!LeadingNumber(paragraph).empty()) return true;
     static constexpr std::string_view kWord = "recommendation";
-    if (paragraph.size() <= kWord.size()) return false;
-    for (std::size_t i = 0; i < kWord.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(paragraph[i])) != kWord[i]) return false;
-    }
+    if (!OpensWithNoCase(paragraph, kWord)) return false;
     std::size_t i = kWord.size();
     if (!std::isspace(static_cast<unsigned char>(paragraph[i]))) return false;
     while (i < paragraph.size() && std::isspace(static_cast<unsigned char>(paragraph[i]))) ++i;

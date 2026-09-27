@@ -145,8 +145,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public ReplayRequest? ActiveReplay => Recorder.ActiveReplay;
 
-    public DemoMaster? ActivePlayback => Recorder.ActivePlayback;
-
     public bool ModelsReady => Readiness.ModelsReady;
 
     public bool ConsultationActive => State != SessionState.Idle;
@@ -157,15 +155,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     /// </summary>
     public string SessionPhase =>
         State == SessionState.Finalising ? $"{State}:{Phase}" : State.ToString();
-
-    /// <summary>
-    /// How long added documents must stop changing before the note is searched again.
-    /// </summary>
-    public TimeSpan DocumentsSettle
-    {
-        get => Review.DocumentsSettle;
-        set => Review.DocumentsSettle = value;
-    }
 
     public Task StartRecordingAsync(ReplayRequest? replay = null) => Recorder.StartRecordingAsync(replay);
 

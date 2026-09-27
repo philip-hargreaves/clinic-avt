@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "adapters/diarisation/fbank.hpp"
+#include "dev_wav.hpp"
 
 namespace clinicavt::diar {
 namespace {
@@ -20,19 +21,6 @@ namespace {
 // p99 abs diff < 1e-4, max abs diff < 1e-2
 constexpr const char* kFixtureDir = CLINICAVT_DIAR_FIXTURE_DIR;
 
-std::vector<float> LoadWav(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in.is_open()) throw std::runtime_error("missing dev wav: " + path);
-    in.seekg(0, std::ios::end);
-    const auto bytes = static_cast<std::size_t>(in.tellg()) - 44;
-    in.seekg(44);
-    std::vector<std::int16_t> pcm(bytes / 2);
-    in.read(reinterpret_cast<char*>(pcm.data()), static_cast<std::streamsize>(bytes));
-    std::vector<float> frames(pcm.size());
-    for (std::size_t i = 0; i < pcm.size(); ++i) frames[i] = pcm[i] / 32768.0f;
-    return frames;
-}
-
 TEST(FbankParity, MatchesTheTorchReferenceOnRealSpeech) {
     std::ifstream in(std::filesystem::path(kFixtureDir) / "fixtures.json");
     ASSERT_TRUE(in.is_open()) << "missing diarisation fixtures";
@@ -41,7 +29,7 @@ TEST(FbankParity, MatchesTheTorchReferenceOnRealSpeech) {
     if (!std::filesystem::exists(meta.at("wav").get<std::string>())) {
         GTEST_SKIP() << "research corpus not mounted";
     }
-    const auto audio = LoadWav(meta.at("wav"));
+    const auto audio = LoadDevWav(meta.at("wav"));
 
     for (const auto& entry : meta.at("slices")) {
         const auto first = static_cast<std::size_t>(entry.at("start_s").get<double>() * 16000.0);

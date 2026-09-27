@@ -1,9 +1,9 @@
-namespace ClinicAVT.App.Tests.Support;
+namespace ClinicAVT.TestSupport;
 
-/// <summary>Writes a temp 16 kHz mono PCM16 silence wav.</summary>
-internal static class SessionContractWav
+/// <summary>A temp 16 kHz mono PCM16 silence wav that sessions replay in place of a microphone.</summary>
+internal static class SilenceWav
 {
-    public static string Write(int seconds)
+    public static string Write(int seconds = 2)
     {
         var frames = seconds * 16000;
         var bytes = new byte[44 + frames * 2];
@@ -25,7 +25,7 @@ internal static class SessionContractWav
         Tag(36, "data");
         U32(40, (uint)(frames * 2));
 
-        var path = Path.Combine(Path.GetTempPath(), $"clinicavt-demo-{Guid.NewGuid():N}.wav");
+        var path = Path.Combine(Path.GetTempPath(), $"clinicavt-silence-{Guid.NewGuid():N}.wav");
         File.WriteAllBytes(path, bytes);
         return path;
     }

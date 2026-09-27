@@ -8,7 +8,7 @@ CREATE TABLE index_meta (
     embedder_id   TEXT    NOT NULL,                 -- model store id, "gte-large-int8"
     embedder_rev  TEXT    NOT NULL,                 -- sha256 of the model weights
     dim           INTEGER NOT NULL CHECK (dim > 0),
-    query_prefix  TEXT    NOT NULL DEFAULT '',
+    query_prefix  TEXT    NOT NULL DEFAULT '',      -- unused, always ''
     max_tokens    INTEGER NOT NULL,
     created_at    TEXT    NOT NULL                  -- ISO 8601 UTC
 );

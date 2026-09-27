@@ -13,11 +13,6 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style x:Key="DocumentHeadingText" TargetType="TextBlock"
-           BasedOn="{StaticResource BodyStrongTextBlockStyle}">
-        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
-    </Style>
-
     <Style x:Key="BodyText" TargetType="TextBlock"
            BasedOn="{StaticResource BodyTextBlockStyle}">
         <Setter Property="TextWrapping" Value="Wrap" />
@@ -84,12 +79,6 @@
         <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
         <Setter Property="Padding" Value="9,5" />
         <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-
-    <!-- A fold toggle drawn as text. It has no chrome until hovered and sits flush with the text beside it -->
-    <Style x:Key="FoldButton" TargetType="Button" BasedOn="{StaticResource TrayButton}">
-        <Setter Property="Padding" Value="0,4" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
 
     <Style x:Key="CaptionLink" TargetType="HyperlinkButton" BasedOn="{StaticResource DefaultHyperlinkButtonStyle}">

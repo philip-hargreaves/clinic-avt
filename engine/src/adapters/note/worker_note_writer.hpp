@@ -45,6 +45,10 @@ class WorkerNoteWriter : public INoteWriter, public INoteLane {
 
     void Cancel() override;
 
+    // True when the host holding the GPU is this lane's and it will not exit.
+    // A healthy host is closed and starts again when next needed
+    bool CheckForStuckHost();
+
     NoteModelState Configure(const std::string& tier) override;
 
     NoteModelState State() const override;

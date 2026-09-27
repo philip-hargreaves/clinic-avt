@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ClinicAVT.App.Tests.Support;
+namespace ClinicAVT.TestSupport;
 
 /// <summary>The shared wire fixtures under schema/fixtures, found from the test output.</summary>
 internal static class Fixtures

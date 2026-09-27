@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <exception>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "ports/transcriber.hpp"
 
@@ -57,8 +59,9 @@ inline json IdToJson(const Id& id) {
     return std::get<std::string>(id);
 }
 
-// Mirrors envelope.schema.json. By value so params move out: nlohmann's
-// copy recurses one frame per nesting level
+// One request per frame, no batches: an integer or string id and object
+// params. By value so params move out: nlohmann's copy recurses one frame
+// per nesting level
 inline std::variant<Request, Error> ParseRequest(json j) {
     const auto invalid = [](std::string why) {
         return Error{kInvalidRequest, "Invalid Request", json(std::move(why))};
@@ -110,6 +113,13 @@ inline json MakeNotification(const std::string& method, json params) {
     return json{{"jsonrpc", "2.0"}, {"method", method}, {"params", std::move(params)}};
 }
 
+inline json MakeRequest(const Id& id, const std::string& method, json params) {
+    return json{{"jsonrpc", "2.0"},
+                {"id", IdToJson(id)},
+                {"method", method},
+                {"params", std::move(params)}};
+}
+
 inline json ToJson(const PeerInfo& p) {
     return json{{"name", p.name}, {"version", p.version}, {"protocolVersion", p.protocol_version}};
 }
@@ -143,6 +153,19 @@ inline std::variant<std::string, Error> IdFrom(const json& params) {
     return params["id"].get<std::string>();
 }
 
+// A handler on one stored session: body(id) runs once the id is valid, and a
+// store failure inside it becomes a session error
+template <class Body>
+std::variant<json, Error> WithSession(const json& params, Body body) {
+    const auto id = IdFrom(params);
+    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
+    try {
+        return body(std::get<std::string>(id));
+    } catch (const std::exception& e) {
+        return SessionError(e.what());
+    }
+}
+
 // Optional stamps are empty strings in the store and null on the wire
 inline json NullWhenEmpty(const std::string& value) {
     return value.empty() ? json(nullptr) : json(value);
@@ -159,6 +182,18 @@ inline json TurnJson(const asr::Turn& turn) {
 inline asr::Turn TurnFromJson(const json& t) {
     return {t.value("firstFrame", std::uint64_t{0}), t.value("frameCount", std::uint64_t{0}),
             t.value("speaker", ""), t.value("text", "")};
+}
+
+inline json TurnsJson(const std::vector<asr::Turn>& turns) {
+    json list = json::array();
+    for (const auto& turn : turns) list.push_back(TurnJson(turn));
+    return list;
+}
+
+inline std::vector<asr::Turn> TurnsFromJson(const json& list) {
+    std::vector<asr::Turn> turns;
+    for (const auto& t : list) turns.push_back(TurnFromJson(t));
+    return turns;
 }
 
 }  // namespace clinicavt::ipc

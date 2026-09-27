@@ -7,10 +7,10 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "core/common/strings.hpp"
-#include "core/guidance/guidance_query.hpp"
 
 namespace clinicavt::guidance {
 
@@ -176,14 +176,9 @@ bool PopulationConflict(std::string_view note, std::string_view recommendation,
 bool NearDuplicate(std::string_view a, std::string_view b) {
     const auto words = [](std::string_view s) {
         std::set<std::string> out;
-        std::string word;
-        for (const char c : std::string(s) + " ") {
-            if (std::isalnum(static_cast<unsigned char>(c))) {
-                word.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-            } else {
-                if (word.size() > 3) out.insert(word);
-                word.clear();
-            }
+        for (auto& word :
+             strings::LowerTokens(s, [](unsigned char c) { return std::isalnum(c) != 0; })) {
+            if (word.size() > 3) out.insert(std::move(word));
         }
         return out;
     };

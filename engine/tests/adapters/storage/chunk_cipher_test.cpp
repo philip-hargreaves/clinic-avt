@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -16,92 +17,59 @@ std::vector<std::uint8_t> SampleChunk() {
     return plain;
 }
 
-TEST(ChunkCipher, RoundTrips) {
+// Empty is real: a loss-only commit seals zero frames
+TEST(ChunkCipher, SealedPayloadsRoundTripAlsoEmptyAndThroughTheWrappedKey) {
     const ChunkCipher cipher = ChunkCipher::Generate();
-    const auto plain = SampleChunk();
-    const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, plain);
-    EXPECT_EQ(sealed.size(), plain.size() + 16);
-    EXPECT_EQ(cipher.Open(Domain::kAudio, "session-a", 7, sealed), plain);
+    const ChunkCipher stored = ChunkCipher::FromWrapped(cipher.Wrapped());
+    for (const auto& plain : {SampleChunk(), std::vector<std::uint8_t>{}}) {
+        SCOPED_TRACE(plain.empty() ? "empty" : "64 KiB");
+        const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, plain);
+        EXPECT_EQ(sealed.size(), plain.size() + 16) << "ciphertext and tag";
+        if (!plain.empty()) {
+            EXPECT_FALSE(std::equal(plain.begin(), plain.end(), sealed.begin()))
+                << "sealed as plaintext";
+        }
+        EXPECT_EQ(cipher.Open(Domain::kAudio, "session-a", 7, sealed), plain);
+        EXPECT_EQ(stored.Open(Domain::kAudio, "session-a", 7, sealed), plain)
+            << "the unwrapped key opens it";
+    }
+    EXPECT_THROW(ChunkCipher::FromWrapped(std::vector<std::uint8_t>(64, 0xAB)), std::runtime_error);
 }
 
-TEST(ChunkCipher, CiphertextIsNotThePlaintext) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    const auto plain = SampleChunk();
-    const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 0, plain);
-    EXPECT_FALSE(std::equal(plain.begin(), plain.end(), sealed.begin()));
-}
-
-TEST(ChunkCipher, RoundTripsAnEmptyChunk) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 0, {});
-    EXPECT_EQ(sealed.size(), 16u);
-    EXPECT_TRUE(cipher.Open(Domain::kAudio, "session-a", 0, sealed).empty());
-}
-
-TEST(ChunkCipher, TamperedCiphertextFailsAuthentication) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, SampleChunk());
-    sealed[100] ^= 0x01;
-    EXPECT_THROW(cipher.Open(Domain::kAudio, "session-a", 7, sealed), std::runtime_error);
-}
-
-TEST(ChunkCipher, TamperedTagFailsAuthentication) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, SampleChunk());
-    sealed.back() ^= 0x01;
-    EXPECT_THROW(cipher.Open(Domain::kAudio, "session-a", 7, sealed), std::runtime_error);
-}
-
-TEST(ChunkCipher, RenumberedChunkFailsAuthentication) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, SampleChunk());
-    EXPECT_THROW(cipher.Open(Domain::kAudio, "session-a", 8, sealed), std::runtime_error);
-}
-
-TEST(ChunkCipher, ChunkMovedBetweenSessionsFailsAuthentication) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, SampleChunk());
-    EXPECT_THROW(cipher.Open(Domain::kAudio, "session-b", 7, sealed), std::runtime_error);
-}
-
-TEST(ChunkCipher, WrongKeyFailsAuthentication) {
+TEST(ChunkCipher, APayloadOpensOnlyUnderItsOwnKeyDomainSessionAndSequence) {
     const ChunkCipher cipher = ChunkCipher::Generate();
     const ChunkCipher other = ChunkCipher::Generate();
-    const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, SampleChunk());
-    EXPECT_THROW(other.Open(Domain::kAudio, "session-a", 7, sealed), std::runtime_error);
-}
-
-TEST(ChunkCipher, TruncatedPayloadFailsAuthentication) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    EXPECT_THROW(cipher.Open(Domain::kAudio, "session-a", 0, std::vector<std::uint8_t>(15)),
-                 std::runtime_error);
-}
-
-TEST(ChunkCipher, DomainsShareAKeyButNotPayloads) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
-    const auto plain = SampleChunk();
-    const auto as_audio = cipher.Seal(Domain::kAudio, "session-a", 7, plain);
-    const auto as_turn = cipher.Seal(Domain::kTurns, "session-a", 7, plain);
-
-    EXPECT_NE(as_audio, as_turn) << "same seq in different domains must differ";
-    EXPECT_EQ(cipher.Open(Domain::kTurns, "session-a", 7, as_turn), plain);
-    EXPECT_THROW(cipher.Open(Domain::kAudio, "session-a", 7, as_turn), std::runtime_error)
-        << "a turn payload must not open as an audio chunk";
-    EXPECT_THROW(cipher.Open(Domain::kTurns, "session-a", 7, as_audio), std::runtime_error);
-}
-
-TEST(ChunkCipher, WrappedKeySurvivesTheRoundTrip) {
-    const ChunkCipher cipher = ChunkCipher::Generate();
     const auto plain = SampleChunk();
     const auto sealed = cipher.Seal(Domain::kAudio, "session-a", 7, plain);
 
-    const ChunkCipher recovered = ChunkCipher::FromWrapped(cipher.Wrapped());
-    EXPECT_EQ(recovered.Open(Domain::kAudio, "session-a", 7, sealed), plain);
-}
+    // Domains share a key and count seq from zero, so their IVs must stay disjoint
+    const auto as_turn = cipher.Seal(Domain::kTurns, "session-a", 7, plain);
+    EXPECT_NE(as_turn, sealed) << "same seq in different domains must differ";
+    EXPECT_EQ(cipher.Open(Domain::kTurns, "session-a", 7, as_turn), plain);
 
-TEST(ChunkCipher, GarbageWrappedKeyThrows) {
-    const std::vector<std::uint8_t> garbage(64, 0xAB);
-    EXPECT_THROW(ChunkCipher::FromWrapped(garbage), std::runtime_error);
+    auto tampered = sealed;
+    tampered[100] ^= 0x01;
+    struct Case {
+        const char* what;
+        const ChunkCipher* key;
+        Domain domain;
+        const char* session;
+        std::uint64_t seq;
+        std::vector<std::uint8_t> payload;
+    };
+    const std::vector<Case> cases = {
+        {"a flipped byte", &cipher, Domain::kAudio, "session-a", 7, tampered},
+        {"shorter than the tag", &cipher, Domain::kAudio, "session-a", 0,
+         std::vector<std::uint8_t>(15)},
+        {"renumbered", &cipher, Domain::kAudio, "session-a", 8, sealed},
+        {"moved to another session", &cipher, Domain::kAudio, "session-b", 7, sealed},
+        {"a turn opened as audio", &cipher, Domain::kAudio, "session-a", 7, as_turn},
+        {"another key", &other, Domain::kAudio, "session-a", 7, sealed},
+    };
+    for (const Case& c : cases) {
+        SCOPED_TRACE(c.what);
+        EXPECT_THROW(c.key->Open(c.domain, c.session, c.seq, c.payload), std::runtime_error);
+    }
 }
 
 }  // namespace

@@ -5,7 +5,6 @@
 
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_clustering.hpp"
-#include "core/diarisation/clip_cuts.hpp"
 #include "core/diarisation/diar_regions.hpp"
 #include "core/diarisation/embeddings.hpp"
 #include "core/diarisation/role_naming.hpp"
@@ -53,54 +52,30 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio) {
     }
 
     result.timing.finish_s = lap();
-    const auto regions = SpeechRegions(probabilities, audio.size());
-    {
-        const auto cuts = SnapClipCuts(capture.clip_cuts, probabilities, seg.change_points);
-        seg.change_points.insert(seg.change_points.end(), cuts.begin(), cuts.end());
-    }
-    std::sort(seg.change_points.begin(), seg.change_points.end());
-    const auto slices = RefineRegions(regions, seg.change_points);
-
-    std::vector<std::vector<float>> embeddings;
-    std::vector<std::uint64_t> durations;
-    std::vector<Region> kept;
-    for (const Region& slice : slices) {
+    const auto slices =
+        CutSlices(probabilities, audio.size(), std::move(seg.change_points), capture.clip_cuts);
+    // Capture's embedding where it has the slice, an empty one meaning too short
+    const auto embedded = EmbedSlices(slices, [&](const Region& slice) -> std::vector<float> {
         const auto it = capture.embeddings.find({slice.first_frame, slice.end_frame});
         if (it != capture.embeddings.end()) {
-            if (it->second.empty()) continue;  // was too short to embed
-            embeddings.push_back(it->second);
-            ++result.timing.embed_hits;
-        } else {
-            const auto ranges = EmbeddingRanges(slice, seg.overlap_spans);
-            if (ranges.empty()) continue;
-            const auto clip = Gather(audio, ranges);
-            if (clip.size() < kEmbedMinFrames) continue;
-            embeddings.push_back(embedder_.Embed(clip));
-            ++result.timing.embed_misses;
+            if (!it->second.empty()) ++result.timing.embed_hits;
+            return it->second;
         }
-        durations.push_back(slice.end_frame - slice.first_frame);
-        kept.push_back(slice);
-    }
+        const auto clip = Gather(audio, EmbeddingRanges(slice, seg.overlap_spans));
+        if (clip.size() < kEmbedMinFrames) return {};
+        ++result.timing.embed_misses;
+        return embedder_.Embed(clip);
+    });
 
     result.timing.embed_s = lap();
-    const auto clusters = ClusterSpeakers(embeddings, durations);
+    const auto clusters = ClusterSpeakers(embedded.embeddings, embedded.durations);
     centroids_ = clusters.centroids;
     result.timing.cluster_s = lap();
-    std::vector<LabelledSlice> out;
-    for (std::size_t i = 0; i < kept.size(); ++i) {
-        out.push_back({kept[i].first_frame, kept[i].end_frame, clusters.labels[i]});
-    }
-
-    const auto overlaps = OverlapTurns(kept, clusters.labels, clusters.centroids, seg.overlap_spans,
-                                       [&](std::uint64_t first, std::uint64_t end) {
-                                           return embedder_.Embed(Gather(audio, {{first, end}}));
-                                       });
-    out.insert(out.end(), overlaps.begin(), overlaps.end());
+    result.slices = LabelSlices(embedded.kept, clusters, seg.overlap_spans,
+                                [&](std::uint64_t first, std::uint64_t end) {
+                                    return embedder_.Embed(Gather(audio, {{first, end}}));
+                                });
     result.timing.overlap_s = lap();
-    std::sort(out.begin(), out.end(), [](const LabelledSlice& a, const LabelledSlice& b) {
-        return a.first_frame < b.first_frame;
-    });
-    result.slices = std::move(out);
     result.cluster_count = clusters.count;
 
     voiceprints_.clear();  // AnchorSimilarities refills them per finalise
@@ -133,24 +108,7 @@ std::vector<asr::Turn> SpeakerDiariser::SpeculativeTranscript() {
     if (anchor && spec.centroids.size() == static_cast<std::size_t>(spec.cluster_count)) {
         for (const auto& centroid : spec.centroids) similarity.push_back(Dot(centroid, *anchor));
     }
-    std::vector<RoleTurn> role_turns;
-    for (std::size_t i = 0; i < spec.turns.size(); ++i) {
-        role_turns.push_back({spec.turns[i].cluster,
-                              spec.turns[i].end_frame - spec.turns[i].first_frame, spec.texts[i]});
-    }
-    const auto roles = NameRoles(role_turns, spec.cluster_count, similarity);
-    std::vector<asr::Turn> out;
-    for (std::size_t i = 0; i < spec.turns.size(); ++i) {
-        const auto cluster = static_cast<std::size_t>(spec.turns[i].cluster);
-        asr::Turn turn;
-        turn.first_frame = spec.turns[i].first_frame;
-        turn.frame_count = spec.turns[i].end_frame - spec.turns[i].first_frame;
-        turn.speaker =
-            cluster < roles.role_of_cluster.size() ? roles.role_of_cluster[cluster] : "unknown";
-        turn.text = spec.texts[i];
-        out.push_back(std::move(turn));
-    }
-    return out;
+    return NameTurns(spec.turns, spec.texts, spec.cluster_count, similarity).turns;
 }
 
 std::vector<float> SpeakerDiariser::DoctorVoiceprint(std::span<const float> audio,

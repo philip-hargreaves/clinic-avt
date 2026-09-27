@@ -26,7 +26,7 @@ struct AnchorRecord {
     std::uint64_t enrolled_at = 0;
 };
 
-// Version 2 layout. Version 1 (no enrolment fields) still parses
+// Version 2 layout. Anything else is refused, and the store starts fresh
 std::vector<std::uint8_t> SerializeAnchor(const AnchorRecord& record);
 std::optional<AnchorRecord> ParseAnchor(std::span<const std::uint8_t> plain);
 
@@ -45,7 +45,6 @@ class AnchorStore {
 
     // Unit-norm voiceprint, empty before any enrolment or consultation
     std::optional<std::vector<float>> Anchor() const;
-    std::uint64_t Sessions() const;
     AnchorStatus Status() const;
 
     void Accrue(std::span<const float> voiceprint);

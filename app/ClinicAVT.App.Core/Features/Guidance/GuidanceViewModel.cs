@@ -10,7 +10,7 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Guidance;
 
 /// <summary>
-/// The Guidelines section under the note. The consultation view model owns the
+/// The Guidelines section of the review. The consultation view model owns the
 /// engine and feeds this from the wire. Nothing here talks to it.
 /// </summary>
 public sealed partial class GuidanceViewModel : ObservableObject
@@ -35,13 +35,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
         _clipboard = clipboard;
         _status = status;
     }
-
-    /// <summary>
-    /// The section folded to its heading. The review's patient sheet folds the same way.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(BodyVisible), nameof(FoldGlyph))]
-    public partial bool Folded { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateCaption), nameof(CaptionVisible),
@@ -94,11 +87,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
     /// <summary>The note sentence under the pointer, for the note editor to light.</summary>
     [ObservableProperty]
     public partial string Hovered { get; set; } = "";
-
-    public bool BodyVisible => !Folded;
-
-    // Open shows an up chevron, folded a down one
-    public string FoldGlyph => Folded ? "" : "";
 
     /// <summary>The loader's reason when unavailable, for the log. Never shown.</summary>
     public string ReadinessDetail { get; private set; } = "";
@@ -217,9 +205,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
     public bool WantsSearchAfterDocuments =>
         HasRecord && !QueryShown && !Searching && Readiness == GuidanceReadiness.Ready;
 
-    [RelayCommand]
-    private void ToggleFold() => Folded = !Folded;
-
     /// <summary>A web link opens in the browser, an added document in the PDF viewer.</summary>
     [RelayCommand]
     private async Task Open(GuidanceRecommendation found)
@@ -235,7 +220,8 @@ public sealed partial class GuidanceViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task ShowInDocument(GuidanceRecommendation found) => ShowInDocumentAsync(found);
+    private Task ShowInDocument(GuidanceRecommendation found) =>
+        ShowInDocumentRequested?.Invoke(found) ?? Task.CompletedTask;
 
     [RelayCommand]
     private Task CopyCitation(GuidanceRecommendation found) =>
@@ -271,9 +257,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
         FoundIn = "";
         QueryChanged();
     }
-
-    public Task ShowInDocumentAsync(GuidanceRecommendation found) =>
-        ShowInDocumentRequested?.Invoke(found) ?? Task.CompletedTask;
 
     public Task OpenDocumentAsync(GuidanceRecommendation found) =>
         OpenDocumentRequested?.Invoke(found) ?? Task.CompletedTask;

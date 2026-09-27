@@ -19,22 +19,21 @@ public sealed partial class MicViewModel : ObservableObject
     private readonly IEngineApi _engine;
     private readonly AppPreferences? _preferences;
 
+    // Empty means "the system default", which the engine pins
+    private string _selectedId;
+
     public MicViewModel(IEngineApi engine, AppPreferences? preferences = null,
         IUiDispatcher? dispatcher = null)
     {
         _engine = engine;
         _preferences = preferences;
-        SelectedId = preferences?.MicId ?? "";
+        _selectedId = preferences?.MicId ?? "";
         // Refresh at connect so the label is right before the first open
         if (dispatcher is not null)
         {
             engine.OnConnected(dispatcher, () => _ = RefreshAsync());
         }
     }
-
-    /// <summary>Empty means "the system default", which the engine pins.</summary>
-    [ObservableProperty]
-    public partial string SelectedId { get; private set; }
 
     public ObservableCollection<MicDevice> Devices { get; } = [];
 
@@ -78,7 +77,7 @@ public sealed partial class MicViewModel : ObservableObject
     public string FullName => Current?.Name ?? "No microphone found";
 
     private MicDevice? Current =>
-        Devices.FirstOrDefault(d => d.Id == SelectedId)
+        Devices.FirstOrDefault(d => d.Id == _selectedId)
         ?? Devices.FirstOrDefault(d => d.IsDefault)
         ?? Devices.FirstOrDefault();
 
@@ -114,7 +113,7 @@ public sealed partial class MicViewModel : ObservableObject
     [RelayCommand]
     public void Select(string id)
     {
-        SelectedId = id;
+        _selectedId = id;
         _preferences.Update(p => p.MicId = id);
 
         Changed();

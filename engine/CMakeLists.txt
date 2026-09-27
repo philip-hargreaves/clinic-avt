@@ -108,18 +108,10 @@ target_compile_definitions(sqlite3 PRIVATE
 # Not ours to keep warning-clean
 set_target_properties(sqlite3 PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
-# The schema and its migrations are SQL files, embedded so the engine stays
-# a single binary
+# The schema is a SQL file, embedded so the engine stays a single binary
 set(clinicavt_schema_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/storage/schema)
 file(READ ${clinicavt_schema_dir}/clinicavt.sql CLINICAVT_SCHEMA_SQL)
-file(READ ${clinicavt_schema_dir}/migrate-2-to-3.sql CLINICAVT_MIGRATE_2_TO_3_SQL)
-file(READ ${clinicavt_schema_dir}/migrate-3-to-4.sql CLINICAVT_MIGRATE_3_TO_4_SQL)
-file(READ ${clinicavt_schema_dir}/migrate-4-to-5.sql CLINICAVT_MIGRATE_4_TO_5_SQL)
-file(READ ${clinicavt_schema_dir}/migrate-5-to-6.sql CLINICAVT_MIGRATE_5_TO_6_SQL)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${clinicavt_schema_dir}/clinicavt.sql ${clinicavt_schema_dir}/migrate-2-to-3.sql
-    ${clinicavt_schema_dir}/migrate-3-to-4.sql ${clinicavt_schema_dir}/migrate-4-to-5.sql
-    ${clinicavt_schema_dir}/migrate-5-to-6.sql)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${clinicavt_schema_dir}/clinicavt.sql)
 configure_file(src/adapters/storage/schema.hpp.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/adapters/storage/schema.hpp @ONLY)
 
@@ -135,7 +127,8 @@ target_link_libraries(clinicavt_storage
 
 add_library(clinicavt_models STATIC
     src/adapters/models/model_store.cpp
-    src/adapters/models/ov_runtime.cpp)
+    src/adapters/models/ov_runtime.cpp
+    src/adapters/system/sha256.cpp)
 target_link_libraries(clinicavt_models
     PUBLIC clinicavt_core nlohmann_json::nlohmann_json openvino::genai
     PRIVATE clinicavt_warnings bcrypt)
@@ -222,7 +215,6 @@ set_target_properties(kaldi-native-fbank-core kissfft PROPERTIES COMPILE_WARNING
 
 add_library(clinicavt_diarisation STATIC
     src/adapters/diarisation/anchor_store.cpp
-    src/adapters/diarisation/cluster_voiceprint.cpp
     src/adapters/diarisation/capture_stage.cpp
     src/adapters/diarisation/fbank.cpp
     src/adapters/diarisation/segmenter.cpp

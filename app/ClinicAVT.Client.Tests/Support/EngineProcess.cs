@@ -11,6 +11,9 @@ internal sealed class EngineProcess : IAsyncDisposable
     private const string DefaultPipeName = EngineInfo.PipeName;
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
 
+    // A note model load cannot be cancelled, and the engine stays until it finishes
+    private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(60);
+
     private readonly Process _process;
     private readonly string _pipeName;
     private readonly StringBuilder _stderr = new();
@@ -40,7 +43,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         string? pipeName = null, string? replayWavPath = null, string? modelsRoot = null)
     {
         var storeRoot = Path.Combine(Path.GetTempPath(), $"clinicavt-store-{Guid.NewGuid():N}");
-        var startInfo = new ProcessStartInfo(LocateEngine())
+        var startInfo = new ProcessStartInfo(EnginePath.Find())
         {
             UseShellExecute = false,
             RedirectStandardError = true,
@@ -92,50 +95,26 @@ internal sealed class EngineProcess : IAsyncDisposable
         return PipeTransport.ConnectAsync(_pipeName, ConnectTimeout, (uint)_process.Id);
     }
 
-    // CLINICAVT_ENGINE_PATH override, else the newest built engine under any preset
-    private static string LocateEngine()
-    {
-        const string exe = "clinicavt_engine.exe";
-        var overridePath = Environment.GetEnvironmentVariable("CLINICAVT_ENGINE_PATH");
-        if (!string.IsNullOrEmpty(overridePath))
-        {
-            return overridePath;
-        }
-
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null)
-        {
-            var buildRoot = Path.Combine(dir, "build");
-            if (Directory.Exists(buildRoot))
-            {
-                var newest = Directory
-                    .EnumerateFiles(buildRoot, exe, SearchOption.AllDirectories)
-                    .Select(path => new FileInfo(path))
-                    .OrderByDescending(info => info.LastWriteTimeUtc)
-                    .FirstOrDefault();
-                if (newest is not null)
-                {
-                    return newest.FullName;
-                }
-            }
-
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        throw new FileNotFoundException(
-            $"{exe} not found via CLINICAVT_ENGINE_PATH or under build/");
-    }
-
+    // Asks the engine to leave and waits, never kills: an engine stopped mid-GPU can wedge
+    // the driver. One that will not leave fails the test and is left running
     public async ValueTask DisposeAsync()
     {
         if (!_process.HasExited)
         {
-            _process.Kill();
+            var asked = await AskToExitAsync().ConfigureAwait(false);
+            try
+            {
+                await WaitForExitAsync(ExitWait).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new InvalidOperationException(
+                    $"engine pid {_process.Id} did not leave within {ExitWait.TotalSeconds:0} s "
+                    + $"({asked}) and was left running: {StandardError}");
+            }
         }
 
-        await _process.WaitForExitAsync().ConfigureAwait(false);
         _process.Dispose();
-
         try
         {
             Directory.Delete(StoreRoot, recursive: true);
@@ -143,6 +122,23 @@ internal sealed class EngineProcess : IAsyncDisposable
         catch (IOException)
         {
             // A leftover temp store is harmless
+        }
+    }
+
+    // The engine leaves once asked and alone, so the request goes on a connection of its own
+    // that closes straight after. The outcome goes into the failure message if it stays
+    private async Task<string> AskToExitAsync()
+    {
+        try
+        {
+            await using var client = await ConnectAsync().ConfigureAwait(false);
+            await client.RequestAsync("engine/exit", null, ConnectTimeout).ConfigureAwait(false);
+            return "asked with engine/exit";
+        }
+        catch (Exception e)
+        {
+            // It may have left on its own. The wait decides
+            return $"engine/exit not delivered: {e.Message}";
         }
     }
 }

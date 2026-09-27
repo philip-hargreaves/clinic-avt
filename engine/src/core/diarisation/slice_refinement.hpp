@@ -11,8 +11,6 @@ inline constexpr std::uint64_t kSplitEdgeMarginFrames =
     800;  // 50 ms: a cut this near an edge is the edge
 inline constexpr std::uint64_t kMinSliceFrames = 3200;  // 0.2 s
 inline constexpr std::uint64_t kMinCleanFrames = 8000;  // 0.5 s to prefer overlap-free audio
-inline constexpr std::uint64_t kOverlapTurnMinFrames =
-    6400;  // 0.4 s of overlap becomes its own turn
 
 // Splits each region at the seg change points strictly inside it, the
 // zero-gap speaker handovers Silero cannot see. Sub-slices under 0.2 s drop

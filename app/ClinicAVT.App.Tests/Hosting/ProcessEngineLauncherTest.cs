@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Platform;
 
@@ -26,11 +27,11 @@ public class ProcessEngineLauncherTest
         var exited = WatchExit(process);
         Assert.False(process.HasExited);
 
-        process.Kill();
+        Process.GetProcessById(process.Id).Kill();
 
         await exited.Task.WaitAsync(ExitWait);
         Assert.True(process.HasExited);
-        Assert.Equal(1, process.ExitCode);
+        Assert.Equal(-1, process.ExitCode);
     }
 
     [Fact]
@@ -58,7 +59,7 @@ public class ProcessEngineLauncherTest
 
         await Task.Delay(500);
         Assert.False(process.HasExited);
-        process.Kill();
+        Process.GetProcessById(process.Id).Kill();
         await exited.Task.WaitAsync(ExitWait);
     }
 

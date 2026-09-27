@@ -1,7 +1,6 @@
 #include "adapters/storage/chunk_cipher.hpp"
 
 #include <cstring>
-#include <fstream>
 #include <stdexcept>
 #include <string>
 
@@ -36,36 +35,6 @@ void PutSeq(std::uint8_t* out, std::uint64_t seq) {
         seq >>= 8;
     }
 }
-
-class HmacSha256 {
-   public:
-    explicit HmacSha256(std::span<const std::uint8_t> key) {
-        Check(BCryptOpenAlgorithmProvider(&alg_, BCRYPT_SHA256_ALGORITHM, nullptr,
-                                          BCRYPT_ALG_HANDLE_HMAC_FLAG),
-              "BCryptOpenAlgorithmProvider");
-        Check(BCryptCreateHash(alg_, &hash_, nullptr, 0, const_cast<std::uint8_t*>(key.data()),
-                               static_cast<ULONG>(key.size()), 0),
-              "BCryptCreateHash");
-    }
-    ~HmacSha256() {
-        if (hash_ != nullptr) BCryptDestroyHash(hash_);
-        if (alg_ != nullptr) BCryptCloseAlgorithmProvider(alg_, 0);
-    }
-    void Update(std::span<const std::uint8_t> data) {
-        Check(BCryptHashData(hash_, const_cast<std::uint8_t*>(data.data()),
-                             static_cast<ULONG>(data.size()), 0),
-              "BCryptHashData");
-    }
-    std::vector<std::uint8_t> Finish() {
-        std::vector<std::uint8_t> out(32);
-        Check(BCryptFinishHash(hash_, out.data(), 32, 0), "BCryptFinishHash");
-        return out;
-    }
-
-   private:
-    BCRYPT_ALG_HANDLE alg_ = nullptr;
-    BCRYPT_HASH_HANDLE hash_ = nullptr;
-};
 
 }  // namespace
 
@@ -131,53 +100,16 @@ ChunkCipher ChunkCipher::FromWrapped(std::span<const std::uint8_t> wrapped) {
     return ChunkCipher(std::move(impl));
 }
 
-std::vector<std::uint8_t> ChunkCipher::Wrapped(const wchar_t* description) const {
+std::vector<std::uint8_t> ChunkCipher::Wrapped() const {
     DATA_BLOB in{static_cast<DWORD>(kKeyBytes), const_cast<std::uint8_t*>(impl_->key_bytes)};
     DATA_BLOB out{};
-    if (!CryptProtectData(&in, description, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN,
-                          &out)) {
+    if (!CryptProtectData(&in, L"ClinicAVT session key", nullptr, nullptr, nullptr,
+                          CRYPTPROTECT_UI_FORBIDDEN, &out)) {
         throw StoreError(StoreCode::kAuth, "CryptProtectData failed");
     }
     std::vector<std::uint8_t> wrapped(out.pbData, out.pbData + out.cbData);
     LocalFree(out.pbData);
     return wrapped;
-}
-
-std::vector<std::uint8_t> ChunkCipher::WrapKey(const ChunkCipher& key, std::string_view id,
-                                               std::uint64_t seq) const {
-    return Seal(Domain::kUploadKey, id, seq, std::span(key.impl_->key_bytes, kKeyBytes));
-}
-
-ChunkCipher ChunkCipher::FromWrappedKey(const ChunkCipher& store, std::string_view id,
-                                        std::uint64_t seq, std::span<const std::uint8_t> sealed) {
-    auto plain = store.Open(Domain::kUploadKey, id, seq, sealed);
-    std::unique_ptr<Impl> impl;
-    try {
-        impl = std::make_unique<Impl>(std::span(plain));
-    } catch (...) {
-        SecureZeroMemory(plain.data(), plain.size());
-        throw;
-    }
-    SecureZeroMemory(plain.data(), plain.size());
-    return ChunkCipher(std::move(impl));
-}
-
-std::vector<std::uint8_t> ChunkCipher::Identity(const std::filesystem::path& file) const {
-    // A MAC key of its own, derived from this key
-    HmacSha256 derive(std::span(impl_->key_bytes, kKeyBytes));
-    // Fixed under the earlier name: stored documents are keyed by it
-    const std::string_view purpose = "ambient document identity";
-    derive.Update({reinterpret_cast<const std::uint8_t*>(purpose.data()), purpose.size()});
-    HmacSha256 mac(derive.Finish());
-    std::ifstream in(file, std::ios::binary);
-    if (!in.is_open()) throw StoreError(StoreCode::kIo, "cannot read " + file.string());
-    std::vector<std::uint8_t> buffer(1 << 16);
-    while (in.read(reinterpret_cast<char*>(buffer.data()),
-                   static_cast<std::streamsize>(buffer.size())) ||
-           in.gcount() > 0) {
-        mac.Update(std::span(buffer.data(), static_cast<std::size_t>(in.gcount())));
-    }
-    return mac.Finish();
 }
 
 std::vector<std::uint8_t> ChunkCipher::Seal(Domain domain, std::string_view session_id,

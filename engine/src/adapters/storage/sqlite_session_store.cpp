@@ -2,13 +2,13 @@
 
 #include <cstdio>
 #include <format>
-#include <fstream>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <stdexcept>
 #include <utility>
 
 #include "adapters/storage/store_migrations.hpp"
+#include "core/common/iso8601.hpp"
 
 namespace clinicavt::store {
 
@@ -43,11 +43,6 @@ KindSpec SpecFor(DocumentKind kind) {
     throw std::invalid_argument("unknown document kind");
 }
 
-std::string Iso8601Now() {
-    const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
-    return std::format("{:%FT%T}Z", now);
-}
-
 std::string RandomId() {
     std::random_device device;
     std::string id;
@@ -61,11 +56,6 @@ std::span<const std::uint8_t> AsBytes(std::span<const float> frames) {
 
 std::span<const std::uint8_t> AsBytes(const std::string& text) {
     return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()};
-}
-
-std::vector<std::uint8_t> ReadFileBytes(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
 }
 
 }  // namespace
@@ -168,15 +158,6 @@ void SqliteSessionStore::InsertTurn(const SessionId& id, std::int64_t seq,
     insert.Step();
 }
 
-void SqliteSessionStore::AppendTurn(const SessionId& id, const asr::Turn& turn) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    Open& session = RequireOpen(id);
-    Db::Transaction txn(db_);
-    InsertTurn(session.id, session.next_turn_seq, *session.cipher, turn);
-    txn.Commit();
-    session.next_turn_seq += 1;
-}
-
 void SqliteSessionStore::ReplaceTurns(const SessionId& id, std::span<const asr::Turn> turns) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
@@ -263,20 +244,6 @@ void SqliteSessionStore::EraseUnretained() {
     std::lock_guard<std::mutex> lock(mutex_);
     Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE retain = 0 AND state = 'finalised'");
     EraseWhere(erase);
-}
-
-std::vector<RecoverableSession> SqliteSessionStore::ScanRecoverable() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    std::vector<RecoverableSession> found;
-    Db::Stmt select =
-        db_.Prepare("SELECT id, started_at, sample_rate FROM sessions WHERE state = 'recording'");
-    while (select.Step()) {
-        RecoverableSession session{select.ColumnText(0), select.ColumnText(1),
-                                   static_cast<int>(select.ColumnInt64(2))};
-        if (open_.has_value() && session.id == open_->id) continue;  // the live session
-        found.push_back(std::move(session));
-    }
-    return found;
 }
 
 // The label is content, so each row's is opened with its own key. The

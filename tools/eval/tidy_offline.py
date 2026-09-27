@@ -1,7 +1,6 @@
 # Offline port of core/diarisation/tidy_transcript.hpp so a tidied copy of an existing sweep
 # can be scored against its untidied self: same decode, same cuts, only the tidy differs.
-# The C++ is the source of truth; this mirrors its three rules and is checked against the
-# engine's own tidied output where both exist.
+# The C++ is the source of truth; this is a hand-kept copy of its three rules and can drift.
 #   python tools/eval/tidy_offline.py <in_tag> <out_tag>      e.g. F1S16 F1S16T
 import glob
 import json

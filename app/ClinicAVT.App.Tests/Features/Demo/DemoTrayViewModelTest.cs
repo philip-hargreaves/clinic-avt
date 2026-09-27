@@ -69,7 +69,7 @@ public class DemoTrayViewModelTest
     public async Task ProgressFollowsDeliveredAudioAndTheReplayStopsItselfAtTheEndOfTheTrack()
     {
         var (session, engine, _) = TestSession.Create();
-        var wav = SessionContractWav.Write(seconds: 2);
+        var wav = SilenceWav.Write(seconds: 2);
         var tray = new DemoTrayViewModel(session, new FakeFilePicker(), [new DemoTrack("Silence", wav)]);
         await tray.PlayCommand.ExecuteAsync(null);
 

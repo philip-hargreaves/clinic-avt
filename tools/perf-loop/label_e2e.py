@@ -4,14 +4,16 @@ import os
 import sys
 import time
 
-sys.path.insert(0, r"C:\dev\ambient\tools\perf-loop")
-import perf_loop as pl
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import perf_loop as pl  # noqa: E402
 
 
 def main():
+    os.makedirs(pl.LOGS, exist_ok=True)
     engine = pl.Engine(990)
     try:
-        result, rtt = engine.request("session/start", {
+        engine.wait_up()
+        result, rtt = pl.timed(engine, "session/start", {
             "replay": {"path": os.path.join(pl.HERE, "audio", "c02m_elbow.wav"),
                        "speed": 16.0, "monitor": False}}, 30)
         print("started:", result, round(rtt, 2))
@@ -19,7 +21,7 @@ def main():
         end = time.time() + 120 / 16.0 + 2
         while time.time() < end:
             engine.next_notification(1)
-        result, rtt = engine.request("session/stop", None, 180)
+        result, rtt = pl.timed(engine, "session/stop", None, 180)
         print("stopped:", result, round(rtt, 2))
         deadline = time.time() + 300
         got_patient = False
@@ -42,8 +44,7 @@ def main():
             return 1
         # The label follows the sheet; give the short generation a moment
         for _ in range(60):
-            result, _ = engine.request("session/list")
-            row = result["sessions"][0]
+            row = engine.request("session/list")["sessions"][0]
             if row.get("label"):
                 print("TITLE:", repr(row["label"]))
                 print("EDITED:", row.get("editedAt"))
@@ -54,7 +55,7 @@ def main():
     finally:
         for line in engine.new_log_lines()[-12:]:
             print("  engine:", line)
-        engine.proc.kill()
+        engine.close()
 
 
 if __name__ == "__main__":

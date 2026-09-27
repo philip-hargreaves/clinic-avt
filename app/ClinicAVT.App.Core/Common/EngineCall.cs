@@ -8,19 +8,12 @@ public static class EngineCall
     /// <summary>
     /// A failure goes on the status line as "{problem}: {reason}". Cancellation still throws.
     /// </summary>
-    public static async Task<bool> ReportAsync(StatusBarViewModel? status, string problem, Func<Task> call)
-    {
-        try
+    public static async Task<bool> ReportAsync(StatusBarViewModel? status, string problem, Func<Task> call) =>
+        await ReportAsync(status, problem, async () =>
         {
             await call().ConfigureAwait(true);
             return true;
-        }
-        catch (Exception e) when (e is not OperationCanceledException)
-        {
-            status?.Append($"{problem}: {e.Message}");
-            return false;
-        }
-    }
+        }).ConfigureAwait(true);
 
     /// <summary>The call's value, or null when it failed.</summary>
     public static async Task<T?> ReportAsync<T>(StatusBarViewModel? status, string problem, Func<Task<T>> call)
@@ -39,19 +32,12 @@ public static class EngineCall
     /// <summary>
     /// Any failure, cancellation included, goes to the log as "{step} failed: {reason}".
     /// </summary>
-    public static async Task<bool> LogAsync(StatusBarViewModel? status, string step, Func<Task> call)
-    {
-        try
+    public static async Task<bool> LogAsync(StatusBarViewModel? status, string step, Func<Task> call) =>
+        await LogAsync(status, step, async () =>
         {
             await call().ConfigureAwait(true);
             return true;
-        }
-        catch (Exception e)
-        {
-            status?.Log($"{step} failed: {e.Message}");
-            return false;
-        }
-    }
+        }).ConfigureAwait(true);
 
     /// <summary>The call's value, or null when it failed.</summary>
     public static async Task<T?> LogAsync<T>(StatusBarViewModel? status, string step, Func<Task<T>> call)

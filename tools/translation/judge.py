@@ -13,7 +13,6 @@ which the judge never sees. A verdict is the judge's JSON saved as .../verdicts/
 """
 
 import json
-import os
 import random
 import re
 import sys
@@ -22,15 +21,16 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
-HERE = Path(__file__).resolve().parent
-LANGUAGES = ["Urdu", "Punjabi", "Bengali", "Gujarati", "Polish", "Romanian", "Arabic", "Somali"]
-LOW_RESOURCE = ("Urdu", "Punjabi", "Bengali", "Gujarati", "Somali")
-REFERENCE = "nllb-600m-int8"
+from common import LANGUAGES, LOW_RESOURCE, REFERENCE, ROOT, bootstrap_interval, read_jsonl
+
 SHEETS_JUDGED = 12
 WEIGHT = {"critical": 25, "major": 5, "minor": 1}
 LETTERS = "ABCDEFGHIJ"
-BOOTSTRAP = 2000
+
+
+def penalty(errors: list, words: int) -> float:
+    """MQM penalty per 100 source words."""
+    return sum(WEIGHT.get(e.get("severity"), 0) for e in errors) * 100 / words
 
 
 def folder(kind: str, part: str) -> Path:
@@ -65,7 +65,7 @@ def tasks(kind="sheets", names=SEQ2SEQ, count=SHEETS_JUDGED):
     systems = {}
     for name in names:
         path = ROOT / "results" / "sheets" / f"{name}.jsonl"
-        systems[name] = {(r["id"], r["language"]): r for r in map(json.loads, open(path, encoding="utf-8"))}
+        systems[name] = {(r["id"], r["language"]): r for r in read_jsonl(path)}
     sheets = sorted({k[0] for k in systems[REFERENCE]})
     chosen = sorted(random.Random(7).sample(sheets, SHEETS_JUDGED))[:count]
     written = 0
@@ -182,9 +182,9 @@ def score(kind="sheets"):
             if judged is None:
                 continue
             errors = judged.get("errors", [])
-            penalty = sum(WEIGHT.get(e.get("severity"), 0) for e in errors) * 100 / item["words"]
             rows[(system, key["language"])][task.split("__")[0]] = {
-                "penalty": penalty, "critical": sum(e.get("severity") == "critical" for e in errors),
+                "penalty": penalty(errors, item["words"]),
+                "critical": sum(e.get("severity") == "critical" for e in errors),
                 "adequacy": judged.get("adequacy", 0), "fluency": judged.get("fluency", 0)}
     rng = np.random.default_rng(7)
     print(f"{'system':<20} {'language':<10}  MQM/100w  critical  adequacy  fluency   n"
@@ -203,8 +203,7 @@ def score(kind="sheets"):
         shared = [t for t in names if t in base]
         if system != REFERENCE and shared:
             delta = np.array([by_task[t]["penalty"] - base[t]["penalty"] for t in shared])
-            draws = rng.integers(0, len(shared), size=(BOOTSTRAP, len(shared)))
-            low, high = np.percentile(delta[draws].mean(axis=1), [2.5, 97.5])
+            low, high = bootstrap_interval(rng, delta)
             entry["delta"] = [float(low), float(high)]
             interval = f"{low:+.1f} to {high:+.1f}"
         table[f"{system}|{language}"] = entry
@@ -215,10 +214,10 @@ def score(kind="sheets"):
         for label, group in (("low-resource", LOW_RESOURCE), ("all", LANGUAGES)):
             picked = [table[f"{system}|{language}"] for language in group if f"{system}|{language}" in table]
             if picked:
-                penalty = np.mean([p["penalty"] for p in picked])
+                mean_penalty = np.mean([p["penalty"] for p in picked])
                 critical = sum(p["critical"] for p in picked)
                 adequacy = np.mean([p["adequacy"] for p in picked])
-                print(f"{system:<20} {label:<13} MQM/100w {penalty:6.1f}  critical {critical:4d}  "
+                print(f"{system:<20} {label:<13} MQM/100w {mean_penalty:6.1f}  critical {critical:4d}  "
                       f"adequacy {adequacy:5.1f}")
     print()
     for language, levels in confidence.items():
@@ -268,18 +267,17 @@ def repeat():
         a = json.load(open(folder("sheets", "verdicts") / path.name, encoding="utf-8"))["items"]["1"]
         b = json.load(open(path, encoding="utf-8"))["items"]["1"]
 
-        def penalty(verdict, letter):
-            errors = verdict[letter]["errors"]
-            return sum(WEIGHT.get(e.get("severity"), 0) for e in errors) * 100 / item["words"]
+        def scored(verdict, letter):
+            return penalty(verdict[letter]["errors"], item["words"])
 
         def critical(verdict, letter):
             return sum(e.get("severity") == "critical" for e in verdict[letter]["errors"])
 
         letters = item["letters"]
-        best += min(letters, key=lambda x: penalty(a, x)) == min(letters, key=lambda x: penalty(b, x))
+        best += min(letters, key=lambda x: scored(a, x)) == min(letters, key=lambda x: scored(b, x))
         for letter in letters:
-            first.append(penalty(a, letter))
-            second.append(penalty(b, letter))
+            first.append(scored(a, letter))
+            second.append(scored(b, letter))
             crit1.append(critical(a, letter))
             crit2.append(critical(b, letter))
             adq1.append(a[letter]["adequacy"])
@@ -298,7 +296,6 @@ def repeat():
 
 if __name__ == "__main__":
     step = sys.argv[1] if len(sys.argv) > 1 else ""
-    sys.path.insert(0, str(HERE))
     steps = {"tasks": tasks, "plant": plant, "score": score, "validity": validity, "repeat": repeat,
              "llm-tasks": lambda: tasks("llm", LLM_ROW, 6), "llm-score": lambda: score("llm")}
     steps.get(step, lambda: print(__doc__))()

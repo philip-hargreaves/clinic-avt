@@ -9,7 +9,7 @@ using ClinicAVT.App.Platform;
 
 namespace ClinicAVT.App.Features.Guidance;
 
-/// <summary>The Guidelines section under the clinical note, hosted by the note editor.</summary>
+/// <summary>The Guidelines section, a tab of the consultation review.</summary>
 public sealed partial class GuidanceSectionView : UserControl
 {
     private readonly FocusReturn _focus;
@@ -40,16 +40,6 @@ public sealed partial class GuidanceSectionView : UserControl
     public GuidanceViewModel ViewModel { get; }
 
     public ShellViewModel Shell { get; }
-
-    /// <summary>Hides the fold heading for a host whose tab already names the section. Hiding it also unfolds.</summary>
-    public void ShowHeading(bool shown)
-    {
-        FoldButton.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
-        if (!shown)
-        {
-            ViewModel.Folded = false;
-        }
-    }
 
     private void OnQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs e)
     {

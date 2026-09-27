@@ -114,15 +114,21 @@ To build everything from the command line instead: `dotnet build clinicavt.slnx 
 
 Weights are not in git. They ship as GitHub Release assets described by the `weights/`
 registry, with a SHA-256 per file and shards of up to 1.9 GiB. One command downloads,
-verifies and installs them into `models/` and `demo/`:
+verifies and installs the packs at the top of `weights/` into `models/` and `demo/`:
 
 ```powershell
 cmake --build --preset dev --target fetch-models
 ```
 
 Interrupted downloads resume on re-run. A hash mismatch is fatal and nothing is installed.
-Release packages carry the same tool as `get-models.cmd`, which you double-click once beside
-the app.
+
+That covers the default note tier. The constrained (4B) and accuracy (35B) note models are
+separate packs under `weights/tiers/`, fetched only when wanted:
+
+```powershell
+dotnet run --project tools\ClinicAVT.FetchModels -c Release -- fetch weights\tiers\constrained .
+dotnet run --project tools\ClinicAVT.FetchModels -c Release -- fetch weights\tiers\accuracy .
+```
 
 ## Tests
 
@@ -155,8 +161,10 @@ engine/            C++20 engine. src/core holds pure logic with one folder per s
 app/               .NET shell. ClinicAVT.App holds the WinUI views, ClinicAVT.App.Core the view
                    models without WinUI, ClinicAVT.App.Platform the Win32 adapters and
                    ClinicAVT.Client the engine SDK over the pipe. Each has a test project
-tools/             ClinicAVT.FetchModels for weights download and packing, and the staging scripts
-schema/            the JSON-RPC contract between shell and engine, with fixtures
+tools/             ClinicAVT.FetchModels for weights download and packing, the toolchain and
+                   release scripts, and the internal evaluation harnesses (perf-loop, demo,
+                   eval, retrieval, translation)
+schema/fixtures/   example wire messages that both the engine and the shell tests read
 weights/           model pack manifests. The packs themselves are release assets
 prompts/  demo/    note prompts and the bundled demo consultations
 ```

@@ -11,7 +11,7 @@ public class EngineStatusInShellTest
     public void TheStatusBarThroughAnEngineLifetime()
     {
         var log = new ListLogger();
-        var bar = new StatusBarViewModel(log);
+        var bar = TestSession.Status(log: log);
 
         bar.SetEngineState(EngineStatus.Running);
         Assert.Equal("Starting up", bar.EngineStateLabel);
@@ -58,6 +58,30 @@ public class EngineStatusInShellTest
         bar.SetEngineState(EngineStatus.Faulted);
         Assert.Equal("Recording is unavailable - please restart the app", bar.EngineStateLabel);
         Assert.Equal(logged + 2, log.Lines.Count);
+    }
+
+    // A full disk must not pass unnoticed. The line stays through other activity until the
+    // next consultation starts
+    [Fact]
+    public async Task AStorageFaultHoldsTheLineUntilTheNextConsultation()
+    {
+        var log = new ListLogger();
+        var (session, engine, _) = TestSession.Create(log: log);
+        var bar = session.Status;
+        bar.SetEngineState(EngineStatus.Running);
+        bar.SetEngineReady(true);
+
+        engine.RaiseNotification("storage/fault", Fixtures.Load("storage-fault.json").GetProperty("params"));
+        const string Line =
+            "Can't save to disk: audio commit: database or disk is full. Recording continues; free some space.";
+        Assert.Equal(Line, bar.DisplayLabel);
+        Assert.Contains(log.Lines, line => line.EndsWith(Line, StringComparison.Ordinal));
+
+        bar.Append("Ready for review");
+        Assert.Equal(Line, bar.DisplayLabel);
+
+        await session.StartRecordingAsync();
+        Assert.Equal("Recording", bar.DisplayLabel);
     }
 
     [Fact]

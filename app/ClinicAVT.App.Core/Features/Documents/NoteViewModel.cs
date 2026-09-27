@@ -41,12 +41,10 @@ public sealed partial class NoteViewModel : ObservableObject
 
     /// <summary>The note style as the engine names it, "prose" or "soap".</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StyleIndex))]
     public partial string Style { get; set; } = NoteOptions.DefaultStyle.Value;
 
     /// <summary>"concise", "standard" or "detailed".</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DetailIndex))]
     public partial string Detail { get; set; } = NoteOptions.DefaultDetail.Value;
 
     [ObservableProperty]
@@ -124,19 +122,6 @@ public sealed partial class NoteViewModel : ObservableObject
     public IReadOnlyList<NoteOption> StyleOptions { get; } = NoteOptions.Styles;
 
     public IReadOnlyList<NoteOption> DetailOptions { get; } = NoteOptions.Details;
-
-    // The combos select by index. An unknown stored value shows the first option
-    public int StyleIndex
-    {
-        get => Math.Max(0, NoteOptions.IndexOf(StyleOptions, Style));
-        set => Style = value >= 0 && value < StyleOptions.Count ? StyleOptions[value].Value : Style;
-    }
-
-    public int DetailIndex
-    {
-        get => Math.Max(0, NoteOptions.IndexOf(DetailOptions, Detail));
-        set => Detail = value >= 0 && value < DetailOptions.Count ? DetailOptions[value].Value : Detail;
-    }
 
     public ObservableCollection<string> Languages { get; } = [];
 

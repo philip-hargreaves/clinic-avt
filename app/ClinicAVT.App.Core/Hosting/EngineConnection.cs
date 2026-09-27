@@ -29,6 +29,9 @@ public sealed class EngineConnection : IEngineTransport
     private IEngineTransport? _transport;
     private Exception? _lastConnectError;
     private int _generation;
+    // Cancels the dial of a generation that has ended, so a stale one can never take the
+    // next engine's pipe
+    private CancellationTokenSource? _dial;
     private volatile string? _methodInFlight;
     private int _disposed;
 
@@ -117,12 +120,16 @@ public sealed class EngineConnection : IEngineTransport
         if (status == EngineStatus.Running)
         {
             int generation;
+            CancellationToken dial;
             lock (_gate)
             {
                 generation = ++_generation;
+                _dial?.Cancel();
+                _dial = CancellationTokenSource.CreateLinkedTokenSource(_disposal.Token);
+                dial = _dial.Token;
             }
 
-            _ = ConnectAsync(generation);
+            _ = ConnectAsync(generation, dial);
         }
         else
         {
@@ -136,6 +143,8 @@ public sealed class EngineConnection : IEngineTransport
         lock (_gate)
         {
             _generation++;
+            _dial?.Cancel();
+            _dial = null;
             old = _transport;
             _transport = null;
         }
@@ -147,11 +156,11 @@ public sealed class EngineConnection : IEngineTransport
         }
     }
 
-    private async Task ConnectAsync(int generation)
+    private async Task ConnectAsync(int generation, CancellationToken dial)
     {
         // Redials until installed or superseded. Giving up would leave the connection dead for
         // good
-        while (Volatile.Read(ref _disposed) == 0 && !_disposal.IsCancellationRequested)
+        while (Volatile.Read(ref _disposed) == 0 && !dial.IsCancellationRequested)
         {
             lock (_gate)
             {
@@ -163,12 +172,12 @@ public sealed class EngineConnection : IEngineTransport
 
             try
             {
-                if (await TryConnectOnceAsync(generation).ConfigureAwait(false))
+                if (await TryConnectOnceAsync(generation, dial).ConfigureAwait(false))
                 {
                     return;
                 }
             }
-            catch (OperationCanceledException) when (_disposal.IsCancellationRequested)
+            catch (OperationCanceledException) when (dial.IsCancellationRequested)
             {
                 return;
             }
@@ -186,7 +195,7 @@ public sealed class EngineConnection : IEngineTransport
 
             try
             {
-                await Task.Delay(RedialDelay, _disposal.Token).ConfigureAwait(false);
+                await Task.Delay(RedialDelay, dial).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -196,16 +205,16 @@ public sealed class EngineConnection : IEngineTransport
     }
 
     // True to stop dialling, once installed or when a newer generation owns the connection
-    private async Task<bool> TryConnectOnceAsync(int generation)
+    private async Task<bool> TryConnectOnceAsync(int generation, CancellationToken dial)
     {
         var pid = _host.EnginePid ?? throw new IOException("engine pid unavailable");
-        var transport = await _connect((uint)pid, _disposal.Token).ConfigureAwait(false);
+        var transport = await _connect((uint)pid, dial).ConfigureAwait(false);
         var installed = false;
         try
         {
             var hello = await transport.RequestAsync(
                 "engine/hello", new PeerInfo(ShellName, ShellVersion, Protocol.ProtocolVersion),
-                HelloTimeout, _disposal.Token).ConfigureAwait(false);
+                HelloTimeout, dial).ConfigureAwait(false);
             var engineProtocol = hello.GetProperty("protocolVersion").GetInt32();
             if (engineProtocol != Protocol.ProtocolVersion)
             {

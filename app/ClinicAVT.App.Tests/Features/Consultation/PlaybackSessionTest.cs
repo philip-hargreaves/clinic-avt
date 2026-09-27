@@ -36,7 +36,7 @@ public class PlaybackSessionTest
 
         await session.StartPlaybackAsync(Elbow);
         Assert.Equal(SessionState.Recording, session.State);
-        Assert.Equal(Elbow, session.ActivePlayback);
+        Assert.Equal(Elbow, session.Recorder.ActivePlayback);
         Assert.Null(session.ActiveReplay);
         Assert.True(session.Status.Demo);
         Assert.True(session.Status.MicVisible);
@@ -57,7 +57,7 @@ public class PlaybackSessionTest
         await session.StopRecordingAsync();
         Assert.Equal(FinalisePhase.Speakers, staged);
         Assert.Equal(SessionState.Finalising, session.State);
-        Assert.Null(session.ActivePlayback);
+        Assert.Null(session.Recorder.ActivePlayback);
         Assert.Equal(FinalisePhase.Note, session.Phase);
 
         engine.RaiseNotification("note/partial", Params(new { text = "Presented with" }));
@@ -108,7 +108,7 @@ public class PlaybackSessionTest
 
         await session.CancelRecordingAsync();
         Assert.Equal(SessionState.Idle, session.State);
-        Assert.Null(session.ActivePlayback);
+        Assert.Null(session.Recorder.ActivePlayback);
         Assert.False(session.Status.Demo);
 
         await session.StartPlaybackAsync(Elbow);
@@ -134,7 +134,7 @@ public class PlaybackSessionTest
         using var json = JsonDocument.Parse(start.Params);
         Assert.Equal("s-chest", json.RootElement.GetProperty("playback").GetProperty("id").GetString());
         Assert.False(json.RootElement.TryGetProperty("micId", out _));
-        Assert.Equal(new DemoMaster("s-chest", 457), session.ActivePlayback);
+        Assert.Equal(new DemoMaster("s-chest", 457), session.Recorder.ActivePlayback);
         Assert.Equal(SessionState.Recording, session.State);
     }
 
@@ -148,7 +148,7 @@ public class PlaybackSessionTest
 
         var start = engine.Requests.Single(r => r.Method == "session/start");
         Assert.Contains("micId", start.Params);
-        Assert.Null(session.ActivePlayback);
+        Assert.Null(session.Recorder.ActivePlayback);
 
         engine.RaiseNotification("audio.level", Params(new { level = 0.4, clipped = false }));
         engine.RaiseNotification("audio.level", Params(new { level = 0.4, clipped = false }));

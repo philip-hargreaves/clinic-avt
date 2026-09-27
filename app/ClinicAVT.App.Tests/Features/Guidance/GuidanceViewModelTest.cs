@@ -2,7 +2,6 @@ using System.Text.Json;
 using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
@@ -243,7 +242,7 @@ public class GuidanceViewModelTest
             pages = 5,
             boxes = new[] { new { page = 1, left = 0.1, top = 0.2, right = 0.6, bottom = 0.3 } },
         };
-        await session.Guidance.ShowInDocumentAsync(found);
+        await session.Guidance.ShowInDocumentCommand.ExecuteAsync(found);
 
         Assert.True(session.PageView.Visible);
         Assert.Equal("Page 2 of 5", session.PageView.PageLabel);
@@ -429,7 +428,7 @@ public class GuidanceViewModelTest
     public async Task ABurstOfDocumentChangesSearchesTheNoteOnceAfterTheySettle()
     {
         var (session, engine, _) = await ReopenedAsync(Record([Result("fx100-1_1_1")]));
-        session.DocumentsSettle = TimeSpan.FromMilliseconds(80);
+        session.Review.DocumentsSettle = TimeSpan.FromMilliseconds(80);
         var before = engine.Requests.Count(r => r.Method == "guidance/search");
 
         // Thirty documents finishing in quick succession
@@ -449,7 +448,7 @@ public class GuidanceViewModelTest
     public async Task DocumentChangesLeaveATypedQueryAlone()
     {
         var (session, engine, _) = await ReopenedAsync(Record([Result("fx100-1_1_1")]));
-        session.DocumentsSettle = TimeSpan.FromMilliseconds(50);
+        session.Review.DocumentsSettle = TimeSpan.FromMilliseconds(50);
         session.Guidance.Query = "allopurinol";
         await session.Guidance.SearchQueryCommand.ExecuteAsync(null);
         var before = engine.Requests.Count(r => r.Method == "guidance/search");
@@ -463,7 +462,7 @@ public class GuidanceViewModelTest
     [Fact]
     public void EverySearchAnnouncesItsTimingEvenWhenTheTextRepeats()
     {
-        var guidance = new GuidanceViewModel(new FakeLauncher(), new FakeClipboard(), new StatusBarViewModel());
+        var guidance = new GuidanceViewModel(new FakeLauncher(), new FakeClipboard(), TestSession.Status());
         var announced = 0;
         guidance.PropertyChanged += (_, e) =>
         {
@@ -487,7 +486,7 @@ public class GuidanceViewModelTest
     {
         var (session, engine, _) = await ReopenedAsync(
             Record([], documentsChanged: true));
-        session.DocumentsSettle = TimeSpan.FromMilliseconds(80);
+        session.Review.DocumentsSettle = TimeSpan.FromMilliseconds(80);
 
         Assert.True(session.Guidance.Stale);
         Assert.Equal(

@@ -105,9 +105,8 @@ public sealed partial class PrivacySettings : ObservableObject
             return;
         }
 
-        if (_session?.ConsultationActive == true)
+        if (ConsultationGuard.Blocks(_session, _status, "deleting stored data"))
         {
-            _status?.Append("finish the consultation before deleting stored data");
             return;
         }
 

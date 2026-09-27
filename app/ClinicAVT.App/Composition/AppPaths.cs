@@ -9,12 +9,6 @@ public sealed record AppPaths(string LocalState)
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         EngineLayout.LocalStateFolder));
 
-    public string Sibling(string name) => Path.Combine(Path.GetDirectoryName(LocalState)!, name);
-
-    /// <summary>The guideline documents folder under a given product name.</summary>
-    public static string Guidelines(string product) => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), $"{product} guidelines");
-
     public static string EngineExe => Path.Combine(AppContext.BaseDirectory, EngineLayout.EngineExe);
 
     public string EngineLog => Path.Combine(LocalState, EngineLayout.EngineLog);

@@ -33,9 +33,8 @@ def candidates_by_consult(engine_log, order):
         m = CAND.search(line)
         if m:
             blocks[-1].append(m)
-    # the first block precedes the first finalise; candidates arrive in the finalise block
-    blocks = [b for b in blocks[1:]]
-    return dict(zip(order, blocks))
+    # The first block precedes the first finalise; candidates arrive in the finalise block
+    return dict(zip(order, blocks[1:]))
 
 
 def reference_speaker(ref_ivs, a, b):
@@ -69,10 +68,9 @@ def main():
     cands = candidates_by_consult(engine_log, order)
     rows = []
     for consult, ms in cands.items():
-        path = os.path.join(score_gate.HERE, "transcripts", f"{tag}-{consult}_mixed.json")
-        if not os.path.exists(path):
+        turns = score_gate.load_turns(tag, consult)
+        if turns is None:
             continue
-        turns = json.load(open(path, encoding="utf-8"))["turns"]
         ref, _ = score_gate.reference(consult)
         for m in ms:
             a, b = float(m.group(1)), float(m.group(2))

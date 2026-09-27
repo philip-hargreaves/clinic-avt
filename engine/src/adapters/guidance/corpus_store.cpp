@@ -1,14 +1,44 @@
 #include "adapters/guidance/corpus_store.hpp"
 
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
 #include "adapters/guidance/loader_core.hpp"
-#include "adapters/models/model_store.hpp"
+#include "adapters/system/sha256.hpp"
 
 namespace clinicavt::guidance {
 namespace {
+
+std::uint64_t AvailablePhysicalMemory() {
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof status;
+    return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys : 0;
+}
+
+// Before allocating: the matrix plus a citation's worth per row
+void GuardMemory(std::size_t rows, std::size_t dim, const std::string& what) {
+    const auto needed = static_cast<std::uint64_t>(rows) * dim * sizeof(float) + rows * 256;
+    Guard(AvailablePhysicalMemory() > needed, what + " too large for the available memory");
+}
+
+void GuardUnitVectors(const float* matrix, std::size_t rows, std::size_t dim) {
+    for (std::size_t r = 0; r < rows; ++r) {
+        double norm = 0;
+        const float* v = matrix + r * dim;
+        for (std::size_t d = 0; d < dim; ++d) norm += static_cast<double>(v[d]) * v[d];
+        Guard(std::fabs(norm - 1.0) <= 1e-3, "a vector is not unit length");
+    }
+}
 
 std::string Str(const nlohmann::json& j, const char* key) {
     const auto it = j.find(key);
@@ -66,7 +96,7 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
         Guard(std::filesystem::exists(path), "corpus.db missing");
         Guard(static_cast<std::int64_t>(std::filesystem::file_size(path)) == bytes,
               "corpus.db size differs from the manifest");
-        Guard(models::Sha256File(path) == info.sha256, "corpus.db hash differs from the manifest");
+        Guard(system::Sha256File(path) == info.sha256, "corpus.db hash differs from the manifest");
 
         // 3. a corpus file of this format, out of WAL mode
         store::Db db(path, store::Db::Mode::kImmutableReadOnly);
@@ -86,7 +116,7 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
         // 4. meta agrees with the manifest and the staged embedder
         auto meta = db.Prepare(
             "SELECT corpus_id, embedder_id, embedder_rev, dim, chunk_count, shard_count,"
-            " query_prefix, max_tokens, normalised, vector_format, source FROM corpus_meta"
+            " max_tokens, normalised, vector_format, source FROM corpus_meta"
             " WHERE id = 1");
         Guard(meta.Step(), "corpus_meta has no row");
         Guard(meta.ColumnText(0) == info.id, "corpus id differs between file and manifest");
@@ -100,12 +130,10 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
               "built with " + info.embedder_id + " " + info.embedder_rev.substr(0, 12) +
                   ", the staged embedder is " + embedder.id + " " + embedder.rev.substr(0, 12));
         Guard(info.dim == embedder.dim, "dimension differs from the staged embedder");
-        Guard(meta.ColumnText(6) == embedder.query_prefix,
-              "query prefix differs from the retriever's");
-        Guard(meta.ColumnInt64(7) == embedder.max_tokens, "max tokens differs from the pipeline's");
-        Guard(meta.ColumnInt64(8) == 1 && meta.ColumnText(9) == "f32le",
+        Guard(meta.ColumnInt64(6) == embedder.max_tokens, "max tokens differs from the pipeline's");
+        Guard(meta.ColumnInt64(7) == 1 && meta.ColumnText(8) == "f32le",
               "vectors are not f32 unit");
-        info.source = meta.ColumnText(10);
+        info.source = meta.ColumnText(9);
         Guard(!meta.Step(), "corpus_meta has more than one row");
 
         // 5. the chunk table is dense

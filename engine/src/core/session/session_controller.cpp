@@ -168,18 +168,9 @@ void SessionController::FinishEnrolment() {
     enrolment_.Finish();
 }
 
-bool SessionController::Enrolling() const {
-    return enrolment_.Running();
-}
-
 audio::SourceEnd SessionController::LastEnd() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return end_;
-}
-
-std::uint64_t SessionController::LostFrames() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return lost_frames_;
 }
 
 store::SessionId SessionController::LastFinalised() const {
@@ -230,11 +221,6 @@ void SessionController::Close() {
     }
 }
 
-bool SessionController::Reviewing() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return reviewing_;
-}
-
 store::SessionId SessionController::CurrentSession() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return session_id_;
@@ -242,10 +228,6 @@ store::SessionId SessionController::CurrentSession() const {
 
 void SessionController::SetNoteOptions(note::NoteOptions options) {
     note_lane_.SetOptions(std::move(options));
-}
-
-note::NoteOptions SessionController::CurrentNoteOptions() const {
-    return note_lane_.Options();
 }
 
 bool SessionController::HasNoteWriter() const {

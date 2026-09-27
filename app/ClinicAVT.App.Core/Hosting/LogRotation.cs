@@ -1,14 +1,18 @@
 namespace ClinicAVT.App.Core.Hosting;
 
 /// <summary>Shifts engine.log to engine-1.log and so on, keeping the last
-/// <c>keep</c>. Runs once per launch, so a crash's log survives the next one.</summary>
+/// <c>keep</c>. Runs are appended until the file passes <c>atBytes</c>, so a burst of launches
+/// cannot rotate a crash's log away.</summary>
 public static class LogRotation
 {
-    public static void Rotate(string path, int keep)
+    public const long RotateAtBytes = 2 * 1024 * 1024;
+
+    public static void Rotate(string path, int keep, long atBytes = RotateAtBytes)
     {
         try
         {
-            if (!File.Exists(path))
+            var file = new FileInfo(path);
+            if (!file.Exists || file.Length < atBytes)
             {
                 return;
             }

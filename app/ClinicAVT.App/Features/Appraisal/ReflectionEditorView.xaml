@@ -45,7 +45,7 @@
                     BorderThickness="0"
                     Background="Transparent"
                     LostFocus="OnSummaryCommitted"
-                    PlaceholderText="Writing the case study"
+                    PlaceholderText="{x:Bind ViewModel.SummaryPlaceholder, Mode=OneWay}"
                     Text="{x:Bind ViewModel.Summary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     TextWrapping="Wrap" />
                 <TextBlock

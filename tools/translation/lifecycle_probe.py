@@ -18,7 +18,9 @@ import sys
 import time
 from pathlib import Path
 
-MODEL = Path(r"C:\dev\ambient\models\nllb-200-600m-int8")
+from common import APP_MODELS, ROOT
+
+MODEL = APP_MODELS / "nllb-200-600m-int8"
 SHEETS = Path(r"D:\dev\intelliscribe\bench\summarisation\notes\tier-accuracy-sheet")
 LANGUAGES = ["Urdu", "Polish", "Punjabi", "Arabic", "Bengali", "Romanian"]
 MAX_TOKENS = 512
@@ -224,7 +226,7 @@ def hash_texts(texts) -> str:
     return hashlib.sha256("\x00".join(texts).encode("utf-8")).hexdigest()[:16]
 
 
-SPM = r"D:\clinicavt-mt\probe\tokenizers\spm"
+SPM = str(ROOT / "probe" / "tokenizers" / "spm")
 VARIANTS = {
     "engine": [],
     "spm": ["--tokenizer", SPM],

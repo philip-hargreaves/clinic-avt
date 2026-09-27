@@ -36,7 +36,7 @@ public class AnchorContractTest
     {
         // Two seconds of silence stand in for the microphone. The window elapses
         // with no speech heard, and the outcome says so without seeding a print
-        var wav = SessionContractTest.WriteSilenceWav();
+        var wav = SilenceWav.Write();
         try
         {
             await using var engine = EngineProcess.Start(

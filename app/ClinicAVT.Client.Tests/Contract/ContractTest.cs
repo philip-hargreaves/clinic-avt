@@ -26,8 +26,8 @@ public class ContractTest
             Timeout);
         var peer = result.Deserialize<PeerInfo>(Protocol.JsonOptions);
 
-        Assert.Equal(EngineInfo.Name, peer!.Name);
-        Assert.Equal(EngineInfo.Version, peer.Version);
+        Assert.Equal(ExpectedEngine.Name, peer!.Name);
+        Assert.Equal(ExpectedEngine.Version, peer.Version);
         Assert.Equal(Protocol.ProtocolVersion, peer.ProtocolVersion);
     }
 
@@ -116,9 +116,8 @@ public class ContractTest
         await using var second = EngineProcess.Start();
         var exitCode = await second.WaitForExitAsync(Timeout);
 
-        // Exit code 1 alone is shared by any startup failure. The message proves
-        // it was the first-instance guard.
-        Assert.Equal(1, exitCode);
+        // Its own exit code, so the app takes the first one over rather than counting a crash
+        Assert.Equal(3, exitCode);
         Assert.Contains("pipe name already claimed", second.StandardError, StringComparison.Ordinal);
     }
 }

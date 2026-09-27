@@ -50,7 +50,7 @@ std::vector<clinicavt::asr::Turn> AsChunk(std::string text, std::span<const floa
 
 std::string Decode(clinicavt::asr::WhisperTranscriber& transcriber, std::span<const float> clip,
                    std::uint64_t first_frame) {
-    return transcriber.DecodeClip(clip, first_frame);
+    return clinicavt::asr::JoinedText(transcriber.DecodeClipChunks(clip, first_frame));
 }
 
 // --amortise-probe: feeds a SpeakerDiariser the audio so far in five-second
@@ -99,12 +99,7 @@ void AmortiseProbe(const clinicavt::models::ModelStore& store,
         if (cache.contains({span.first_frame, span.end_frame})) ++hits;
     }
     const auto turn_texts = clinicavt::diar::DecodeTurnTexts(turns, audio, decode, &cache);
-    std::vector<clinicavt::diar::RoleTurn> role_turns;
-    for (std::size_t i = 0; i < turns.size(); ++i) {
-        role_turns.push_back(
-            {turns[i].cluster, turns[i].end_frame - turns[i].first_frame, turn_texts[i]});
-    }
-    const auto named = clinicavt::diar::NameRoles(role_turns, result.cluster_count);
+    const auto named = clinicavt::diar::NameTurns(turns, turn_texts, result.cluster_count);
     const auto vp_start = Clock::now();
     for (int c = 0; c < result.cluster_count && c < 2; ++c) {
         (void)clinicavt::diar::ClusterVoiceprint(fed.Embedder(), audio, result.slices, c);
@@ -153,10 +148,8 @@ void AmortiseProbe(const clinicavt::models::ModelStore& store,
                  stop_decodes, result.slices.size(), batch.slices.size(), mismatch, turns.size(),
                  cache.size(), hits);
     // The attributed transcript, for the blinded judge
-    for (std::size_t i = 0; i < turns.size(); ++i) {
-        if (turn_texts[i].empty()) continue;
-        const auto& role = named.role_of_cluster[static_cast<std::size_t>(turns[i].cluster)];
-        std::printf("ATURN %s\t%s\n", role.c_str(), turn_texts[i].c_str());
+    for (const auto& turn : named.turns) {
+        std::printf("ATURN %s\t%s\n", turn.speaker.c_str(), turn.text.c_str());
     }
     std::error_code ec;
     std::filesystem::remove_all(anchor_root, ec);
@@ -218,16 +211,12 @@ int main(int argc, char** argv) {
         const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - before);
         std::fprintf(stderr, "per-turn: %zu turns decoded in %.1f s\n", pturns.size(),
                      took.count());
-        std::vector<clinicavt::diar::RoleTurn> role_turns;
-        for (std::size_t i = 0; i < pturns.size(); ++i) {
-            role_turns.push_back(
-                {pturns[i].cluster, pturns[i].end_frame - pturns[i].first_frame, turn_texts[i]});
-        }
-        const auto named = clinicavt::diar::NameRoles(role_turns, result.cluster_count);
+        const auto named = clinicavt::diar::NameTurns(pturns, turn_texts, result.cluster_count);
+        const auto& decided = named.roles;
 
-        std::printf("DOCTOR %d\nMARGIN %.4f\n", named.doctor_cluster, named.margin);
-        for (std::size_t c = 0; c < named.role_of_cluster.size(); ++c) {
-            std::printf("ROLE %zu %s\n", c, named.role_of_cluster[c].c_str());
+        std::printf("DOCTOR %d\nMARGIN %.4f\n", decided.doctor_cluster, decided.margin);
+        for (std::size_t c = 0; c < decided.role_of_cluster.size(); ++c) {
+            std::printf("ROLE %zu %s\n", c, decided.role_of_cluster[c].c_str());
         }
         for (int c = 0; c < result.cluster_count; ++c) {
             const auto voiceprint =
@@ -241,10 +230,8 @@ int main(int argc, char** argv) {
             std::printf("SLICE %.3f %.3f %d\n", static_cast<double>(slice.first_frame) / 16000.0,
                         static_cast<double>(slice.end_frame) / 16000.0, slice.cluster);
         }
-        for (std::size_t i = 0; i < pturns.size(); ++i) {
-            if (turn_texts[i].empty()) continue;
-            const auto& role = named.role_of_cluster[static_cast<std::size_t>(pturns[i].cluster)];
-            std::printf("TURN %s\t%s\n", role.c_str(), turn_texts[i].c_str());
+        for (const auto& turn : named.turns) {
+            std::printf("TURN %s\t%s\n", turn.speaker.c_str(), turn.text.c_str());
         }
 
         return 0;

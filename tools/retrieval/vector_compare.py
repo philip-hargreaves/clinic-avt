@@ -7,23 +7,13 @@ Writes rag/results/<stamp>-vector-compare/vector-compare.csv
 
 import argparse
 import csv
-import statistics
 import time
 
 import numpy as np
 
-from common import log, run_dir
+from common import log, median_time, run_dir
 
 QUERIES = 100
-
-
-def median_time(fn, repeats=QUERIES) -> float:
-    times = []
-    for _ in range(repeats):
-        t0 = time.perf_counter()
-        fn()
-        times.append(time.perf_counter() - t0)
-    return statistics.median(times)
 
 
 def recall(found: np.ndarray, truth: np.ndarray) -> float:
@@ -58,7 +48,7 @@ def main():
         def exact_fp32():
             q = queries[next(qi) % QUERIES]
             return np.argpartition(-(mat @ q), args.k)[:args.k]
-        rows.append({"n": n, "dims": dims, "method": "numpy fp32 exact", "ms": round(median_time(exact_fp32) * 1e3, 2), "recall": 1.0})
+        rows.append({"n": n, "dims": dims, "method": "numpy fp32 exact", "ms": round(median_time(exact_fp32, QUERIES) * 1e3, 2), "recall": 1.0})
 
         # Per-vector scale, since unit-vector components sit near 1/sqrt(d)
         d_scale = np.abs(mat).max(axis=1, keepdims=True) / 127.0
@@ -71,7 +61,7 @@ def main():
         def exact_i8():
             q = q_i8[next(qi) % QUERIES].astype(np.int32)
             return np.argpartition(-((mat_i32 @ q) * d_scale[:, 0]), args.k)[:args.k]
-        rows.append({"n": n, "dims": dims, "method": "numpy int8 exact, per-vector scale", "ms": round(median_time(exact_i8) * 1e3, 2), "recall": round(recall(found, truth), 4)})
+        rows.append({"n": n, "dims": dims, "method": "numpy int8 exact, per-vector scale", "ms": round(median_time(exact_i8, QUERIES) * 1e3, 2), "recall": round(recall(found, truth), 4)})
 
         try:
             import hnswlib
@@ -82,7 +72,7 @@ def main():
             build = time.perf_counter() - t0
             idx.set_ef(50)
             labels, _ = idx.knn_query(queries, k=args.k)
-            rows.append({"n": n, "dims": dims, "method": "hnswlib M16 ef50", "ms": round(median_time(lambda: idx.knn_query(queries[next(qi) % QUERIES], k=args.k)) * 1e3, 2),
+            rows.append({"n": n, "dims": dims, "method": "hnswlib M16 ef50", "ms": round(median_time(lambda: idx.knn_query(queries[next(qi) % QUERIES], k=args.k), QUERIES) * 1e3, 2),
                          "recall": round(recall(labels, truth), 4), "build_s": round(build, 1)})
         except Exception as e:
             log(f"hnswlib skipped: {e}")
@@ -95,7 +85,7 @@ def main():
             build = time.perf_counter() - t0
             matches = idx.search(queries, args.k)
             labels = np.array([m.keys for m in matches]) if hasattr(matches[0], "keys") else matches.keys
-            rows.append({"n": n, "dims": dims, "method": "usearch i8 hnsw", "ms": round(median_time(lambda: idx.search(queries[next(qi) % QUERIES], args.k)) * 1e3, 2),
+            rows.append({"n": n, "dims": dims, "method": "usearch i8 hnsw", "ms": round(median_time(lambda: idx.search(queries[next(qi) % QUERIES], args.k), QUERIES) * 1e3, 2),
                          "recall": round(recall(labels, truth), 4), "build_s": round(build, 1)})
         except Exception as e:
             log(f"usearch skipped: {e}")
@@ -115,7 +105,7 @@ def main():
                 q = queries[next(qi) % QUERIES]
                 return db.execute("select rowid from v where e match ? order by distance limit ?", (q.tobytes(), args.k)).fetchall()
             labels = np.array([[r[0] for r in db.execute("select rowid from v where e match ? order by distance limit ?", (q.tobytes(), args.k)).fetchall()] for q in queries])
-            rows.append({"n": n, "dims": dims, "method": "sqlite-vec vec0 float", "ms": round(median_time(sv) * 1e3, 2),
+            rows.append({"n": n, "dims": dims, "method": "sqlite-vec vec0 float", "ms": round(median_time(sv, QUERIES) * 1e3, 2),
                          "recall": round(recall(labels, truth), 4), "build_s": round(build, 1)})
         except Exception as e:
             log(f"sqlite-vec skipped: {e}")

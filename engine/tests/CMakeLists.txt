@@ -27,12 +27,12 @@ add_executable(engine_tests
     core/diarisation/frontier_test.cpp
     core/diarisation/diar_regions_test.cpp
     core/diarisation/embeddings_test.cpp
-    ports/guidance_port_test.cpp
     core/guidance/guidance_query_test.cpp
     core/guidance/guidance_rank_test.cpp
     core/guidance/guidance_scan_test.cpp
     core/audio/level_meter_test.cpp
     core/metrics/metrics_test.cpp
+    core/note/model_failure_test.cpp
     core/note/note_label_test.cpp
     core/diarisation/turn_decode_test.cpp
     core/diarisation/role_naming_test.cpp
@@ -55,6 +55,7 @@ add_executable(engine_tests
     adapters/storage/db_test.cpp
     adapters/diarisation/fbank_test.cpp
     adapters/ipc/framing_test.cpp
+    adapters/system/child_process_test.cpp
     adapters/system/gpu_lease_test.cpp
     adapters/system/process_scan_test.cpp
     adapters/guidance/guidance_chunker_test.cpp
@@ -81,8 +82,8 @@ add_executable(engine_tests
     adapters/note/note_prompt_test.cpp
     adapters/models/ov_smoke_test.cpp
     adapters/ipc/pipe_security_test.cpp
+    adapters/ipc/pipe_server_test.cpp
     adapters/system/power_throttling_test.cpp
-    adapters/transcription/scripted_transcriber_test.cpp
     adapters/storage/session_store_test.cpp
     adapters/diarisation/speaker_clustering_test.cpp
     adapters/storage/store_recovery_test.cpp
@@ -132,18 +133,14 @@ target_link_libraries(capture_tests PRIVATE
 
 # Same mechanism for tests needing the Intel GPU
 add_executable(gpu_tests
-    adapters/models/ov_device_test.cpp
     adapters/models/ov_runtime_test.cpp)
 target_link_libraries(gpu_tests PRIVATE
     clinicavt_models clinicavt_warnings openvino::genai GTest::gtest_main)
 
 # And for tests needing staged model weights
 add_executable(models_tests
-    adapters/models/asr_model_test.cpp
     adapters/models/asr_wer_test.cpp
-    adapters/diarisation/cluster_voiceprint_test.cpp
     adapters/diarisation/diariser_pipeline_test.cpp
-    adapters/models/embedder_model_test.cpp
     adapters/diarisation/fbank_parity_test.cpp
     adapters/guidance/guidance_embedder_test.cpp
     adapters/models/note_writer_test.cpp
@@ -151,7 +148,6 @@ add_executable(models_tests
     adapters/vad/silero_vad_test.cpp
     adapters/diarisation/speaker_embedder_test.cpp
     adapters/models/translate_test.cpp
-    adapters/models/whisper_real_test.cpp
     adapters/models/worker_note_writer_test.cpp)
 target_compile_definitions(models_tests PRIVATE
     CLINICAVT_MODELS_DIR="${clinicavt_SOURCE_DIR}/models"

@@ -40,7 +40,7 @@ public class EngineConnectionTest
             if (method == "engine/hello")
             {
                 return Task.FromResult(JsonSerializer.SerializeToElement(
-                    new PeerInfo(EngineInfo.Name, EngineInfo.Version, HelloProtocol),
+                    new PeerInfo(ExpectedEngine.Name, ExpectedEngine.Version, HelloProtocol),
                     Protocol.JsonOptions));
             }
 

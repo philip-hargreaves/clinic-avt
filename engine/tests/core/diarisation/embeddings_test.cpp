@@ -10,24 +10,10 @@
 namespace clinicavt::diar {
 namespace {
 
-TEST(Embeddings, DotRunsOverTheSharedDimensions) {
-    const std::vector<float> a{1.0f, 0.0f, 5.0f};
-    const std::vector<float> b{0.5f, 2.0f};
-    EXPECT_DOUBLE_EQ(Dot(a, b), 0.5);
-}
-
 TEST(Embeddings, GatherClampsToTheRecording) {
     const std::vector<float> audio{1, 2, 3, 4, 5};
     EXPECT_EQ(Gather(audio, {{1, 3}, {4, 9}}), (std::vector<float>{2, 3, 5}));
     EXPECT_TRUE(Gather(audio, {{7, 9}}).empty());
-}
-
-TEST(Embeddings, NearestOtherSkipsThePrimaryCentroid) {
-    const std::vector<std::vector<float>> centroids{{1.0f, 0.0f}, {0.0f, 1.0f}, {0.7f, 0.7f}};
-    const std::vector<float> like_first{0.9f, 0.1f};
-    EXPECT_EQ(NearestOther(like_first, centroids, 0), 2);
-    EXPECT_EQ(NearestOther(like_first, centroids, -1), 0);
-    EXPECT_EQ(NearestOther(like_first, {{1.0f, 0.0f}}, 0), -1);
 }
 
 TEST(Embeddings, OverlapTurnsNeedTwoClustersAndALongEnoughSpan) {

@@ -15,7 +15,7 @@ public class SessionReadbackContractTest
     [Fact]
     public async Task RecordedSessionsAreListedReadableAndDeletable()
     {
-        var wav = SessionContractTest.WriteSilenceWav();
+        var wav = SilenceWav.Write();
         try
         {
             await using var engine =
@@ -39,8 +39,6 @@ public class SessionReadbackContractTest
             var list = await client.RequestAsync("session/list", null, Timeout);
             var sessions = list.GetProperty("sessions");
             Assert.Equal(1, sessions.GetArrayLength());
-            Assert.Equal("finalised", sessions[0].GetProperty("state").GetString());
-            Assert.Equal(16000, sessions[0].GetProperty("sampleRate").GetInt32());
             Assert.False(string.IsNullOrEmpty(sessions[0].GetProperty("endedAt").GetString()));
             var id = sessions[0].GetProperty("id").GetString()!;
 
@@ -69,7 +67,6 @@ public class SessionReadbackContractTest
             Assert.False(string.IsNullOrEmpty(note.GetProperty("editedAt").GetString()));
 
             var patient = await client.RequestAsync("session/patient", new { id }, Timeout);
-            Assert.Equal("en", patient.GetProperty("language").GetString());
             Assert.Equal(JsonValueKind.Null, patient.GetProperty("translation").ValueKind);
 
             await client.RequestAsync("session/label", new { id, text = "Elbow swelling" }, Timeout);

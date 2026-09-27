@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cctype>
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -25,20 +26,51 @@ inline std::string_view Trim(std::string_view s) {
     return s;
 }
 
-// Whitespace-delimited words, as typed
-inline std::vector<std::string> Words(std::string_view s) {
-    std::vector<std::string> words;
-    std::string word;
+// Whitespace-delimited words, as typed, viewing s
+inline std::vector<std::string_view> Words(std::string_view s) {
+    std::vector<std::string_view> words;
+    std::size_t i = 0;
+    while (i < s.size()) {
+        while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i])) != 0) ++i;
+        const std::size_t start = i;
+        while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i])) == 0) ++i;
+        if (i > start) words.push_back(s.substr(start, i - start));
+    }
+    return words;
+}
+
+// Lower-cased runs of the bytes word_char accepts; everything else separates
+inline std::vector<std::string> LowerTokens(std::string_view s, bool (*word_char)(unsigned char)) {
+    std::vector<std::string> tokens;
+    std::string token;
     for (const char c : s) {
-        if (std::isspace(static_cast<unsigned char>(c)) != 0) {
-            if (!word.empty()) words.push_back(std::move(word));
-            word.clear();
-        } else {
-            word.push_back(c);
+        const auto u = static_cast<unsigned char>(c);
+        if (word_char(u)) {
+            token.push_back(static_cast<char>(std::tolower(u)));
+        } else if (!token.empty()) {
+            tokens.push_back(std::move(token));
+            token.clear();
         }
     }
-    if (!word.empty()) words.push_back(std::move(word));
-    return words;
+    if (!token.empty()) tokens.push_back(std::move(token));
+    return tokens;
+}
+
+// Whitespace runs to one space, none at either end
+inline std::string Squeeze(std::string_view s) {
+    std::string out;
+    bool space = true;
+    for (const unsigned char c : s) {
+        if (std::isspace(c) != 0) {
+            if (!space) out.push_back(' ');
+            space = true;
+        } else {
+            out.push_back(static_cast<char>(c));
+            space = false;
+        }
+    }
+    if (!out.empty() && out.back() == ' ') out.pop_back();
+    return out;
 }
 
 inline int WordCount(std::string_view s) {

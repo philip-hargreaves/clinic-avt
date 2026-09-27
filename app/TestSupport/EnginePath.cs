@@ -1,4 +1,4 @@
-namespace ClinicAVT.App.Tests.Support;
+namespace ClinicAVT.TestSupport;
 
 /// <summary>
 /// Locates the engine binary for real-engine tests. An explicit override comes
@@ -6,7 +6,7 @@ namespace ClinicAVT.App.Tests.Support;
 /// Release wins to match the shipped app, and because OpenVINO's debug GPU
 /// plugin asserts on the second generation of the note/patient lane.
 /// </summary>
-public static class EnginePath
+internal static class EnginePath
 {
     public static string Find()
     {

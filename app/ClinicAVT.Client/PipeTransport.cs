@@ -77,6 +77,24 @@ public sealed class PipeTransport : IEngineTransport
         return transport;
     }
 
+    /// <summary>The pid serving the pipe, found by connecting and leaving at once. The engine
+    /// drops a client that leaves before speaking. Null when nobody serves it in time.</summary>
+    public static uint? ServingProcessId(string pipeName, TimeSpan timeout)
+    {
+        using var pipe = new NamedPipeClientStream(
+            ".", pipeName, PipeDirection.InOut, PipeOptions.CurrentUserOnly);
+        try
+        {
+            pipe.Connect(timeout);
+        }
+        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        return ServerVerifier.GetServerProcessId(pipe);
+    }
+
     public async Task<JsonElement> RequestAsync(
         string method, object? parameters, TimeSpan timeout,
         CancellationToken cancellationToken = default)

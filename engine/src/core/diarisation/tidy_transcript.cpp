@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -14,7 +15,7 @@ namespace clinicavt::diar {
 
 namespace {
 
-std::string NormalisedWord(const std::string& word) {
+std::string NormalisedWord(std::string_view word) {
     std::string out;
     for (const char c : word) {
         const auto u = static_cast<unsigned char>(c);
@@ -79,7 +80,7 @@ std::string Terminated(std::string text) {
 bool NoContent(const std::string& text) {
     std::size_t function_words = 0;
     std::size_t words = 0;
-    for (const auto& raw : strings::Words(text)) {
+    for (const auto raw : strings::Words(text)) {
         const auto w = NormalisedWord(raw);
         if (w.empty()) continue;
         ++words;

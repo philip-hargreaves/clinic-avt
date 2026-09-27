@@ -21,7 +21,7 @@ constexpr int kDim = 8;
 
 // Deterministic unit vectors from the text, so a rebuild reproduces a corpus
 struct FakeEmbedder : IEmbedder {
-    EmbedderIdentity identity{"fx-embed-int8", "abc123", kDim, 512, ""};
+    EmbedderIdentity identity{"fx-embed-int8", "abc123", kDim, 512};
     const EmbedderIdentity& Identity() const override {
         return identity;
     }
@@ -56,39 +56,17 @@ std::string Paragraph(int words) {
     return out;
 }
 
-TEST(ReadCodes, LowerCasesAndDropsComments) {
-    TempDir dir("codes");
-    WriteText(dir.path / "codes.txt",
-              "NG100 # rheumatoid arthritis\nng65\n\n  QS33  \n# only a comment\n");
-    const auto codes = ReadCodes(dir.path / "codes.txt");
-    EXPECT_EQ(codes, (std::set<std::string>{"ng100", "ng65", "qs33"}));
-}
-
-TEST(ChunksFromTextDir, OneDocumentPerFileWithTheHeadingAsTitle) {
-    TempDir dir("text");
-    WriteText(dir.path / "Gout.md",
-              "# Fictional gout guideline\n\n1.1.1 " + Paragraph(20) + "\n\n" + Paragraph(20));
-    WriteText(dir.path / "notes.txt", Paragraph(30) + "\n\n" + Paragraph(30));
-    WriteText(dir.path / "ignored.pdf", "%PDF");
-    const auto chunks = ChunksFromTextDir(dir.path);
-    ASSERT_EQ(chunks.size(), 2u);
-    EXPECT_EQ(chunks[0].id, "gout-1");
-    EXPECT_EQ(chunks[0].title, "Fictional gout guideline");
-    EXPECT_EQ(chunks[0].number, "1.1.1");
-    EXPECT_EQ(chunks[0].url, "Gout.md");
-    EXPECT_EQ(chunks[1].id, "notes-1");
-    EXPECT_EQ(chunks[1].title, "notes") << "no heading: the stem";
-}
-
-TEST(ChunksFromNiceDir, AppliesTheManifestFilterAcrossDocuments) {
+TEST(ChunksFromNiceDir, KeepsOnlyRequestedCurrentFullDocuments) {
     TempDir dir("nice");
     const nlohmann::json manifest{{"fx100", {{"status", "current"}, {"is_stub", false}}},
                                   {"fx200", {{"status", "current"}, {"is_stub", false}}},
-                                  {"fx300", {{"status", "withdrawn"}}}};
+                                  {"fx300", {{"status", "withdrawn"}}},
+                                  {"fx400", {{"status", "current"}, {"is_stub", true}}},
+                                  {"fx500", nlohmann::json::object()}};
     WriteText(dir.path / "manifest.json", manifest.dump());
-    auto doc = [](const char* code, const char* rec_id) {
+    auto doc = [](const std::string& code) {
         const nlohmann::json rec{
-            {"id", rec_id}, {"kind", "recommendation"}, {"text", "Offer something."}};
+            {"id", code + "-1_1_1"}, {"kind", "recommendation"}, {"text", "Offer something."}};
         const nlohmann::json chapter{{"title", "Recommendations"},
                                      {"slug", "rec"},
                                      {"recommendations", nlohmann::json::array({rec})}};
@@ -97,45 +75,52 @@ TEST(ChunksFromNiceDir, AppliesTheManifestFilterAcrossDocuments) {
                               {"source_url", "https://example.test"},
                               {"chapters", nlohmann::json::array({chapter})}};
     };
-    WriteText(dir.path / "json" / "fx100.json", doc("fx100", "fx100-1_1_1").dump());
-    WriteText(dir.path / "json" / "fx200.json", doc("fx200", "fx200-1_1_1").dump());
-    WriteText(dir.path / "json" / "fx300.json", doc("fx300", "fx300-1_1_1").dump());
-    const auto chunks = ChunksFromNiceDir(dir.path, {"fx100", "fx300"});
-    ASSERT_EQ(chunks.size(), 1u) << "fx200 not requested, fx300 withdrawn";
+    for (const char* code : {"fx100", "fx200", "fx300", "fx400", "fx500"})
+        WriteText(dir.path / "json" / (std::string(code) + ".json"), doc(code).dump());
+    const auto chunks = ChunksFromNiceDir(dir.path, {"fx100", "fx300", "fx400", "fx500"});
+    ASSERT_EQ(chunks.size(), 1u)
+        << "fx200 not requested, fx300 withdrawn, fx400 a stub, fx500 without a status";
     EXPECT_EQ(chunks[0].id, "fx100-1_1_1");
-}
-
-TEST(ReadBuildSpec, ResolvesPathsBesideTheSpec) {
-    TempDir dir("spec");
-    WriteText(
-        dir.path / "build.json",
-        R"({"id": "fx-2026-09", "name": "Fixture", "licence": "invented", "attribution": "none",
-                  "source": "text", "text": {"dir": "docs"}})");
-    const auto spec = ReadBuildSpec(dir.path / "build.json");
-    EXPECT_EQ(spec.corpus.id, "fx-2026-09");
-    EXPECT_EQ(spec.corpus.source, "text");
-    EXPECT_EQ(spec.text_dir, dir.path / "docs");
-    WriteText(dir.path / "bad.json",
-              R"({"id": "x", "name": "x", "licence": "x", "attribution": "x", "source": "pdf"})");
-    EXPECT_THROW(ReadBuildSpec(dir.path / "bad.json"), std::runtime_error);
 }
 
 TEST(IndexCorpus, BuildsACorpusTheStoreOpensWithTheEmbeddersIdentity) {
     TempDir dir("build");
     fixture::WriteMarkdown(kFixtureDir, dir.path / "docs");
+    WriteText(dir.path / "docs" / "Gout.md",
+              "# Fictional gout guideline\n\n1.1.1 " + Paragraph(20) + "\n\n" + Paragraph(20));
+    WriteText(dir.path / "docs" / "ignored.pdf", "%PDF");
     WriteText(
         dir.path / "build.json",
         R"({"id": "fixture-2026-09", "name": "Fixture", "licence": "invented", "attribution": "none",
                   "source": "text", "text": {"dir": "docs"}})");
+    const auto spec = ReadBuildSpec(dir.path / "build.json");
+    EXPECT_EQ(spec.corpus.id, "fixture-2026-09");
+    EXPECT_EQ(spec.text_dir, dir.path / "docs") << "paths resolve beside the spec";
+    WriteText(dir.path / "bad.json",
+              R"({"id": "x", "name": "x", "licence": "x", "attribution": "x", "source": "pdf"})");
+    EXPECT_THROW(ReadBuildSpec(dir.path / "bad.json"), std::runtime_error);
+
+    // One document per file, titled by its heading or else its stem
+    const auto chunks = ChunksFromTextDir(spec.text_dir);
+    ASSERT_EQ(chunks.size(), 41u) << "one chunk per numbered recommendation, and the gout file";
+    for (const auto& chunk : chunks) {
+        if (chunk.id == "gout-1") {
+            EXPECT_EQ(chunk.title, "Fictional gout guideline");
+            EXPECT_EQ(chunk.number, "1.1.1");
+            EXPECT_EQ(chunk.url, "Gout.md");
+        } else {
+            EXPECT_EQ(chunk.title, chunk.id.substr(0, chunk.id.find('-'))) << chunk.id;
+        }
+    }
+
     FakeEmbedder embedder;
     std::size_t calls = 0, last_total = 0;
-    const auto report =
-        IndexCorpus(ReadBuildSpec(dir.path / "build.json"), embedder, dir.path / "out",
-                    "2026-09-11T00:00:00Z", "engine_tests", [&](std::size_t, std::size_t total) {
-                        ++calls;
-                        last_total = total;
-                    });
-    EXPECT_EQ(report.chunks, 40u) << "one chunk per numbered recommendation";
+    const auto report = IndexCorpus(spec, embedder, dir.path / "out", "2026-09-11T00:00:00Z",
+                                    "engine_tests", [&](std::size_t, std::size_t total) {
+                                        ++calls;
+                                        last_total = total;
+                                    });
+    EXPECT_EQ(report.chunks, chunks.size());
     EXPECT_EQ(calls, report.chunks);
     EXPECT_EQ(last_total, report.chunks);
     EXPECT_EQ(report.truncated, 0u);

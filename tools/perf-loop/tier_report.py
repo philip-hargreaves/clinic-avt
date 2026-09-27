@@ -4,14 +4,13 @@ Reads runs-tier-*.jsonl and logs/tier-*-<track>.log under build/perf-loop and pr
 markdown table per track: the stop path phase by phase, the load that arm paid at engine
 start, prefill coverage and decode rate from the engine log.
 """
-import glob
 import json
 import os
 import re
 import sys
 
 HERE = os.environ.get("PERF_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "build", "perf-loop"))
-ARMS = [("tier-4b", "4B"), ("tier-9b", "9B"), ("tier-35b", "35B"), ("tier-35b-pf", "35B + VLM prefill")]
+ARMS = [("tier-4b", "4B"), ("tier-9b", "9B"), ("tier-35b", "35B")]
 
 
 def runs(tag):

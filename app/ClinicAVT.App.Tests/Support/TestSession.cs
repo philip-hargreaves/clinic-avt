@@ -19,12 +19,28 @@ internal static class TestSession
     {
         engine ??= new FakeEngineClient(autoNotify: false);
         var note = new NoteViewModel();
-        var status = new StatusBarViewModel(log);
+        var status = Status(engine, log);
         var session = new ConsultationViewModel(
             new EngineApi(engine), new InlineDispatcher(), new TranscriptViewModel(), note, status,
             dialogs ?? new FakeDialogService(), Page(engine, status), Guidance(status),
             readinessPollInterval: readinessPollInterval, preferences: preferences, demo: demo);
         return (session, engine, note);
+    }
+
+    /// <summary>
+    /// A status bar over the engine, so note/model reaches it as in the app. Without an engine it
+    /// hears nothing. Its clock never moves, so it polls once at connect and not again.
+    /// </summary>
+    public static StatusBarViewModel Status(IEngineTransport? engine = null, ListLogger? log = null)
+    {
+        if (engine is null)
+        {
+            var silent = new FakeEngineClient();
+            silent.SetConnected(false);
+            engine = silent;
+        }
+
+        return new(new EngineApi(engine), new InlineDispatcher(), new FakeTimeProvider(), logger: log);
     }
 
     public static PageViewModel Page(IEngineTransport engine, StatusBarViewModel status) =>

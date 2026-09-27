@@ -20,12 +20,6 @@ struct SessionMeta {
     bool retain = true;  // false: erased once the consultation is left
 };
 
-struct RecoverableSession {
-    SessionId id;
-    std::string started_at;  // ISO 8601 UTC
-    int sample_rate = 0;
-};
-
 struct SessionSummary {
     SessionId id;
     std::string started_at;  // ISO 8601 UTC
@@ -59,7 +53,7 @@ struct Document {
     std::string detail;           // Note only: concise | standard | detailed
     std::string generated_at;     // ISO 8601 UTC, when the model wrote it
     std::string edited_at;        // ISO 8601 UTC, empty until a person changed it
-    std::int64_t revision = 0;    // Counts every write, 0 when absent or from before schema 6
+    std::int64_t revision = 0;    // Counts every write, 0 when absent
 };
 
 // Audio is durable within a second and exists to resume a crash: Finalise
@@ -76,18 +70,14 @@ class ISessionStore {
     virtual void Append(const SessionId& id, std::span<const float> frames,
                         std::uint64_t lost_frames) = 0;
 
-    virtual void AppendTurn(const SessionId& id, const asr::Turn& turn) = 0;
-
-    // The speaker-attributed transcript supersedes the live turns at
-    // finalise, in one transaction before the session seals
+    // The transcript is written at finalise, in one transaction before the
+    // session seals
     virtual void ReplaceTurns(const SessionId& id, std::span<const asr::Turn> turns) = 0;
 
     virtual void Finalise(const SessionId& id) = 0;
     virtual void Cancel(const SessionId& id) = 0;
 
     virtual void Abandon(const SessionId& id) = 0;
-
-    virtual std::vector<RecoverableSession> ScanRecoverable() = 0;
 
     virtual std::vector<SessionSummary> ListSessions() = 0;
 

@@ -94,9 +94,8 @@ public sealed partial class VoiceViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSetUp))]
     private async Task SetUpVoice()
     {
-        if (_session?.ConsultationActive == true)
+        if (ConsultationGuard.Blocks(_session, _status, "voice enrolment"))
         {
-            _status?.Append("finish the consultation before voice enrolment");
             return;
         }
 
@@ -121,9 +120,8 @@ public sealed partial class VoiceViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanForget))]
     private async Task ForgetVoice()
     {
-        if (_session?.ConsultationActive == true)
+        if (ConsultationGuard.Blocks(_session, _status, "forgetting voice enrolment"))
         {
-            _status?.Append("finish the consultation before forgetting voice enrolment");
             return;
         }
 

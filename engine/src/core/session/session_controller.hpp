@@ -31,7 +31,6 @@ namespace clinicavt::session {
 // finalises, Cancel erases, an interruption abandons recoverable
 class SessionController {
    public:
-    static constexpr std::size_t kMinNoteWords = NoteLane::kMinNoteWords;
     // Audio the capture thread can run ahead of the pipeline before frames are
     // lost. A first-launch model compile stalls for a few seconds
     static constexpr std::size_t kCaptureBufferFrames = 30 * audio::kSampleRate;
@@ -43,7 +42,7 @@ class SessionController {
                       std::uint64_t diar_advance_frames = 5 * audio::kSampleRate,
                       note::INoteWriter* note_writer = nullptr,
                       metrics::Registry* metrics = nullptr,
-                      std::size_t min_note_words = kMinNoteWords);
+                      std::size_t min_note_words = NoteLane::kMinNoteWords);
     // Every lane is joined before the members they read are destroyed
     ~SessionController();
     SessionController(const SessionController&) = delete;
@@ -72,10 +71,8 @@ class SessionController {
                         double min_speech_s = audio::kEnrolMinSpeechSeconds);
     void CancelEnrolment();
     void FinishEnrolment();
-    bool Enrolling() const;
 
     audio::SourceEnd LastEnd() const;
-    std::uint64_t LostFrames() const;
     // The most recently finalised session, for the shell's post-stop
     // transcript fetch, empty until a session has finalised
     store::SessionId LastFinalised() const;
@@ -86,13 +83,11 @@ class SessionController {
     // next finalise or open), deletes a session that ended in a refusal, and
     // erases what was recorded with retain off
     void Close();
-    bool Reviewing() const;
     // The recording session's id, so the shell can resume it after a crash
     store::SessionId CurrentSession() const;
 
     // Applied to the next note. The shell sets these ahead of the stop
     void SetNoteOptions(note::NoteOptions options);
-    note::NoteOptions CurrentNoteOptions() const;
     bool HasNoteWriter() const;
     // Rewrites the last finalised session's note. False when busy, so the RPC
     // thread never blocks on the lane

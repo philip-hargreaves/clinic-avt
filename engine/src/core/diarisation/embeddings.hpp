@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -8,7 +9,6 @@
 #include <vector>
 
 #include "core/diarisation/diar_regions.hpp"
-#include "core/diarisation/slice_refinement.hpp"
 #include "ports/diariser.hpp"
 
 namespace clinicavt::diar {
@@ -22,6 +22,14 @@ inline double Dot(std::span<const float> a, std::span<const float> b) {
     const std::size_t dims = std::min(a.size(), b.size());
     for (std::size_t d = 0; d < dims; ++d) dot += static_cast<double>(a[d]) * b[d];
     return dot;
+}
+
+// Scales to unit length in place, the norm summed in double
+inline void Normalise(std::vector<float>& v) {
+    double norm = 0.0;
+    for (const float x : v) norm += static_cast<double>(x) * x;
+    norm = std::sqrt(norm) + 1e-9;
+    for (float& x : v) x = static_cast<float>(x / norm);
 }
 
 // The audio of several ranges end to end, clamped to what was recorded
@@ -53,6 +61,8 @@ inline int NearestOther(std::span<const float> embedding,
 }
 
 using EmbedRangeFn = std::function<std::vector<float>(std::uint64_t first, std::uint64_t end)>;
+
+inline constexpr std::uint64_t kOverlapTurnMinFrames = 6400;  // 0.4 s
 
 // A long-enough overlap span inside a labelled slice becomes a second turn on
 // the best non-primary centroid. Nothing with fewer than two clusters

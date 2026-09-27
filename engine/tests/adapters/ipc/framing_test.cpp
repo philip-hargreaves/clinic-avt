@@ -7,68 +7,53 @@
 namespace clinicavt::ipc {
 namespace {
 
-TEST(Framing, RoundTrip) {
-    FrameDecoder d;
-    d.Push(EncodeFrame("hello"));
-    EXPECT_EQ(d.Next(), "hello");
-    EXPECT_EQ(d.Next(), std::nullopt);
-}
+// A pipe read can end anywhere, so the decoder must reassemble whatever split arrives
+TEST(Framing, FramesReassembleFromAnySplit) {
+    FrameDecoder whole;
+    whole.Push(EncodeFrame("hello"));
+    EXPECT_EQ(whole.Next(), "hello");
+    EXPECT_EQ(whole.Next(), std::nullopt);
 
-TEST(Framing, EmptyPayload) {
-    FrameDecoder d;
-    d.Push(EncodeFrame(""));
-    EXPECT_EQ(d.Next(), "");
-}
+    FrameDecoder empty;
+    empty.Push(EncodeFrame(""));
+    EXPECT_EQ(empty.Next(), "");
 
-TEST(Framing, ByteAtATimeDelivery) {
-    FrameDecoder d;
-    const std::string frame = EncodeFrame("split across pushes");
-    for (char c : frame) {
-        d.Push(std::string_view(&c, 1));
-    }
-    EXPECT_EQ(d.Next(), "split across pushes");
-}
+    FrameDecoder bytewise;
+    for (char c : EncodeFrame("split across pushes")) bytewise.Push(std::string_view(&c, 1));
+    EXPECT_EQ(bytewise.Next(), "split across pushes");
 
-TEST(Framing, TwoFramesInOnePush) {
-    FrameDecoder d;
-    d.Push(EncodeFrame("first") + EncodeFrame("second"));
-    EXPECT_EQ(d.Next(), "first");
-    EXPECT_EQ(d.Next(), "second");
-    EXPECT_EQ(d.Next(), std::nullopt);
-}
+    FrameDecoder two;
+    two.Push(EncodeFrame("first") + EncodeFrame("second"));
+    EXPECT_EQ(two.Next(), "first");
+    EXPECT_EQ(two.Next(), "second");
+    EXPECT_EQ(two.Next(), std::nullopt);
 
-TEST(Framing, IncompleteFrameYieldsNothing) {
-    FrameDecoder d;
+    FrameDecoder partial;
     const std::string frame = EncodeFrame("truncated");
-    d.Push(std::string_view(frame).substr(0, frame.size() - 3));
-    EXPECT_EQ(d.Next(), std::nullopt);
-    EXPECT_FALSE(d.failed());
+    partial.Push(std::string_view(frame).substr(0, frame.size() - 3));
+    EXPECT_EQ(partial.Next(), std::nullopt);
+    EXPECT_FALSE(partial.failed()) << "an incomplete frame is waiting, not broken";
 }
 
-TEST(Framing, OversizeDeclaredLengthPoisonsDecoder) {
-    FrameDecoder d;
-    const std::uint32_t len = kMaxFrameBytes + 1;
-    std::string header;
-    for (int shift : {0, 8, 16, 24}) {
-        header.push_back(static_cast<char>((len >> shift) & 0xFF));
-    }
-    d.Push(header);
-    EXPECT_EQ(d.Next(), std::nullopt);
-    EXPECT_TRUE(d.failed());
-    d.Push(EncodeFrame("after failure"));
-    EXPECT_EQ(d.Next(), std::nullopt);
-}
-
-TEST(Framing, EncodeRejectsOversizePayload) {
-    EXPECT_THROW(EncodeFrame(std::string(kMaxFrameBytes + 1, 'x')), std::length_error);
-}
-
-TEST(Framing, MaxSizePayloadAccepted) {
-    FrameDecoder d;
-    d.Push(EncodeFrame(std::string(kMaxFrameBytes, 'x')));
-    auto out = d.Next();
+// The cap bounds what a peer can make the engine allocate
+TEST(Framing, TheFrameCapIsInclusiveAndPoisonsTheStream) {
+    FrameDecoder at_cap;
+    at_cap.Push(EncodeFrame(std::string(kMaxFrameBytes, 'x')));
+    const auto out = at_cap.Next();
     ASSERT_TRUE(out.has_value());
     EXPECT_EQ(out->size(), kMaxFrameBytes);
+
+    EXPECT_THROW(EncodeFrame(std::string(kMaxFrameBytes + 1, 'x')), std::length_error);
+
+    FrameDecoder over;
+    const std::uint32_t len = kMaxFrameBytes + 1;
+    std::string header;
+    for (int shift : {0, 8, 16, 24}) header.push_back(static_cast<char>((len >> shift) & 0xFF));
+    over.Push(header);
+    EXPECT_EQ(over.Next(), std::nullopt);
+    EXPECT_TRUE(over.failed());
+    over.Push(EncodeFrame("after failure"));
+    EXPECT_EQ(over.Next(), std::nullopt) << "a poisoned stream stays poisoned";
 }
 
 }  // namespace

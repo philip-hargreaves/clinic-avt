@@ -22,7 +22,7 @@ param(
     [Parameter(Mandatory)] [string]$Licence,
     [string]$Name = "",   # display name for the shell, e.g. "Whisper Large v3 Turbo"
     [string]$Device = "GPU",
-    [ValidateSet("llm", "vlm")] [string]$Pipeline = "",
+    [ValidateSet("llm", "vlm", "embedding")] [string]$Pipeline = "",
     [string[]]$Property = @(),   # OpenVINO properties, KEY=value; numbers and bools typed
     [string]$Source,
     [switch]$InPlace,

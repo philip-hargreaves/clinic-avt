@@ -23,7 +23,10 @@ public sealed record EnrolmentProgress(
     double Level = 0, double Elapsed = 0, double Speech = 0, bool Clipped = false)
     : EngineNotification;
 
-public sealed record EnrolmentDone(bool Ok = false, string? Detail = null, double SpeechSeconds = 0)
+public sealed record EnrolmentDone(bool Ok = false, string? Detail = null) : EngineNotification;
+
+/// <summary>Speech recognition moving to another device: loading, then ready or failed.</summary>
+public sealed record AsrDeviceState(string Device = "", string State = "", string? Detail = null)
     : EngineNotification;
 
 /// <summary>Whether the note lane's model is loading, ready or failed, and the tier it serves.</summary>
@@ -79,6 +82,9 @@ public sealed record ReflectionSummaryReady(string Id = "", string Text = "") : 
 public sealed record ReflectionSummaryFailed(string Id = "", string Detail = "")
     : EngineNotification;
 
+/// <summary>The store stopped taking writes, such as on a full disk. Sent once per failure.</summary>
+public sealed record StorageFault(string Detail = "") : EngineNotification;
+
 public static class EngineNotifications
 {
     /// <summary>
@@ -93,6 +99,7 @@ public static class EngineNotifications
         "anchor/progress" => Protocol.Parse<EnrolmentProgress>(parameters),
         "anchor/enrolled" => Protocol.Parse<EnrolmentDone>(parameters),
         "note/model" => Protocol.Parse<NoteModelState>(parameters),
+        "asr/device" => Protocol.Parse<AsrDeviceState>(parameters),
         "note/partial" => Protocol.Parse<NotePartial>(parameters),
         "note/ready" => Protocol.Parse<NoteReady>(parameters) ?? new NoteReady(),
         "note/refused" => Protocol.Parse<NoteRefused>(parameters) ?? new NoteRefused(),
@@ -115,6 +122,7 @@ public static class EngineNotifications
         "guidance/progress" => Protocol.Parse<GuidanceProgress>(parameters),
         "reflection/summary" => Protocol.Parse<ReflectionSummaryReady>(parameters),
         "reflection/summaryFailed" => Protocol.Parse<ReflectionSummaryFailed>(parameters),
+        "storage/fault" => Protocol.Parse<StorageFault>(parameters) ?? new StorageFault(),
         _ => null,
     };
 }

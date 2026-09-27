@@ -269,6 +269,7 @@ public sealed partial class SessionRecorder : ObservableObject
         _replayEndSeconds = replay is null ? 0 : DemoTracks.DurationSeconds(replay.Path);
         ActivePlayback = playback;
         State = SessionState.Recording;
+        _status.ClearStorageFault();
         _status.ResetThroughput();
         _status.SetMicVisible(true);
         return true;

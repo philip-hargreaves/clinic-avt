@@ -5,26 +5,26 @@
 #include <fstream>
 
 #include "adapters/storage/db.hpp"
+#include "adapters/system/sha256.hpp"
 #include "guidance_fixture.hpp"
 
 namespace clinicavt::guidance {
 namespace {
 
-const EmbedderIdentity kEmbedder{"words", "rev-a", 4, 64, ""};
+const EmbedderIdentity kEmbedder{"words", "rev-a", 4, 64};
 
 IndexChunk Chunk(std::int64_t ord, int page, const char* text) {
     return {ord, page, "1.1", "Recommendations", text, {1.0F, 0.0F, 0.0F, 0.0F}, "[]"};
 }
 
-TEST(DocumentIndex, HashesAndDerivesTheIdFromTheLeadingBits) {
+TEST(DocumentIndex, HoldsFilesByContentAndReleasesADocumentNoFileHolds) {
     const std::string abc = "abc";
-    EXPECT_EQ(Sha256Hex({reinterpret_cast<const std::uint8_t*>(abc.data()), abc.size()}),
+    EXPECT_EQ(system::Sha256Hex({reinterpret_cast<const std::uint8_t*>(abc.data()), abc.size()}),
               "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    // The id is the hash's leading 63 bits, never 0
     EXPECT_EQ(DocumentIndex::IdOf(std::string(64, 'f')), 0x7FFFFFFFFFFFFFFF);
     EXPECT_EQ(DocumentIndex::IdOf(std::string(64, '0')), 1);
-}
 
-TEST(DocumentIndex, HoldsFilesByContentAndDropsADocumentNoFileHolds) {
     fixture::TempDir dir{"index"};
     DocumentIndex index(dir.path / kIndexFile);
     EXPECT_FALSE(index.Adopted());
@@ -99,7 +99,7 @@ TEST(DocumentIndex, AnotherEmbedderEmptiesItAndAForeignFileIsMadeAgain) {
         ASSERT_EQ(index.List().size(), 1u) << "listing needs no embedder";
         index.Adopt(kEmbedder);
         EXPECT_EQ(index.List().size(), 1u);
-        index.Adopt({"words", "rev-b", 4, 64, ""});
+        index.Adopt({"words", "rev-b", 4, 64});
         EXPECT_TRUE(index.List().empty());
         EXPECT_TRUE(index.Files().empty());
         EXPECT_EQ(index.Embedder().rev, "rev-b");

@@ -7,7 +7,6 @@
 #include <limits>
 #include <string>
 
-#include "adapters/diarisation/speaker_clustering.hpp"
 #include "core/diarisation/clip_cuts.hpp"
 #include "core/diarisation/diar_regions.hpp"
 #include "core/diarisation/embeddings.hpp"
@@ -15,8 +14,62 @@
 #include "core/diarisation/resplit.hpp"
 #include "core/diarisation/slice_refinement.hpp"
 #include "core/diarisation/turn_decode.hpp"
+#include "ports/audio_source.hpp"
 
 namespace clinicavt::diar {
+
+namespace {
+
+// One segmenter run over audio starting at `offset`, in absolute frames
+void AppendSeg(SegResult& seg, const SegResult& part, std::uint64_t offset) {
+    for (const auto c : part.change_points) seg.change_points.push_back(c + offset);
+    for (const auto& span : part.overlap_spans) {
+        seg.overlap_spans.push_back({span.first_frame + offset, span.end_frame + offset});
+    }
+}
+
+}  // namespace
+
+std::vector<Region> CutSlices(std::span<const float> probabilities, std::uint64_t total_frames,
+                              std::vector<std::uint64_t> change_points,
+                              std::span<const std::uint64_t> clip_cuts, std::uint64_t frontier) {
+    const auto cuts = SnapClipCuts(clip_cuts, probabilities, change_points);
+    change_points.insert(change_points.end(), cuts.begin(), cuts.end());
+    std::sort(change_points.begin(), change_points.end());
+    auto regions = SpeechRegions(probabilities, total_frames);
+    std::erase_if(regions, [frontier](const Region& r) { return r.end_frame > frontier; });
+    return RefineRegions(regions, change_points);
+}
+
+EmbeddedSlices EmbedSlices(const std::vector<Region>& slices,
+                           const std::function<std::vector<float>(const Region&)>& embed) {
+    EmbeddedSlices out;
+    for (const Region& slice : slices) {
+        auto embedding = embed(slice);
+        if (embedding.empty()) continue;
+        out.embeddings.push_back(std::move(embedding));
+        out.durations.push_back(slice.end_frame - slice.first_frame);
+        out.kept.push_back(slice);
+    }
+    return out;
+}
+
+std::vector<LabelledSlice> LabelSlices(const std::vector<Region>& kept,
+                                       const ClusterResult& clusters,
+                                       const std::vector<Region>& overlap_spans,
+                                       const EmbedRangeFn& embed_span) {
+    std::vector<LabelledSlice> labelled;
+    for (std::size_t i = 0; i < kept.size(); ++i) {
+        labelled.push_back({kept[i].first_frame, kept[i].end_frame, clusters.labels[i]});
+    }
+    const auto overlaps =
+        OverlapTurns(kept, clusters.labels, clusters.centroids, overlap_spans, embed_span);
+    labelled.insert(labelled.end(), overlaps.begin(), overlaps.end());
+    std::sort(labelled.begin(), labelled.end(), [](const LabelledSlice& a, const LabelledSlice& b) {
+        return a.first_frame < b.first_frame;
+    });
+    return labelled;
+}
 
 CaptureStage::CaptureStage(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder)
     : vad_(vad), segmenter_(segmenter), embedder_(embedder) {
@@ -27,12 +80,7 @@ void CaptureStage::Finish(std::span<const float> audio) {
     auto& s = state_;
     AppendVadHops(vad_, audio, s.vad_probabilities, true);
     if (s.seg_done < audio.size()) {
-        const auto part = segmenter_.Run(audio.subspan(s.seg_done));
-        for (const auto c : part.change_points) s.seg.change_points.push_back(c + s.seg_done);
-        for (const auto& span : part.overlap_spans) {
-            s.seg.overlap_spans.push_back(
-                {span.first_frame + s.seg_done, span.end_frame + s.seg_done});
-        }
+        AppendSeg(s.seg, segmenter_.Run(audio.subspan(s.seg_done)), s.seg_done);
         s.seg_done = audio.size();
     }
 }
@@ -54,12 +102,7 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
     AppendVadHops(vad_, audio, s.vad_probabilities, false);
 
     while (s.seg_done + kSegWindowFrames <= audio.size()) {
-        const auto part = segmenter_.Run(audio.subspan(s.seg_done, kSegWindowFrames));
-        for (const auto c : part.change_points) s.seg.change_points.push_back(c + s.seg_done);
-        for (const auto& span : part.overlap_spans) {
-            s.seg.overlap_spans.push_back(
-                {span.first_frame + s.seg_done, span.end_frame + s.seg_done});
-        }
+        AppendSeg(s.seg, segmenter_.Run(audio.subspan(s.seg_done, kSegWindowFrames)), s.seg_done);
         s.seg_done += kSegWindowFrames;
     }
 
@@ -74,56 +117,29 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
         return std::chrono::duration<double>(b - a).count();
     };
 
-    // Slices behind the frontier, cut exactly as finalise cuts them
-    auto cps = s.seg.change_points;
-    {
-        const auto cuts = SnapClipCuts(s.clip_cuts, s.vad_probabilities, cps);
-        cps.insert(cps.end(), cuts.begin(), cuts.end());
-    }
-    std::sort(cps.begin(), cps.end());
-    auto regions =
-        SpeechRegions(s.vad_probabilities, s.vad_probabilities.size() * audio::kVadHopFrames);
-    std::erase_if(regions, [&](const Region& r) { return r.end_frame > settled; });
-    const auto slices = RefineRegions(regions, cps);
-
-    std::vector<std::vector<float>> embeddings;
-    std::vector<std::uint64_t> durations;
-    std::vector<Region> kept;
+    // Slices behind the frontier, cut as finalise cuts them
+    const auto slices =
+        CutSlices(s.vad_probabilities, s.vad_probabilities.size() * audio::kVadHopFrames,
+                  s.seg.change_points, s.clip_cuts, settled);
     const auto t_embed = Clock::now();
-    for (const auto& slice : slices) {
-        const auto& e = EmbedSlice(audio, slice);
-        if (e.empty()) continue;
-        embeddings.push_back(e);
-        durations.push_back(slice.end_frame - slice.first_frame);
-        kept.push_back(slice);
-    }
+    const auto embedded =
+        EmbedSlices(slices, [&](const Region& slice) { return EmbedSlice(audio, slice); });
+    const auto& kept = embedded.kept;
     if (kept.size() < 2) return;
 
-    // Provisional labels, built exactly as finalise builds them. A span
-    // that final clustering changes is never looked up
+    // Provisional labels. A span that final clustering changes is never looked up
     const auto t_cluster = Clock::now();
-    const auto clusters = ClusterSpeakers(embeddings, durations);
-    std::vector<LabelledSlice> labelled;
-    for (std::size_t i = 0; i < kept.size(); ++i) {
-        labelled.push_back({kept[i].first_frame, kept[i].end_frame, clusters.labels[i]});
-    }
+    const auto clusters = ClusterSpeakers(embedded.embeddings, embedded.durations);
     // Overlap embeddings are memoised separately from slice embeddings (same
     // span, raw audio): this runs every tick over all settled overlaps
-    const auto overlaps =
-        OverlapTurns(kept, clusters.labels, clusters.centroids, s.seg.overlap_spans,
-                     [&](std::uint64_t first, std::uint64_t end) {
-                         auto& embedding = overlap_cache_[{first, end}];
-                         if (embedding.empty())
-                             embedding = embedder_.Embed(Gather(audio, {{first, end}}));
-                         return embedding;
-                     });
-    if (!overlaps.empty()) {
-        labelled.insert(labelled.end(), overlaps.begin(), overlaps.end());
-        std::sort(labelled.begin(), labelled.end(),
-                  [](const LabelledSlice& a, const LabelledSlice& b) {
-                      return a.first_frame < b.first_frame;
-                  });
-    }
+    const auto labelled = LabelSlices(
+        kept, clusters, s.seg.overlap_spans, [&](std::uint64_t first, std::uint64_t end) {
+            auto& embedding = overlap_cache_[{first, end}];
+            if (embedding.empty()) {
+                embedding = embedder_.Embed(Gather(audio, {{first, end}}));
+            }
+            return embedding;
+        });
 
     // Decode settled turns into the cache. The last turn may still grow unless
     // closed. The catch-up decodes everything
@@ -151,19 +167,18 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
                 continue;
             }
             if (auto assembled = AssembleFromChunks(s.turn_chunks, a, b)) {
-                s.turn_texts[{a, b}] = JoinedText(*assembled);
+                s.turn_texts[{a, b}] = asr::JoinedText(*assembled);
                 s.turn_chunks[{a, b}] = std::move(*assembled);
                 ++cached;
                 continue;
             }
             if (budget-- <= 0) break;
             auto chunks_of_span = decode(audio.subspan(a, b - a), a);
-            const std::string text = JoinedText(chunks_of_span);
+            const std::string text = asr::JoinedText(chunks_of_span);
             ++decoded;
             decoded_audio += static_cast<double>(b - a) / audio::kSampleRate;
             if (catch_up) {
-                std::fprintf(stderr, "clinicavt-engine: %s decoded %.1f-%.1f s\n",
-                             catch_up ? "catch-up" : "tick",
+                std::fprintf(stderr, "clinicavt-engine: catch-up decoded %.1f-%.1f s\n",
                              static_cast<double>(a) / audio::kSampleRate,
                              static_cast<double>(b) / audio::kSampleRate);
             }

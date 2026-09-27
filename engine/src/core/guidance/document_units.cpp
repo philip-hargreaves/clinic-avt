@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "core/common/strings.hpp"
-#include "core/guidance/guidance_query.hpp"
 #include "core/guidance/page_clean.hpp"
 #include "core/guidance/page_text.hpp"
 #include "core/guidance/recommendation_marks.hpp"
@@ -41,18 +40,6 @@ bool IsHeading(const Paragraph& paragraph, Scheme scheme) {
            !Continues(text);
 }
 
-std::vector<std::string_view> Tokens(std::string_view text) {
-    std::vector<std::string_view> out;
-    std::size_t i = 0;
-    while (i < text.size()) {
-        while (i < text.size() && text[i] == ' ') ++i;
-        const auto start = i;
-        while (i < text.size() && text[i] != ' ') ++i;
-        if (i > start) out.push_back(text.substr(start, i - start));
-    }
-    return out;
-}
-
 // The token as a whole number, or -1
 long Integer(std::string_view token) {
     if (token.empty() || token.size() > 6) return -1;
@@ -66,7 +53,7 @@ long Integer(std::string_view token) {
 
 // Without its runs of consecutive integers, the line numbers of a proof copy
 std::string WithoutCounts(std::string_view text) {
-    const auto tokens = Tokens(text);
+    const auto tokens = strings::Words(text);
     std::string out;
     for (std::size_t i = 0; i < tokens.size();) {
         std::size_t end = i + 1;
@@ -101,16 +88,10 @@ bool Numeric(std::string_view token) {
 int CountWords(std::string_view lower, std::initializer_list<std::string_view> among,
                int* total = nullptr) {
     int found = 0;
-    std::string word;
-    for (const char c : std::string(lower) + " ") {
-        if (std::isalpha(static_cast<unsigned char>(c))) {
-            word.push_back(c);
-            continue;
-        }
-        if (word.empty()) continue;
+    for (const auto& word :
+         strings::LowerTokens(lower, [](unsigned char c) { return std::isalpha(c) != 0; })) {
         if (total != nullptr) ++*total;
         for (const auto one : among) found += word == one;
-        word.clear();
     }
     return found;
 }
@@ -123,7 +104,7 @@ bool Guides(std::string_view lower) {
 
 // A table's cells read across, or the abbreviations printed under it
 bool IsTable(const Unit& unit) {
-    const auto tokens = Tokens(unit.text);
+    const auto tokens = strings::Words(unit.text);
     if (tokens.empty()) return false;
     int numeric = 0;
     for (const auto token : tokens) numeric += Numeric(token);
@@ -139,7 +120,7 @@ bool IsTable(const Unit& unit) {
 // The author list: name after name ending in the number of its address
 bool IsAuthors(std::string_view text) {
     int names = 0;
-    for (const auto token : Tokens(text)) {
+    for (const auto token : strings::Words(text)) {
         auto end = token.size();
         while (end > 0 && (token[end - 1] == ',' ||
                            std::isdigit(static_cast<unsigned char>(token[end - 1])))) {
@@ -206,11 +187,9 @@ bool TokenAhead(const std::vector<Paragraph>& paragraphs, std::size_t from, int 
 }  // namespace
 
 Scheme DetectScheme(const std::vector<Paragraph>& paragraphs) {
-    static constexpr Scheme kAll[] = {Scheme::kDotted,   Scheme::kRoman, Scheme::kBracketed,
-                                      Scheme::kNumbered, Scheme::kWord,  Scheme::kLetterR};
     Scheme best = Scheme::kNone;
     int best_count = kSchemeMarks - 1;
-    for (const auto scheme : kAll) {
+    for (const auto scheme : kMarkSchemes) {
         int count = 0;
         for (const auto& paragraph : paragraphs) {
             const auto mark = MarkOf(paragraph.text, scheme);
@@ -314,6 +293,12 @@ std::vector<Unit> UnitsFromParagraphs(const std::vector<Paragraph>& paragraphs) 
     return out;
 }
 
+namespace {
+
+// Not guidance. A short unmarked run that never ends a sentence is figure
+// labels or a table fragment, a shorter one a sentence's tail. Front matter
+// and captions are known by their opening, tables and addresses by what they
+// hold, unless they say what to do
 bool IsFragment(const Unit& unit) {
     const int words = strings::WordCount(unit.text);
     if (unit.number.empty() &&
@@ -337,6 +322,8 @@ bool IsFragment(const Unit& unit) {
     }
     return false;
 }
+
+}  // namespace
 
 std::vector<Unit> DropFragments(std::vector<Unit> units) {
     for (auto& unit : units) unit.text = WithoutCounts(unit.text);

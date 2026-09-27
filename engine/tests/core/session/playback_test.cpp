@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -97,10 +98,12 @@ struct Fixture {
     }
 
     // A sealed consultation with every document a real run leaves
-    store::SessionId Source(bool with_guidance = true) {
+    store::SessionId Source() {
         const auto id = store->Begin({16000, "", ""});
-        store->AppendTurn(id, {0, 32000, "doctor", "Good morning."});
-        store->AppendTurn(id, {40000, 96000, "patient", "My elbow has been swollen."});
+        const std::vector<asr::Turn> turns = {
+            {0, 32000, "doctor", "Good morning."},
+            {40000, 96000, "patient", "My elbow has been swollen."}};
+        store->ReplaceTurns(id, turns);
         store->Finalise(id);
         store->SaveDocument(id, DocumentKind::kLabel, {.text = "Elbow swelling"});
         store->SaveDocument(id, DocumentKind::kNote,
@@ -108,11 +111,17 @@ struct Fixture {
                              .style = "soap",
                              .detail = "concise"});
         store->SaveDocument(id, DocumentKind::kPatient, {.text = "You came in about your elbow."});
-        if (with_guidance) {
-            store->SaveDocument(id, DocumentKind::kGuidance,
-                                {.text = R"({"version":1,"noteRevision":7,"results":[]})"});
-        }
+        store->SaveDocument(id, DocumentKind::kGuidance,
+                            {.text = R"({"version":1,"noteRevision":7,"results":[]})"});
         return id;
+    }
+
+    // Listening for ten seconds, so a test acts while the clock runs
+    PlaybackPacing Slow() const {
+        PlaybackPacing slow = fast;
+        slow.listen = std::chrono::seconds(10);
+        slow.tick = std::chrono::milliseconds(5);
+        return slow;
     }
 
     static void Settle(Playback& playback) {
@@ -122,16 +131,21 @@ struct Fixture {
         EXPECT_FALSE(playback.Active());
     }
 
+    std::size_t Readings() {
+        std::lock_guard<std::mutex> lock(events.mutex);
+        return events.seconds.size();
+    }
+
     // Sleeps are coarse on Windows, so the clock is awaited rather than timed
-    void AwaitClockEnd(double audio_seconds) {
-        for (int i = 0; i < 500; ++i) {
+    bool AwaitClock(const std::function<bool(const std::vector<double>&)>& reached) {
+        for (int i = 0; i < 2500; ++i) {
             {
                 std::lock_guard<std::mutex> lock(events.mutex);
-                if (!events.seconds.empty() && events.seconds.back() >= audio_seconds) return;
+                if (reached(events.seconds)) return true;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
-        FAIL() << "the clock never reached the end";
+        return false;
     }
 };
 
@@ -144,7 +158,8 @@ TEST(Playback, PlaysTheStoredConsultationBackAsADemoCopy) {
     const auto copy = playback.Current();
     EXPECT_NE(copy, source);
     EXPECT_TRUE(playback.Listening());
-    f.AwaitClockEnd(8.5);
+    ASSERT_TRUE(f.AwaitClock([](const auto& s) { return !s.empty() && s.back() >= 8.5; }))
+        << "the clock never reached the end";
     EXPECT_TRUE(playback.Listening()) << "the clock waits for stop at the end";
     playback.Stop();
     EXPECT_FALSE(playback.Listening());
@@ -193,84 +208,51 @@ TEST(Playback, PlaysTheStoredConsultationBackAsADemoCopy) {
         << "the source's search is not copied, the copy's note is searched afresh";
 }
 
-TEST(Playback, StopEarlyFinalisesFromWhereTheClockIs) {
+TEST(Playback, PauseHoldsTheClockAndAnEarlyStopFinalisesFromThere) {
     Fixture f;
-    PlaybackPacing slow = f.fast;
-    slow.listen = std::chrono::seconds(10);
-    slow.tick = std::chrono::milliseconds(5);
-    Playback playback(f.events, *f.store, f.Hooks(), slow);
+    Playback playback(f.events, *f.store, f.Hooks(), f.Slow());
 
     ASSERT_TRUE(playback.Start(f.Source()));
+    ASSERT_TRUE(f.AwaitClock([](const auto& s) { return !s.empty(); }));
+    playback.SetPaused(true);
+    // Nothing is awaited here: the test is that nothing happens
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));  // a tick in flight lands
+    const auto held = f.Readings();
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    EXPECT_EQ(f.Readings(), held) << "a paused clock holds";
+    playback.SetPaused(false);
+    ASSERT_TRUE(f.AwaitClock([held](const auto& s) { return s.size() > held; }))
+        << "and runs on when resumed";
+
     playback.Stop();
     Fixture::Settle(playback);
-
-    EXPECT_LT(f.events.seconds.back(), 8.5);
+    EXPECT_LT(f.events.seconds.back(), 8.5) << "finalised from where the clock was";
     EXPECT_EQ(f.events.Lines().front(), "progress:transcript");
     EXPECT_EQ(f.finalised.size(), 1u);
 }
 
-TEST(Playback, CancelErasesTheCopy) {
+TEST(Playback, RefusesWhatItCannotPlayAndCancelLeavesNoCopy) {
     Fixture f;
-    PlaybackPacing slow = f.fast;
-    slow.listen = std::chrono::seconds(10);
-    Playback playback(f.events, *f.store, f.Hooks(), slow);
-
-    ASSERT_TRUE(playback.Start(f.Source()));
-    playback.Cancel();
-
-    EXPECT_FALSE(playback.Active());
-    EXPECT_EQ(f.store->ListSessions().size(), 1u);
-    EXPECT_TRUE(f.events.Lines().empty());
-    EXPECT_TRUE(f.finalised.empty());
-}
-
-TEST(Playback, PauseHoldsTheClock) {
-    Fixture f;
-    PlaybackPacing slow = f.fast;
-    slow.listen = std::chrono::seconds(10);
-    slow.tick = std::chrono::milliseconds(5);
-    Playback playback(f.events, *f.store, f.Hooks(), slow);
-
-    ASSERT_TRUE(playback.Start(f.Source()));
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    playback.SetPaused(true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    const auto held = f.events.seconds.size();
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    EXPECT_EQ(f.events.seconds.size(), held);
-    playback.SetPaused(false);
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    EXPECT_GT(f.events.seconds.size(), held);
-    playback.Cancel();
-}
-
-TEST(Playback, RefusesWhatItCannotPlay) {
-    Fixture f;
-    Playback playback(f.events, *f.store, f.Hooks(), f.fast);
+    Playback playback(f.events, *f.store, f.Hooks(), f.Slow());
 
     EXPECT_FALSE(playback.Start("no-such-session"));
     const auto bare = f.store->Begin({16000, "", ""});
-    f.store->AppendTurn(bare, {0, 16000, "", "hello"});
+    const std::vector<asr::Turn> hello = {{0, 16000, "", "hello"}};
+    f.store->ReplaceTurns(bare, hello);
     f.store->Finalise(bare);
     EXPECT_FALSE(playback.Start(bare)) << "no note to show";
     EXPECT_EQ(f.store->ListSessions().size(), 1u) << "no copy left behind";
 
-    ASSERT_TRUE(playback.Start(f.Source()));
-    EXPECT_FALSE(playback.Start(f.Source())) << "one at a time";
+    const auto source = f.Source();
+    ASSERT_TRUE(playback.Start(source));
+    EXPECT_FALSE(playback.Start(source)) << "one at a time";
+    EXPECT_EQ(f.store->ListSessions().size(), 3u) << "the copy exists while listening";
     playback.Cancel();
-}
 
-TEST(Playback, ASourceNeverSearchedStillHasItsCopySearched) {
-    Fixture f;
-    Playback playback(f.events, *f.store, f.Hooks(), f.fast);
-
-    ASSERT_TRUE(playback.Start(f.Source(false)));
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
-    playback.Stop();
-    Fixture::Settle(playback);
-
-    EXPECT_EQ(f.guidance, std::vector<std::string>{playback.Current()});
+    EXPECT_FALSE(playback.Active());
+    EXPECT_EQ(f.store->ListSessions().size(), 2u) << "a cancel erases the copy";
+    EXPECT_TRUE(f.events.Lines().empty());
+    EXPECT_TRUE(f.finalised.empty());
 }
 
 }  // namespace

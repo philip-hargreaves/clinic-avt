@@ -42,18 +42,6 @@ TEST(Resplit, ABorrowedHeadChunkGoesBackToItsSpeaker) {
     EXPECT_EQ(out[1].slice.end_frame, 200000u) << "the turn keeps its own end";
 }
 
-TEST(Resplit, OnlyEdgeChunksMoveAndAShortOneStays) {
-    const std::vector<LabelledSlice> turns{{50000, 300000, 0}};
-    const std::vector<std::string> texts{"a b c d"};
-    const std::vector<std::vector<asr::Turn>> chunks{
-        {C(50000, 56000, "a"),  // 0.4 s: too short to move
-         C(60000, 98000, "b"), C(100000, 200000, "c"), C(200000, 300000, "d")}};
-    const auto out = ResplitByEmbedding(turns, texts, chunks, Voice, kCentroids);
-    ASSERT_EQ(out.size(), 1u)
-        << "the short head chunk blocks the head run; the tail is the doctor's";
-    EXPECT_EQ(out[0].text, "a b c d");
-}
-
 TEST(Resplit, AChunkStampedPastTheTurnIsJudgedOnTheTurnsAudioOnly) {
     // The tail chunk's stamp runs 5 s past the turn end into the patient's audio.
     // Judged on the turn's own audio it is the doctor's and stays
@@ -71,14 +59,26 @@ TEST(Resplit, AChunkStampedPastTheTurnIsJudgedOnTheTurnsAudioOnly) {
     for (const auto& span : asked) EXPECT_LE(span.second, 140000u);
 }
 
-TEST(Resplit, NothingMovesWithoutAMarginOrWithOneCluster) {
+TEST(Resplit, NothingMovesWithoutAConfidentLongEdgeChunk) {
+    // Only edge runs move, and a 0.4 s head chunk is too short to move, so it blocks the
+    // head run. The tail is the doctor's own
+    const std::vector<LabelledSlice> long_turn{{50000, 300000, 0}};
+    const std::vector<std::vector<asr::Turn>> short_head{
+        {C(50000, 56000, "a"), C(60000, 98000, "b"), C(100000, 200000, "c"),
+         C(200000, 300000, "d")}};
+    const auto blocked = ResplitByEmbedding(long_turn, {"a b c d"}, short_head, Voice, kCentroids);
+    ASSERT_EQ(blocked.size(), 1u) << "a short head chunk";
+    EXPECT_EQ(blocked[0].text, "a b c d");
+
     const std::vector<LabelledSlice> turns{{50000, 200000, 0}};
     const std::vector<std::string> texts{"x y"};
     const std::vector<std::vector<asr::Turn>> chunks{
         {C(50000, 98000, "x"), C(100000, 200000, "y")}};
     const auto same = [](std::uint64_t, std::uint64_t) { return std::vector<float>{0.7f, 0.714f}; };
-    EXPECT_EQ(ResplitByEmbedding(turns, texts, chunks, same, kCentroids)[0].text, "x y");
-    EXPECT_EQ(ResplitByEmbedding(turns, texts, chunks, Voice, {{1.0f, 0.0f}}).size(), 1u);
+    EXPECT_EQ(ResplitByEmbedding(turns, texts, chunks, same, kCentroids)[0].text, "x y")
+        << "no margin between the clusters";
+    EXPECT_EQ(ResplitByEmbedding(turns, texts, chunks, Voice, {{1.0f, 0.0f}}).size(), 1u)
+        << "one cluster";
 }
 
 }  // namespace

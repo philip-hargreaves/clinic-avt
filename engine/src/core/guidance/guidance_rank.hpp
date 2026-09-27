@@ -5,8 +5,6 @@
 #include <string_view>
 #include <vector>
 
-#include "core/guidance/guidance_query.hpp"
-
 namespace clinicavt::guidance {
 
 // Ordering and abstention over first-stage candidates. Each sub-query's

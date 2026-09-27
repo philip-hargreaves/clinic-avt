@@ -1,0 +1,7 @@
+{
+    "jsonrpc": "2.0",
+    "method": "storage/fault",
+    "params": {
+        "detail": "audio commit: database or disk is full"
+    }
+}

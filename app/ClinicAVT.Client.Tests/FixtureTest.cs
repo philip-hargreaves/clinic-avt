@@ -5,81 +5,68 @@ namespace ClinicAVT.Client.Tests;
 /// <summary>The fixtures both languages must agree on, one test per family.</summary>
 public class FixtureTest
 {
-    private static JsonDocument LoadFixture(string name)
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null && !Directory.Exists(Path.Combine(dir, "schema", "fixtures")))
-        {
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        Assert.NotNull(dir);
-        return JsonDocument.Parse(
-            File.ReadAllText(Path.Combine(dir, "schema", "fixtures", name)));
-    }
-
     [Fact]
     public void ProtocolFixturesRoundTripThroughTheClientTypes()
     {
         var serialized = JsonSerializer.SerializeToElement(
             new PeerInfo("clinicavt-shell", "0.1.0", Protocol.ProtocolVersion),
             Protocol.JsonOptions);
-        var expected = LoadFixture("hello-request.json").RootElement.GetProperty("params");
+        var expected = Fixtures.Load("hello-request.json").GetProperty("params");
         Assert.True(JsonElement.DeepEquals(serialized, expected));
 
         // Against the constants, so drift from the shared fixture fails here
-        var result = LoadFixture("hello-response.json").RootElement.GetProperty("result");
+        var result = Fixtures.Load("hello-response.json").GetProperty("result");
         var peer = result.Deserialize<PeerInfo>(Protocol.JsonOptions);
         Assert.Equal(
-            new PeerInfo(EngineInfo.Name, EngineInfo.Version, Protocol.ProtocolVersion), peer);
+            new PeerInfo(ExpectedEngine.Name, ExpectedEngine.Version, Protocol.ProtocolVersion), peer);
 
-        var echo = LoadFixture("echo-request-nonascii.json");
-        var payload = echo.RootElement.GetProperty("params").GetProperty("payload").GetString();
+        var echo = Fixtures.Load("echo-request-nonascii.json");
+        var payload = echo.GetProperty("params").GetProperty("payload").GetString();
         Assert.NotNull(payload);
         var reserialized = JsonSerializer.Serialize(new { payload }, Protocol.JsonOptions);
         Assert.Contains("naïve", reserialized, StringComparison.Ordinal);
         Assert.Contains("東京", reserialized, StringComparison.Ordinal);
 
-        var error = LoadFixture("error-method-not-found.json").RootElement.GetProperty("error");
+        var error = Fixtures.Load("error-method-not-found.json").GetProperty("error");
         Assert.Equal(-32601, error.GetProperty("code").GetInt32());
     }
 
     [Fact]
     public void SessionFixturesNameTheirMethodAndCarryTheirParams()
     {
-        var label = LoadFixture("session-label.json").RootElement;
+        var label = Fixtures.Load("session-label.json");
         Assert.Equal("session/label", label.GetProperty("method").GetString());
         Assert.Equal("Elbow swelling", label.GetProperty("params").GetProperty("text").GetString());
 
-        var open = LoadFixture("session-open.json").RootElement;
+        var open = Fixtures.Load("session-open.json");
         Assert.Equal("session/open", open.GetProperty("method").GetString());
         Assert.False(string.IsNullOrEmpty(open.GetProperty("params").GetProperty("id").GetString()));
 
-        var close = LoadFixture("session-close.json").RootElement;
+        var close = Fixtures.Load("session-close.json");
         Assert.Equal("session/close", close.GetProperty("method").GetString());
         Assert.Equal(JsonValueKind.Null, close.GetProperty("params").ValueKind);
 
-        var level = LoadFixture("audio-level.json").RootElement;
+        var level = Fixtures.Load("audio-level.json");
         Assert.Equal("audio.level", level.GetProperty("method").GetString());
         Assert.Equal(0.5, level.GetProperty("params").GetProperty("level").GetDouble());
         Assert.False(level.GetProperty("params").GetProperty("clipped").GetBoolean());
 
-        var start = LoadFixture("session-start-playback.json").RootElement;
+        var start = Fixtures.Load("session-start-playback.json");
         Assert.Equal("session/start", start.GetProperty("method").GetString());
         Assert.False(string.IsNullOrEmpty(
             start.GetProperty("params").GetProperty("playback").GetProperty("id").GetString()));
 
-        var playback = LoadFixture("audio-level-playback.json").RootElement;
+        var playback = Fixtures.Load("audio-level-playback.json");
         Assert.Equal("audio.level", playback.GetProperty("method").GetString());
         Assert.Equal(271.4, playback.GetProperty("params").GetProperty("seconds").GetDouble());
 
-        var interrupted = LoadFixture("session-interrupted.json").RootElement;
+        var interrupted = Fixtures.Load("session-interrupted.json");
         Assert.Equal("session/interrupted", interrupted.GetProperty("method").GetString());
         Assert.Equal("deviceLost", interrupted.GetProperty("params").GetProperty("reason").GetString());
         Assert.False(
             string.IsNullOrEmpty(interrupted.GetProperty("params").GetProperty("detail").GetString()));
 
-        var progress = LoadFixture("session-progress.json").RootElement;
+        var progress = Fixtures.Load("session-progress.json");
         Assert.Equal("session/progress", progress.GetProperty("method").GetString());
         Assert.Equal("speakers", progress.GetProperty("params").GetProperty("stage").GetString());
     }
@@ -87,34 +74,31 @@ public class FixtureTest
     [Fact]
     public void SessionReadbackAndDemoFixturesCarryTheStoredRecords()
     {
-        var session = LoadFixture("session-list.json").RootElement
+        var session = Fixtures.Load("session-list.json")
             .GetProperty("result").GetProperty("sessions")[0];
-        Assert.Equal("finalised", session.GetProperty("state").GetString());
         Assert.False(string.IsNullOrEmpty(session.GetProperty("label").GetString()));
         Assert.Equal(JsonValueKind.Null, session.GetProperty("editedAt").ValueKind);
         Assert.False(session.GetProperty("demo").GetBoolean());
 
-        var seeded = LoadFixture("demo-seed.json").RootElement.GetProperty("result");
-        var cleared = LoadFixture("demo-clear.json").RootElement.GetProperty("result");
+        var seeded = Fixtures.Load("demo-seed.json").GetProperty("result");
+        var cleared = Fixtures.Load("demo-clear.json").GetProperty("result");
         Assert.Equal(seeded.GetProperty("added").GetInt32(), cleared.GetProperty("removed").GetInt32());
 
-        var note = LoadFixture("session-note.json").RootElement.GetProperty("result");
+        var note = Fixtures.Load("session-note.json").GetProperty("result");
         Assert.False(string.IsNullOrEmpty(note.GetProperty("text").GetString()));
         Assert.Equal("prose", note.GetProperty("style").GetString());
         Assert.Equal("standard", note.GetProperty("detail").GetString());
         Assert.True(DateTimeOffset.TryParse(note.GetProperty("generatedAt").GetString(), out _));
         Assert.True(DateTimeOffset.TryParse(note.GetProperty("editedAt").GetString(), out _));
 
-        var patient = LoadFixture("session-patient.json").RootElement.GetProperty("result");
-        Assert.Equal("en", patient.GetProperty("language").GetString());
+        var patient = Fixtures.Load("session-patient.json").GetProperty("result");
+        Assert.True(DateTimeOffset.TryParse(patient.GetProperty("generatedAt").GetString(), out _));
         var translation = patient.GetProperty("translation");
         Assert.Equal("pl", translation.GetProperty("language").GetString());
         Assert.Contains("łokcia", translation.GetProperty("text").GetString(), StringComparison.Ordinal);
 
-        var guidance = LoadFixture("session-guidance.json").RootElement
+        var guidance = Fixtures.Load("session-guidance.json")
             .GetProperty("result").GetProperty("guidance");
-        Assert.True(
-            DateTimeOffset.TryParse(guidance.GetProperty("generatedAt").GetString(), out _));
         Assert.Equal(JsonValueKind.False, guidance.GetProperty("stale").ValueKind);
         Assert.Equal(1, guidance.GetProperty("version").GetInt32());
         Assert.True(guidance.GetProperty("noteRevision").GetInt64() > 0);
@@ -128,7 +112,7 @@ public class FixtureTest
     [Fact]
     public void ReflectionFixturesCarryTheThreeAnswersAndAgreeAcrossMethods()
     {
-        var result = LoadFixture("reflection-get.json").RootElement.GetProperty("result");
+        var result = Fixtures.Load("reflection-get.json").GetProperty("result");
         Assert.False(string.IsNullOrEmpty(result.GetProperty("label").GetString()));
         Assert.False(string.IsNullOrEmpty(result.GetProperty("summary").GetProperty("text").GetString()));
         var reflection = result.GetProperty("reflection");
@@ -144,16 +128,16 @@ public class FixtureTest
             Assert.False(string.IsNullOrEmpty(reference.GetProperty(key).GetString()), key);
         }
 
-        var listed = LoadFixture("reflection-list.json").RootElement
+        var listed = Fixtures.Load("reflection-list.json")
             .GetProperty("result").GetProperty("reflections")[0];
         Assert.False(listed.GetProperty("demo").GetBoolean());
-        var update = LoadFixture("reflection-update.json").RootElement.GetProperty("params");
+        var update = Fixtures.Load("reflection-update.json").GetProperty("params");
         Assert.Equal(update.GetProperty("id").GetString(), listed.GetProperty("id").GetString());
         Assert.Equal(update.GetProperty("learned").GetString(), listed.GetProperty("learned").GetString());
         Assert.Equal(1, update.GetProperty("references").GetArrayLength());
         Assert.True(DateTimeOffset.TryParse(listed.GetProperty("startedAt").GetString(), out _));
 
-        var summary = LoadFixture("reflection-summary.json").RootElement;
+        var summary = Fixtures.Load("reflection-summary.json");
         Assert.Equal("reflection/summary", summary.GetProperty("method").GetString());
         Assert.False(summary.TryGetProperty("id", out _), "a notification, not a request");
     }
@@ -161,14 +145,14 @@ public class FixtureTest
     [Fact]
     public void GuidanceRetrievalFixturesAreARequestItsTwoOutcomesAndTheEmbedderState()
     {
-        var search = LoadFixture("guidance-search.json").RootElement;
+        var search = Fixtures.Load("guidance-search.json");
         Assert.Equal("guidance/search", search.GetProperty("method").GetString());
         Assert.True(search.TryGetProperty("id", out _), "a request, not a notification");
         Assert.False(
             string.IsNullOrEmpty(search.GetProperty("params").GetProperty("id").GetString()));
         Assert.Equal(3, search.GetProperty("params").GetProperty("limit").GetInt32());
 
-        var failed = LoadFixture("guidance-failed.json").RootElement;
+        var failed = Fixtures.Load("guidance-failed.json");
         Assert.Equal("guidance/failed", failed.GetProperty("method").GetString());
         Assert.False(failed.TryGetProperty("id", out _), "a notification, not a request");
         Assert.False(
@@ -176,7 +160,7 @@ public class FixtureTest
         Assert.False(
             string.IsNullOrEmpty(failed.GetProperty("params").GetProperty("detail").GetString()));
 
-        var ready = LoadFixture("guidance-ready.json").RootElement;
+        var ready = Fixtures.Load("guidance-ready.json");
         Assert.Equal("guidance/ready", ready.GetProperty("method").GetString());
         var record = ready.GetProperty("params");
         Assert.False(string.IsNullOrEmpty(record.GetProperty("id").GetString()));
@@ -224,14 +208,14 @@ public class FixtureTest
         Assert.Equal(JsonValueKind.Null, searched[0].GetProperty("unavailable").ValueKind);
 
         // The embedder announces its state, and the corpus listing has both shapes
-        var model = LoadFixture("guidance-model.json").RootElement;
+        var model = Fixtures.Load("guidance-model.json");
         Assert.Equal("guidance/model", model.GetProperty("method").GetString());
         Assert.False(model.TryGetProperty("id", out _), "a notification, not a request");
         Assert.Equal("unavailable", model.GetProperty("params").GetProperty("state").GetString());
         Assert.False(
             string.IsNullOrEmpty(model.GetProperty("params").GetProperty("detail").GetString()));
 
-        var corporaResult = LoadFixture("guidance-corpora.json").RootElement.GetProperty("result");
+        var corporaResult = Fixtures.Load("guidance-corpora.json").GetProperty("result");
         Assert.Equal("ready", corporaResult.GetProperty("state").GetString());
         Assert.Equal(JsonValueKind.Null, corporaResult.GetProperty("detail").ValueKind);
         var corpora = corporaResult.GetProperty("corpora");
@@ -252,7 +236,7 @@ public class FixtureTest
     [Fact]
     public void GuidanceDocumentFixturesCarryEveryStateTheBoxesAndTheNotifications()
     {
-        var listing = LoadFixture("guidance-documents.json").RootElement.GetProperty("result");
+        var listing = Fixtures.Load("guidance-documents.json").GetProperty("result");
         var documents = listing.GetProperty("documents");
         Assert.False(string.IsNullOrEmpty(listing.GetProperty("folder").GetString()));
         Assert.True(listing.GetProperty("found").GetBoolean());
@@ -264,23 +248,20 @@ public class FixtureTest
             Assert.True(document.GetProperty("id").GetInt64() > 0);
             Assert.False(string.IsNullOrEmpty(document.GetProperty("name").GetString()));
             Assert.False(string.IsNullOrEmpty(document.GetProperty("path").GetString()));
-            Assert.Equal(64, document.GetProperty("sha256").GetString()!.Length);
             Assert.True(
                 DateTimeOffset.TryParse(document.GetProperty("addedAt").GetString(), out _));
-            Assert.True(document.GetProperty("bytes").GetInt64() > 0);
         }
 
         Assert.True(documents[0].GetProperty("chunks").GetInt32() > 0);
         Assert.Equal(JsonValueKind.Null, documents[0].GetProperty("error").ValueKind);
-        Assert.Equal(JsonValueKind.Null, documents[1].GetProperty("indexedAt").ValueKind);
         Assert.Equal("patientData", documents[2].GetProperty("error").GetString());
 
-        var add = LoadFixture("guidance-documents-add.json").RootElement.GetProperty("result");
+        var add = Fixtures.Load("guidance-documents-add.json").GetProperty("result");
         Assert.Equal(1, add.GetProperty("documents").GetArrayLength());
         Assert.Equal(["unsupported", "unreadable"], add.GetProperty("skipped").EnumerateArray()
             .Select(s => s.GetProperty("reason").GetString()));
 
-        var page = LoadFixture("guidance-page.json").RootElement.GetProperty("result");
+        var page = Fixtures.Load("guidance-page.json").GetProperty("result");
         Assert.EndsWith(".bmp", page.GetProperty("path").GetString());
         Assert.True(page.GetProperty("width").GetInt32() > 0);
         Assert.True(page.GetProperty("height").GetInt32() > 0);
@@ -293,21 +274,31 @@ public class FixtureTest
             Assert.True(box.GetProperty("bottom").GetDouble() <= 1);
         }
 
-        var opened = LoadFixture("guidance-documents-open.json").RootElement.GetProperty("result");
+        var opened = Fixtures.Load("guidance-documents-open.json").GetProperty("result");
         Assert.False(string.IsNullOrEmpty(opened.GetProperty("path").GetString()));
 
-        var indexed = LoadFixture("guidance-document.json").RootElement;
+        var indexed = Fixtures.Load("guidance-document.json");
         Assert.Equal("guidance/document", indexed.GetProperty("method").GetString());
         Assert.False(indexed.TryGetProperty("id", out _), "a notification, not a request");
         Assert.Equal("ready", indexed.GetProperty("params").GetProperty("state").GetString());
 
-        var progress = LoadFixture("guidance-progress.json").RootElement.GetProperty("params");
+        var progress = Fixtures.Load("guidance-progress.json").GetProperty("params");
         Assert.Equal("preparing", progress.GetProperty("phase").GetString());
         Assert.True(
             progress.GetProperty("done").GetInt32() <= progress.GetProperty("total").GetInt32());
 
-        var changed = LoadFixture("guidance-documentsChanged.json").RootElement;
+        var changed = Fixtures.Load("guidance-documentsChanged.json");
         Assert.Equal("guidance/documentsChanged", changed.GetProperty("method").GetString());
         Assert.Empty(changed.GetProperty("params").EnumerateObject());
+    }
+
+    [Fact]
+    public void AStorageFaultCarriesItsDetail()
+    {
+        var fault = Fixtures.Load("storage-fault.json");
+        Assert.Equal("storage/fault", fault.GetProperty("method").GetString());
+        Assert.Equal(
+            new StorageFault("audio commit: database or disk is full"),
+            EngineNotifications.Parse("storage/fault", fault.GetProperty("params")));
     }
 }

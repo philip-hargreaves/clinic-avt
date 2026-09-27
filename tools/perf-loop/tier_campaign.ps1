@@ -5,10 +5,10 @@
 # tier_report.py.
 param(
     [string[]]$Tracks = @("c02m", "c05m", "c10m"),
-    [string]$Out = "C:\dev\ambient\build\perf-loop"
+    [string]$Out = (Join-Path $PSScriptRoot "..\..\build\perf-loop")
 )
 $ErrorActionPreference = "Continue"
-Set-Location C:\dev\ambient
+Set-Location (Join-Path $PSScriptRoot "..\..")
 $arms = @(
     @{ tag = "tier-4b";        tier = "constrained" },
     @{ tag = "tier-9b";        tier = "default" },

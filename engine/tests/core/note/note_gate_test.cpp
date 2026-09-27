@@ -17,33 +17,31 @@ TEST(RefusalReason, ReadsTheSentinelLineAndNothingElse) {
         << "case matters: the sentinel is exact";
 }
 
-TEST(RefusalFilter, HoldsTheOpeningThenStreamsARealNote) {
+TEST(RefusalFilter, HoldsOnlyWhileTheOpeningCouldBeTheSentinel) {
     std::vector<std::string> seen;
-    RefusalFilter filter([&](const std::string& t) { seen.push_back(t); });
-    filter("NOT");
-    filter("NOT A CONS");
+    const auto collect = [&seen](const std::string& t) { seen.push_back(t); };
+
+    RefusalFilter ordinary(collect);
+    ordinary("The");
+    EXPECT_EQ(seen.size(), 1u) << "an ordinary opening streams at once";
+
+    seen.clear();
+    RefusalFilter note(collect);
+    note("NOT");
+    note("NOT A CONS");
     EXPECT_TRUE(seen.empty()) << "could still be a refusal";
-    filter("NOT A CONSIDERABLE delay, the patient presented");
+    note("NOT A CONSIDERABLE delay, the patient presented");
     ASSERT_EQ(seen.size(), 1u) << "decided: not the sentinel";
-    filter("NOT A CONSIDERABLE delay, the patient presented with");
+    note("NOT A CONSIDERABLE delay, the patient presented with");
     EXPECT_EQ(seen.size(), 2u);
-    EXPECT_FALSE(filter.Refused());
-}
+    EXPECT_FALSE(note.Refused());
 
-TEST(RefusalFilter, SwallowsARefusalEntirely) {
-    std::vector<std::string> seen;
-    RefusalFilter filter([&](const std::string& t) { seen.push_back(t); });
-    filter("NOT A CONSULTATION:");
-    filter("NOT A CONSULTATION: a ramen video");
-    EXPECT_TRUE(seen.empty());
-    EXPECT_TRUE(filter.Refused());
-}
-
-TEST(RefusalFilter, AnOrdinaryOpeningStreamsAtOnce) {
-    std::vector<std::string> seen;
-    RefusalFilter filter([&](const std::string& t) { seen.push_back(t); });
-    filter("The");
-    EXPECT_EQ(seen.size(), 1u);
+    seen.clear();
+    RefusalFilter refusal(collect);
+    refusal("NOT A CONSULTATION:");
+    refusal("NOT A CONSULTATION: a ramen video");
+    EXPECT_TRUE(seen.empty()) << "a refusal is swallowed whole";
+    EXPECT_TRUE(refusal.Refused());
 }
 
 }  // namespace

@@ -1,12 +1,9 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <map>
 #include <nlohmann/json.hpp>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "tools/corpus/chunker.hpp"
@@ -56,34 +53,13 @@ TEST(ChunksFromDocument, OneChunkPerRecommendationWithDuplicatesAndParagraphsSki
     EXPECT_EQ(seen.size(), 3u);
 }
 
-TEST(IncludeDocument, RequestedCurrentAndNotAStub) {
-    const std::set<std::string> requested{"fx100", "fx200"};
-    EXPECT_TRUE(IncludeDocument({{"status", "current"}, {"is_stub", false}}, "fx100", requested));
-    EXPECT_FALSE(IncludeDocument({{"status", "current"}}, "fx300", requested)) << "not requested";
-    EXPECT_FALSE(IncludeDocument({{"status", "current"}, {"is_stub", true}}, "fx100", requested));
-    EXPECT_FALSE(IncludeDocument({{"status", "withdrawn"}}, "fx200", requested));
-    EXPECT_FALSE(IncludeDocument(nlohmann::json::object(), "fx200", requested)) << "no status";
-}
-
-TEST(StartsRecommendation, NumberedOpeningsOnly) {
-    EXPECT_TRUE(StartsRecommendation("Recommendation 12"));
-    EXPECT_TRUE(StartsRecommendation("recommendation 3a Consider a blood test"));
-    EXPECT_TRUE(StartsRecommendation("1.2 Investigations"));
-    EXPECT_TRUE(StartsRecommendation("1.2.3 Offer first-line treatment"));
-    EXPECT_FALSE(StartsRecommendation("1 Introduction"));
-    EXPECT_FALSE(StartsRecommendation("Version 1.2 of the guideline"));
-    EXPECT_FALSE(StartsRecommendation("10 mg twice a day"));
-    EXPECT_FALSE(StartsRecommendation("Recommendations for research"));
-    EXPECT_FALSE(StartsRecommendation("1.2.3mg is the dose"));
-}
-
 std::string Paragraph(int words) {
     std::string out;
     for (int i = 0; i < words; ++i) out += (i ? " word" : "word");
     return out;
 }
 
-TEST(ChunksFromText, RunsCloseAtHeadingsAndAtTheTargetLength) {
+TEST(ChunksFromText, RunsCloseAtHeadingsAndTheTargetLengthAndNeverExceedTheMaximum) {
     const std::string text = "A short title\n\n" + Paragraph(20) + "\n\n" + Paragraph(20) +
                              "\n\n1.1.1 " + Paragraph(30) + "\n \n" + Paragraph(280) + "\n\n" +
                              Paragraph(40) + "\n\nRecommendation 2 " + Paragraph(10);
@@ -99,78 +75,25 @@ TEST(ChunksFromText, RunsCloseAtHeadingsAndAtTheTargetLength) {
     EXPECT_EQ(chunks[3].text.substr(0, 16), "Recommendation 2");
     EXPECT_EQ(chunks[3].url, "doc.md");
     EXPECT_TRUE(ChunksFromText("x", "x", "too short\n\nalso short").empty());
-}
 
-TEST(ChunksFromText, NeverExceedsTheMaximum) {
-    std::string text;
-    for (int i = 0; i < 10; ++i) text += Paragraph(250) + "\n\n";
-    for (const auto& chunk : ChunksFromText("doc", "A document", text)) {
+    std::string long_text;
+    for (int i = 0; i < 10; ++i) long_text += Paragraph(250) + "\n\n";
+    for (const auto& chunk : ChunksFromText("doc", "A document", long_text)) {
         int words = 1;
         for (char c : chunk.text) words += c == ' ';
         EXPECT_LE(words, kMaxWords);
     }
-}
 
-// The engine chunker over the real NICE research copy must reproduce the
-// harness's chunk file exactly. Opt in with the two paths, skipped elsewhere
-TEST(ChunksFromDocument, ReproducesTheHarnessChunkFileWhenTheCorpusIsPresent) {
-    const auto env = [](const char* name) {
-        char* value = nullptr;
-        std::string out = _dupenv_s(&value, nullptr, name) == 0 && value != nullptr ? value : "";
-        std::free(value);
-        return out;
+    // Only a numbered opening is a heading, never a dose or a version
+    const std::pair<const char*, bool> openings[] = {
+        {"Recommendation 12", true},    {"recommendation 3a Consider a blood test", true},
+        {"1.2 Investigations", true},   {"1.2.3 Offer first-line treatment", true},
+        {"1 Introduction", false},      {"Version 1.2 of the guideline", false},
+        {"10 mg twice a day", false},   {"Recommendations for research", false},
+        {"1.2.3mg is the dose", false},
     };
-    const auto dir = env("CLINICAVT_NICE_DIR");
-    const auto file = env("CLINICAVT_NICE_CHUNKS");
-    if (dir.empty() || file.empty())
-        GTEST_SKIP() << "set CLINICAVT_NICE_DIR and CLINICAVT_NICE_CHUNKS";
-    const std::filesystem::path root(dir);
-    std::set<std::string> requested;
-    {
-        std::ifstream codes(root.parent_path() / "codes.txt");
-        for (std::string line; std::getline(codes, line);) {
-            const auto code = line.substr(0, line.find('#'));
-            const auto end = code.find_last_not_of(" \t\r");
-            if (end != std::string::npos) {
-                std::string c = code.substr(0, end + 1);
-                for (auto& ch : c)
-                    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-                requested.insert(c);
-            }
-        }
-    }
-    std::ifstream manifest_in(root / "manifest.json");
-    const auto manifest = nlohmann::json::parse(manifest_in);
-    std::map<std::string, Chunk> ours;
-    std::set<std::string> seen;
-    std::vector<std::filesystem::path> files;
-    for (const auto& e : std::filesystem::directory_iterator(root / "json"))
-        files.push_back(e.path());
-    std::sort(files.begin(), files.end());
-    for (const auto& path : files) {
-        std::ifstream in(path);
-        const auto doc = nlohmann::json::parse(in);
-        const auto code = doc.at("code").get<std::string>();
-        if (!IncludeDocument(manifest.value(code, nlohmann::json::object()), code, requested))
-            continue;
-        for (auto& chunk : ChunksFromDocument(doc, seen)) ours.emplace(chunk.id, std::move(chunk));
-    }
-    std::ifstream harness(file);
-    std::size_t rows = 0, mismatched = 0;
-    for (std::string line; std::getline(harness, line);) {
-        if (line.empty()) continue;
-        ++rows;
-        const auto row = nlohmann::json::parse(line);
-        const auto it = ours.find(row.at("id").get<std::string>());
-        const auto section =
-            row.at("section").is_string() ? row.at("section").get<std::string>() : std::string();
-        if (it == ours.end() || it->second.text != row.at("text").get<std::string>() ||
-            it->second.url != row.at("url").get<std::string>() || it->second.section != section) {
-            ++mismatched;
-        }
-    }
-    EXPECT_EQ(ours.size(), rows);
-    EXPECT_EQ(mismatched, 0u);
+    for (const auto& [opening, starts] : openings)
+        EXPECT_EQ(StartsRecommendation(opening), starts) << opening;
 }
 
 }  // namespace

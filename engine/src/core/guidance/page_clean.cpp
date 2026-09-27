@@ -8,11 +8,11 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "core/common/strings.hpp"
 #include "core/common/utf8.hpp"
-#include "core/guidance/guidance_query.hpp"
 #include "core/guidance/page_text.hpp"
 
 namespace clinicavt::guidance {
@@ -83,14 +83,9 @@ std::unordered_set<std::string> DocumentWords(const std::vector<Page>& pages) {
     std::unordered_set<std::string> words;
     for (const auto& page : pages) {
         for (const auto& line : page.lines) {
-            std::string word;
-            for (const char c : line.text + " ") {
-                if (Alpha(static_cast<unsigned char>(c))) {
-                    word.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-                } else {
-                    if (word.size() > 1) words.insert(word);
-                    word.clear();
-                }
+            for (auto& word :
+                 strings::LowerTokens(line.text, [](unsigned char c) { return Alpha(c); })) {
+                if (word.size() > 1) words.insert(std::move(word));
             }
         }
     }

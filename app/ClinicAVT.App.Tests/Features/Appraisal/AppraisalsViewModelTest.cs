@@ -1,5 +1,5 @@
 using ClinicAVT.App.Core.Features.Appraisal;
-using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
 
@@ -15,7 +15,7 @@ public class AppraisalsViewModelTest
         engine.Reflections.Add(("c", "2026-06-20T10:00:00Z", "Back pain", "", "A patient in their sixties with back pain."));
         engine.Reflections.Add(("d", "2025-11-03T10:00:00Z", "", "listen longer", ""));
         engine.DemoReflections.Add("c");
-        return (new AppraisalsViewModel(new EngineApi(engine), new InlineDispatcher(), new StatusBarViewModel(), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService()), engine);
+        return (new AppraisalsViewModel(new EngineApi(engine), new InlineDispatcher(), TestSession.Status(engine), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService()), engine);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public class AppraisalsViewModelTest
     public async Task NothingWrittenYetIsSaidPlainly()
     {
         var engine = new FakeEngineClient();
-        var page = new AppraisalsViewModel(new EngineApi(engine), new InlineDispatcher(), new StatusBarViewModel(), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService());
+        var page = new AppraisalsViewModel(new EngineApi(engine), new InlineDispatcher(), TestSession.Status(engine), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService());
 
         await page.RefreshAsync();
 

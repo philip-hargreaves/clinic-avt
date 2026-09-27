@@ -23,17 +23,28 @@ std::string Trimmed(const std::string& text) {
 }
 
 DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& runtime,
-                           const std::string& device_override, metrics::Registry* metrics,
-                           const char* role = "asr") {
+                           const std::string& device_override, metrics::Registry* metrics) {
     const models::ModelInfo& info = store.Resolve("asr", "default");
-    store.Verify(info);
-    const std::string device =
-        runtime.ResolveDevice(device_override.empty() ? info.device : device_override);
-    std::fprintf(stderr, "clinicavt-engine: %s on %s\n", role, device.c_str());
-    if (metrics != nullptr) metrics->RecordDevice(role, device);
-
-    ov::AnyMap properties{{"CACHE_DIR", (info.dir / ".cache").string()}};
-    auto pipeline = std::make_shared<ov::genai::WhisperPipeline>(info.dir, device, properties);
+    const std::string requested = device_override.empty() ? info.device : device_override;
+    // Only GPU work takes turns. On the NPU Whisper runs beside the note model
+    const bool on_gpu = requested.rfind("GPU", 0) == 0;
+    const auto take_gpu = [on_gpu](const char* who) {
+        return on_gpu ? system::GpuLease::Global().Acquire(system::WatchForStuckHosts(who))
+                      : system::GpuLease::Guard{};
+    };
+    // Taken before the seconds of device discovery, so Whisper is ready ahead
+    // of a note model the shell asks for on connect
+    std::shared_ptr<ov::genai::WhisperPipeline> pipeline;
+    std::string device;
+    {
+        const auto lease = take_gpu("asr load");
+        store.Verify(info);
+        device = runtime.ResolveDevice(requested);
+        std::fprintf(stderr, "clinicavt-engine: asr on %s\n", device.c_str());
+        if (metrics != nullptr) metrics->RecordDevice("asr", device);
+        pipeline = std::make_shared<ov::genai::WhisperPipeline>(info.dir, device,
+                                                                models::CompileProperties(info));
+    }
     auto config = pipeline->get_generation_config();
     config.language = "<|en|>";
     config.task = "transcribe";
@@ -41,16 +52,10 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 
     // Transcript-tail conditioning (initial_prompt) was measured here and
     // rejected: it worsened WER even with register effects folded out
-    return [pipeline, config](std::span<const float> frames, std::uint64_t first_frame) {
+    return [pipeline, config, take_gpu](std::span<const float> frames, std::uint64_t first_frame) {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
-        // Bound: the longest legitimate hold, a cold 35B load. Past it the holder is wedged
-        auto& gpu = system::GpuLease::Global();
-        const bool was_broken = gpu.Broken();
-        const auto lease = gpu.Acquire(std::chrono::minutes(10));
-        if (!was_broken && gpu.Broken()) {
-            std::fprintf(stderr,
-                         "clinicavt-engine: the GPU lease holder is wedged; decoding beside it\n");
-        }
+        // A stuck holder leaves the lease wedged, and the decode runs beside it
+        const auto lease = take_gpu("asr");
         if (lease.waited() > 0.25) {
             std::fprintf(stderr, "clinicavt-engine: asr waited %.2f s for the GPU lease\n",
                          lease.waited());
@@ -89,13 +94,30 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 
 WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
                                        std::string device_override, metrics::Registry* metrics)
-    : WhisperTranscriber(DecodeLoader([&store, &runtime, device = device_override, metrics] {
+    : WhisperTranscriber(DeviceLoader([&store, &runtime, metrics](const std::string& device) {
                              return MakeWhisperDecode(store, runtime, device, metrics);
                          }),
-                         metrics) {}
+                         std::move(device_override), metrics) {}
 
-WhisperTranscriber::WhisperTranscriber(DecodeFn decode) : decode_(std::move(decode)) {
+WhisperTranscriber::WhisperTranscriber(DeviceLoader loader, std::string device,
+                                       metrics::Registry* metrics)
+    : loader_([loader, device] { return loader(device); }),
+      by_device_(std::move(loader)),
+      metrics_(metrics) {
     worker_ = std::thread([this] { WorkerLoop(); });
+}
+
+bool WhisperTranscriber::SwitchDevice(std::string device,
+                                      std::function<void(const std::string&)> done) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!by_device_ || stopping_) return false;
+        loader_ = [loader = by_device_, device = std::move(device)] { return loader(device); };
+        switched_ = std::move(done);
+        switching_ = true;
+    }
+    cv_.notify_all();
+    return true;
 }
 
 WhisperTranscriber::WhisperTranscriber(DecodeLoader loader, metrics::Registry* metrics)
@@ -140,23 +162,31 @@ void WhisperTranscriber::RecordDecode(std::size_t frames,
 }
 
 // Load off the hot path. A failed load drains clips without turns, so
-// nothing hangs
-void WhisperTranscriber::LoadIfPending() {
-    if (!loader_) {
-        return;
+// nothing hangs. Returns the error, empty on success
+std::string WhisperTranscriber::LoadIfPending() {
+    DecodeLoader loader;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        loader = std::exchange(loader_, {});
     }
+    if (!loader) {
+        return {};
+    }
+    // The old device's model goes first, so two are never resident at once
+    decode_ = {};
     const auto t0 = std::chrono::steady_clock::now();
     try {
-        decode_ = loader_();
+        decode_ = loader();
         if (metrics_ != nullptr) {
             metrics_->RecordLoad(
                 "asr",
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         }
+        return {};
     } catch (const std::exception& e) {
         std::fprintf(stderr, "clinicavt-engine: transcription unavailable (%s)\n", e.what());
+        return e.what();
     }
-    loader_ = {};
 }
 
 void WhisperTranscriber::WorkerLoop() {
@@ -164,12 +194,16 @@ void WhisperTranscriber::WorkerLoop() {
 
     std::unique_lock<std::mutex> lock(mutex_);
     while (!stopping_) {
-        cv_.wait(lock, [this] { return !clips_.empty() || stopping_; });
+        cv_.wait(lock, [this] { return !clips_.empty() || stopping_ || switching_; });
         if (stopping_) break;
         if (loader_) {
+            auto done = std::exchange(switched_, {});
+            switching_ = false;
             lock.unlock();
-            LoadIfPending();
+            const std::string error = LoadIfPending();
+            if (done) done(error);
             lock.lock();
+            if (clips_.empty()) continue;
         }
 
         Clip clip = std::move(clips_.front());

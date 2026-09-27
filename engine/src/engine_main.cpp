@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -37,6 +38,7 @@
 #include "adapters/note/worker_note_writer.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/system/exe_paths.hpp"
+#include "adapters/system/gpu_lease.hpp"
 #include "adapters/system/power_throttling.hpp"
 #include "adapters/system/process_scan.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
@@ -52,6 +54,13 @@
 #include "core/session/session_controller.hpp"
 
 namespace {
+
+// Another engine already serves the pipe. The shell takes it over rather
+// than counting a crash
+constexpr int kExitAlreadyServing = 3;
+
+// How long an engine waits for a shell to come back before it leaves
+constexpr auto kIdleExit = std::chrono::seconds(30);
 
 std::filesystem::path StoreRoot(const std::vector<std::string>& args) {
     if (args.size() > 1) return args[1];
@@ -79,7 +88,7 @@ std::filesystem::path GuidelinesFolder(const std::string& override) {
 
 // True when a staged model has never been compiled on this machine
 bool Uncompiled(const clinicavt::models::ModelStore& store, const std::string& role) {
-    return !std::filesystem::exists(store.Resolve(role, "default").dir / ".cache");
+    return !clinicavt::models::Compiled(store.Resolve(role, "default"));
 }
 
 // A replay request plays a wav through the same port. A launch-time wav path,
@@ -154,7 +163,7 @@ std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
     clinicavt::ipc::PipeServer& server, bool& first_use) {
     try {
         store.Resolve("note", "default");
-        const auto host = clinicavt::system::ExeDir() / "clinicavt_note_host.exe";
+        const auto host = clinicavt::system::ExeDir() / clinicavt::system::kNoteHostExe;
         if (!std::filesystem::exists(host)) {
             // Never write in-process, because that is the configuration the driver fault corrupts
             std::fprintf(stderr, "clinicavt-engine: note DISABLED, %s is missing\n",
@@ -222,17 +231,9 @@ int main(int argc, char* argv[]) {
         const std::string guidelines_override = clinicavt::TakeFlag(args, "--guidelines");
         // For dev builds, a demo corpus marked research is searched when set
         const bool include_research = clinicavt::TakeSwitch(args, "--include-research");
-        // For evaluation, where a held-out run must not teach the voiceprint
-        const bool freeze_anchor = clinicavt::TakeSwitch(args, "--freeze-anchor");
-        // Whisper and the note host take turns on the GPU. With whisper on the
-        // NPU there is nothing to share
-        if (asr_device != "NPU") {
-            const std::string lease =
-                "Local\\clinicavt-gpu-" + std::to_string(GetCurrentProcessId());
-            _putenv_s("CLINICAVT_GPU_LEASE", lease.c_str());
-            std::fprintf(stderr, "clinicavt-engine: note prefill on, GPU lease %s\n",
-                         lease.c_str());
-        }
+        // Every engine and note host takes turns on the GPU under one name,
+        // which the hosts inherit
+        _putenv_s("CLINICAVT_GPU_LEASE", clinicavt::system::kGpuLeaseName);
         std::fprintf(
             stderr, "clinicavt-engine: power throttling %s\n",
             clinicavt::system::Describe(clinicavt::system::DisableThrottlingOnSelf()).c_str());
@@ -260,21 +261,38 @@ int main(int argc, char* argv[]) {
         clinicavt::metrics::Registry metrics;
         clinicavt::diar::AnchorStore anchors(store_root);
 
+        // A host whose engine has gone takes a few seconds to leave. One still
+        // here after that is stuck in the driver, and only a restart ends it.
+        // Checked before any model touches the GPU
+        const bool stray_note_host = !clinicavt::system::LingeringOrphans(
+                                          clinicavt::system::kNoteHostExe, std::chrono::seconds(8))
+                                          .empty();
+        if (stray_note_host) {
+            clinicavt::system::GpuLease::Global().MarkWedged();
+            std::fprintf(stderr,
+                         "clinicavt-engine: a note host from an earlier engine is stuck; "
+                         "the GPU is not ours until the computer restarts\n");
+        }
         bool first_use = false;
         auto transcriber =
             BuildTranscriber(model_store, ov_runtime, asr_device, metrics, first_use);
         auto vad = BuildVad(model_store, ov_runtime, metrics);
         auto diariser = BuildDiariser(model_store, ov_runtime, anchors, metrics);
-        // A host from an engine that has died takes a moment to leave. One
-        // still here after that is wedged in the driver, and only a reboot ends it
-        const bool stray_note_host =
-            !clinicavt::system::WaitUntilGone(L"clinicavt_note_host.exe", std::chrono::seconds(5));
-        if (stray_note_host) {
-            std::fprintf(stderr,
-                         "clinicavt-engine: a note host from an earlier engine is still running; "
-                         "the GPU is not ours until the computer restarts\n");
-        }
         auto note_writer = BuildNoteWriter(model_store, models_root, server, first_use);
+        // The lane says so at once rather than when a note is asked for
+        if (stray_note_host && note_writer != nullptr) note_writer->Prepare();
+        // A GPU wait that runs on asks whether the holder is this engine's own
+        // host. Cleared before the lane goes, since Whisper outlives it
+        struct ProbeScope {
+            explicit ProbeScope(clinicavt::note::WorkerNoteWriter* lane) {
+                if (lane == nullptr) return;
+                clinicavt::system::GpuLease::Global().SetStuckProbe(
+                    [lane] { return lane->CheckForStuckHost(); });
+            }
+            ~ProbeScope() {
+                clinicavt::system::GpuLease::Global().SetStuckProbe({});
+            }
+        } probe_scope(note_writer.get());
         auto translator = BuildTranslator(model_store, ov_runtime, first_use);
         std::unique_ptr<clinicavt::translate::TranslateLane> translate_lane;
         if (translator != nullptr) {
@@ -306,10 +324,9 @@ int main(int argc, char* argv[]) {
             MakeSourceFactory(args.size() > 3 ? args[3] : std::string()), events, session_store,
             *transcriber, *vad, *diariser, std::chrono::seconds(10),
             5 * clinicavt::audio::kSampleRate, note_writer.get(), &metrics);
-        if (freeze_anchor) controller.FreezeAnchor();
 
         // Added documents embed between note searches and wait while a consultation runs
-        const auto ingest_host = clinicavt::system::ExeDir() / "clinicavt_ingest_host.exe";
+        const auto ingest_host = clinicavt::system::ExeDir() / clinicavt::system::kIngestHostExe;
         clinicavt::guidance::DocumentIngest ingest(
             guidance_retriever, GuidelinesFolder(guidelines_override), store_root / "documents",
             [&controller] { return controller.Running(); },
@@ -331,35 +348,59 @@ int main(int argc, char* argv[]) {
             events, session_store,
             {.finalised = [&controller](const std::string& id) { controller.Open(id); },
              .guidance =
-                 [&server, &session_store, &guidance_lane](const std::string& id) {
-                     auto note =
+                 [&events, &session_store](const std::string& id) {
+                     const auto note =
                          session_store.ReadDocument(id, clinicavt::store::DocumentKind::kNote);
-                     if (note.text.empty()) return;
-                     guidance_lane.Run(clinicavt::ipc::GuidanceSearchRequest(
-                         session_store, id, std::move(note), clinicavt::ipc::kGuidanceLimit,
-                         [&server](const std::string& method, nlohmann::json body) {
-                             server.PushNotification(method, std::move(body));
-                         }));
+                     if (!note.text.empty()) events.OnNoteSaved(id, note);
                  }});
         clinicavt::ipc::RegisterMethods(
-            server, {.controller = controller,
-                     .models = model_store,
-                     .sessions = session_store,
-                     .metrics = &metrics,
-                     .runtime = &ov_runtime,
-                     .translator = translator.get(),
-                     .translate_lane = translate_lane.get(),
-                     .first_use = first_use,
-                     .anchors = &anchors,
-                     .note_lane = note_writer.get(),
-                     .stray_note_host = stray_note_host,
-                     .demo_dir = models_root.parent_path() / "demo" / "reflections",
-                     .playback = &playback});
+            server,
+            {.controller = controller,
+             .models = model_store,
+             .sessions = session_store,
+             .metrics = &metrics,
+             .runtime = &ov_runtime,
+             .translator = translator.get(),
+             .translate_lane = translate_lane.get(),
+             .first_use = first_use,
+             .anchors = &anchors,
+             .note_lane = note_writer.get(),
+             .stray_note_host = stray_note_host,
+             .demo_dir = models_root.parent_path() / "demo" / "reflections",
+             .playback = &playback,
+             .switch_asr =
+                 [whisper = dynamic_cast<clinicavt::asr::WhisperTranscriber*>(transcriber.get())](
+                     const std::string& device, std::function<void(const std::string&)> done) {
+                     return whisper != nullptr && whisper->SwitchDevice(device, std::move(done));
+                 }});
         clinicavt::ipc::RegisterGuidanceMethods(server, session_store, guidance_retriever,
                                                 guidance_lane, ingest);
-        server.ServeOneClient();
-        controller.Stop();
+        // A shell that closes ends its capture, and a reopened one picks this
+        // engine up again. A note model still loading keeps it here, since a
+        // load cannot be cancelled. Idle and alone, it leaves, at once when
+        // the shell asked it to
+        bool exit_asked = false;
+        std::atomic<bool> asked_now{false};
+        server.RegisterMethod("engine/exit", [&asked_now](const nlohmann::json&) {
+            asked_now = true;
+            return nlohmann::json::object();
+        });
+        const auto loading = [&note_writer] {
+            return note_writer != nullptr &&
+                   note_writer->State().phase == clinicavt::note::NoteModelState::Phase::kLoading;
+        };
+        while (server.AwaitClient(exit_asked ? std::chrono::seconds(0) : kIdleExit, loading) ==
+               clinicavt::ipc::PipeServer::Accept::kClient) {
+            asked_now = false;
+            // Only a client that speaks decides. A stale dial that touches the
+            // pipe and leaves never cancels an exit already asked for
+            if (server.Serve()) exit_asked = asked_now;
+            controller.Stop();
+        }
         return 0;
+    } catch (const clinicavt::ipc::PipeTaken& e) {
+        std::fprintf(stderr, "clinicavt-engine: %s\n", e.what());
+        return kExitAlreadyServing;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "clinicavt-engine: %s\n", e.what());
         return 1;

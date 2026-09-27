@@ -35,12 +35,22 @@ struct RecordingSink : IAudioSink {
     }
 };
 
-TEST(WasapiCapture, CapturesRealAudioThenStopsCleanly) {
+TEST(WasapiCapture, StopBeforeRunEndsAtOnceAndARunCapturesThenStopsCleanly) {
+    {
+        // A stop that lands before the capture thread starts must still end the run
+        WasapiCapture source;
+        RecordingSink sink;
+        source.RequestStop();
+        source.Run(sink);
+        ASSERT_EQ(sink.ends.size(), 1u);
+        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped);
+        EXPECT_EQ(sink.total_frames, 0u) << "stopped before run captures nothing";
+    }
+
     WasapiCapture source;
     RecordingSink sink;
-
     std::thread runner([&source, &sink] { source.Run(sink); });
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::seconds(2));  // two seconds of real capture
     source.RequestStop();
     runner.join();
 
@@ -53,18 +63,6 @@ TEST(WasapiCapture, CapturesRealAudioThenStopsCleanly) {
     // The startup transient is real and must stay visible, but bounded
     EXPECT_LT(sink.lost_in_warmup, 1600u) << "more than 100 ms lost at startup";
     EXPECT_EQ(sink.lost_in_steady_state, 0u) << "steady state must be lossless";
-}
-
-TEST(WasapiCapture, StopBeforeRunEndsWithoutCapturing) {
-    WasapiCapture source;
-    RecordingSink sink;
-    source.RequestStop();
-
-    source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped);
-    EXPECT_EQ(sink.total_frames, 0u);
 }
 
 TEST(WasapiCapture, AnUnknownEndpointFailsWithTheCall) {

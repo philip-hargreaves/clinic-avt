@@ -3,13 +3,13 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <set>
 #include <vector>
 
 #include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
+#include "dev_wav.hpp"
 
 namespace clinicavt::diar {
 namespace {
@@ -21,37 +21,27 @@ namespace {
 constexpr const char* kWav =
     "C:/dev/intelliscribe/bench/transcription/mixed/day1_consultation01_mixed.wav";
 
-std::vector<float> LoadWav(const char* path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in.is_open()) throw std::runtime_error(std::string("missing dev wav: ") + path);
-    in.seekg(0, std::ios::end);
-    const auto bytes = static_cast<std::size_t>(in.tellg()) - 44;
-    in.seekg(44);
-    std::vector<std::int16_t> pcm(bytes / 2);
-    in.read(reinterpret_cast<char*>(pcm.data()), static_cast<std::streamsize>(bytes));
-    std::vector<float> frames(pcm.size());
-    for (std::size_t i = 0; i < pcm.size(); ++i) frames[i] = pcm[i] / 32768.0f;
-    return frames;
-}
-
-TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
+// The voiceprints are computed off the Diarise path, overlapping the GPU turn
+// decode, and DoctorVoiceprint reuses them: the numbers must be the ones the
+// reference method produces, and the reuse must actually skip the embed
+TEST(DiariserPipeline, AConsultDiarisesToTwoSpeakersAndTheTaughtAnchorRanksItsCluster) {
     if (!std::filesystem::exists(kWav)) {
         GTEST_SKIP() << "research corpus not mounted";
     }
-    const auto audio = LoadWav(kWav);
+    const auto audio = LoadDevWav(kWav);
     const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
     models::OvRuntime runtime;
-    const auto anchor_root =
-        std::filesystem::temp_directory_path() / "clinicavt-diar-pipeline-test";
+    const auto anchor_root = std::filesystem::temp_directory_path() / "clinicavt-diar-anchor-test";
+    std::filesystem::remove_all(anchor_root);
     std::filesystem::create_directories(anchor_root);
     AnchorStore diariser_anchors(anchor_root);
     SpeakerDiariser diariser(store, runtime, diariser_anchors);
 
+    // Session one: shape checks, and a fresh root has no anchor to rank against
     const auto start = std::chrono::steady_clock::now();
-    const auto result = diariser.Diarise(audio);
+    const auto first = diariser.Diarise(audio);
     const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - start);
-    const auto& slices = result.slices;
-
+    const auto& slices = first.slices;
     ASSERT_GT(slices.size(), 20u) << "a full consult yields a real turn structure";
     std::set<int> clusters;
     for (std::size_t i = 0; i < slices.size(); ++i) {
@@ -61,34 +51,13 @@ TEST(DiariserPipeline, ADoctorPatientConsultDiarisesToTwoSpeakers) {
         if (i > 0) EXPECT_GE(slices[i].first_frame, slices[i - 1].first_frame) << "time-sorted";
     }
     EXPECT_EQ(clusters.size(), 2u) << "doctor and patient, no phantom third voice";
-    EXPECT_EQ(result.cluster_count, 2);
-    EXPECT_TRUE(diariser.AnchorSimilarities(audio, slices, result.cluster_count).empty())
+    ASSERT_EQ(first.cluster_count, 2);
+    EXPECT_TRUE(diariser.AnchorSimilarities(audio, slices, first.cluster_count).empty())
         << "no anchor has accrued in a fresh root";
     std::printf("diarised %zu slices, %zu clusters in %.1f s\n", slices.size(), clusters.size(),
                 took.count());
-    std::error_code ec;
-    std::filesystem::remove_all(anchor_root, ec);
-}
 
-// The voiceprints are computed off the Diarise path, overlapping the GPU turn
-// decode, and DoctorVoiceprint reuses them: the numbers must be the ones the
-// reference method produces, and the reuse must actually skip the embed
-TEST(DiariserPipeline, AnchorSimilaritiesAreTheReferenceVoiceprintsAndAccrueReusesThem) {
-    if (!std::filesystem::exists(kWav)) {
-        GTEST_SKIP() << "research corpus not mounted";
-    }
-    const auto audio = LoadWav(kWav);
-    const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
-    models::OvRuntime runtime;
-    const auto anchor_root = std::filesystem::temp_directory_path() / "clinicavt-diar-anchor-test";
-    std::filesystem::remove_all(anchor_root);
-    std::filesystem::create_directories(anchor_root);
-    AnchorStore diariser_anchors(anchor_root);
-    SpeakerDiariser diariser(store, runtime, diariser_anchors);
-
-    // Session one teaches the anchor from cluster 0
-    const auto first = diariser.Diarise(audio);
-    ASSERT_EQ(first.cluster_count, 2);
+    // Teach the anchor from cluster 0
     diariser.AccrueVoiceprint(diariser.DoctorVoiceprint(audio, first.slices, 0));
 
     // Session two: similarities equal the reference voiceprint against the anchor
@@ -105,15 +74,16 @@ TEST(DiariserPipeline, AnchorSimilaritiesAreTheReferenceVoiceprintsAndAccrueReus
         for (std::size_t d = 0; d < voiceprint.size(); ++d) {
             dot += static_cast<double>(voiceprint[d]) * (*anchor)[d];
         }
-        EXPECT_DOUBLE_EQ(similarity[static_cast<std::size_t>(c)], dot);
+        EXPECT_DOUBLE_EQ(similarity[static_cast<std::size_t>(c)], dot) << "cluster " << c;
     }
     EXPECT_GT(similarity[0], similarity[1]) << "the taught cluster ranks nearer";
 
     // Accrue reuses the voiceprint Diarise computed: no second embed of the cluster
-    const auto start = std::chrono::steady_clock::now();
+    const auto accrue_start = std::chrono::steady_clock::now();
     diariser.AccrueVoiceprint(diariser.DoctorVoiceprint(audio, second.slices, 0));
-    const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - start);
-    EXPECT_LT(took.count(), 0.05) << "a re-embed of the cluster takes hundreds of ms";
+    const auto accrue_took =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - accrue_start);
+    EXPECT_LT(accrue_took.count(), 0.05) << "a re-embed of the cluster takes hundreds of ms";
     std::error_code ec;
     std::filesystem::remove_all(anchor_root, ec);
 }
@@ -124,7 +94,7 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
     if (!std::filesystem::exists(kWav)) {
         GTEST_SKIP() << "research corpus not mounted";
     }
-    const auto audio = LoadWav(kWav);
+    const auto audio = LoadDevWav(kWav);
     const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
     models::OvRuntime runtime;
     const auto root = std::filesystem::temp_directory_path() / "clinicavt-diar-capture-test";

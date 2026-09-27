@@ -10,7 +10,7 @@ public sealed record EngineReadiness(bool FirstUse = false, bool Ready = true, b
 
 public sealed record ModelInfo(
     string Id = "", string? Name = null, string Task = "", string Tier = "", string Device = "",
-    string? Licence = null, bool Active = false);
+    bool Active = false);
 
 public sealed record EngineDevices(string? Asr = null, string? Note = null);
 
@@ -33,7 +33,7 @@ public sealed record SessionSummary(
     string? EditedAt = null, double AudioSeconds = 0, bool Demo = false, bool HasReflection = false);
 
 public sealed record TranscriptTurn(
-    string Speaker = "", ulong FirstFrame = 0, ulong FrameCount = 0, string Text = "");
+    string Speaker = "", ulong FirstFrame = 0, string Text = "");
 
 public sealed record StoredNote(
     string? Text = null, string? Style = null, string? Detail = null, string? GeneratedAt = null,
@@ -48,9 +48,8 @@ public sealed record NoteTierState(
     string Tier = "", string Id = "", string Name = "", string State = "");
 
 public sealed record CorpusInfo(
-    string Id = "", string Name = "", string? Licence = null, string? Attribution = null,
-    string? Source = null, string? Embedder = null, string? Sha256 = null, int Chunks = 0,
-    string? BuiltAt = null, string? Unavailable = null);
+    string Id = "", string Name = "", string? Attribution = null, string? Source = null,
+    int Chunks = 0, string? BuiltAt = null, string? Unavailable = null);
 
 public sealed record CorporaStatus(string State = "", string? Detail = null)
 {
@@ -120,7 +119,7 @@ public sealed record ReflectionReference(
 
 public sealed record ReflectionAnswers(
     string? Happened = null, string? Learned = null, string? Next = null,
-    string? CreatedAt = null, string? EditedAt = null)
+    string? EditedAt = null)
 {
     public IReadOnlyList<ReflectionReference> References { get; init; } = [];
 }
@@ -131,5 +130,5 @@ public sealed record StoredReflection(
 
 public sealed record ReflectionListing(
     string Id = "", string StartedAt = "", string? Label = null, string? Happened = null,
-    string? Learned = null, string? Next = null, string? Summary = null, string? CreatedAt = null,
-    string? EditedAt = null, bool Demo = false);
+    string? Learned = null, string? Next = null, string? Summary = null, string? EditedAt = null,
+    bool Demo = false);

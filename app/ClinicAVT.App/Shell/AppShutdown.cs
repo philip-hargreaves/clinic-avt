@@ -6,8 +6,9 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Shell;
 
 /// <summary>
-/// Closes the app. It asks first during a recording, then saves the review's edits, closes
-/// the connection and stops the engine, in that order.
+/// Closes the app. It asks first during a recording, then saves the review's edits, lets the
+/// engine go and closes the connection, in that order. The engine leaves by itself, after
+/// finishing any note model load, so nothing is killed mid-GPU.
 /// </summary>
 internal sealed class AppShutdown(
     ConsultationViewModel session, IDialogService dialogs, EngineConnection connection,
@@ -15,7 +16,7 @@ internal sealed class AppShutdown(
 {
     /// <summary>False when the clinician chose to keep recording.</summary>
     public async Task<bool> ConfirmAsync() =>
-        !(session.ConsultationActive && session.State is SessionState.Recording or SessionState.Finalising)
+        session.State is not (SessionState.Recording or SessionState.Finalising)
         || await dialogs.ConfirmAsync(
             "Close during a consultation?",
             "The recording so far is kept; the note will not be written.", "Close", "Keep recording");
@@ -25,8 +26,8 @@ internal sealed class AppShutdown(
         try
         {
             await session.CloseReviewAsync();
+            await host.ReleaseAsync();
             await connection.DisposeAsync();
-            host.Shutdown();
         }
         catch (Exception e)
         {

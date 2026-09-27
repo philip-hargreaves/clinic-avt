@@ -8,8 +8,8 @@ namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
 /// One reading of the passage. The clinician presses Start, reads at their own pace and
-/// presses Finish, then the engine gives its verdict. The dialog binds to this and closes on
-/// Succeeded.
+/// presses Finish, then the engine gives its verdict. The dialog binds to this and closes once
+/// the reading succeeded.
 /// </summary>
 public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 {
@@ -50,8 +50,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLine), nameof(PrimaryText), nameof(CloseText),
-        nameof(Recording), nameof(Succeeded), nameof(KeepsOpen))]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(CancelCommand), nameof(FinishCommand))]
+        nameof(Recording), nameof(KeepsOpen))]
     public partial EnrolmentState State { get; private set; } = EnrolmentState.Ready;
 
     /// <summary>Microphone level, 0 to 1, for the ring.</summary>
@@ -71,8 +70,6 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
     public string PassageText { get; } = Passage;
 
     public bool Recording => State == EnrolmentState.Recording;
-
-    public bool Succeeded => State == EnrolmentState.Succeeded;
 
     /// <summary>Clear speech captured against what the engine needs, 0 to 1.</summary>
     public double Progress => Math.Clamp(Speech / NeededSpeechSeconds, 0, 1);
@@ -110,9 +107,15 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
     /// <summary>True once a print was made. False on cancel, failure or dismissal.</summary>
     public Task<bool> Outcome => _outcome.Task;
 
-    [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task Start()
     {
+        // Without the engine there is nothing to record into
+        if (!_engine.Connected)
+        {
+            Fail("recording is not available yet");
+            return;
+        }
+
         State = EnrolmentState.Recording;
         Speech = 0;
         Detail = "";
@@ -126,10 +129,6 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         }
     }
 
-    private bool CanStart() =>
-        State is EnrolmentState.Ready or EnrolmentState.Failed && _engine.Connected;
-
-    [RelayCommand(CanExecute = nameof(CanCancel))]
     private async Task Cancel()
     {
         try
@@ -142,12 +141,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         }
     }
 
-    private bool CanCancel() => State == EnrolmentState.Recording;
-
-    /// <summary>
-    /// The reader reached the end. The engine makes the print from what it heard.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanCancel))]
+    // The reader reached the end. The engine makes the print from what it heard
     private async Task Finish()
     {
         try

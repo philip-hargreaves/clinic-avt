@@ -7,26 +7,16 @@ Writes rag/results/<stamp>-latency/latency.csv. Medians of repeated runs.
 
 import argparse
 import csv
-import statistics
 import time
 
 import numpy as np
 import psutil
 
-from common import candidate, candidate_dir, latest_chunks, log, read_jsonl, run_dir
+from common import candidate, candidate_dir, latest_chunks, log, median_time, read_jsonl, run_dir
 from embed import make_pipeline
 from evaluate import make_reranker, rerank
 
 REPEATS = 7
-
-
-def median_time(fn, repeats=REPEATS) -> float:
-    times = []
-    for _ in range(repeats):
-        t0 = time.perf_counter()
-        fn()
-        times.append(time.perf_counter() - t0)
-    return statistics.median(times)
 
 
 def rss_mb() -> float:
@@ -57,10 +47,10 @@ def main():
             pipe = make_pipeline(entry, candidate_dir(cid, precision))
             load_s = time.perf_counter() - t0
             pipe.embed_query(sentences[0])
-            per_sentence = median_time(lambda: pipe.embed_query(sentences[1]))
+            per_sentence = median_time(lambda: pipe.embed_query(sentences[1]), REPEATS)
             per_note_seq = median_time(lambda: [pipe.embed_query(s) for s in sentences[:30]], 3)
             per_note_batch = median_time(lambda: pipe.embed_documents(sentences[:30]), 3)
-            whole_note = median_time(lambda: pipe.embed_query(note))
+            whole_note = median_time(lambda: pipe.embed_query(note), REPEATS)
             dims = entry["dims"]
             n = len(texts)
             mat = np.random.default_rng(0).standard_normal((n, dims), dtype=np.float32)
@@ -73,7 +63,7 @@ def main():
                          "whole_note_ms": round(whole_note * 1e3, 1), "scan_fp32_ms": round(scan_fp32 * 1e3, 1),
                          "vectors": n, "dims": dims})
             log(str(rows[-1]))
-            del pipe
+            pipe = None  # frees the model before the next one loads
 
     for rid in [r for r in args.rerankers.split(",") if r]:
         for precision in args.precision.split(","):
@@ -90,7 +80,7 @@ def main():
                 row[f"rerank_{pairs}_ms"] = round(t * 1e3)
             rows.append(row)
             log(str(row))
-            del pipe
+            pipe = None  # frees the model before the next one loads
 
     with open(out / "latency.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=sorted({k for r in rows for k in r}))

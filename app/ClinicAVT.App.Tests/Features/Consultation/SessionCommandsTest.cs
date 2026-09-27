@@ -30,7 +30,7 @@ public class SessionCommandsTest
         Assert.True(controls.MicPickerEnabled);
 
         await controls.StartRecordingCommand.ExecuteAsync(null);
-        Assert.Equal(SessionState.Recording, controls.State);
+        Assert.Equal(SessionState.Recording, session.State);
         Assert.False(controls.StartRecordingCommand.CanExecute(null));
         Assert.True(controls.StopRecordingCommand.CanExecute(null));
         Assert.True(controls.CancelRecordingCommand.CanExecute(null));
@@ -102,13 +102,20 @@ public class SessionCommandsTest
 
         Assert.False(session.ModelsReady);
         Assert.False(controls.StartRecordingCommand.CanExecute(null));
-        Assert.Contains("First-time setup", bar.DisplayLabel);
+        Assert.True(bar.ShowsSetup);
+        Assert.False(bar.Busy, "the bar stands in for the ring");
+        Assert.Equal("Setting up for this computer · 0:00 · this can take a few minutes", bar.DisplayLabel);
+        bar.SetMicVisible(true);
+        Assert.False(bar.ShowsSetup, "the level meter has the bar's place");
+        bar.SetMicVisible(false);
 
         engine.ModelsCompiled = true;
         await WaitUntilAsync(() => session.ModelsReady);
 
         Assert.True(session.ModelsReady);
         Assert.True(controls.StartRecordingCommand.CanExecute(null));
+        Assert.False(bar.ShowsSetup);
+        Assert.Equal("Ready", bar.DisplayLabel);
     }
 
     [Fact]
@@ -127,11 +134,18 @@ public class SessionCommandsTest
         Assert.True(session.ModelsReady);
         Assert.True(controls.StartRecordingCommand.CanExecute(null));
         Assert.Equal("Ready", session.Status.DisplayLabel);
+        Assert.Equal("Ready to start recording", controls.StartLabel);
 
+        // A first-use compile holds recording, and only then does the status line show it
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "loading", firstUse = true }));
         Assert.False(session.ModelsReady);
-        Assert.Contains("Preparing note model", session.Status.DisplayLabel);
+        Assert.StartsWith("Setting up for this computer", session.Status.DisplayLabel);
+
+        engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
+            new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "ready" }));
+        Assert.True(session.ModelsReady);
+        Assert.Equal("Ready", session.Status.DisplayLabel);
     }
 
     [Fact]
@@ -177,6 +191,11 @@ public class SessionCommandsTest
 
         // Once sealed the caption names the prefill, and a late stage cannot go back
         Assert.Equal(FinalisePhase.Note, session.Phase);
+        Assert.Equal("Preparing note", controls.FinalisingLabel);
+        // A note that waits on the model's load says so
+        engine.RaiseNotification("note/model", Params(new { tier = "default", state = "loading" }));
+        Assert.Equal("Waiting for the note model to load · 0:00", controls.FinalisingLabel);
+        engine.RaiseNotification("note/model", Params(new { tier = "default", state = "ready" }));
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
         Assert.Equal(FinalisePhase.Note, session.Phase);

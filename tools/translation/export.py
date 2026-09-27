@@ -8,24 +8,21 @@ models/<id>-<weights>, with provenance.json beside it. A finished export is skip
 
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
+from common import ROOT, force_ipv4, option
+
 CANDIDATES = json.load(open(Path(__file__).with_name("candidates.json"), encoding="utf-8"))
 
-# IPv6 drops on this network
-_lookup = socket.getaddrinfo
-socket.getaddrinfo = lambda host, port, family=0, *rest, **more: _lookup(
-    host, port, socket.AF_INET, *rest, **more)
+force_ipv4()
 
 
 def main():
     name = sys.argv[1]
-    weights = sys.argv[sys.argv.index("--weights") + 1] if "--weights" in sys.argv else "int8"
+    weights = option("--weights", "int8")
     entry = CANDIDATES[name]
     out = ROOT / "models" / f"{name}-{weights}"
     if (out / "provenance.json").exists():

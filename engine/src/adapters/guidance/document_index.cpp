@@ -1,23 +1,12 @@
 #include "adapters/guidance/document_index.hpp"
 
-#include <chrono>
 #include <cstring>
-#include <format>
 #include <system_error>
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-// clang-format off
-#include <windows.h>
-#include <bcrypt.h>
-// clang-format on
 
 #include "adapters/guidance/loader_core.hpp"
 #include "adapters/guidance/schema.hpp"
+#include "core/common/iso8601.hpp"
+#include "core/common/utf8.hpp"
 #include "ports/store_error.hpp"
 
 namespace clinicavt::guidance {
@@ -26,11 +15,6 @@ namespace {
 using store::Db;
 using store::StoreCode;
 using store::StoreError;
-
-std::string Iso8601Now() {
-    const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
-    return std::format("{:%FT%T}Z", now);
-}
 
 // Opens the file, or deletes what is there and starts again when it is not
 // an index of this format
@@ -83,8 +67,7 @@ DocumentInfo Row(Db::Stmt& select) {
     info.chunks = select.ColumnInt64(9);
     info.path = select.ColumnText(10);
     info.bytes = select.ColumnInt64(11);
-    info.name =
-        Utf8(std::filesystem::path(std::u8string(info.path.begin(), info.path.end())).stem());
+    info.name = utf8::FromPath(utf8::ToPath(info.path).stem());
     return info;
 }
 
@@ -108,35 +91,6 @@ IndexChunk ChunkRow(Db::Stmt& select, std::size_t dim) {
 
 }  // namespace
 
-std::string Utf8(const std::filesystem::path& path) {
-    const auto u8 = path.u8string();
-    return std::string(u8.begin(), u8.end());
-}
-
-std::string Sha256Hex(std::span<const std::uint8_t> bytes) {
-    BCRYPT_ALG_HANDLE alg = nullptr;
-    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) < 0) {
-        throw StoreError(StoreCode::kOther, "BCryptOpenAlgorithmProvider failed");
-    }
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    if (BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) < 0) {
-        BCryptCloseAlgorithmProvider(alg, 0);
-        throw StoreError(StoreCode::kOther, "BCryptCreateHash failed");
-    }
-    BCryptHashData(hash, const_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), 0);
-    unsigned char digest[32];
-    BCryptFinishHash(hash, digest, sizeof digest, 0);
-    BCryptDestroyHash(hash);
-    BCryptCloseAlgorithmProvider(alg, 0);
-    std::string hex;
-    for (const unsigned char byte : digest) {
-        constexpr char kDigits[] = "0123456789abcdef";
-        hex += kDigits[byte >> 4];
-        hex += kDigits[byte & 0xF];
-    }
-    return hex;
-}
-
 std::int64_t DocumentIndex::IdOf(const std::string& sha256) {
     const auto id = static_cast<std::int64_t>(std::stoull(sha256.substr(0, 16), nullptr, 16) &
                                               0x7FFFFFFFFFFFFFFFull);
@@ -145,11 +99,10 @@ std::int64_t DocumentIndex::IdOf(const std::string& sha256) {
 
 DocumentIndex::DocumentIndex(const std::filesystem::path& file) : db_(OpenIndex(file)) {
     auto meta = db_.Prepare(
-        "SELECT embedder_id, embedder_rev, dim, query_prefix, max_tokens FROM index_meta"
-        " WHERE id = 1");
+        "SELECT embedder_id, embedder_rev, dim, max_tokens FROM index_meta WHERE id = 1");
     if (meta.Step()) {
         embedder_ = {meta.ColumnText(0), meta.ColumnText(1), static_cast<int>(meta.ColumnInt64(2)),
-                     static_cast<int>(meta.ColumnInt64(4)), meta.ColumnText(3)};
+                     static_cast<int>(meta.ColumnInt64(3))};
     }
 }
 
@@ -159,14 +112,13 @@ void DocumentIndex::Adopt(const EmbedderIdentity& embedder) {
         Db::Transaction txn(db_);
         db_.Exec("DELETE FROM index_meta");
         auto insert = db_.Prepare(
-            "INSERT INTO index_meta(id, embedder_id, embedder_rev, dim, query_prefix,"
-            " max_tokens, created_at) VALUES(1, ?, ?, ?, ?, ?, ?)");
+            "INSERT INTO index_meta(id, embedder_id, embedder_rev, dim, max_tokens, created_at)"
+            " VALUES(1, ?, ?, ?, ?, ?)");
         insert.BindText(1, embedder.id);
         insert.BindText(2, embedder.rev);
         insert.BindInt64(3, embedder.dim);
-        insert.BindText(4, embedder.query_prefix);
-        insert.BindInt64(5, embedder.max_tokens);
-        insert.BindText(6, Iso8601Now());
+        insert.BindInt64(4, embedder.max_tokens);
+        insert.BindText(5, Iso8601Now());
         insert.Step();
         txn.Commit();
         embedder_ = embedder;

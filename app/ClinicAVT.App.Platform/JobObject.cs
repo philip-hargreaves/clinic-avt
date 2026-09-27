@@ -41,6 +41,18 @@ public sealed class JobObject : IDisposable
 
     private HANDLE Handle => new(_handle.DangerousGetHandle());
 
+    /// <summary>Ends kill-on-close, so the assigned processes can finish after this one.</summary>
+    public void KeepProcessesOnClose()
+    {
+        var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+        unsafe
+        {
+            PInvoke.SetInformationJobObject(
+                Handle, JOBOBJECTINFOCLASS.JobObjectExtendedLimitInformation, &info,
+                (uint)sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+        }
+    }
+
     public void Assign(SafeHandle process)
     {
         if (!PInvoke.AssignProcessToJobObject(Handle, new HANDLE(process.DangerousGetHandle())))

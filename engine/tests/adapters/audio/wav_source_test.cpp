@@ -3,10 +3,12 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -118,148 +120,85 @@ std::vector<std::uint8_t> FloatBytes(const std::vector<float>& samples) {
     return bytes;
 }
 
-TEST(WavSource, Pcm16RoundTripsWithPinnedScaling) {
-    const TempWav file(Build({.data = Pcm16Bytes({-32768, -16384, 0, 16384, 32767})}));
+// Runs a file through a fresh source on this thread
+RecordingSink Play(const std::vector<std::uint8_t>& bytes) {
+    const TempWav file(bytes);
     WavSource source(file.path.string());
     RecordingSink sink;
-
     source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted);
-    ASSERT_EQ(sink.frames.size(), 5u);
-    EXPECT_EQ(sink.frames[0], -1.0F);
-    EXPECT_EQ(sink.frames[1], -0.5F);
-    EXPECT_EQ(sink.frames[2], 0.0F);
-    EXPECT_EQ(sink.frames[3], 0.5F);
-    EXPECT_NEAR(sink.frames[4], 1.0F, 0.0001F);
-    EXPECT_EQ(sink.lost, 0u);
+    return sink;
 }
 
-TEST(WavSource, Float32RoundTripsExactly) {
-    const std::vector<float> samples{0.25F, -0.75F, 1.0F, -1.0F};
-    const TempWav file(Build({.format = 3, .bits_per_sample = 32, .data = FloatBytes(samples)}));
-    WavSource source(file.path.string());
-    RecordingSink sink;
-
-    source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted);
-    EXPECT_EQ(sink.frames, samples);
-}
-
-TEST(WavSource, EmitsFixedPacketsWithAShortTail) {
-    const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(1000, 7))}));
-    WavSource source(file.path.string());
-    RecordingSink sink;
-
-    source.Run(sink);
-
-    EXPECT_EQ(sink.packet_sizes, (std::vector<std::size_t>{480, 480, 40}));
-    EXPECT_EQ(sink.frames.size(), 1000u);
-}
-
-TEST(WavSource, SkipsUnknownChunksAndTheirPadByte) {
+TEST(WavSource, ReadsPcm16AndFloat32ExactlyInFixedPacketsPastUnknownChunks) {
     std::vector<std::uint8_t> list_chunk;
     AppendTag(list_chunk, "LIST");
     AppendValue<std::uint32_t>(list_chunk, 3);  // Odd size forces the pad byte
     list_chunk.insert(list_chunk.end(), {'a', 'b', 'c', 0});
-    const TempWav file(Build({.data = Pcm16Bytes({1, 2, 3}), .chunk_before_data = list_chunk}));
-    WavSource source(file.path.string());
-    RecordingSink sink;
 
-    source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted);
-    EXPECT_EQ(sink.frames.size(), 3u);
-}
-
-TEST(WavSource, ATruncatedDataChunkFailsNeverCompletes) {
-    const TempWav file(Build(
-        {.data = Pcm16Bytes(std::vector<std::int16_t>(500, 7)), .declared_data_bytes = 2000}));
-    WavSource source(file.path.string());
-    RecordingSink sink;
-
-    source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kFailed);
-    EXPECT_NE(sink.ends[0].detail.find("truncated"), std::string::npos);
-    // The complete packet before the truncation point was still delivered
-    EXPECT_EQ(sink.frames.size(), 480u);
-}
-
-TEST(WavSource, GarbageFailsAsNotARiffFile) {
-    const TempWav file(std::vector<std::uint8_t>{'n', 'o', 't', ' ', 'a', ' ', 'w', 'a', 'v'});
-    WavSource source(file.path.string());
-    RecordingSink sink;
-
-    source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kFailed);
-    EXPECT_EQ(sink.ends[0].detail, "not a RIFF file");
-    EXPECT_TRUE(sink.frames.empty());
-}
-
-TEST(WavSource, RefusesFormatsThePipelineDoesNotSpeak) {
-    const struct {
+    const std::vector<float> floats{0.25F, -0.75F, 1.0F, -1.0F};
+    struct Case {
+        std::string name;
         WavSpec spec;
-        const char* expected;
-    } cases[] = {
-        {{.channels = 2, .data = Pcm16Bytes({1, 2})}, "mono"},
-        {{.sample_rate = 44100, .data = Pcm16Bytes({1})}, "16000"},
-        {{.bits_per_sample = 24, .data = {0, 0, 0}}, "PCM16 and float32"},
+        std::vector<float> frames;
+        std::vector<std::size_t> packets;
     };
-
-    for (const auto& [spec, expected] : cases) {
-        const TempWav file(Build(spec));
-        WavSource source(file.path.string());
-        RecordingSink sink;
-
-        source.Run(sink);
-
-        ASSERT_EQ(sink.ends.size(), 1u) << expected;
-        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kFailed) << expected;
-        EXPECT_NE(sink.ends[0].detail.find(expected), std::string::npos) << sink.ends[0].detail;
-        EXPECT_TRUE(sink.frames.empty()) << expected;
+    const std::vector<Case> cases = {
+        {"pcm16 with pinned scaling",
+         {.data = Pcm16Bytes({-32768, -16384, 0, 16384, 32767})},
+         {-1.0F, -0.5F, 0.0F, 0.5F, 32767.0F / 32768.0F},
+         {5}},
+        {"float32 exactly",
+         {.format = 3, .bits_per_sample = 32, .data = FloatBytes(floats)},
+         floats,
+         {4}},
+        {"fixed packets with a short tail",
+         {.data = Pcm16Bytes(std::vector<std::int16_t>(1000, 7))},
+         std::vector<float>(1000, 7.0F / 32768.0F),
+         {480, 480, 40}},
+        // LIST chunks are common in real recordings
+        {"an unknown chunk and its pad byte are skipped",
+         {.data = Pcm16Bytes({1, 2, 3}), .chunk_before_data = list_chunk},
+         {1.0F / 32768.0F, 2.0F / 32768.0F, 3.0F / 32768.0F},
+         {3}},
+    };
+    for (const auto& c : cases) {
+        SCOPED_TRACE(c.name);
+        const auto sink = Play(Build(c.spec));
+        ASSERT_EQ(sink.ends.size(), 1u);
+        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted) << sink.ends[0].detail;
+        EXPECT_EQ(sink.frames, c.frames);
+        EXPECT_EQ(sink.packet_sizes, c.packets);
+        EXPECT_EQ(sink.lost, 0u);
     }
 }
 
-TEST(WavSource, DataThatIsNotWholeFramesFails) {
-    const TempWav file(Build({.data = {1, 2, 3}}));  // 3 bytes of PCM16
-    WavSource source(file.path.string());
-    RecordingSink sink;
-
-    source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kFailed);
-    EXPECT_NE(sink.ends[0].detail.find("whole frames"), std::string::npos);
-}
-
-TEST(WavSource, StopMidStreamEndsAsStoppedNotCompleted) {
-    struct StoppingSink : RecordingSink {
-        WavSource* source = nullptr;
-
-        void OnAudio(std::span<const float> packet, std::uint64_t lost_frames) override {
-            RecordingSink::OnAudio(packet, lost_frames);
-            source->RequestStop();
-        }
+TEST(WavSource, RefusesMalformedAndUnsupportedFiles) {
+    struct Case {
+        std::string name;
+        std::vector<std::uint8_t> bytes;
+        std::string detail;
+        std::size_t delivered;
     };
-
-    const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(2000, 7))}));
-    WavSource source(file.path.string());
-    StoppingSink sink;
-    sink.source = &source;
-
-    source.Run(sink);
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped);
-    EXPECT_EQ(sink.frames.size(), 480u);  // One packet, then the stop honoured
+    const std::vector<Case> cases = {
+        // A truncated file fails rather than completing, after the whole packets before the cut
+        {"a truncated data chunk",
+         Build(
+             {.data = Pcm16Bytes(std::vector<std::int16_t>(500, 7)), .declared_data_bytes = 2000}),
+         "truncated", 480},
+        {"garbage", {'n', 'o', 't', ' ', 'a', ' ', 'w', 'a', 'v'}, "not a RIFF file", 0},
+        {"stereo", Build({.channels = 2, .data = Pcm16Bytes({1, 2})}), "mono", 0},
+        {"44.1 kHz", Build({.sample_rate = 44100, .data = Pcm16Bytes({1})}), "16000", 0},
+        {"24-bit", Build({.bits_per_sample = 24, .data = {0, 0, 0}}), "PCM16 and float32", 0},
+        {"3 bytes of PCM16", Build({.data = {1, 2, 3}}), "whole frames", 0},
+    };
+    for (const auto& c : cases) {
+        SCOPED_TRACE(c.name);
+        const auto sink = Play(c.bytes);
+        ASSERT_EQ(sink.ends.size(), 1u);
+        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kFailed);
+        EXPECT_NE(sink.ends[0].detail.find(c.detail), std::string::npos) << sink.ends[0].detail;
+        EXPECT_EQ(sink.frames.size(), c.delivered);
+    }
 }
 
 TEST(WavSource, RealTimeReplayIsPacedFlatOutIsNot) {
@@ -279,38 +218,90 @@ TEST(WavSource, RealTimeReplayIsPacedFlatOutIsNot) {
     EXPECT_LT(paced, std::chrono::milliseconds(1500));
 }
 
-TEST(WavSource, PauseHoldsFramesAndResumeDeliversThemAll) {
+// Stops or pauses the source from inside the first packet, on the source's own thread, so
+// the next turn of its loop is certain to see it. The test thread waits for that packet
+struct SteeringSink : IAudioSink {
+    enum class Act { kStop, kPause };
+    WavSource& source;
+    Act act;
+    std::mutex mutex;
+    std::condition_variable changed;
+    bool acted = false;
+    bool resumed = false;
+    std::size_t frames = 0;
+    std::size_t frames_while_paused = 0;
+    std::vector<SourceEnd> ends;
+
+    SteeringSink(WavSource& source, Act act) : source(source), act(act) {}
+
+    void OnAudio(std::span<const float> packet, std::uint64_t) override {
+        const std::lock_guard lock(mutex);
+        frames += packet.size();
+        if (acted && !resumed) frames_while_paused += packet.size();
+        if (!acted) {
+            acted = true;
+            if (act == Act::kStop) {
+                source.RequestStop();
+            } else {
+                source.SetPaused(true);
+            }
+            changed.notify_all();
+        }
+    }
+
+    void OnEnd(const SourceEnd& end) override {
+        const std::lock_guard lock(mutex);
+        ends.push_back(end);
+        changed.notify_all();
+    }
+
+    bool WaitForTheFirstPacket() {
+        std::unique_lock lock(mutex);
+        return changed.wait_for(lock, std::chrono::seconds(5),
+                                [this] { return acted || !ends.empty(); });
+    }
+};
+
+TEST(WavSource, PauseHoldsEveryFrameAndStopAlwaysWins) {
     const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(4800, 0))}));
-    WavSource source(file.path.string());
-    RecordingSink sink;
-    source.SetPaused(true);
+    {
+        WavSource source(file.path.string());
+        SteeringSink sink(source, SteeringSink::Act::kStop);
+        source.Run(sink);
+        ASSERT_EQ(sink.ends.size(), 1u);
+        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped) << "stopped, not completed";
+        EXPECT_EQ(sink.frames, 480u) << "one packet, then the stop honoured";
+    }
+    {
+        WavSource source(file.path.string());
+        SteeringSink sink(source, SteeringSink::Act::kPause);
+        std::thread runner([&] { source.Run(sink); });
+        EXPECT_TRUE(sink.WaitForTheFirstPacket());
+        {
+            const std::lock_guard lock(sink.mutex);
+            sink.resumed = true;
+        }
+        source.SetPaused(false);
+        runner.join();
 
-    std::thread runner([&] { source.Run(sink); });
-    std::this_thread::sleep_for(std::chrono::milliseconds(80));
-    const auto held = sink.frames.size();
-    source.SetPaused(false);
-    runner.join();
+        EXPECT_EQ(sink.frames_while_paused, 0u) << "nothing is delivered while paused";
+        EXPECT_EQ(sink.frames, 4800u) << "paused audio is held, never dropped";
+        ASSERT_EQ(sink.ends.size(), 1u);
+        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted);
+    }
+    {
+        WavSource source(file.path.string());
+        SteeringSink sink(source, SteeringSink::Act::kPause);
+        std::thread runner([&] { source.Run(sink); });
+        EXPECT_TRUE(sink.WaitForTheFirstPacket());
+        source.RequestStop();
+        runner.join();
 
-    EXPECT_LE(held, 480u) << "at most the packet in flight before the pause was seen";
-    EXPECT_EQ(sink.frames.size(), 4800u) << "paused audio is held, never dropped";
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted);
-}
-
-TEST(WavSource, StopWinsOverPause) {
-    const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(4800, 0))}));
-    WavSource source(file.path.string());
-    RecordingSink sink;
-    source.SetPaused(true);
-
-    std::thread runner([&] { source.Run(sink); });
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    source.RequestStop();
-    runner.join();
-
-    ASSERT_EQ(sink.ends.size(), 1u);
-    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped)
-        << "a paused session can always be finalised";
+        ASSERT_EQ(sink.ends.size(), 1u);
+        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped)
+            << "a paused session can always be finalised";
+        EXPECT_EQ(sink.frames, 480u);
+    }
 }
 
 }  // namespace

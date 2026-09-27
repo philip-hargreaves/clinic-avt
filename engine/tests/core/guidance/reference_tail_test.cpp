@@ -29,7 +29,7 @@ std::vector<Paragraph> Citations(int count) {
     return out;
 }
 
-TEST(ReferenceTail, TheHeadingAndItsCitationsGoAndAnAppendixAfterThemStays) {
+TEST(ReferenceTail, TheTailGoesFromItsHeadingButAnAppendixAfterItStays) {
     auto paragraphs = Body(30);
     paragraphs.push_back(Para("8 References"));
     const auto citations = Citations(8);
@@ -53,20 +53,18 @@ TEST(ReferenceTail, TheHeadingAndItsCitationsGoAndAnAppendixAfterThemStays) {
     DropReferenceTail(paragraphs);
     ASSERT_EQ(paragraphs.size(), 32u);
     EXPECT_EQ(paragraphs[30].text, "Supplementary Table 1 Doses in pregnancy");
-}
 
-TEST(ReferenceTail, AHeadingEndingAParagraphTakesOnlyTheTail) {
-    auto paragraphs = Body(30);
+    // A heading that ends a paragraph takes only the tail, not the paragraph
+    auto joined = Body(30);
     Paragraph last = Para("Review the plan at every appointment.");
     last.lines.push_back({"References", {}});
     last.text += " References";
-    paragraphs.push_back(last);
-    const auto citations = Citations(8);
-    paragraphs.insert(paragraphs.end(), citations.begin(), citations.end());
-    DropReferenceTail(paragraphs);
-    ASSERT_EQ(paragraphs.size(), 31u);
-    EXPECT_EQ(paragraphs.back().text, "Review the plan at every appointment.");
-    EXPECT_EQ(paragraphs.back().lines.size(), 1u);
+    joined.push_back(last);
+    joined.insert(joined.end(), citations.begin(), citations.end());
+    DropReferenceTail(joined);
+    ASSERT_EQ(joined.size(), 31u);
+    EXPECT_EQ(joined.back().text, "Review the plan at every appointment.");
+    EXPECT_EQ(joined.back().lines.size(), 1u);
 }
 
 TEST(ReferenceTail, TheWordAloneOrEarlyDropsNothing) {

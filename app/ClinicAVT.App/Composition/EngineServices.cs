@@ -24,7 +24,8 @@ internal static class EngineServices
             sp.GetRequiredService<ISessionState>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ICrashLog>(),
-            () => sp.GetRequiredService<EngineConnection>().MethodInFlight));
+            () => sp.GetRequiredService<EngineConnection>().MethodInFlight,
+            () => sp.GetRequiredService<IEngineApi>().RequestExitAsync()));
         services.AddSingleton(sp => new EngineConnection(
             sp.GetRequiredService<IEngineHost>(),
             static async (pid, ct) => await PipeTransport.ConnectAsync(

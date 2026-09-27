@@ -63,10 +63,12 @@ TEST(BufferedSink, DeliversEveryFrameInOrderThenTheEnd) {
         BufferedSink sink(inner, 16384);
         const auto audio = Ramp(9600);
         for (std::size_t at = 0; at < audio.size(); at += 160) {
-            sink.OnAudio(std::span<const float>(audio).subspan(at, 160), 0);
+            // One packet carries the source's own loss, which must pass through unchanged
+            sink.OnAudio(std::span<const float>(audio).subspan(at, 160), at == 1600 ? 3 : 0);
         }
         sink.OnEnd({SourceEndReason::kCompleted, "done"});
         EXPECT_EQ(inner.frames, audio);
+        EXPECT_EQ(inner.TotalLost(), 3u);
         ASSERT_EQ(inner.ends.size(), 1u);
         EXPECT_EQ(inner.ends[0].reason, SourceEndReason::kCompleted);
         EXPECT_EQ(inner.ends[0].detail, "done");
@@ -74,34 +76,25 @@ TEST(BufferedSink, DeliversEveryFrameInOrderThenTheEnd) {
     EXPECT_EQ(inner.ends.size(), 1u) << "destruction after an end delivers nothing more";
 }
 
-TEST(BufferedSink, PassesTheSourcesLossThroughUnchanged) {
-    RecordingSink inner;
-    BufferedSink sink(inner, 1024);
-    const auto audio = Ramp(160);
-    sink.OnAudio(audio, 0);
-    sink.OnAudio(audio, 3);
-    sink.OnAudio(audio, 0);
-    sink.OnEnd({SourceEndReason::kStopped, ""});
-    EXPECT_EQ(inner.TotalLost(), 3u);
-    EXPECT_EQ(inner.frames.size(), 480u);
-}
-
-TEST(BufferedSink, AStallBehindTheSinkCostsNothingWithinTheRing) {
-    RecordingSink inner;
-    inner.hold = true;
-    BufferedSink sink(inner, 16000);
-    const auto audio = Ramp(8000);
-    // The source keeps delivering while the sink is stuck, filling half the ring
-    for (std::size_t at = 0; at < audio.size(); at += 160) {
-        sink.OnAudio(std::span<const float>(audio).subspan(at, 160), 0);
+TEST(BufferedSink, AStalledSinkNeverBlocksTheSourceAndOnlyOverrunIsLost) {
+    {
+        RecordingSink inner;
+        inner.hold = true;
+        BufferedSink sink(inner, 16000);
+        const auto audio = Ramp(8000);
+        // The source keeps delivering while the sink is stuck, filling half the ring
+        const auto start = std::chrono::steady_clock::now();
+        for (std::size_t at = 0; at < audio.size(); at += 160) {
+            sink.OnAudio(std::span<const float>(audio).subspan(at, 160), 0);
+        }
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        inner.hold = false;
+        sink.OnEnd({SourceEndReason::kStopped, ""});
+        EXPECT_LT(elapsed, std::chrono::milliseconds(50)) << "a held sink must not slow the source";
+        EXPECT_EQ(inner.frames, audio) << "a stall within the ring costs nothing";
+        EXPECT_EQ(inner.TotalLost(), 0u);
     }
-    inner.hold = false;
-    sink.OnEnd({SourceEndReason::kStopped, ""});
-    EXPECT_EQ(inner.frames, audio);
-    EXPECT_EQ(inner.TotalLost(), 0u);
-}
 
-TEST(BufferedSink, AnOverrunIsCountedAsLossNotDroppedSilently) {
     RecordingSink inner;
     inner.hold = true;
     BufferedSink sink(inner, 1024);
@@ -111,7 +104,7 @@ TEST(BufferedSink, AnOverrunIsCountedAsLossNotDroppedSilently) {
     }
     inner.hold = false;
     sink.OnEnd({SourceEndReason::kStopped, ""});
-    // What fitted arrived intact and in order. The rest is counted as lost
+    // What fitted arrived intact and in order. The rest is counted as lost, never dropped silently
     ASSERT_LE(inner.frames.size(), 1024u);
     EXPECT_EQ(inner.frames, Ramp(inner.frames.size()));
     EXPECT_EQ(inner.frames.size() + inner.TotalLost(), 3000u);
@@ -129,21 +122,6 @@ TEST(BufferedSink, TheSinkThrowingEndsTheStreamOnceAsAFailure) {
     ASSERT_EQ(inner.ends.size(), 1u);
     EXPECT_EQ(inner.ends[0].reason, SourceEndReason::kFailed);
     EXPECT_NE(inner.ends[0].detail.find("disk full"), std::string::npos);
-}
-
-TEST(BufferedSink, TheSourceThreadNeverWaitsOnTheSink) {
-    RecordingSink inner;
-    inner.hold = true;
-    BufferedSink sink(inner, 16000);
-    const auto audio = Ramp(160);
-    const auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < 100; ++i) {
-        sink.OnAudio(audio, 0);
-    }
-    const auto elapsed = std::chrono::steady_clock::now() - start;
-    inner.hold = false;
-    sink.OnEnd({SourceEndReason::kStopped, ""});
-    EXPECT_LT(elapsed, std::chrono::milliseconds(50)) << "a held sink must not slow the source";
 }
 
 }  // namespace clinicavt::audio

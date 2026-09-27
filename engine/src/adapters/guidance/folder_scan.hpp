@@ -8,7 +8,9 @@
 
 namespace clinicavt::guidance {
 
-// text/plain, text/markdown or application/pdf by extension, else empty
+inline constexpr const char* kPdf = "application/pdf";
+
+// text/plain, text/markdown or kPdf by extension, else empty
 std::string Mime(const std::filesystem::path& path);
 
 // The open does not share writing, so a file another program is still writing

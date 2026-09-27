@@ -1,6 +1,5 @@
 #include "adapters/diarisation/anchor_store.hpp"
 
-#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -13,6 +12,8 @@
 #include <dpapi.h>
 // clang-format on
 
+#include "core/diarisation/embeddings.hpp"
+
 namespace clinicavt::diar {
 
 namespace detail {
@@ -20,36 +21,34 @@ namespace detail {
 namespace {
 
 constexpr std::uint32_t kVersion = 2;
-constexpr std::size_t kHeaderV1 = 16;  // version, dims, sessions
-constexpr std::size_t kHeaderV2 = 24;  // + enrolled_at
+constexpr std::size_t kHeader = 24;  // version, dims, sessions, enrolled_at
 
 }  // namespace
 
 std::vector<std::uint8_t> SerializeAnchor(const AnchorRecord& record) {
-    std::vector<std::uint8_t> plain(kHeaderV2 + record.sum.size() * 4);
+    std::vector<std::uint8_t> plain(kHeader + record.sum.size() * 4);
     const auto dims = static_cast<std::uint32_t>(record.sum.size());
     std::memcpy(plain.data(), &kVersion, 4);
     std::memcpy(plain.data() + 4, &dims, 4);
     std::memcpy(plain.data() + 8, &record.sessions, 8);
     std::memcpy(plain.data() + 16, &record.enrolled_at, 8);
-    std::memcpy(plain.data() + kHeaderV2, record.sum.data(), record.sum.size() * 4);
+    std::memcpy(plain.data() + kHeader, record.sum.data(), record.sum.size() * 4);
     return plain;
 }
 
 std::optional<AnchorRecord> ParseAnchor(std::span<const std::uint8_t> plain) {
-    if (plain.size() < kHeaderV1) return std::nullopt;
+    if (plain.size() < kHeader) return std::nullopt;
     std::uint32_t version = 0, dims = 0;
     std::memcpy(&version, plain.data(), 4);
     std::memcpy(&dims, plain.data() + 4, 4);
-    const std::size_t header = version == 1 ? kHeaderV1 : version == kVersion ? kHeaderV2 : 0;
-    if (header == 0 || plain.size() != header + static_cast<std::size_t>(dims) * 4) {
+    if (version != kVersion || plain.size() != kHeader + static_cast<std::size_t>(dims) * 4) {
         return std::nullopt;
     }
     AnchorRecord record;
     std::memcpy(&record.sessions, plain.data() + 8, 8);
-    if (version == kVersion) std::memcpy(&record.enrolled_at, plain.data() + 16, 8);
+    std::memcpy(&record.enrolled_at, plain.data() + 16, 8);
     record.sum.resize(dims);
-    std::memcpy(record.sum.data(), plain.data() + header, static_cast<std::size_t>(dims) * 4);
+    std::memcpy(record.sum.data(), plain.data() + kHeader, static_cast<std::size_t>(dims) * 4);
     return record;
 }
 
@@ -62,19 +61,9 @@ AnchorStore::AnchorStore(const std::filesystem::path& root) : path_(root / "anch
 std::optional<std::vector<float>> AnchorStore::Anchor() const {
     const std::lock_guard<std::mutex> lock(mutex_);
     if (record_.sum.empty()) return std::nullopt;
-    double norm = 0.0;
-    for (const float x : record_.sum) norm += static_cast<double>(x) * x;
-    norm = std::sqrt(norm) + 1e-9;
-    std::vector<float> anchor(record_.sum.size());
-    for (std::size_t i = 0; i < anchor.size(); ++i) {
-        anchor[i] = static_cast<float>(record_.sum[i] / norm);
-    }
+    std::vector<float> anchor = record_.sum;
+    Normalise(anchor);
     return anchor;
-}
-
-std::uint64_t AnchorStore::Sessions() const {
-    const std::lock_guard<std::mutex> lock(mutex_);
-    return record_.sessions;
 }
 
 AnchorStatus AnchorStore::Status() const {

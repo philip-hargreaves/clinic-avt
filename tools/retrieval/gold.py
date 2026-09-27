@@ -18,6 +18,7 @@ The build refuses a synthetic statement sharing a 4-gram with a recommendation i
 import argparse
 import csv
 import difflib
+import json
 import re
 import time
 
@@ -128,6 +129,19 @@ def overlap_report(queries: list[dict], chunks: dict) -> list[str]:
     return offending
 
 
+def check_expected(queries: list[dict], chunks: dict) -> None:
+    missing = [(q["qid"], i) for q in queries for i in q["expected_ids"] if i not in chunks]
+    if missing:
+        raise SystemExit(f"expected ids not in the corpus: {missing}")
+
+
+def primock_by_consult() -> dict:
+    by_consult = {}
+    for r in read_jsonl(GOLD / "primock-statements" / "statements.jsonl"):
+        by_consult.setdefault(r["consult"], []).append(r)
+    return by_consult
+
+
 def build():
     queries = []
 
@@ -186,9 +200,7 @@ def build():
         log("negatives missing")
 
     chunks = {c["id"]: c for c in read_jsonl(latest_chunks())}
-    missing = [(q["qid"], i) for q in queries for i in q["expected_ids"] if i not in chunks]
-    if missing:
-        raise SystemExit(f"expected ids not in the corpus: {missing}")
+    check_expected(queries, chunks)
     offending = overlap_report(queries, chunks)
     if offending:
         raise SystemExit("synthetic statements share wording with their recommendation:\n  " + "\n  ".join(offending))
@@ -212,11 +224,7 @@ NOTE_SOURCES = {
 
 
 def build_notes():
-    import json
-    statements = read_jsonl(GOLD / "primock-statements" / "statements.jsonl")
-    by_consult = {}
-    for r in statements:
-        by_consult.setdefault(r["consult"], []).append(r)
+    by_consult = primock_by_consult()
     chunks = {c["id"]: c for c in read_jsonl(latest_chunks())}
     queries = []
     for set_name, (folder, ext) in NOTE_SOURCES.items():
@@ -236,9 +244,7 @@ def build_notes():
             queries.append({"qid": f"{set_name}-{consult}", "set": set_name, "consult": consult, "text": text.strip(),
                             "mode": "note", "expected_ids": ids, "expected_codes": codes, "negative": not ids,
                             "statements": [r["qid"] for r in rows]})
-    missing = [(q["qid"], i) for q in queries for i in q["expected_ids"] if i not in chunks]
-    if missing:
-        raise SystemExit(f"expected ids not in the corpus: {missing}")
+    check_expected(queries, chunks)
     out = RESULTS / "queries" / f"notes-{time.strftime('%Y%m%d')}.jsonl"
     n = write_jsonl(out, queries)
     sets = {}
@@ -265,11 +271,7 @@ def read_textgrid(path) -> list[tuple[float, str]]:
 def build_transcripts():
     """Transcript-derived queries for the labelled PriMock consultations: the full transcript, the doctor's
     turns only, and the clinician's note with the doctor's sentences as extra sub-queries."""
-    import json
-    statements = read_jsonl(GOLD / "primock-statements" / "statements.jsonl")
-    by_consult = {}
-    for r in statements:
-        by_consult.setdefault(r["consult"], []).append(r)
+    by_consult = primock_by_consult()
     chunks = {c["id"]: c for c in read_jsonl(latest_chunks())}
     notes_dir = NOTE_SOURCES["notes-human"][0]
     queries = []
@@ -290,9 +292,7 @@ def build_transcripts():
         queries.append({"qid": f"transcript-doctor-{consult}", "set": "transcript-doctor", "text": "\n".join(doctor), **base})
         queries.append({"qid": f"note-plus-doctor-{consult}", "set": "note-plus-doctor", "text": note,
                         "extra_sentences": [s for t in doctor for s in split_sentences(t)], **base})
-    missing = [(q["qid"], i) for q in queries for i in q["expected_ids"] if i not in chunks]
-    if missing:
-        raise SystemExit(f"expected ids not in the corpus: {missing}")
+    check_expected(queries, chunks)
     out = RESULTS / "queries" / f"transcripts-{time.strftime('%Y%m%d')}.jsonl"
     n = write_jsonl(out, queries)
     for s in ("transcript-full", "transcript-doctor", "note-plus-doctor"):

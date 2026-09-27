@@ -1,9 +1,5 @@
 using System.Diagnostics;
-using ClinicAVT.App.Core.Hosting;
-using ClinicAVT.App.Platform;
 using ClinicAVT.App.Tests.Support;
-using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 using static ClinicAVT.App.Tests.Support.Waits;
 
 namespace ClinicAVT.App.Tests.Hosting;
@@ -18,53 +14,32 @@ public class TransportRecoveryTest
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
-    private static string FindEngine() => EnginePath.Find();
-
     [Fact]
     public async Task TheConnectionSurvivesASupervisedRestart()
     {
-        var pipeName = $"LOCAL\\clinicavt-e2e-{Guid.NewGuid():N}";
-        var directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var crashPath = Path.Combine(directory, "crashes.jsonl");
-        using var launcher = new ProcessEngineLauncher(FindEngine(), pipeName);
-        using var host = new EngineSupervisor(
-            launcher, new FakeSession(), TimeProvider.System, new FileCrashLog(crashPath));
-        await using var connection = new EngineConnection(host, async (pid, ct) =>
-            await PipeTransport.ConnectAsync(pipeName, Timeout, pid, ct));
-        try
+        // Echo tests the transport alone and needs no microphone on a
+        // CI runner
+        await using var engine = await RealEngine.StartAsync("e2e", models: false);
+        var (host, connection) = (engine.Host, engine.Connection);
+        var firstPid = host.EnginePid;
+        Assert.NotNull(firstPid);
+
+        Process.GetProcessById(firstPid.Value).Kill();
+
+        await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "back" }, Timeout));
+        Assert.NotEqual(firstPid, host.EnginePid);
+        Assert.Single(File.ReadAllLines(engine.CrashLog));
+
+        var patientReady = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.NotificationReceived += (method, _) =>
         {
-            // Echo tests the transport alone and needs no microphone on a
-            // CI runner
-            host.Start();
-            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "up" }, Timeout));
-            var firstPid = host.EnginePid;
-            Assert.NotNull(firstPid);
-
-            Process.GetProcessById(firstPid.Value).Kill();
-
-            await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "back" }, Timeout));
-            Assert.NotEqual(firstPid, host.EnginePid);
-            Assert.Single(File.ReadAllLines(crashPath));
-
-            var patientReady = new TaskCompletionSource(
-                TaskCreationOptions.RunContinuationsAsynchronously);
-            connection.NotificationReceived += (method, _) =>
+            if (method == "patient/ready")
             {
-                if (method == "patient/ready")
-                {
-                    patientReady.TrySetResult();
-                }
-            };
-            await connection.RequestAsync("session/stop", null, Timeout);
-            await patientReady.Task.WaitAsync(Timeout);
-        }
-        finally
-        {
-            host.Shutdown();
-            if (Directory.Exists(directory))
-            {
-                Directory.Delete(directory, recursive: true);
+                patientReady.TrySetResult();
             }
-        }
+        };
+        await connection.RequestAsync("session/stop", null, Timeout);
+        await patientReady.Task.WaitAsync(Timeout);
     }
 }

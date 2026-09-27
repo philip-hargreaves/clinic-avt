@@ -1,6 +1,5 @@
 #pragma once
 
-#include <chrono>
 #include <map>
 #include <openvino/openvino.hpp>
 #include <string>
@@ -18,7 +17,6 @@ ov::AnyMap CompileProperties(const ModelInfo& info);
 struct LoadedModel {
     ov::CompiledModel model;
     std::string device;  // the concrete device compiled for, e.g. GPU.1
-    std::chrono::milliseconds load_time{0};
 };
 
 // Compiles cleared models for their manifest device. An unavailable device
@@ -27,6 +25,8 @@ class OvRuntime {
    public:
     LoadedModel Load(const ModelStore& store, std::string_view task, std::string_view tier,
                      const std::string& xml_name);
+    // One IR of a model the caller has already resolved and verified
+    LoadedModel Load(const ModelInfo& info, const std::string& xml_name);
 
     std::string ResolveDevice(const std::string& requested);
 

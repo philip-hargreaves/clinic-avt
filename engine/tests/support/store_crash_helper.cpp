@@ -49,12 +49,10 @@ int main(int argc, char* argv[]) {
     // what the test holds recovery to
     clinicavt::store::Db reader(root / "clinicavt.db");
     const std::string count_sql = "SELECT COUNT(*) FROM chunks WHERE session_id = '" + id + "'";
-    std::uint64_t turn = 0;
+    store.ReplaceTurns(id, std::vector<clinicavt::asr::Turn>{{0, audio.size(), "", "turn 0"}});
     for (;;) {
         for (auto& sample : audio) sample = PatternAt(frame++);
         store.Append(id, audio, 0);
-        store.AppendTurn(
-            id, {frame - audio.size(), audio.size(), "", "turn " + std::to_string(turn++)});
         std::printf("CHUNKS %lld\n", static_cast<long long>(reader.QueryInt64(count_sql.c_str())));
         std::fflush(stdout);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

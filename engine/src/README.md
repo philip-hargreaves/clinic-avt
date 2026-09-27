@@ -14,19 +14,20 @@ core/            a static library, one folder per stage; namespace = folder
   session/       the session controller and its events, transcription, note lane,
                  enrolment, demo playback
   diarisation/   speaker regions, per-turn decode, re-split, role naming, transcript tidy
-  note/          the note gate, label and summary scrub
+  note/          the note gate, label, summary scrub and load-failure reading
   guidance/      query, ranking and scan; added-document units and page text
+  translate/     punctuation the translator cannot write
   metrics/       counters and throughput
-  common/        utf8, strings, version, argv
-ports/           the seams of the hexagon, flat: eleven interfaces and the store error type
+  common/        utf8, strings, ISO 8601 time, version, argv
+ports/           the seams of the hexagon, flat: twelve interfaces and the store error type
 adapters/        one folder per seam, matching core/ where a stage has one
   audio/ vad/ transcription/ diarisation/ note/ translate/ guidance/ storage/ ipc/ models/
-  system/        GPU lease, awake requests, process scan, child processes, executable
-                 paths, the Recycle Bin
+  system/        GPU lease, awake requests, power throttling, process scan, child
+                 processes, executable paths, the Recycle Bin, COM, SHA-256
   demo/
 ```
 
-Tests mirror this tree under `engine/tests/`: `core/<stage>/`, `ports/`, `adapters/<seam>/`,
+Tests mirror this tree under `engine/tests/`: `core/<stage>/`, `adapters/<seam>/`,
 with stand-in hosts in `support/`, fixtures in `fixtures/` and the evaluation runner in `tools/`.
 Test binaries are split by what they need, not by folder: `engine_tests` runs anywhere,
 `models_tests` needs staged weights, `gpu_tests` the Intel GPU, `capture_tests` a microphone;

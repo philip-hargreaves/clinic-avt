@@ -5,7 +5,8 @@
 namespace clinicavt::metrics {
 namespace {
 
-TEST(Metrics, RecordsAndSnapshots) {
+// The perf report reads one session: loads and devices outlive it, the rest does not
+TEST(Metrics, ANewSessionKeepsOnlyDevicesAndLoads) {
     Registry registry;
     registry.RecordDevice("asr", "GPU.0");
     registry.RecordLoad("asr", 2.1);
@@ -26,26 +27,17 @@ TEST(Metrics, RecordsAndSnapshots) {
     EXPECT_EQ(s.diar_ticks, 108);
     EXPECT_EQ(s.turns, 73);
     EXPECT_EQ(s.clusters, 2);
-}
-
-TEST(Metrics, ANewSessionKeepsDevicesAndLoadsOnly) {
-    Registry registry;
-    registry.RecordDevice("asr", "NPU");
-    registry.RecordLoad("asr", 13.4);
-    registry.RecordDecode(30.0, 3.0);
-    registry.RecordStage("sealed", 19.6);
-    registry.RecordTranscript(73, 2);
 
     registry.BeginSession(true, 1.0);
 
-    const auto s = registry.Take();
-    EXPECT_EQ(s.devices.at("asr"), "NPU");
-    EXPECT_EQ(s.load_seconds.at("asr"), 13.4);
-    EXPECT_TRUE(s.stage_seconds.empty());
-    EXPECT_EQ(s.decoded_audio_seconds, 0);
-    EXPECT_EQ(s.turns, -1);
-    EXPECT_TRUE(s.replay);
-    EXPECT_EQ(s.replay_speed, 1.0);
+    const auto next = registry.Take();
+    EXPECT_EQ(next.devices.at("asr"), "GPU.0");
+    EXPECT_EQ(next.load_seconds.at("asr"), 2.1);
+    EXPECT_TRUE(next.stage_seconds.empty());
+    EXPECT_EQ(next.decoded_audio_seconds, 0);
+    EXPECT_EQ(next.turns, -1);
+    EXPECT_TRUE(next.replay);
+    EXPECT_EQ(next.replay_speed, 1.0);
 }
 
 }  // namespace

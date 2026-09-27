@@ -1,22 +1,12 @@
-#include <algorithm>
-#include <cctype>
-#include <cstddef>
-#include <cstdio>
 #include <memory>
 #include <openvino/core/version.hpp>
 #include <optional>
-#include <set>
 #include <stdexcept>
 
-#include "adapters/demo/sample_year.hpp"
-#include "adapters/guidance/guidance_record.hpp"
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/system/power_throttling.hpp"
-#include "adapters/translate/translate_lane.hpp"
 #include "core/common/version.hpp"
-#include "core/note/summary_scrub.hpp"
-#include "ports/store_error.hpp"
 
 namespace clinicavt::ipc {
 
@@ -81,11 +71,28 @@ json HandleModels(const clinicavt::models::ModelStore& models, const std::string
     return json{{"models", std::move(list)}};
 }
 
+namespace {
+
+const char* PhaseName(clinicavt::note::NoteModelState::Phase phase) {
+    switch (phase) {
+        case clinicavt::note::NoteModelState::Phase::kLoading:
+            return "loading";
+        case clinicavt::note::NoteModelState::Phase::kReady:
+            return "ready";
+        case clinicavt::note::NoteModelState::Phase::kFailed:
+            return "failed";
+        default:
+            return "idle";
+    }
+}
+
+}  // namespace
+
 json NoteModelJson(const clinicavt::note::NoteModelState& state) {
     json result{{"tier", state.tier},
                 {"id", state.id},
                 {"name", state.name},
-                {"state", clinicavt::note::PhaseName(state.phase)}};
+                {"state", PhaseName(state.phase)}};
     if (state.phase == clinicavt::note::NoteModelState::Phase::kLoading) {
         result["firstUse"] = state.first_use;
     }
@@ -122,6 +129,27 @@ std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteLane* lane, bool 
     }
 }
 
+std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool session_active,
+                                          const json& params, std::function<void(json)> notify) {
+    const std::string device = params.value("device", "");
+    if (device != "GPU" && device != "NPU") {
+        return InvalidParams("device must be GPU or NPU");
+    }
+    if (session_active) {
+        return SessionError("finish the consultation before switching transcription device");
+    }
+    const bool started =
+        switcher && switcher(device, [device, notify](const std::string& error) {
+            json state{{"device", device}, {"state", error.empty() ? "ready" : "failed"}};
+            if (!error.empty()) state["detail"] = error;
+            notify(std::move(state));
+        });
+    if (!started) {
+        return SessionError("speech recognition cannot move to another device here");
+    }
+    return json{{"device", device}, {"state", "loading"}};
+}
+
 void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
     auto& controller = services.controller;
     const auto& models = services.models;
@@ -144,7 +172,7 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
         "engine/readiness", [&models, first_use, note_tier, stray_note_host](const json&) {
             const auto ready = [&models](const char* role, const std::string& tier) {
                 try {
-                    const auto cache = models.Resolve(role, tier).dir / ".cache";
+                    const auto cache = clinicavt::models::CacheDir(models.Resolve(role, tier));
                     return std::filesystem::exists(cache) && !std::filesystem::is_empty(cache);
                 } catch (...) {
                     return true;  // role not staged: nothing to wait for
@@ -158,6 +186,12 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
     server.RegisterMethod("note/tier", [note_lane, &controller](const json& params) {
         return HandleNoteTier(note_lane, controller.Running(), params);
     });
+    server.RegisterMethod(
+        "asr/device", [switcher = services.switch_asr, &controller, &server](const json& params) {
+            return HandleAsrDevice(switcher, controller.Running(), params, [&server](json state) {
+                server.PushNotification("asr/device", std::move(state));
+            });
+        });
     if (metrics != nullptr) {
         // Device names are enumerated once, on the first fetch
         auto hardware = std::make_shared<std::optional<json>>();
@@ -201,7 +235,6 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
                 clinicavt::session::MicSelection mic;
                 if (params.contains("mic") && params["mic"].is_object()) {
                     mic.id = params["mic"].value("id", "");
-                    mic.name = params["mic"].value("name", "");
                 }
                 if (seconds <= 0 || seconds > 300) {
                     return InvalidParams("seconds must be 1-300");

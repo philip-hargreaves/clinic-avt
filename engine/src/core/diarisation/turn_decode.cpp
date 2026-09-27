@@ -9,23 +9,15 @@
 #include <string>
 #include <vector>
 
+#include "core/common/strings.hpp"
 #include "core/diarisation/diar_regions.hpp"
 #include "ports/diariser.hpp"
 
 namespace clinicavt::diar {
 
 std::size_t MaxRepeatedNgram(const std::string& text) {
-    std::vector<std::string> words;
-    std::string word;
-    for (const unsigned char c : text) {
-        if (std::isalnum(c) != 0) {
-            word.push_back(static_cast<char>(std::tolower(c)));
-        } else if (!word.empty()) {
-            words.push_back(word);
-            word.clear();
-        }
-    }
-    if (!word.empty()) words.push_back(word);
+    const auto words =
+        strings::LowerTokens(text, [](unsigned char c) { return std::isalnum(c) != 0; });
     if (words.size() < 6) return 0;
     std::map<std::string, std::size_t> seen;
     std::size_t worst = 0;
@@ -112,13 +104,13 @@ std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>& turns
             }
             if (chunk_cache != nullptr) {
                 if (auto assembled = AssembleFromChunks(*chunk_cache, a, b)) {
-                    texts[i] = JoinedText(*assembled);
+                    texts[i] = asr::JoinedText(*assembled);
                     if (chunks_out != nullptr) (*chunks_out)[i] = std::move(*assembled);
                     continue;
                 }
             }
             auto chunks = decode(audio.subspan(a, b - a), a);
-            std::string text = JoinedText(chunks);
+            std::string text = asr::JoinedText(chunks);
             // A degenerate loop has no safe fallback, so empty is the answer
             if (MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
             texts[i] = std::move(text);

@@ -7,20 +7,16 @@ identical sentences and the chrF++ of one against the other.
 """
 
 import json
-import os
-import sys
-from pathlib import Path
 
-ROOT = Path(os.environ.get("MT_ROOT", r"D:\clinicavt-mt"))
-HERE = Path(__file__).resolve().parent
-SHIPPED = Path(r"C:\dev\ambient\models\nllb-200-600m-int8")
+from common import APP_MODELS, LANGUAGES, ROOT, option
+
+SHIPPED = APP_MODELS / "nllb-200-600m-int8"
 
 
 def main():
-    sys.path.insert(0, str(HERE))
     from sacrebleu.metrics import CHRF
-    from translate import LANGUAGES, Translator, load_set, sentences
-    count = int(sys.argv[sys.argv.index("--sheets") + 1]) if "--sheets" in sys.argv else 6
+    from translate import Translator, load_set, sentences
+    count = int(option("--sheets", "6"))
     sheets = [s for s in load_set("sheets", count) if s["language"] == "Urdu"]
     fresh = Translator("nllb-600m", "int8", 8)
     shipped = Translator("nllb-600m", "int8", 8)
