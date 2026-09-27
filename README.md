@@ -58,11 +58,11 @@ The zip already contains the model weights.
 
 ## Backing up
 
-Settings > Your data, or Back up on the Sessions page, saves the consultations from a period to a
-`.clinicavt` file protected by a password. Nobody can open the file without the password, and it
-cannot be reset, so keep it somewhere you can find without this computer. After the backup is
-checked, Remove these from this computer clears those consultations here. Restore in Settings
-brings them back and leaves any already on the computer as they are. A backup holds patient
+Back up, in Settings > Your data or on the Sessions page, saves the consultations from a chosen
+period to a password-protected `.clinicavt` file. The password cannot be reset and the file cannot
+be opened without it, so keep it somewhere you can reach without this computer. Once the file is
+checked, Remove backed-up consultations clears them from this computer. Restore, in Settings > Your
+data, brings them back and leaves consultations already here unchanged. A backup holds patient
 information: keep it only where your practice allows, and restore only on a computer your practice
 has approved.
 
