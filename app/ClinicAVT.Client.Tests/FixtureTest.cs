@@ -301,4 +301,121 @@ public class FixtureTest
             new StorageFault("audio commit: database or disk is full"),
             EngineNotifications.Parse("storage/fault", fault.GetProperty("params")));
     }
+
+    // The shell's requests are compared field for field with the fixtures the engine tests too
+    [Fact]
+    public async Task BackupFixturesAreWhatTheClientSendsAndReads()
+    {
+        var transport = new ReplayingTransport();
+        var api = new EngineApi(transport);
+
+        var summary = Fixtures.Load("archive-summary.json");
+        var summaryParams = summary.GetProperty("request").GetProperty("params");
+        var covered = summaryParams.GetProperty("covered");
+        transport.Reply = summary.GetProperty("response").GetProperty("result");
+        var counts = await api.ArchiveSummaryAsync(
+            summaryParams.GetProperty("from").GetString()!, summaryParams.GetProperty("to").GetString()!,
+            new ArchiveCoverage(covered.GetProperty("from").GetString()!,
+                covered.GetProperty("to").GetString()!, covered.GetProperty("at").GetString()!));
+        transport.AssertSent("archive/summary", summaryParams);
+        Assert.Equal(new ArchiveSummary(38, 12, 1, 6), counts);
+
+        var backup = Fixtures.Load("archive-backup.json").GetProperty("request");
+        var backupParams = backup.GetProperty("params");
+        await api.BackUpAsync(backupParams.GetProperty("from").GetString()!,
+            backupParams.GetProperty("to").GetString()!, backupParams.GetProperty("path").GetString()!,
+            backupParams.GetProperty("password").GetString()!);
+        transport.AssertSent("archive/backup", backupParams);
+
+        var restore = Fixtures.Load("archive-restore.json").GetProperty("request").GetProperty("params");
+        await api.RestoreAsync(restore.GetProperty("path").GetString()!,
+            restore.GetProperty("password").GetString()!, restore.GetProperty("dryRun").GetBoolean());
+        transport.AssertSent("archive/restore", restore);
+
+        var remove = Fixtures.Load("session-remove.json");
+        var removeParams = remove.GetProperty("request").GetProperty("params");
+        transport.Reply = remove.GetProperty("response").GetProperty("result");
+        var removed = await api.RemoveSessionsAsync(
+            removeParams.GetProperty("ids").EnumerateArray().Select(i => i.GetString()!).ToList(),
+            removeParams.GetProperty("deleteReflections").GetBoolean());
+        transport.AssertSent("session/remove", removeParams);
+        Assert.Equal(2, removed);
+
+        var deleteAll = Fixtures.Load("session-deleteAll.json");
+        transport.Reply = deleteAll.GetProperty("response").GetProperty("result");
+        Assert.Equal(40, await api.DeleteAllSessionsAsync());
+        transport.AssertSent("session/deleteAll", deleteAll.GetProperty("request").GetProperty("params"));
+
+        var progress = Parse("archive-progress.json");
+        Assert.Equal(new ArchiveProgress("backup", "writing", 12, 38), progress);
+
+        var backedUp = Assert.IsType<ArchiveDone>(Parse("archive-done-backup.json"));
+        Assert.Equal(("backup", false, 38, 12), (backedUp.Job, backedUp.DryRun, backedUp.Consultations, backedUp.Reflections));
+        Assert.Equal(2, backedUp.Ids.Count);
+        Assert.True(DateTimeOffset.TryParse(backedUp.CreatedAt, out _));
+
+        var dryRun = Assert.IsType<ArchiveDone>(Parse("archive-done-restore.json"));
+        Assert.Equal(("restore", true, 33, 5), (dryRun.Job, dryRun.DryRun, dryRun.Consultations, dryRun.Skipped));
+        Assert.Empty(dryRun.Ids);
+
+        Assert.Equal(new ArchiveFailed("restore", "wrong-password"), Parse("archive-failed.json"));
+    }
+
+    // The error's data is the engine's reason, and it is what the shell shows
+    [Fact]
+    public void AnEngineErrorCarriesTheReasonFromItsData()
+    {
+        var error = Fixtures.Load("session-error.json").GetProperty("error");
+        var thrown = new EngineErrorException(
+            error.GetProperty("code").GetInt32(), error.GetProperty("message").GetString()!,
+            error.GetProperty("data"));
+        Assert.Equal("no session nope", thrown.Message);
+        Assert.Equal("Invalid params", new EngineErrorException(-32602, "Invalid params", null).Message);
+    }
+
+    private static EngineNotification? Parse(string fixture)
+    {
+        var notification = Fixtures.Load(fixture);
+        return EngineNotifications.Parse(
+            notification.GetProperty("method").GetString()!, notification.GetProperty("params"));
+    }
+
+    /// <summary>Records the last request and answers every one with the scripted reply.</summary>
+    private sealed class ReplayingTransport : IEngineTransport
+    {
+        private string _method = "";
+        private JsonElement _params;
+
+        public event Action<string, JsonElement>? NotificationReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public event Action<bool>? ConnectedChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool Connected => true;
+
+        public JsonElement Reply { get; set; } = JsonSerializer.SerializeToElement(new { });
+
+        public Task<JsonElement> RequestAsync(
+            string method, object? parameters, TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            _method = method;
+            _params = JsonSerializer.SerializeToElement(parameters, Protocol.JsonOptions);
+            return Task.FromResult(Reply);
+        }
+
+        public void AssertSent(string method, JsonElement expected)
+        {
+            Assert.Equal(method, _method);
+            Assert.True(JsonElement.DeepEquals(expected, _params), $"{method} sent {_params}");
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }

@@ -85,6 +85,25 @@ public sealed record ReflectionSummaryFailed(string Id = "", string Detail = "")
 /// <summary>The store stopped taking writes, such as on a full disk. Sent once per failure.</summary>
 public sealed record StorageFault(string Detail = "") : EngineNotification;
 
+/// <summary>A backup or restore under way. Job is "backup" or "restore".</summary>
+public sealed record ArchiveProgress(string Job = "", string Phase = "", int Done = 0, int Total = 0)
+    : EngineNotification;
+
+/// <summary>
+/// A finished backup or restore. A backup lists the ids it wrote and checked. A restore counts
+/// what it added, or would add on a dry run, and what was already here.
+/// </summary>
+public sealed record ArchiveDone(
+    string Job = "", bool DryRun = false, int Consultations = 0, int Reflections = 0,
+    int Skipped = 0, string? From = null, string? To = null, string? CreatedAt = null)
+    : EngineNotification
+{
+    public IReadOnlyList<string> Ids { get; init; } = [];
+}
+
+/// <summary>A backup or restore that stopped. Code is one of a fixed set, never file content.</summary>
+public sealed record ArchiveFailed(string Job = "", string Code = "") : EngineNotification;
+
 public static class EngineNotifications
 {
     /// <summary>
@@ -123,6 +142,9 @@ public static class EngineNotifications
         "reflection/summary" => Protocol.Parse<ReflectionSummaryReady>(parameters),
         "reflection/summaryFailed" => Protocol.Parse<ReflectionSummaryFailed>(parameters),
         "storage/fault" => Protocol.Parse<StorageFault>(parameters) ?? new StorageFault(),
+        "archive/progress" => Protocol.Parse<ArchiveProgress>(parameters),
+        "archive/done" => Protocol.Parse<ArchiveDone>(parameters),
+        "archive/failed" => Protocol.Parse<ArchiveFailed>(parameters) ?? new ArchiveFailed(),
         _ => null,
     };
 }

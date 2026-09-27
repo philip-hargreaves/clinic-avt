@@ -60,8 +60,27 @@ public interface IEngineApi
 
     Task DeleteSessionAsync(string id);
 
-    /// <summary>Erases every stored consultation and returns how many went.</summary>
-    Task<int> DeleteAllSessionsAsync();
+    /// <summary>
+    /// Erases every stored consultation and returns how many went. Reflections, with their case
+    /// summary, stay unless asked to go too.
+    /// </summary>
+    Task<int> DeleteAllSessionsAsync(bool deleteReflections = false);
+
+    /// <summary>Erases the given consultations, as after a checked backup, and returns how many went.</summary>
+    Task<int> RemoveSessionsAsync(IReadOnlyList<string> ids, bool deleteReflections);
+
+    /// <summary>
+    /// Counts what a backup of the half-open UTC period would hold. Empty ends are open. With
+    /// the last backup's coverage it also counts what no backup holds.
+    /// </summary>
+    Task<ArchiveSummary> ArchiveSummaryAsync(
+        string periodStart, string periodEnd, ArchiveCoverage? covered = null);
+
+    /// <summary>Starts a backup. archive/progress, then archive/done or archive/failed follow.</summary>
+    Task BackUpAsync(string periodStart, string periodEnd, string path, string password);
+
+    /// <summary>Starts a restore, or on a dry run only reads the file and counts.</summary>
+    Task RestoreAsync(string path, string password, bool dryRun);
 
     Task<NoteTierState> SetNoteTierAsync(string tier);
 

@@ -107,8 +107,29 @@ public sealed class EngineApi : IEngineApi
 
     public Task DeleteSessionAsync(string id) => CallAsync("session/delete", new { id });
 
-    public async Task<int> DeleteAllSessionsAsync() =>
-        Int(await CallAsync("session/deleteAll", null, LongTimeout).ConfigureAwait(false), "removed");
+    public async Task<int> DeleteAllSessionsAsync(bool deleteReflections = false) =>
+        Int(await CallAsync("session/deleteAll", new { deleteReflections }, LongTimeout)
+            .ConfigureAwait(false), "removed");
+
+    public async Task<int> RemoveSessionsAsync(IReadOnlyList<string> ids, bool deleteReflections) =>
+        Int(await CallAsync("session/remove", new { ids, deleteReflections }, LongTimeout)
+            .ConfigureAwait(false), "removed");
+
+    public Task<ArchiveSummary> ArchiveSummaryAsync(
+        string periodStart, string periodEnd, ArchiveCoverage? covered = null) =>
+        ReplyAsync<ArchiveSummary>("archive/summary",
+            covered is null
+                ? new { from = periodStart, to = periodEnd }
+                : new { from = periodStart, to = periodEnd, covered },
+            LongTimeout);
+
+    // The job runs on the engine's own thread, so these return once it has started
+    public Task BackUpAsync(string periodStart, string periodEnd, string path, string password) =>
+        CallAsync("archive/backup",
+            new { from = periodStart, to = periodEnd, path, password }, LongTimeout);
+
+    public Task RestoreAsync(string path, string password, bool dryRun) =>
+        CallAsync("archive/restore", new { path, password, dryRun }, LongTimeout);
 
     public Task<NoteTierState> SetNoteTierAsync(string tier) =>
         ReplyAsync<NoteTierState>("note/tier", new { tier }, LongTimeout);

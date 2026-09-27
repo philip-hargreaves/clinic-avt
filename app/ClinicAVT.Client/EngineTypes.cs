@@ -132,3 +132,13 @@ public sealed record ReflectionListing(
     string Id = "", string StartedAt = "", string? Label = null, string? Happened = null,
     string? Learned = null, string? Next = null, string? Summary = null, string? EditedAt = null,
     bool Demo = false);
+
+/// <summary>
+/// What a backup of a period would hold. Unfinished consultations are counted and left out.
+/// Uncovered counts the stored consultations the given last backup does not hold.
+/// </summary>
+public sealed record ArchiveSummary(
+    int Consultations = 0, int Reflections = 0, int Unfinished = 0, int Uncovered = 0);
+
+/// <summary>The period a checked backup held and when it was made, as UTC instants.</summary>
+public sealed record ArchiveCoverage(string From, string To, string At);

@@ -76,9 +76,13 @@ public static class JsonElements
         root.Find(path) is { ValueKind: JsonValueKind.String } s ? s.GetString() : null;
 }
 
-/// <summary>A JSON-RPC error response from the engine.</summary>
+/// <summary>
+/// A JSON-RPC error response from the engine. The message is the engine's reason from the error
+/// data when it sent one, since the error message itself only names the kind.
+/// </summary>
 public sealed class EngineErrorException(int code, string message, JsonElement? data)
-    : Exception(message)
+    : Exception(data is { ValueKind: JsonValueKind.String } reason
+        && reason.GetString() is { Length: > 0 } text ? text : message)
 {
     public int Code { get; } = code;
 
