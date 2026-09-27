@@ -107,7 +107,7 @@ public sealed partial class DemoTrayViewModel : ObservableObject
     [RelayCommand]
     private async Task Browse()
     {
-        var path = await _picker.PickFileAsync(".wav").ConfigureAwait(true);
+        var path = await _picker.PickFileAsync([".wav"]).ConfigureAwait(true);
         if (path is not null)
         {
             UseTrack(path);

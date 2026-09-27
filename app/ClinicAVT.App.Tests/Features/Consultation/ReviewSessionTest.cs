@@ -101,6 +101,58 @@ public class ReviewSessionTest
     }
 
     [Fact]
+    public async Task EditingTheTranslatedSheetMarksTheTranslationStaleAndTranslateAgainKeepsItsLanguage()
+    {
+        var (session, engine, note) = TestSession.Create();
+        engine.StoredPatient = "Take one tablet a day.";
+        await session.OpenStoredSessionAsync("abc");
+        engine.RaiseNotification("translate/ready", Translation("Jedna tabletka dziennie.", "Polish"));
+        Assert.False(note.TranslationStale);
+        Assert.False(note.TranslateAgainCommand.CanExecute(null));
+
+        Assert.True(note.PatientViewing, "the sheet is read until an explicit Edit");
+        note.EditPatientCommand.Execute(null);
+        Assert.True(note.PatientEditing);
+        note.PatientInfoText = "Take two tablets a day.";
+        Assert.False(note.TranslationStale, "an unsaved edit changes nothing yet");
+        Assert.False(note.TranslateAgainCommand.CanExecute(null), "nothing is translated mid-edit");
+
+        await note.SavePatientCommand.ExecuteAsync(null);
+        Assert.True(note.PatientViewing, "saving returns to reading");
+        Assert.True(note.TranslationStale, "the translation says one tablet, the sheet two");
+
+        note.SelectedLanguage = "French";
+        await note.TranslateAgainCommand.ExecuteAsync(null);
+        var request = engine.Requests.Last(r => r.Method == "patient/translate");
+        Assert.Contains("Polish", request.Params);
+        Assert.DoesNotContain("French", request.Params);
+
+        engine.RaiseNotification("translate/ready", Translation("Dwie tabletki dziennie.", "Polish"));
+        Assert.False(note.TranslationStale, "the new translation matches the sheet");
+        Assert.False(note.TranslateAgainCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ARewrittenSheetMarksTheTranslationStaleButAnUnchangedSaveDoesNot()
+    {
+        var (session, engine, note) = TestSession.Create();
+        engine.StoredPatient = "Take one tablet a day.";
+        await session.OpenStoredSessionAsync("abc");
+        engine.RaiseNotification("translate/ready", Translation("Jedna tabletka dziennie.", "Polish"));
+
+        note.EditPatientCommand.Execute(null);
+        await note.SavePatientCommand.ExecuteAsync(null);
+        Assert.False(note.TranslationStale, "the sheet did not change");
+
+        engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
+            .SerializeToElement(new { text = "A rewritten sheet." }));
+        Assert.True(note.TranslationStale);
+
+        await session.CloseReviewAsync();
+        Assert.False(note.TranslationStale, "leaving clears it");
+    }
+
+    [Fact]
     public async Task AStoredSheetOlderThanTheNoteEditLoadsStale()
     {
         var (session, engine, note) = TestSession.Create();
@@ -201,4 +253,7 @@ public class ReviewSessionTest
         Assert.False(await session.OpenStoredSessionAsync("abc"));
         Assert.DoesNotContain(engine.Requests, r => r.Method == "session/open");
     }
+
+    private static System.Text.Json.JsonElement Translation(string text, string language) =>
+        System.Text.Json.JsonSerializer.SerializeToElement(new { text, language });
 }

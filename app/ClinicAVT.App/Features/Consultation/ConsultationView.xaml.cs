@@ -21,6 +21,8 @@ public sealed partial class ConsultationView : UserControl
         ControlsHost.Content = controls;
         SurfaceHost.Content = surface;
         DemoTrayHost.Content = demoTray;
+        AudioDrop.Attach(Root, DropHighlight, () => Controls.ImportRecordingCommand.CanExecute(null),
+            path => Controls.ImportRecordingCommand.ExecuteAsync(path));
 
         // The review opens as the note streams. It shows the transcript as the reference
         // because the guidance waits for the note

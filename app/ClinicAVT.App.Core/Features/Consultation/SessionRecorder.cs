@@ -3,6 +3,7 @@ using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Core.Shell;
 using ClinicAVT.Client;
@@ -64,6 +65,14 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial double AudioSeconds { get; private set; }
 
+    /// <summary>True from an import's request until the engine has sealed it or it ends.</summary>
+    [ObservableProperty]
+    public partial bool Importing { get; private set; }
+
+    /// <summary>How far the import's transcription has got, null until the engine says.</summary>
+    [ObservableProperty]
+    public partial int? ImportPercent { get; private set; }
+
     /// <summary>The active session's replay request, null for a microphone.</summary>
     [ObservableProperty]
     public partial ReplayRequest? ActiveReplay { get; private set; }
@@ -80,8 +89,14 @@ public sealed partial class SessionRecorder : ObservableObject
     /// <summary>The session the engine is recording into, for a resume after a restart.</summary>
     public string? RecordingSessionId { get; private set; }
 
-    /// <summary>A stop sealed this session. The review takes it over.</summary>
+    /// <summary>A stop or an import sealed this session. The review takes it over.</summary>
     public event Action<string>? Sealed;
+
+    /// <summary>An import began, with when the consultation took place.</summary>
+    public event Action<RecordingImport>? ImportStarted;
+
+    // With Keep consultations off the engine erases the session once it is left
+    private bool Retain => _preferences?.KeepConsultations ?? true;
 
     public void ShowDemo(bool record)
     {
@@ -96,6 +111,7 @@ public sealed partial class SessionRecorder : ObservableObject
 
     partial void OnStateChanged(SessionState value)
     {
+        _status.SetSessionIdle(value == SessionState.Idle);
         if (value == SessionState.Idle)
         {
             ShowDemo(false);
@@ -214,12 +230,10 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        // With Keep consultations off the engine erases the session once it is left. An empty
-        // mic id means the default, and a missing device falls back to it with a log line
-        var retain = _preferences?.KeepConsultations ?? true;
+        // An empty mic id means the default, and a missing device falls back to it with a log line
         var start = replay is null
-            ? () => _engine.StartSessionAsync(retain, _preferences?.MicId ?? "")
-            : (Func<Task<string>>)(() => _engine.StartReplayAsync(retain, replay));
+            ? () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")
+            : (Func<Task<string>>)(() => _engine.StartReplayAsync(Retain, replay));
         if (!await BeginAsync(start, replay, null).ConfigureAwait(true))
         {
             return;
@@ -269,10 +283,15 @@ public sealed partial class SessionRecorder : ObservableObject
         _replayEndSeconds = replay is null ? 0 : DemoTracks.DurationSeconds(replay.Path);
         ActivePlayback = playback;
         State = SessionState.Recording;
-        _status.ClearStorageFault();
-        _status.ResetThroughput();
+        ResetForNewConsultation();
         _status.SetMicVisible(true);
         return true;
+    }
+
+    private void ResetForNewConsultation()
+    {
+        _status.ClearStorageFault();
+        _status.ResetThroughput();
     }
 
     // A restarted engine has lost the live session, but its audio is stored. Resume replays it
@@ -297,9 +316,8 @@ public sealed partial class SessionRecorder : ObservableObject
 
         try
         {
-            var retain = _preferences?.KeepConsultations ?? true;
             // The raw call tells a lost engine from one that answered
-            var started = await _engine.ResumeSessionAsync(resume, retain, ActiveReplay)
+            var started = await _engine.ResumeSessionAsync(resume, Retain, ActiveReplay)
                 .ConfigureAwait(true);
             RecordingSessionId = started.Length > 0 ? started : null;
             _status.Append("Recording");
@@ -349,8 +367,6 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        State = SessionState.Finalising;
-        Phase = FinalisePhase.Sealing;
         Paused = false;
         ActiveReplay = null;
         // A playback's timings are staged, so the collector never sees them
@@ -361,29 +377,107 @@ public sealed partial class SessionRecorder : ObservableObject
 
         ActivePlayback = null;
         _status.SetMicVisible(false);
+        // The recording is safe in the store even when the stop fails
+        await FinaliseAsync("session/stop", "Stop failed, consultation kept", _engine.StopSessionAsync)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// A recording from a file. The engine decodes and stores it, then finalises it as a stop
+    /// does, so the same stages and the note follow.
+    /// </summary>
+    public async Task ImportRecordingAsync(RecordingImport import)
+    {
+        if (State != SessionState.Idle)
+        {
+            return;
+        }
+
+        AudioSeconds = import.Seconds;
+        ResetForNewConsultation();
+        ImportStarted?.Invoke(import);
+        ImportPercent = null;
+        Importing = true;
+        try
+        {
+            await FinaliseAsync("session/import", "Could not import the recording",
+                () => _engine.ImportRecordingAsync(import.Path, import.StartedAt, Retain))
+                .ConfigureAwait(true);
+        }
+        finally
+        {
+            Importing = false;
+        }
+    }
+
+    /// <summary>The import's pass through the file, shown as a percentage.</summary>
+    public void OnImportProgress(ImportProgress progress)
+    {
+        if (!Importing || Phase > FinalisePhase.Transcript || progress.Total <= 0)
+        {
+            return;
+        }
+
+        var percent = (int)Math.Clamp(100 * progress.Seconds / progress.Total, 0, 100);
+        if (percent == ImportPercent)
+        {
+            return;
+        }
+
+        ImportPercent = percent;
+        _status.Show($"Transcribing · {percent}%", busy: true);
+    }
+
+    /// <summary>Stops an import. The engine erases what it began and the page goes back to idle.</summary>
+    public async Task CancelImportAsync()
+    {
+        if (Importing)
+        {
+            await EngineCall.TryAsync(_status, "session/cancel", () => _engine.CancelSessionAsync())
+                .ConfigureAwait(true);
+        }
+    }
+
+    // Past transcription the status line drops the percentage
+    partial void OnPhaseChanged(FinalisePhase value)
+    {
+        if (Importing && value is FinalisePhase.Speakers)
+        {
+            _status.Append("Finalising", busy: true);
+        }
+    }
+
+    // The shared tail of stop and import. A failure must not wedge the UI, so it goes back to
+    // idle saying why. A cancelled import has nothing to say
+    private async Task FinaliseAsync(string step, string problem, Func<Task<string>> call)
+    {
+        State = SessionState.Finalising;
+        Phase = FinalisePhase.Sealing;
         _status.SetDecodeActive(true);  // the tail decode keeps the RT figure up
         _note.Apply(NotePipelineEvent.NoteWritingStarted);
         _guidance.NoteStarted();
         _status.Append("Finalising", busy: true);
-        var stopped = await EngineCall.TryAsync(_status, "session/stop", () => _engine.StopSessionAsync())
-            .ConfigureAwait(true);
-        if (stopped is null)
+        string sealedId;
+        try
         {
-            // A failed stop must not wedge the UI. The recording is safe in
-            // the store either way
+            sealedId = await call().ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            _status.Log($"{step} failed: {e.Message}");
             State = SessionState.Idle;
             ClearPanes();
             _status.SetDecodeActive(false);
-            _status.Append("Stop failed - consultation kept");
+            _status.Append(e is ImportCancelledException ? "Cancelled" : $"{problem}: {EngineWords.Reason(e)}");
             return;
         }
 
         // The finalised transcript carries the speaker labels the live feed
         // could not. It replaces the pane once the engine has sealed it
-        if (stopped.Length > 0)
+        if (sealedId.Length > 0)
         {
-            Sealed?.Invoke(stopped);
-            await LoadFinalTranscriptAsync(stopped).ConfigureAwait(true);
+            Sealed?.Invoke(sealedId);
+            await LoadFinalTranscriptAsync(sealedId).ConfigureAwait(true);
         }
     }
 

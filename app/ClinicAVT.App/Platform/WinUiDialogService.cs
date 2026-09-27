@@ -9,6 +9,7 @@ using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Features.Appraisal;
 using ClinicAVT.App.Features.Backup;
+using ClinicAVT.App.Features.Consultation;
 using ClinicAVT.App.Features.Settings;
 using ClinicAVT.Client;
 
@@ -74,6 +75,19 @@ public sealed class WinUiDialogService(
         var dialog = new RestoreDialog(restore) { XamlRoot = window.XamlRoot };
         await dialog.ShowAsync();
         return restore.RestoredAny;
+    }
+
+    // Add closes the dialog; the consultation page then shows the finalise
+    public async Task<RecordingImport?> RunImportAsync(string? path)
+    {
+        var import = new ImportRecordingViewModel(engine, picker, clock);
+        var dialog = new ImportRecordingDialog(import) { XamlRoot = window.XamlRoot };
+        if (path is not null)
+        {
+            _ = import.UseFileAsync(path);
+        }
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary ? import.Result : null;
     }
 
     // A fresh reading per dialog. The outcome says whether it produced a voiceprint

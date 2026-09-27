@@ -21,7 +21,9 @@ public sealed partial class SessionControlsViewModel : ObservableObject
             if (e.PropertyName is nameof(ConsultationViewModel.State)
                 or nameof(ConsultationViewModel.EngineReady)
                 or nameof(ConsultationViewModel.Phase)
-                or nameof(ConsultationViewModel.ModelsReady))
+                or nameof(ConsultationViewModel.ModelsReady)
+                or nameof(ConsultationViewModel.Importing)
+                or nameof(ConsultationViewModel.ImportPercent))
             {
                 OnPropertyChanged(nameof(IdleVisible));
                 OnPropertyChanged(nameof(RecordingVisible));
@@ -32,13 +34,16 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(CentreStageVisible));
                 OnPropertyChanged(nameof(PanesVisible));
                 OnPropertyChanged(nameof(FinalisingVisible));
+                OnPropertyChanged(nameof(ImportCancelVisible));
                 OnPropertyChanged(nameof(RefusedVisible));
                 DoneCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(FinalisingLabel));
                 OnPropertyChanged(nameof(StartLabel));
                 StartRecordingCommand.NotifyCanExecuteChanged();
+                ImportRecordingCommand.NotifyCanExecuteChanged();
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
+                CancelImportCommand.NotifyCanExecuteChanged();
                 NewConsultationCommand.NotifyCanExecuteChanged();
             }
             else if (e.PropertyName is nameof(ConsultationViewModel.AudioSeconds))
@@ -62,10 +67,12 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     /// <summary>Microphone level, 0 to 1, for the ring around the disc.</summary>
     public double Level => _session.Status.MicLevel;
 
-    /// <summary>The centre-stage caption for the current finalise phase. A note that waits on
-    /// the note model's load says so, with the time.</summary>
+    /// <summary>The centre-stage caption for the current finalise phase, with an import's
+    /// percentage. A note that waits on the note model's load says so, with the time.</summary>
     public string FinalisingLabel => _session.Phase switch
     {
+        FinalisePhase.Sealing or FinalisePhase.Transcript when _session.Importing =>
+            _session.ImportPercent is { } percent ? $"Transcribing · {percent}%" : "Transcribing",
         FinalisePhase.Transcript => "Writing transcript",
         FinalisePhase.Speakers => "Labelling speakers",
         FinalisePhase.Turns => "Writing transcript",
@@ -109,18 +116,30 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     public bool FinalisingVisible =>
         _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;
 
+    /// <summary>An import can be stopped until the engine has sealed it.</summary>
+    public bool ImportCancelVisible => FinalisingVisible && _session.Importing;
+
     public string ElapsedLabel => Words.Position(_session.AudioSeconds);
 
     public string StartLabel =>
         _session.State == SessionState.Idle && !(_session.EngineReady && _session.ModelsReady)
             ? "Getting ready"
-            : "Ready to start recording";
+            : "Ready to start";
 
     [RelayCommand(CanExecute = nameof(CanStartRecording))]
     private Task StartRecording() => _session.StartRecordingAsync();
 
     private bool CanStartRecording() =>
         _session.State == SessionState.Idle && _session.EngineReady && _session.ModelsReady;
+
+    /// <summary>Opens the import dialog, on the dropped file when given one.</summary>
+    [RelayCommand(CanExecute = nameof(CanImportRecording))]
+    private Task ImportRecording(string? path) => _session.ImportRecordingAsync(path);
+
+    // From idle, or from a review the import then ends
+    private bool CanImportRecording() =>
+        _session.State is SessionState.Idle or SessionState.Review or SessionState.Refused
+        && _session.EngineReady && _session.ModelsReady;
 
     [RelayCommand(CanExecute = nameof(CanStopRecording))]
     private Task StopRecording() => _session.StopRecordingAsync();
@@ -131,6 +150,9 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     private Task CancelRecording() => _session.CancelRecordingAsync();
 
     private bool CanCancelRecording() => _session.State == SessionState.Recording;
+
+    [RelayCommand(CanExecute = nameof(ImportCancelVisible))]
+    private Task CancelImport() => _session.CancelImportAsync();
 
     [RelayCommand(CanExecute = nameof(CanNewConsultation))]
     private void NewConsultation() => _session.StartNewConsultation();

@@ -104,6 +104,13 @@
                 HorizontalAlignment="Center"
                 Style="{StaticResource ClockText}"
                 Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />
+            <Button
+                HorizontalAlignment="Center"
+                AutomationProperties.Name="Cancel import"
+                Command="{x:Bind ViewModel.CancelImportCommand}"
+                Content="Cancel"
+                Style="{StaticResource TrayButton}"
+                Visibility="{x:Bind ViewModel.ImportCancelVisible, Mode=OneWay}" />
         </StackPanel>
         <StackPanel
             MaxWidth="420"

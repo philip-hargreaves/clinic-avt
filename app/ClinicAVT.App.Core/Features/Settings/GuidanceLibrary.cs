@@ -165,21 +165,21 @@ public sealed partial class GuidanceLibrary : ObservableObject
 
     public bool DocumentsCaptionVisible => DocumentsCaption.Length > 0;
 
-    /// <summary>"32 documents · all ready", or what is still being read or could not be.</summary>
+    /// <summary>"32 documents", then what is still being read or could not be.</summary>
     public string DocumentsSummary
     {
         get
         {
             var working = Documents.Count(r => r.Working);
             var failed = Documents.Count(r => r.Failed);
-            var state = (working, failed) switch
+            var count = Words.Count(Documents.Count, "document");
+            return (working, failed) switch
             {
-                (0, 0) => "all ready",
-                (_, 0) => $"reading {working}",
-                (0, _) => $"{failed} could not be read",
-                _ => $"reading {working}, {failed} could not be read",
+                (0, 0) => count,
+                (_, 0) => $"{count} · reading {working}",
+                (0, _) => $"{count} · {failed} could not be read",
+                _ => $"{count} · reading {working}, {failed} could not be read",
             };
-            return $"{Words.Count(Documents.Count, "document")} · {state}";
         }
     }
 

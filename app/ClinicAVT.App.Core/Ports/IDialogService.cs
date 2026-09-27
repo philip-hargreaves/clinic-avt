@@ -22,6 +22,12 @@ public interface IDialogService
     /// <summary>The Restore dialog. True when it added consultations.</summary>
     Task<bool> RunRestoreAsync();
 
+    /// <summary>
+    /// The Add consultation recording dialog, opened on the given file when one was dropped. The
+    /// file and its date, or null when cancelled.
+    /// </summary>
+    Task<RecordingImport?> RunImportAsync(string? path = null);
+
     /// <summary>The voice enrolment dialog. True when a print was made.</summary>
     Task<bool> RunEnrolmentAsync();
 

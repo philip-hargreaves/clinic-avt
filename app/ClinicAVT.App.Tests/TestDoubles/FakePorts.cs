@@ -40,6 +40,18 @@ public sealed class FakeDialogService : IDialogService
 
     public Task<bool> RunRestoreAsync() => Task.FromResult(false);
 
+    /// <summary>What the import dialog hands back, null for a cancel.</summary>
+    public RecordingImport? Import { get; set; }
+
+    /// <summary>Each import dialog shown, with the dropped file it opened on.</summary>
+    public List<string?> ImportsShown { get; } = [];
+
+    public Task<RecordingImport?> RunImportAsync(string? path = null)
+    {
+        ImportsShown.Add(path);
+        return Task.FromResult(Import);
+    }
+
     public Task<bool> RunEnrolmentAsync()
     {
         OnEnrolment?.Invoke();
@@ -66,7 +78,7 @@ public sealed class FakeFilePicker : IFilePicker
     /// <summary>The file an open picker returns, null for a cancel.</summary>
     public string? OpenPath { get; set; }
 
-    public Task<string?> PickFileAsync(string extension) => Task.FromResult(OpenPath);
+    public Task<string?> PickFileAsync(IReadOnlyList<string> extensions) => Task.FromResult(OpenPath);
 
     public Task<IReadOnlyList<string>> PickFilesAsync(IReadOnlyList<string> extensions) =>
         Task.FromResult(Files);
