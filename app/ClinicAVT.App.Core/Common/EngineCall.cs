@@ -6,7 +6,8 @@ namespace ClinicAVT.App.Core.Common;
 public static class EngineCall
 {
     /// <summary>
-    /// A failure goes on the status line as "{problem}: {reason}". Cancellation still throws.
+    /// A failure goes on the status line as "{problem}: {reason}", the engine's reason in plain
+    /// words. Cancellation still throws.
     /// </summary>
     public static async Task<bool> ReportAsync(StatusBarViewModel? status, string problem, Func<Task> call) =>
         await ReportAsync(status, problem, async () =>
@@ -24,7 +25,7 @@ public static class EngineCall
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            status?.Append($"{problem}: {e.Message}");
+            status?.Append($"{problem}: {EngineWords.Reason(e)}");
             return default;
         }
     }

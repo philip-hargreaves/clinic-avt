@@ -16,7 +16,8 @@ public sealed partial class StatusBarView : UserControl
         InitializeComponent();
         PartnerMarks.Attach(this, CreditsRow, credits.Marks);
         Loaded += (_, _) => FitChips();
-        // A chip's words change its width, so the fit is checked again
+        // A change of words changes widths, so the fit is checked again once the bindings
+        // have shown them
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(StatusBarViewModel.AsrChip)
@@ -25,7 +26,7 @@ public sealed partial class StatusBarView : UserControl
                 or nameof(StatusBarViewModel.MetricsVisible)
                 or nameof(StatusBarViewModel.DisplayLabel))
             {
-                FitChips();
+                DispatcherQueue.TryEnqueue(FitChips);
             }
         };
     }
@@ -34,8 +35,8 @@ public sealed partial class StatusBarView : UserControl
 
     private void OnBarSizeChanged(object sender, SizeChangedEventArgs e) => FitChips();
 
-    // The state line and partner marks always show. The chips show only when all of them
-    // fit in the room between, so nothing is clipped
+    // The state line and partner marks always show. The chips show only when all of them fit
+    // in the room between, so nothing is clipped. The consent line gives way to them
     private void FitChips()
     {
         if (Bar.ActualWidth <= 0)

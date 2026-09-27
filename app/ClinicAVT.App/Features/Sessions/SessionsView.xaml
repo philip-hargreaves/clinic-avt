@@ -20,7 +20,13 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <controls:PageHeader Title="Sessions" />
+        <controls:PageHeader Title="Sessions">
+            <controls:PageHeader.Commands>
+                <Button AutomationProperties.Name="Back up consultations" Command="{x:Bind ViewModel.BackUpCommand}">
+                    <controls:IconLabel Glyph="&#xE8F7;" Text="Back up&#x2026;" />
+                </Button>
+            </controls:PageHeader.Commands>
+        </controls:PageHeader>
 
         <Grid Grid.Row="1" Padding="24,0,24,16" ColumnSpacing="24">
             <Grid.RowDefinitions>

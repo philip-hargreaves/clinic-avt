@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <thread>
@@ -46,6 +47,11 @@ TEST(NllbTranslator, TranslatesStreamsAndSurvivesARelease) {
         translator.Translate("It\xE2\x80\x99s your body\xE2\x80\x99s defence.", "Urdu", nullptr),
         translator.Translate("It's your body's defence.", "Urdu", nullptr))
         << "a curly apostrophe translates as a straight one";
+
+    std::string edited = kSheet;
+    std::replace(edited.begin(), edited.end(), '\n', '\r');
+    EXPECT_EQ(translator.Translate(edited, "French", nullptr), french)
+        << "a sheet saved from a text box, with CR line ends, translates line by line";
 
     EXPECT_THROW(translator.Translate("hello", "Klingon", nullptr), std::runtime_error);
 

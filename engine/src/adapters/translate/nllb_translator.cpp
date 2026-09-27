@@ -14,6 +14,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/models/residency.hpp"
+#include "core/common/strings.hpp"
 #include "core/translate/plain_punctuation.hpp"
 
 namespace clinicavt::translate {
@@ -252,8 +253,10 @@ std::vector<std::string> NllbTranslator::Languages() {
     return names;
 }
 
-std::string NllbTranslator::Translate(const std::string& text, const std::string& language,
+std::string NllbTranslator::Translate(const std::string& sheet, const std::string& language,
                                       const Progress& progress) {
+    // Sheets edited before line endings were normalised on save still hold CR
+    const std::string text = strings::UnixLines(sheet);
     if (text.empty()) {
         throw std::runtime_error("nothing to translate");
     }

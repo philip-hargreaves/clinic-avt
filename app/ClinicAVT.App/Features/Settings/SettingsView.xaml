@@ -36,7 +36,7 @@
                         SelectedIndex="{x:Bind ViewModel.Appearance.ThemeIndex, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
 
-                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Consultations" />
+                <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Your data" />
                 <toolkit:SettingsCard Description="Encrypted on this device, the audio is never kept" Header="Save consultation data">
                     <ToggleSwitch
                         MinWidth="0"
@@ -62,7 +62,19 @@
                         Command="{x:Bind Voice.SetUpVoiceCommand}"
                         Content="{x:Bind Voice.SetUpLabel, Mode=OneWay}" />
                 </toolkit:SettingsCard>
-                <toolkit:SettingsCard Description="Every stored consultation, with its notes and reflections. Cannot be undone." Header="Delete all consultation data">
+                <toolkit:SettingsCard Description="{x:Bind ViewModel.Privacy.BackupDescription, Mode=OneWay}" Header="Back up consultations">
+                    <Button
+                        MinWidth="160"
+                        Command="{x:Bind ViewModel.Privacy.BackUpCommand}"
+                        Content="Back up&#x2026;" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard Description="Bring consultations back from a backup file." Header="Restore from a backup">
+                    <Button
+                        MinWidth="160"
+                        Command="{x:Bind ViewModel.Privacy.RestoreCommand}"
+                        Content="Restore&#x2026;" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard Description="Every stored consultation, with its notes. Cannot be undone." Header="Delete all consultation data">
                     <Button
                         MinWidth="160"
                         Command="{x:Bind ViewModel.Privacy.DeleteAllConsultationsCommand}"

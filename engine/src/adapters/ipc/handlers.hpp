@@ -15,6 +15,7 @@
 #include "ports/document_ingest.hpp"
 #include "ports/guidance_lane.hpp"
 #include "ports/note_lane.hpp"
+#include "ports/recording_reader.hpp"
 
 namespace clinicavt::models {
 class OvRuntime;
@@ -24,6 +25,10 @@ namespace clinicavt::translate {
 class ITranslator;
 class TranslateLane;
 }  // namespace clinicavt::translate
+
+namespace clinicavt::archive {
+class ArchiveLane;
+}  // namespace clinicavt::archive
 
 namespace clinicavt::ipc {
 
@@ -73,9 +78,25 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore
 json HandleReflectionList(clinicavt::store::ISessionStore& sessions);
 std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
                                               const json& params);
-// One crypto-erase of everything stored, refused while a consultation records
+// One crypto-erase of everything stored, refused while a consultation records or a backup
+// runs. Without deleteReflections a session with an appraisal entry is cleared to it instead
 std::variant<json, Error> HandleSessionDeleteAll(clinicavt::store::ISessionStore& sessions,
-                                                 bool session_active);
+                                                 const json& params, bool session_active,
+                                                 bool archive_busy);
+// session/remove: clears or erases the given sessions as Delete all does, once a backup holds
+// them. An id already gone is not counted
+std::variant<json, Error> HandleSessionRemove(clinicavt::store::ISessionStore& sessions,
+                                              const json& params, bool archive_busy);
+
+// archive/summary: what a backup of the period would hold, and how many consultations the last
+// backup (covered) does not. archive/backup and archive/restore start a job on the lane,
+// refused while a consultation records or another job runs
+std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionStore& sessions,
+                                               const json& params);
+std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& lane,
+                                              bool session_active, const json& params);
+std::variant<json, Error> HandleArchiveRestore(clinicavt::archive::ArchiveLane& lane,
+                                               bool session_active, const json& params);
 
 // Seed data from demo_dir, a no-op while present. Clearing leaves real sessions untouched
 std::variant<json, Error> HandleDemoSeed(clinicavt::store::ISessionStore& sessions,
@@ -90,6 +111,22 @@ inline Notify PushTo(PipeServer& server) {
         server.PushNotification(method, std::move(params));
     };
 }
+
+// recording/inspect: a recording's length and date for the import dialog. Nothing is kept
+std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
+                                                 const json& params);
+// session/import: answers the new session's id at once, then finalises it on the import's
+// thread, pushing session/importProgress and session/imported or session/importFailed from there.
+// Refused as session/start is, during playback, and for a file the reader cannot open. No error
+// carries the path
+std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
+                                              clinicavt::session::SessionController& controller,
+                                              bool playback_active,
+                                              clinicavt::translate::ITranslator* translator,
+                                              const Notify& push, const json& params);
+// session/importProgress: seconds of the recording transcribed, of total, to a tenth
+json ImportProgressJson(const std::string& id, double seconds, double total);
+
 // guidance/corpora: whether the embedder is loading, ready or unavailable, and
 // every corpus directory. guidance/model carries the state alone once loading ends
 json GuidanceCorporaJson(const clinicavt::guidance::Readiness& readiness,
@@ -172,16 +209,21 @@ struct EngineServices {
     std::filesystem::path demo_dir;
     clinicavt::session::Playback* playback = nullptr;
     AsrSwitch switch_asr;
+    clinicavt::archive::ArchiveLane* archive_lane = nullptr;   // deletes are refused while it runs
+    clinicavt::audio::IRecordingReader* recordings = nullptr;  // import is absent without it
 };
 
 // engine/*, note/tier, anchor/* and audio/inputs
 void RegisterEngineMethods(PipeServer& server, const EngineServices& services);
 // session/*, note/*, patient/*, reflection/*, demo/* and translate/*
 void RegisterSessionMethods(PipeServer& server, const EngineServices& services);
+// archive/*, with the archive lane present
+void RegisterArchiveMethods(PipeServer& server, const EngineServices& services);
 
 inline void RegisterMethods(PipeServer& server, const EngineServices& services) {
     RegisterEngineMethods(server, services);
     RegisterSessionMethods(server, services);
+    if (services.archive_lane != nullptr) RegisterArchiveMethods(server, services);
 }
 
 }  // namespace clinicavt::ipc

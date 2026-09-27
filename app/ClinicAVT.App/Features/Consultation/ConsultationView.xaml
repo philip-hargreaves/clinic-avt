@@ -5,7 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:ClinicAVT.App.Controls">
 
-    <Grid>
+    <!-- A recording dragged anywhere on the page can be imported, so all of it takes hits -->
+    <Grid x:Name="Root" Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -51,27 +52,37 @@
 
         <!-- The record control holds this region until stop, then the documents take it -->
         <Grid Grid.Row="1" Margin="24,0,24,16">
-            <!-- The 2* and 3* rows put the record control at the optical centre, two fifths down -->
+            <!-- The 2* and 3* rows put the record control at the optical centre, two fifths down. The
+                 footnote hangs below it without moving it -->
             <Grid Visibility="{x:Bind Controls.CentreStageVisible, Mode=OneWay}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="2*" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="3*" />
                 </Grid.RowDefinitions>
-                <StackPanel
+                <ContentControl
+                    x:Name="ControlsHost"
                     Grid.Row="1"
                     MaxWidth="560"
+                    HorizontalAlignment="Center" />
+                <StackPanel
+                    Grid.Row="2"
+                    Margin="0,20,0,0"
                     HorizontalAlignment="Center"
-                    Spacing="20">
-                    <ContentControl x:Name="ControlsHost" HorizontalAlignment="Center" />
+                    VerticalAlignment="Top"
+                    Orientation="Horizontal"
+                    Spacing="4"
+                    Visibility="{x:Bind Controls.IdleVisible, Mode=OneWay}">
                     <TextBlock
-                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
                         Foreground="{ThemeResource MutedTextBrush}"
                         Style="{StaticResource BodyText}"
-                        Text="Ensure patient consent is given before starting to record the consultation."
-                        TextAlignment="Center"
-                        TextWrapping="Wrap"
-                        Visibility="{x:Bind Controls.IdleVisible, Mode=OneWay}" />
+                        Text="Already have a recording?" />
+                    <HyperlinkButton
+                        Padding="0"
+                        VerticalAlignment="Center"
+                        Command="{x:Bind Controls.ImportRecordingCommand}"
+                        Content="Import the file" />
                 </StackPanel>
             </Grid>
             <!-- The top margin is the height of the Sessions search row, so the title lines up
@@ -102,6 +113,36 @@
                     Grid.Row="1"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch" />
+            </Grid>
+
+            <Grid
+                x:Name="DropHighlight"
+                IsHitTestVisible="False"
+                Opacity="0">
+                <Grid.OpacityTransition>
+                    <ScalarTransition Duration="0:0:0.15" />
+                </Grid.OpacityTransition>
+                <Rectangle
+                    Fill="{ThemeResource AcrylicInAppFillColorDefaultBrush}"
+                    RadiusX="8"
+                    RadiusY="8"
+                    Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                    StrokeDashArray="4,3"
+                    StrokeThickness="1.5" />
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="12">
+                    <FontIcon
+                        HorizontalAlignment="Center"
+                        FontSize="32"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Glyph="&#xE8B5;" />
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SubtitleTextBlockStyle}"
+                        Text="Drop to import" />
+                </StackPanel>
             </Grid>
         </Grid>
     </Grid>

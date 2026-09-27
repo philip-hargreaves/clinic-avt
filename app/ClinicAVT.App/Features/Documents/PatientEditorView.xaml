@@ -53,15 +53,19 @@
             </StackPanel>
         </Grid>
 
-        <TextBox
-            x:Name="PatientBox"
-            Grid.Row="1"
-            MinHeight="140"
-            IsHitTestVisible="{x:Bind ViewModel.PatientEditing, Mode=OneWay}"
-            IsReadOnly="{x:Bind ViewModel.PatientViewing, Mode=OneWay}"
-            IsTabStop="{x:Bind ViewModel.PatientEditing, Mode=OneWay}"
-            Style="{StaticResource DocumentTextBox}"
-            Text="{x:Bind ViewModel.PatientInfoText, Mode=TwoWay}" />
+        <!-- The host carries the cap for both views -->
+        <Grid x:Name="PatientHost" Grid.Row="1" MinHeight="140">
+            <controls:DocumentView
+                Label="Patient information"
+                Text="{x:Bind ViewModel.PatientInfoText, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.PatientViewing, Mode=OneWay}" />
+            <TextBox
+                x:Name="PatientBox"
+                AutomationProperties.Name="Patient information"
+                Style="{StaticResource DocumentTextBox}"
+                Text="{x:Bind ViewModel.PatientInfoText, Mode=TwoWay}"
+                Visibility="{x:Bind ViewModel.PatientEditing, Mode=OneWay}" />
+        </Grid>
 
         <Grid x:Name="ActionRow" Grid.Row="3" Margin="0,2,0,0">
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -106,16 +110,22 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <TextBlock
-                x:Name="TranslationCaption"
-                Style="{StaticResource CaptionText}"
-                Text="{x:Bind ViewModel.TranslationCaption, Mode=OneWay}" />
-            <TextBox
-                x:Name="TranslationBox"
+            <StackPanel x:Name="TranslationHeader">
+                <TextBlock
+                    Style="{StaticResource CaptionText}"
+                    Text="{x:Bind ViewModel.TranslationCaption, Mode=OneWay}" />
+                <controls:StaleNotice
+                    ActionText="Translate again"
+                    Command="{x:Bind ViewModel.TranslateAgainCommand}"
+                    Text="The information changed since it was translated."
+                    Visibility="{x:Bind ViewModel.TranslationStale, Mode=OneWay}" />
+            </StackPanel>
+            <!-- Never edited. A changed sheet is translated again instead -->
+            <controls:DocumentView
+                x:Name="TranslationView"
                 Grid.Row="1"
                 MinHeight="96"
-                IsReadOnly="True"
-                Style="{StaticResource DocumentTextBox}"
+                Label="{x:Bind ViewModel.TranslationCaption, Mode=OneWay}"
                 Text="{x:Bind ViewModel.TranslationText, Mode=OneWay}" />
         </Grid>
     </Grid>

@@ -24,6 +24,13 @@
                 Text="{x:Bind ViewModel.DisplayLabel, Mode=OneWay}"
                 TextStyle="{StaticResource CaptionText}" />
 
+            <TextBlock
+                Grid.Column="1"
+                Style="{StaticResource MicroText}"
+                Text="Ensure patient consent is given before recording"
+                TextWrapping="NoWrap"
+                Visibility="{x:Bind ViewModel.ConsentVisible, Mode=OneWay}" />
+
             <!-- First-time setup can take minutes: the bar moves while the line counts the time -->
             <ProgressBar
                 Grid.Column="1"

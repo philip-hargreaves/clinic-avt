@@ -15,6 +15,8 @@ namespace clinicavt::diar {
 // (clip, absolute first frame) -> Whisper's chunks with absolute frames.
 // The text is their join
 using DecodeClipFn = std::function<std::vector<asr::Turn>(std::span<const float>, std::uint64_t)>;
+// True once a catch-up should give up, checked between its steps
+using StopFn = std::function<bool()>;
 
 // Exact decode span -> speculated text
 using TurnTexts = std::map<std::pair<std::uint64_t, std::uint64_t>, std::string>;
@@ -62,8 +64,8 @@ class IDiariser {
     virtual void Advance(std::span<const float>, const DecodeClipFn&) {}
 
     // Finalise's catch-up: Advance without a budget, so every settled span is
-    // decoded and cut before Diarise, however far capture lagged
-    virtual void Settle(std::span<const float>, const DecodeClipFn&) {}
+    // decoded and cut before Diarise, however far capture lagged. A stop leaves it part done
+    virtual void Settle(std::span<const float>, const DecodeClipFn&, const StopFn&) {}
 
     // Turn texts speculated by Advance, keyed on exact decode spans. Valid
     // after Diarise

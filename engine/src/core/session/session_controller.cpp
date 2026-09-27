@@ -43,50 +43,21 @@ SessionController::~SessionController() {
 
 bool SessionController::Start(std::optional<ReplaySpec> replay, const store::SessionId& resume_from,
                               bool retain, const MicSelection& mic) {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (running_ || enrolment_.Running()) {
-            return false;
-        }
-        running_ = true;
-        reviewing_ = false;  // Record wins over a review
-        got_audio_ = false;
-        ended_ = false;
-        stop_requested_ = false;
-        diar_stop_ = false;
-        lost_frames_ = 0;
-        end_ = {};
-        meter_ = audio::LevelMeter{};
-    }
-    std::vector<float> resumed_audio;
-    try {
-        if (!resume_from.empty()) {
-            resumed_audio = store_.ReadAudio(resume_from);
-            std::fprintf(stderr, "clinicavt-engine: resuming %s with %.1f s of stored audio\n",
-                         resume_from.c_str(),
-                         static_cast<double>(resumed_audio.size()) / audio::kSampleRate);
-        }
-        store_.EraseUnretained();  // the previous consultation is left
-        store::SessionMeta meta{audio::kSampleRate, "", ""};
-        if (!replay.has_value()) {
-            // What was actually opened, so a default fallback is on record
-            meta.device_id = mic.id;
-            meta.device_name = mic.name;
-        }
-        meta.retain = retain;
-        const store::SessionId id = store_.Begin(meta);
-        std::lock_guard<std::mutex> lock(mutex_);
-        session_id_ = id;
-        resumed_from_ = resume_from;
-        note_prepared_ = false;
-        session_audio_.clear();
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: session start failed: %s\n", e.what());
-        std::lock_guard<std::mutex> lock(mutex_);
-        running_ = false;
-        end_ = {audio::SourceEndReason::kFailed, std::string("session setup failed: ") + e.what()};
+    if (!Claim()) {
         return false;
     }
+    store::SessionMeta meta{audio::kSampleRate, "", ""};
+    if (!replay.has_value()) {
+        // What was actually opened, so a default fallback is on record
+        meta.device_id = mic.id;
+        meta.device_name = mic.name;
+    }
+    meta.retain = retain;
+    auto stored = BeginStored(meta, resume_from);
+    if (!stored.has_value()) {
+        return false;
+    }
+    std::vector<float> resumed_audio = std::move(*stored);
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!resumed_audio.empty()) {
@@ -120,7 +91,146 @@ bool SessionController::Start(std::optional<ReplaySpec> replay, const store::Ses
     return false;
 }
 
+store::SessionId SessionController::Import(std::function<std::vector<float>()> read,
+                                           const std::string& started_at, bool retain,
+                                           ImportReport report) {
+    if (Importing()) {
+        return {};
+    }
+    if (import_thread_.joinable()) {
+        import_thread_.join();  // the last import's, already done
+    }
+    if (!Claim()) {
+        return {};
+    }
+    store::SessionMeta meta{audio::kSampleRate, "", ""};
+    meta.retain = retain;
+    meta.started_at = started_at;
+    if (!BeginStored(meta, {}).has_value()) {
+        return {};
+    }
+    store::SessionId id;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        id = session_id_;
+        importing_ = true;
+        source_.reset();  // the last recording's, which pause and monitor would reach
+    }
+    import_cancel_ = false;
+    import_thread_ = std::thread(
+        [this, read = std::move(read), report = std::move(report)] { RunImport(read, report); });
+    return id;
+}
+
+bool SessionController::Importing() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return importing_;
+}
+
+// Nothing escapes the thread. The slot is freed before done, so a request answering it is
+// never refused as busy
+void SessionController::RunImport(const std::function<std::vector<float>()>& read,
+                                  const ImportReport& report) {
+    const store::SessionId id = CurrentSession();
+    std::string error;
+    try {
+        std::vector<float> recording = read();
+        const double total = static_cast<double>(recording.size()) / audio::kSampleRate;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            session_audio_ = std::move(recording);
+        }
+        if (metrics_ != nullptr) {
+            metrics_->BeginSession(true, 0.0);
+        }
+        if (note_writer_ != nullptr) {
+            note_writer_->Prepare();
+        }
+        if (report.progress) {
+            import_progress_ = [&report, &id, total](double seconds) {
+                report.progress(id, seconds, total);
+            };
+        }
+        // Another channel, maybe another clinician: the print must not drift toward it
+        if (import_cancel_ || FinishSession(Outcome::kFinalise, false) == Outcome::kCancel) {
+            error = kImportCancelled;
+        }
+    } catch (const std::exception& e) {
+        error = e.what();
+    } catch (...) {
+        error = "the recording could not be imported";
+    }
+    import_progress_ = nullptr;
+    if (!error.empty()) {
+        // A read that failed leaves its session begun
+        try {
+            FinishSession(Outcome::kCancel);
+        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        running_ = false;
+        importing_ = false;
+        import_cancel_ = false;
+    }
+    if (report.done) {
+        try {
+            report.done(id, error);
+        } catch (...) {  // NOLINT(bugprone-empty-catch) a shell that has gone reads it as over
+        }
+    }
+}
+
+bool SessionController::Claim() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (running_ || enrolment_.Running()) {
+        return false;
+    }
+    running_ = true;
+    reviewing_ = false;  // Record wins over a review
+    got_audio_ = false;
+    ended_ = false;
+    stop_requested_ = false;
+    diar_stop_ = false;
+    diar_ticks_ = 0;
+    lost_frames_ = 0;
+    end_ = {};
+    meter_ = audio::LevelMeter{};
+    return true;
+}
+
+std::optional<std::vector<float>> SessionController::BeginStored(
+    const store::SessionMeta& meta, const store::SessionId& resumed_from) {
+    try {
+        std::vector<float> resumed_audio;
+        if (!resumed_from.empty()) {
+            resumed_audio = store_.ReadAudio(resumed_from);
+            std::fprintf(stderr, "clinicavt-engine: resuming %s with %.1f s of stored audio\n",
+                         resumed_from.c_str(),
+                         static_cast<double>(resumed_audio.size()) / audio::kSampleRate);
+        }
+        store_.EraseUnretained();  // the previous consultation is left
+        const store::SessionId id = store_.Begin(meta);
+        std::lock_guard<std::mutex> lock(mutex_);
+        session_id_ = id;
+        resumed_from_ = resumed_from;
+        note_prepared_ = false;
+        session_audio_.clear();
+        return resumed_audio;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "clinicavt-engine: session start failed: %s\n", e.what());
+        std::lock_guard<std::mutex> lock(mutex_);
+        running_ = false;
+        end_ = {audio::SourceEndReason::kFailed, std::string("session setup failed: ") + e.what()};
+        return std::nullopt;
+    }
+}
+
 void SessionController::Stop() {
+    if (import_thread_.joinable()) {
+        import_thread_.join();
+    }
     // Re-warm in parallel with finalise, since a long session may have evicted
     if (note_writer_ != nullptr && Running()) {
         note_writer_->Prepare();
@@ -130,6 +240,13 @@ void SessionController::Stop() {
 }
 
 void SessionController::Cancel() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (importing_) {
+            import_cancel_ = true;
+            return;
+        }
+    }
     EndCapture();
     FinishSession(Outcome::kCancel);
 }
@@ -147,6 +264,10 @@ void SessionController::SetMonitor(bool monitor) {
 bool SessionController::Running() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return running_ && !ended_;
+}
+
+bool SessionController::Busy() const {
+    return Running() || note_lane_.Busy();
 }
 
 void SessionController::FreezeAnchor() {
@@ -199,7 +320,8 @@ void SessionController::Close() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (note_lane_.Refused()) {
-            refused = std::exchange(last_finalised_, {});
+            // Only a fresh capture too short for a note goes. A reviewed session is a kept record
+            if (!reviewing_) refused = std::exchange(last_finalised_, {});
             note_lane_.ClearRefusal();
         }
         if (reviewing_) {
@@ -246,6 +368,10 @@ bool SessionController::RegenerateNote(note::NoteOptions options) {
     try {
         turns = store_.ReadTurns(id);
     } catch (...) {
+        return false;
+    }
+    // A session restored without its transcript has nothing to write from
+    if (turns.empty()) {
         return false;
     }
     note_lane_.SetOptions(std::move(options));
@@ -428,13 +554,13 @@ void SessionController::EndCapture() {
     running_ = false;
 }
 
-// Stop, cancel and abandon all end here. The store outcome always holds even
-// if the bookkeeping around it fails
-void SessionController::FinishSession(Outcome outcome) {
+// Stop, import, cancel and abandon all end here. The store outcome always holds
+// even if the bookkeeping around it fails
+SessionController::Outcome SessionController::FinishSession(Outcome outcome, bool learn) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (session_id_.empty()) {
-            return;
+            return outcome;
         }
     }
     // No capture work may run once finalise starts. Stage timings let a slow
@@ -460,11 +586,20 @@ void SessionController::FinishSession(Outcome outcome) {
     // Capture decodes a few spans per tick and can lag. The rest decodes now,
     // so the cuts reach the diariser at every replay speed
     if (outcome == Outcome::kFinalise) {
+        events_.OnProgress("transcript");
         try {
-            diariser_.Settle(session_audio_,
-                             [this](std::span<const float> clip, std::uint64_t first) {
-                                 return transcriber_.DecodeClipChunks(clip, first);
-                             });
+            // An import reports how far through the file it is. Spans decode in order
+            diariser_.Settle(
+                session_audio_,
+                [this](std::span<const float> clip, std::uint64_t first) {
+                    auto chunks = transcriber_.DecodeClipChunks(clip, first);
+                    if (import_progress_) {
+                        import_progress_(static_cast<double>(first + clip.size()) /
+                                         audio::kSampleRate);
+                    }
+                    return chunks;
+                },
+                [this] { return import_cancel_.load(); });
             const auto cuts = transcriber_.TakeClipCuts();
             if (!cuts.empty()) diariser_.AddCutPoints(cuts);
         } catch (const std::exception& e) {
@@ -473,7 +608,7 @@ void SessionController::FinishSession(Outcome outcome) {
             std::fprintf(stderr, "clinicavt-engine: capture settle failed\n");
         }
         stage("capture settled");
-        events_.OnProgress("transcript");
+        if (import_cancel_) outcome = Outcome::kCancel;
     }
 
     store::SessionId id;
@@ -486,7 +621,7 @@ void SessionController::FinishSession(Outcome outcome) {
         }
     }
     if (id.empty()) {
-        return;
+        return outcome;
     }
     // The note lane's input is the attributed transcript. A diarisation
     // failure leaves it empty, so the note is refused as too thin and the
@@ -504,7 +639,7 @@ void SessionController::FinishSession(Outcome outcome) {
             stage("transcript sealed");
             // The print learns only from named sessions, and only once the
             // note lane agrees this was a consultation
-            if (transcript.doctor_cluster >= 0 && learn_anchor_) {
+            if (transcript.doctor_cluster >= 0 && learn && learn_anchor_) {
                 doctor_voiceprint = diariser_.DoctorVoiceprint(
                     session_audio_, transcript.diarised.slices, transcript.doctor_cluster);
                 if (note_writer_ == nullptr) {
@@ -520,10 +655,17 @@ void SessionController::FinishSession(Outcome outcome) {
         }
     }
     // Capture state a finalise did not consume must not leak into the next
-    // session (cancel, abandon, a diarisation failure)
+    // session (cancel, abandon, a diarisation failure), nor the cuts of its own decodes
     diariser_.DiscardCapture();
+    (void)transcriber_.TakeClipCuts();
     session_audio_.clear();
     session_audio_.shrink_to_fit();
+    // A cancel that arrived while the transcript was sealed still wins
+    if (outcome == Outcome::kFinalise && import_cancel_) {
+        outcome = Outcome::kCancel;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (last_finalised_ == id) last_finalised_.clear();
+    }
     try {
         switch (outcome) {
             case Outcome::kFinalise:
@@ -560,6 +702,7 @@ void SessionController::FinishSession(Outcome outcome) {
                                  if (!print.empty()) diariser_.AccrueVoiceprint(print);
                              });
     }
+    return outcome;
 }
 
 // Empty when the session has no note or cannot be read

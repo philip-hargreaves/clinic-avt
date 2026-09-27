@@ -22,10 +22,14 @@ public sealed class WinUiFilePicker(WindowAccessor window) : IFilePicker
         return file?.Path;
     }
 
-    public async Task<string?> PickFileAsync(string extension)
+    public async Task<string?> PickFileAsync(IReadOnlyList<string> extensions)
     {
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.Downloads };
-        picker.FileTypeFilter.Add(extension);
+        foreach (var extension in extensions)
+        {
+            picker.FileTypeFilter.Add(extension);
+        }
+
         if (!window.BindToWindow(picker))
         {
             return null;

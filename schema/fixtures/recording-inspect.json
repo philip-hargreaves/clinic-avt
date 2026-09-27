@@ -1,0 +1,18 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 36,
+        "method": "recording/inspect",
+        "params": {
+            "path": "C:\\Users\\clinician\\Downloads\\Home visit 26 Sep.m4a"
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 36,
+        "result": {
+            "seconds": 760.4,
+            "recordedAt": "2026-09-26T13:05:00Z"
+        }
+    }
+}

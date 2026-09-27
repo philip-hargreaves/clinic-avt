@@ -84,7 +84,8 @@ struct RecordingDiariser : diar::IDiariser {
     void Advance(std::span<const float>, const diar::DecodeClipFn&) override {
         calls.push_back("Advance");
     }
-    void Settle(std::span<const float> audio, const diar::DecodeClipFn&) override {
+    void Settle(std::span<const float> audio, const diar::DecodeClipFn&,
+                const diar::StopFn&) override {
         calls.push_back("Settle " + std::to_string(audio.size()));
     }
     diar::TurnTexts TakeTurnTexts() override {
@@ -146,7 +147,7 @@ TEST(DeferredDiariser, ForwardsEveryMethodToTheLoadedDiariser) {
     (void)diariser.Diarise(audio);
     EXPECT_EQ(diariser.AnchorSimilarities(audio, {}, 2), (std::vector<double>{0.75, 0.75}));
     diariser.Advance(audio, decode);
-    diariser.Settle(audio, decode);
+    diariser.Settle(audio, decode, [] { return false; });
     (void)diariser.TakeTurnTexts();
     (void)diariser.TakeTurnChunks();
     EXPECT_EQ(diariser.ClusterCentroids().size(), 2u);

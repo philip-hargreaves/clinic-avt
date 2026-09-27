@@ -40,7 +40,7 @@
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Ask everyone in the room before you record, including an interpreter on the phone. A sentence is enough: the consultation is transcribed by software to help write the notes, and nothing leaves this computer." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Ask everyone in the room before you record, including an interpreter on the phone. A sentence is enough: the consultation is transcribed by software on this computer to help write the notes, and the recording is not kept." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="Start the consultation after the patient has given their name and date of birth, so the transcript carries neither." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="The audio is used to write the transcript and is then discarded. It is never kept." />
                             </StackPanel>
@@ -101,9 +101,23 @@
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Sessions lists every consultation kept on this computer, newest first, with its transcript, note and patient sheet. Search finds a consultation by its label or its words." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Sessions lists every consultation kept on this computer, newest first, with its transcript, note and patient sheet. Search finds a consultation by its label." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="Click the label above a consultation to rename it. Delete on a row removes that consultation; Delete all in Settings removes every one and cannot be undone." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Consultations are stored encrypted, on this computer only, under your Windows account. Turn off Save consultation data in Settings and each one is erased when you leave it." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Consultations are stored encrypted on this computer, under your Windows account. They leave it only when you copy, export or back them up. Turn off Save consultation data in Settings and each one is erased when you leave it." />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsExpander Description="Saving consultations to a file, removing them, and bringing them back" Header="Backing up">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HelpText}" Text="Back up, in Settings or on the Sessions page, saves finished consultations to a file protected by a password: their transcripts, notes, patient information and appraisal reflections. Choose which consultations, then where to save the file. The file is checked before the app says it is done." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="The first time, the app offers a password made of five words. Keep it somewhere safe away from this computer, such as your practice's password manager, and use the same one each time. Without it nobody can open the backup, and it cannot be reset." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="After a backup, Remove these from this computer clears exactly the consultations the file holds. Delete all in Settings clears every one and says how many are in no backup. Appraisal reflections stay unless you tick Delete associated reflections. Neither touches your backup files; delete those yourself when your practice no longer needs them." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Restore, in Settings, brings consultations back from a backup. It shows what the file holds first, and any consultation already on this computer is left as it is." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="A backup holds patient information. Keep it only where your practice allows, such as a practice network drive, and never on a personal computer or personal cloud storage. Restore only on a computer your practice has approved for patient information." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
@@ -151,12 +165,12 @@
                         <toolkit:SettingsCard Header="Privacy">
                             <toolkit:SettingsCard.Description>
                                 <StackPanel Spacing="6">
-                                    <TextBlock TextWrapping="Wrap" Text="Everything runs on device. Audio, transcripts, notes and translations are processed and stored locally; nothing leaves the device." />
+                                    <TextBlock TextWrapping="Wrap" Text="Everything runs on this computer and nothing is sent over the internet. Consultations you keep are stored encrypted here. Copies leave the app only when you copy, export or back them up." />
                                     <TextBlock TextWrapping="Wrap" Text="Guideline documents you add are kept in a folder in your Documents and searched on this device. The app reads them where they are and sends nothing anywhere." />
                                 </StackPanel>
                             </toolkit:SettingsCard.Description>
                         </toolkit:SettingsCard>
-                        <toolkit:SettingsCard Description="PDFs are read with PDFium (The PDFium Authors, BSD 3-Clause licence) from the pdfium-binaries build (Benoit Blanchon, MIT licence). The licence texts sit in the licences folder beside the app." Header="Third-party software" />
+                        <toolkit:SettingsCard Description="PDFs are read with PDFium (The PDFium Authors, BSD 3-Clause licence) from the pdfium-binaries build (Benoit Blanchon, MIT licence). The licence texts sit in the licences folder beside the app. Passwords made of five words use the EFF Large Wordlist by the Electronic Frontier Foundation, licensed under CC BY 3.0 US (creativecommons.org/licenses/by/3.0/us)." Header="Third-party software" />
                         <toolkit:SettingsCard Header="Minimum system requirements">
                             <toolkit:SettingsCard.Description>
                                 <StackPanel Spacing="6">

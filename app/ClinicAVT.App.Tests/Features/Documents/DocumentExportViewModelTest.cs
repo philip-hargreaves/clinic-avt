@@ -23,12 +23,12 @@ public class DocumentExportViewModelTest
     {
         var (export, note, clipboard, _, status) = Create();
         note.ClinicalNoteText = "the note";
-        note.PatientInfoText = "take one tablet";
+        note.PatientInfoText = "take\rone tablet";  // as an edit box leaves it
         Assert.Equal("Copies the sheet", note.PatientCopyTip);
 
         await export.CopyNoteCommand.ExecuteAsync(null);
         await export.CopyPatientCommand.ExecuteAsync(null);
-        Assert.Equal(["the note", "take one tablet"], clipboard.Copied);
+        Assert.Equal(["the note", "take\r\none tablet"], clipboard.Copied);
         Assert.Contains("Patient note copied", status.LatestActivity);
 
         note.TranslationLanguage = "Urdu";
@@ -37,7 +37,7 @@ public class DocumentExportViewModelTest
         Assert.Contains("translation", note.PatientExportTip);
 
         await export.CopyPatientCommand.ExecuteAsync(null);
-        Assert.Equal("take one tablet\n\nUrdu translation\n\nایک گولی لیں", clipboard.Copied[^1]);
+        Assert.Equal("take\r\none tablet\r\n\r\nUrdu translation\r\n\r\nایک گولی لیں", clipboard.Copied[^1]);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class DocumentExportViewModelTest
         try
         {
             note.ClinicalNoteText = "the note";
-            note.PatientInfoText = "take one tablet";
+            note.PatientInfoText = "take\rone tablet";
             note.TranslationText = "prendre un comprimé";
             note.TranslationLanguage = "French";
 
@@ -63,7 +63,7 @@ public class DocumentExportViewModelTest
 
             var written = await File.ReadAllTextAsync(picker.SavePath);
             Assert.StartsWith(DocumentExport.Marker, written);
-            Assert.Contains("take one tablet\n\nFrench translation\n\nprendre un comprimé", written);
+            Assert.Contains("take\none tablet\n\nFrench translation\n\nprendre un comprimé", written);
             Assert.Equal(["clinical-note.txt", "patient-sheet.txt"], picker.SuggestedNames);
             Assert.Contains("outside the encrypted store", status.LatestActivity);
         }

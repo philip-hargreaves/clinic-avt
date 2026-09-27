@@ -19,7 +19,9 @@
 #include <crtdbg.h>
 #endif
 
+#include "adapters/archive/archive_lane.hpp"
 #include "adapters/audio/capture_devices.hpp"
+#include "adapters/audio/media_foundation_reader.hpp"
 #include "adapters/audio/wasapi_capture.hpp"
 #include "adapters/audio/wav_source.hpp"
 #include "adapters/diarisation/anchor_store.hpp"
@@ -254,6 +256,7 @@ int main(int argc, char* argv[]) {
         clinicavt::ipc::PipeServer server(pipe_name);
         clinicavt::store::SqliteSessionStore session_store(store_root);
         clinicavt::ipc::WireEvents events(server, session_store);
+        clinicavt::archive::ArchiveLane archive_lane(session_store, clinicavt::ipc::PushTo(server));
         // A consultation left by closing the app is left all the same
         session_store.EraseUnretained();
         clinicavt::models::ModelStore model_store(models_root);
@@ -353,6 +356,7 @@ int main(int argc, char* argv[]) {
                          session_store.ReadDocument(id, clinicavt::store::DocumentKind::kNote);
                      if (!note.text.empty()) events.OnNoteSaved(id, note);
                  }});
+        clinicavt::audio::MediaFoundationReader recordings;
         clinicavt::ipc::RegisterMethods(
             server,
             {.controller = controller,
@@ -372,7 +376,9 @@ int main(int argc, char* argv[]) {
                  [whisper = dynamic_cast<clinicavt::asr::WhisperTranscriber*>(transcriber.get())](
                      const std::string& device, std::function<void(const std::string&)> done) {
                      return whisper != nullptr && whisper->SwitchDevice(device, std::move(done));
-                 }});
+                 },
+             .archive_lane = &archive_lane,
+             .recordings = &recordings});
         clinicavt::ipc::RegisterGuidanceMethods(server, session_store, guidance_retriever,
                                                 guidance_lane, ingest);
         // A shell that closes ends its capture, and a reopened one picks this

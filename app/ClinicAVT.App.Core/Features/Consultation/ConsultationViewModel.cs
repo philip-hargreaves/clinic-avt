@@ -16,6 +16,8 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 /// </summary>
 public sealed partial class ConsultationViewModel : ObservableObject, ISessionState
 {
+    private readonly IDialogService _dialogs;
+
     public ConsultationViewModel(
         IEngineApi engine, IUiDispatcher dispatcher,
         TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
@@ -23,6 +25,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null,
         AppPreferences? preferences = null, DemoMode? demo = null)
     {
+        _dialogs = dialogs;
         Transcript = transcript;
         Note = note;
         Guidance = guidance;
@@ -143,11 +146,20 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public double AudioSeconds => Recorder.AudioSeconds;
 
+    public bool Importing => Recorder.Importing;
+
+    public int? ImportPercent => Recorder.ImportPercent;
+
     public ReplayRequest? ActiveReplay => Recorder.ActiveReplay;
 
     public bool ModelsReady => Readiness.ModelsReady;
 
-    public bool ConsultationActive => State != SessionState.Idle;
+    public bool ConsultationInProgress => State is SessionState.Recording or SessionState.Finalising;
+
+    public string? ReviewedSessionId =>
+        State is SessionState.Review or SessionState.Refused ? Review.FinalisedSessionId : null;
+
+    public Task EndReviewAsync() => CloseReviewAsync();
 
     /// <summary>
     /// Finalising is the state worth splitting. Its stages differ by an order of magnitude,
@@ -163,6 +175,23 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     public Task StopRecordingAsync() => Recorder.StopRecordingAsync();
 
     public Task CancelRecordingAsync() => Recorder.CancelRecordingAsync();
+
+    /// <summary>
+    /// The Add consultation recording dialog, on a dropped file when there is one. An open
+    /// review ends before the import starts.
+    /// </summary>
+    public async Task ImportRecordingAsync(string? path = null)
+    {
+        if (await _dialogs.RunImportAsync(path).ConfigureAwait(true) is not { } import)
+        {
+            return;
+        }
+
+        await CloseReviewAsync().ConfigureAwait(true);
+        await Recorder.ImportRecordingAsync(import).ConfigureAwait(true);
+    }
+
+    public Task CancelImportAsync() => Recorder.CancelImportAsync();
 
     public Task SetPausedAsync(bool paused) => Recorder.SetPausedAsync(paused);
 

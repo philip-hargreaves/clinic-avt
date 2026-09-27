@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
@@ -16,10 +17,13 @@
 #include <vector>
 
 #include "adapters/diarisation/anchor_store.hpp"
+#include "adapters/diarisation/scripted_diariser.hpp"
 #include "adapters/guidance/guidance_lane.hpp"
 #include "adapters/ipc/pipe_client.hpp"
 #include "adapters/ipc/wire_events.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
+#include "adapters/transcription/scripted_transcriber.hpp"
+#include "adapters/vad/passthrough_vad.hpp"
 #include "core/common/version.hpp"
 #include "ports/store_error.hpp"
 
@@ -236,8 +240,10 @@ struct SessionStoreFixture {
         std::filesystem::remove_all(root, ignored);
     }
 
+    // With a turn, as a finished consultation has, so it is not taken for a cleared one
     std::string AddFinalisedSession() const {
         const auto id = store->Begin({16000, "", ""});
+        store->ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "", "how is the elbow"}});
         store->Finalise(id);
         return id;
     }
@@ -267,7 +273,8 @@ TEST(Handlers, WhatWouldDisturbARunningConsultationIsRefused) {
         {"asr/device",
          [&] { return HandleAsrDevice(switcher, true, json{{"device", "GPU"}}, [](json) {}); }},
         {"anchor/clear", [&] { return HandleAnchorClear(anchors, true); }},
-        {"session/deleteAll", [&] { return HandleSessionDeleteAll(*fixture.store, true); }},
+        {"session/deleteAll",
+         [&] { return HandleSessionDeleteAll(*fixture.store, json::object(), true, false); }},
     };
     for (const auto& c : cases) {
         SCOPED_TRACE(c.method);
@@ -425,7 +432,8 @@ TEST(Handlers, TheSampleYearSeedsOnceAndClearsCleanly) {
 
     // One erase removes samples and real sessions alike
     ASSERT_TRUE(std::holds_alternative<json>(HandleDemoSeed(*fixture.store, CLINICAVT_DEMO_DIR)));
-    const auto erased = HandleSessionDeleteAll(*fixture.store, false);
+    const auto erased =
+        HandleSessionDeleteAll(*fixture.store, json{{"deleteReflections", true}}, false, false);
     ASSERT_TRUE(std::holds_alternative<json>(erased));
     EXPECT_EQ(ResultOf(erased)["removed"], 9);
     EXPECT_EQ(HandleSessionList(*fixture.store)["sessions"].size(), 0u);
@@ -719,6 +727,8 @@ TEST(Handlers, GuidanceReadyMatchesTheFixture) {
     request.on_ready(results);
     json expected = LoadFixture("guidance-ready.json");
     expected["params"]["id"] = id;
+    // A revision is opaque: the stored note's own, not the fixture's example
+    expected["params"]["noteRevision"] = note.revision;
     ASSERT_EQ(sent.all.size(), 1u);
     EXPECT_EQ(expected["method"], sent.all[0].first);
     EXPECT_EQ(sent.all[0].second, expected["params"]);
@@ -1074,7 +1084,9 @@ TEST(Handlers, SessionGuidanceReadsTheStoredRecordAndItsStaleness) {
               (json{{"guidance", nullptr}}));
 
     fixture.store->SaveDocument(id, clinicavt::store::DocumentKind::kNote, {.text = "note"});
-    const json expected = LoadFixture("session-guidance.json")["result"];
+    json expected = LoadFixture("session-guidance.json")["result"];
+    expected["guidance"]["noteRevision"] =
+        fixture.store->ReadDocument(id, clinicavt::store::DocumentKind::kNote).revision;
     json record = expected["guidance"];
     record.erase("stale");
     fixture.store->SaveDocument(id, clinicavt::store::DocumentKind::kGuidance,
@@ -1141,6 +1153,286 @@ TEST(Handlers, AStorageFaultGoesOutAsTheFixture) {
     }
     ASSERT_TRUE(frame.has_value());
     EXPECT_EQ(json::parse(*frame), LoadFixture("storage-fault.json"));
+}
+
+// Polled, for what an import's thread sets
+template <typename Pred>
+bool WaitUntil(Pred done) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!done()) {
+        if (std::chrono::steady_clock::now() > deadline) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return true;
+}
+
+// fail reaches both calls, fail_decode only the decode on the import's thread
+struct FakeReader : clinicavt::audio::IRecordingReader {
+    clinicavt::audio::RecordingInfo info;
+    std::vector<float> audio;
+    std::function<void()> fail;
+    std::function<void()> fail_decode;
+    std::filesystem::path last_path;
+    std::atomic<int> decodes{0};
+
+    clinicavt::audio::RecordingInfo Inspect(const std::filesystem::path& path) override {
+        last_path = path;
+        if (fail) fail();
+        return info;
+    }
+
+    std::vector<float> Decode(const std::filesystem::path&) override {
+        ++decodes;
+        if (fail) fail();
+        if (fail_decode) fail_decode();
+        return audio;
+    }
+};
+
+// A microphone hearing silence until stopped
+struct SilentSource : clinicavt::audio::IAudioSource {
+    std::atomic<bool> stop{false};
+
+    void Run(clinicavt::audio::IAudioSink& sink) override {
+        const std::vector<float> window(1600, 0.0F);
+        while (!stop.load()) {
+            sink.OnAudio(window, 0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        sink.OnEnd({clinicavt::audio::SourceEndReason::kStopped, ""});
+    }
+
+    void RequestStop() override {
+        stop.store(true);
+    }
+};
+
+struct QuietEvents : clinicavt::session::ISessionEvents {
+    void OnLevel(const clinicavt::audio::LevelReading&) override {}
+    void OnInterrupted(clinicavt::audio::SourceEndReason, const std::string&) override {}
+};
+
+// Everything the import's thread uses is declared before the controller, which joins it
+struct ImportRig {
+    SessionStoreFixture fixture;
+    QuietEvents events;
+    clinicavt::asr::ScriptedTranscriber transcriber;
+    clinicavt::audio::PassthroughVad vad;
+    clinicavt::diar::ScriptedDiariser diariser;
+    FakeReader reader;
+    std::mutex mutex;
+    std::vector<std::pair<std::string, json>> pushed;
+    clinicavt::session::SessionController controller{
+        [](const auto&, const auto&) { return std::make_unique<SilentSource>(); },
+        events,
+        *fixture.store,
+        transcriber,
+        vad,
+        diariser};
+
+    std::variant<json, Error> Import(const json& params, bool playback_active = false) {
+        return HandleSessionImport(
+            reader, controller, playback_active, nullptr,
+            [this](const std::string& method, json body) {
+                const std::lock_guard<std::mutex> lock(mutex);
+                pushed.emplace_back(method, std::move(body));
+            },
+            params);
+    }
+
+    std::vector<std::string> Methods() {
+        const std::lock_guard<std::mutex> lock(mutex);
+        std::vector<std::string> methods;
+        for (const auto& [method, body] : pushed) methods.push_back(method);
+        return methods;
+    }
+
+    // The import's last word, session/imported or session/importFailed
+    std::optional<std::pair<std::string, json>> WaitForEnd() {
+        std::optional<std::pair<std::string, json>> end;
+        (void)WaitUntil([&] {
+            const std::lock_guard<std::mutex> lock(mutex);
+            for (const auto& entry : pushed) {
+                if (entry.first == "session/imported" || entry.first == "session/importFailed") {
+                    end = entry;
+                }
+            }
+            return end.has_value();
+        });
+        return end;
+    }
+};
+
+TEST(Handlers, RecordingInspectAndSessionImportMatchTheFixtures) {
+    using namespace std::chrono;
+    ImportRig rig;
+    const json inspect = LoadFixture("recording-inspect.json");
+    rig.reader.info = {760.4, sys_days{2026y / 9 / 26} + 13h + 5min};
+    const auto inspected = HandleRecordingInspect(rig.reader, inspect["request"]["params"]);
+    ASSERT_TRUE(std::holds_alternative<json>(inspected));
+    EXPECT_EQ(MakeResult(std::int64_t{36}, ResultOf(inspected)), inspect["response"]);
+    (void)HandleRecordingInspect(rig.reader, json{{"path", "C:\\Visite \u00e0 domicile.m4a"}});
+    EXPECT_EQ(rig.reader.last_path.wstring(), L"C:\\Visite \u00e0 domicile.m4a")
+        << "the wire's UTF-8 names the file";
+
+    const json import = LoadFixture("session-import.json");
+    rig.reader.audio.assign(2 * 16000, 0.1F);
+    const auto imported = rig.Import(import["request"]["params"]);
+    ASSERT_TRUE(std::holds_alternative<json>(imported));
+    const json& result = ResultOf(imported);
+    EXPECT_EQ(result.size(), import["response"]["result"].size());
+    ASSERT_TRUE(result["sessionId"].is_string());
+
+    const auto end = rig.WaitForEnd();
+    ASSERT_TRUE(end.has_value());
+    const json done = LoadFixture("session-imported.json");
+    EXPECT_EQ(end->first, done["method"].get<std::string>());
+    EXPECT_EQ(end->second, (json{{"sessionId", result["sessionId"]}})) << "the session answered";
+    EXPECT_EQ(end->second.size(), done["params"].size());
+    EXPECT_EQ(rig.controller.LastFinalised(), result["sessionId"].get<std::string>())
+        << "sealed as a stop seals";
+    ASSERT_TRUE(WaitUntil([&] { return rig.Methods().size() == 3; }));
+    EXPECT_EQ(rig.Methods(),
+              (std::vector<std::string>{"session/imported", "note/ready", "patient/ready"}))
+        << "without a writer the stubs keep the contract, after the seal";
+
+    const json list = HandleSessionList(*rig.fixture.store);
+    ASSERT_EQ(list["sessions"].size(), 1u);
+    EXPECT_EQ(list["sessions"][0]["id"], result["sessionId"]);
+    EXPECT_EQ(list["sessions"][0]["startedAt"], "2026-09-26T13:05:00Z") << "dated as chosen";
+    EXPECT_FALSE(list["sessions"][0]["endedAt"].get<std::string>().empty());
+
+    const json progress = LoadFixture("session-importProgress.json");
+    EXPECT_EQ(ImportProgressJson("a1b2c3d4e5f60718293a4b5c6d7e8f90", 304.2371, 760.4049),
+              progress["params"])
+        << "to a tenth of a second";
+}
+
+TEST(Handlers, ACancelledImportEndsAsAFailureNamedCancelledAndLeavesNothing) {
+    ImportRig rig;
+    rig.reader.audio.assign(2 * 16000, 0.1F);
+    std::atomic<bool> decoding{false};
+    std::atomic<bool> release{false};
+    rig.reader.fail_decode = [&] {
+        decoding = true;
+        (void)WaitUntil([&] { return release.load(); });
+    };
+    const auto imported =
+        rig.Import(json{{"path", "C:\\visit.m4a"}, {"startedAt", "2026-09-26T13:05:00Z"}});
+    ASSERT_TRUE(std::holds_alternative<json>(imported));
+    ASSERT_TRUE(WaitUntil([&] { return decoding.load(); }));
+    rig.controller.Cancel();
+    release = true;
+
+    const auto end = rig.WaitForEnd();
+    ASSERT_TRUE(end.has_value());
+    EXPECT_EQ(end->first, "session/importFailed");
+    const json failed = LoadFixture("session-importFailed.json");
+    EXPECT_EQ(end->second, (json{{"sessionId", ResultOf(imported)["sessionId"]},
+                                 {"error", failed["params"]["error"]}}));
+    EXPECT_TRUE(HandleSessionList(*rig.fixture.store)["sessions"].empty());
+    EXPECT_FALSE(rig.controller.Running());
+    EXPECT_EQ(rig.Methods(), (std::vector<std::string>{"session/importFailed"}))
+        << "no stubs, since no note follows";
+}
+
+TEST(Handlers, SessionImportRefusesBeforeReadingAnything) {
+    ImportRig rig;
+    const json good{{"path", "C:\\visit.m4a"}, {"startedAt", "2026-09-26T13:05:00Z"}};
+    const auto with = [&](const char* key, json value) {
+        json params = good;
+        params[key] = std::move(value);
+        return params;
+    };
+    struct Row {
+        const char* name;
+        json params;
+        int code;
+    };
+    const Row rows[] = {
+        {"no path", json{{"startedAt", "2026-09-26T13:05:00Z"}}, kInvalidParams},
+        {"no date", json{{"path", "C:\\visit.m4a"}}, kInvalidParams},
+        {"local time", with("startedAt", "2026-09-26T14:05:00+01:00"), kInvalidParams},
+        {"fractions", with("startedAt", "2026-09-26T13:05:00.000Z"), kInvalidParams},
+        {"no time", with("startedAt", "2026-09-26"), kInvalidParams},
+        {"retain as text", with("retain", "yes"), kInvalidParams},
+        {"the future", with("startedAt", "2999-01-01T00:00:00Z"), kSessionError},
+    };
+    for (const auto& row : rows) {
+        SCOPED_TRACE(row.name);
+        const auto outcome = rig.Import(row.params);
+        ASSERT_TRUE(std::holds_alternative<Error>(outcome));
+        EXPECT_EQ(std::get<Error>(outcome).code, row.code);
+    }
+
+    const auto during_playback = rig.Import(good, true);
+    ASSERT_TRUE(std::holds_alternative<Error>(during_playback));
+    EXPECT_EQ(std::get<Error>(during_playback).data, json("a playback is running"));
+
+    ASSERT_TRUE(rig.controller.Start());
+    const auto while_recording = rig.Import(good);
+    rig.controller.Cancel();
+    ASSERT_TRUE(std::holds_alternative<Error>(while_recording));
+    EXPECT_EQ(std::get<Error>(while_recording).code, kSessionError);
+
+    EXPECT_EQ(rig.reader.decodes.load(), 0) << "a refusal never waits on a decode";
+    EXPECT_TRUE(HandleSessionList(*rig.fixture.store)["sessions"].empty());
+    EXPECT_TRUE(rig.Methods().empty());
+}
+
+TEST(Handlers, AReaderFailureAnswersInPlainWordsAndNeverWithTheFile) {
+    ImportRig rig;
+    const json params{{"path", "C:\\Home visit Jane Doe.m4a"},
+                      {"startedAt", "2026-09-26T13:05:00Z"}};
+    struct Row {
+        const char* name;
+        std::function<void()> fail;
+        std::string reason;
+    };
+    const Row rows[] = {
+        {"the reader's reason",
+         [] { throw clinicavt::audio::RecordingError("this file is not a sound recording"); },
+         "this file is not a sound recording"},
+        {"anything else",
+         [] {
+             throw std::filesystem::filesystem_error(
+                 "open", std::filesystem::path("C:\\Home visit Jane Doe.m4a"),
+                 std::make_error_code(std::errc::permission_denied));
+         },
+         "the recording could not be read"},
+    };
+    for (const auto& row : rows) {
+        SCOPED_TRACE(row.name);
+        rig.reader.fail = row.fail;
+        for (const auto& outcome :
+             {HandleRecordingInspect(rig.reader, params), rig.Import(params)}) {
+            ASSERT_TRUE(std::holds_alternative<Error>(outcome));
+            EXPECT_EQ(std::get<Error>(outcome).code, kSessionError);
+            EXPECT_EQ(std::get<Error>(outcome).data, json(row.reason));
+        }
+    }
+    EXPECT_TRUE(HandleSessionList(*rig.fixture.store)["sessions"].empty())
+        << "no session began for a file that could not be opened";
+    EXPECT_FALSE(rig.controller.Running());
+
+    // A file that opens but fails to decode ends the import the same way, on its thread
+    rig.reader.fail = nullptr;
+    for (const auto& row : rows) {
+        SCOPED_TRACE(row.name);
+        rig.reader.fail_decode = row.fail;
+        {
+            const std::lock_guard<std::mutex> lock(rig.mutex);
+            rig.pushed.clear();
+        }
+        ASSERT_TRUE(std::holds_alternative<json>(rig.Import(params)));
+        const auto end = rig.WaitForEnd();
+        ASSERT_TRUE(end.has_value());
+        EXPECT_EQ(end->first, "session/importFailed");
+        EXPECT_EQ(end->second["error"], json(row.reason));
+        ASSERT_TRUE(WaitUntil([&] { return !rig.controller.Running(); }));
+    }
+    EXPECT_TRUE(HandleSessionList(*rig.fixture.store)["sessions"].empty())
+        << "the session each began is erased";
 }
 
 }  // namespace

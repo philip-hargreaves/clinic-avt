@@ -25,9 +25,12 @@ public sealed partial class ConsultationHeaderViewModel : ObservableObject
                 OnStateChanged();
             }
         };
+        // An import never records, so its heading is the time chosen for it
+        _session.Recorder.ImportStarted += import =>
+            Title = Words.LocalTime(import.StartedAt) is { } started ? SessionText.Heading(started) : "";
     }
 
-    /// <summary>"Thursday 25 September, 15:09", set as a recording starts.</summary>
+    /// <summary>"Thursday 25 September, 15:09", set as a recording or an import starts.</summary>
     [ObservableProperty]
     public partial string Title { get; private set; } = "";
 

@@ -10,6 +10,9 @@ public static class Protocol
 {
     public const int ProtocolVersion = 1;
 
+    // The engine's code for a refusal whose data is its reason
+    public const int SessionErrorCode = -32001;
+
     // Non-ASCII patient and drug names go on the wire as readable UTF-8 without \uXXXX escapes
     public static JsonSerializerOptions JsonOptions { get; } = new()
     {
@@ -76,9 +79,16 @@ public static class JsonElements
         root.Find(path) is { ValueKind: JsonValueKind.String } s ? s.GetString() : null;
 }
 
-/// <summary>A JSON-RPC error response from the engine.</summary>
+/// <summary>An import the clinician cancelled. Nothing of it was kept.</summary>
+public sealed class ImportCancelledException() : Exception("the import was cancelled");
+
+/// <summary>
+/// A JSON-RPC error response from the engine. The message is the engine's reason from the error
+/// data when it sent one, since the error message itself only names the kind.
+/// </summary>
 public sealed class EngineErrorException(int code, string message, JsonElement? data)
-    : Exception(message)
+    : Exception(data is { ValueKind: JsonValueKind.String } reason
+        && reason.GetString() is { Length: > 0 } text ? text : message)
 {
     public int Code { get; } = code;
 

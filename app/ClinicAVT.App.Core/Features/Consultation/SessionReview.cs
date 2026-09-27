@@ -250,6 +250,7 @@ public sealed class SessionReview
         }
 
         _note.TranslationText = "";
+        _note.TranslationStale = false;
         await EngineCall.TryAsync(_status, "patient/translate", () => _engine.TranslatePatientAsync(id, language))
             .ConfigureAwait(true);
     }
@@ -358,10 +359,17 @@ public sealed class SessionReview
             return;
         }
 
+        var changed = _note.PatientInfoText != LoadedPatient;
         var saved = await EngineCall.TryAsync(_status, "patient/update",
             () => _engine.UpdatePatientAsync(id, _note.PatientInfoText)).ConfigureAwait(true);
         if (saved)
         {
+            // A changed sheet outdates its translation, even one still running
+            if (changed && _note.TranslationVisible)
+            {
+                _note.TranslationStale = true;
+            }
+
             LoadedPatient = _note.PatientInfoText;
             _status.Append("Patient note saved");
         }

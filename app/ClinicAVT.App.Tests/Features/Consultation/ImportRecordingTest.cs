@@ -1,0 +1,212 @@
+using System.Globalization;
+using System.Text.Json;
+using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Tests.Support;
+using ClinicAVT.App.Tests.TestDoubles;
+using ClinicAVT.Client;
+using static ClinicAVT.App.Tests.Support.Wire;
+
+namespace ClinicAVT.App.Tests.Features.Consultation;
+
+public class ImportRecordingTest
+{
+    private static readonly JsonElement InspectSent =
+        Fixtures.Load("recording-inspect.json").GetProperty("request").GetProperty("params");
+
+    private static readonly JsonElement ImportSent =
+        Fixtures.Load("session-import.json").GetProperty("request").GetProperty("params");
+
+    private static string FixturePath => ImportSent.GetProperty("path").GetString()!;
+
+    private static string FixtureStartedAt => ImportSent.GetProperty("startedAt").GetString()!;
+
+    private static ImportRecordingViewModel Dialog(FakeEngineClient engine, FakeFilePicker picker) =>
+        new(new EngineApi(engine), picker, FakeTimeProvider.London());
+
+    [Fact]
+    public async Task AChosenRecordingIsReadThenImportedAtTheChosenTimeInUtc()
+    {
+        var engine = new FakeEngineClient();
+        var picker = new FakeFilePicker { OpenPath = FixturePath };
+        var import = Dialog(engine, picker);
+        Assert.True(import.NoFile);
+        Assert.False(import.CanImport);
+
+        await import.ChooseCommand.ExecuteAsync(null);
+
+        Assert.True(JsonElement.DeepEquals(InspectSent, engine.Sent("recording/inspect")));
+        Assert.Equal("Home visit 26 Sep.m4a", import.FileName);
+        Assert.Equal("12:40", import.LengthText);
+        // 13:05 UTC is 14:05 in London in September
+        Assert.Equal(new DateTime(2026, 9, 26), import.Day!.Value.Date);
+        Assert.Equal(new TimeSpan(14, 5, 0), import.Time);
+        Assert.True(import.CanImport);
+        Assert.Equal("", import.Problem);
+        Assert.Equal((FixturePath, FixtureStartedAt, 760.4),
+            (import.Result!.Path, import.Result.StartedAt, import.Result.Seconds));
+
+        import.Day = new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.FromHours(1));
+        import.Time = new TimeSpan(9, 30, 0);
+        Assert.Equal("2026-09-25T08:30:00Z", import.Result!.StartedAt);
+
+        // The clock reads 10:00 in London: 11:00 today has not happened yet
+        Assert.Equal(new DateTime(2026, 9, 27), import.Today.Date);
+        import.Day = import.Today;
+        import.Time = new TimeSpan(11, 0, 0);
+        Assert.Contains("future", import.Problem);
+        Assert.Null(import.Result);
+        import.Time = new TimeSpan(9, 45, 0);
+        Assert.Equal("2026-09-27T08:45:00Z", import.Result!.StartedAt);
+
+        // The shell refuses on the inspected length; the engine has no length rule
+        engine.RecordingSeconds = 29.4;
+        await import.UseFileAsync(@"C:\Users\clinician\Downloads\Voice memo.wav");
+        Assert.True(import.TooShort);
+        Assert.Contains("too short", import.Problem);
+        Assert.Null(import.Result);
+
+        var inspections = engine.Requests.Count(r => r.Method == "recording/inspect");
+        await import.UseFileAsync(@"C:\Users\clinician\Downloads\Referral.pdf");
+        Assert.Equal(inspections, engine.Requests.Count(r => r.Method == "recording/inspect"));
+        Assert.Contains("not a recording", import.Problem);
+        Assert.False(import.CanImport);
+    }
+
+    [Fact]
+    public async Task AnImportEndsTheOpenReviewThenWalksTheFinaliseStagesIntoReview()
+    {
+        var dialogs = new FakeDialogService();
+        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
+        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var header = new ConsultationHeaderViewModel(session);
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready", Params(new { text = "note" }));
+        Assert.Equal(SessionState.Review, session.State);
+
+        // Cancelled, nothing changes
+        await controls.ImportRecordingCommand.ExecuteAsync(null);
+        Assert.Equal(SessionState.Review, session.State);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/import");
+
+        var phases = new List<FinalisePhase>();
+        session.PropertyChanged += (_, e) =>
+        {
+            // Closing the review resets the phase first
+            if (e.PropertyName == nameof(ConsultationViewModel.Phase) && session.Phase != FinalisePhase.None)
+            {
+                phases.Add(session.Phase);
+            }
+        };
+        dialogs.Import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4);
+        Assert.True(controls.ImportRecordingCommand.CanExecute(FixturePath));
+        await controls.ImportRecordingCommand.ExecuteAsync(FixturePath);
+
+        Assert.Equal([null, FixturePath], dialogs.ImportsShown);
+        var methods = engine.Requests.Select(r => r.Method).ToList();
+        Assert.True(methods.LastIndexOf("session/close") < methods.IndexOf("session/import"),
+            "the review closes first");
+        // Keep consultations goes with it, as with a recording
+        Assert.True(JsonElement.DeepEquals(ImportSent, engine.Sent("session/import")));
+        Assert.Equal(
+            [FinalisePhase.Sealing, FinalisePhase.Transcript, FinalisePhase.Speakers, FinalisePhase.Turns,
+                FinalisePhase.Note],
+            phases);
+        Assert.Equal(SessionState.Finalising, session.State);
+        Assert.True(controls.FinalisingVisible);
+        Assert.Equal("12:40", controls.ElapsedLabel);
+        // Headed with the import's own time
+        Assert.Equal(SessionText.Heading(DateTimeOffset.Parse(FixtureStartedAt, CultureInfo.InvariantCulture)), header.Title);
+
+        engine.RaiseNotification("note/partial", Params(new { text = "The" }));
+        Assert.True(controls.PanesVisible);
+        engine.RaiseNotification("note/ready", Params(new { text = "The note" }));
+        Assert.Equal(SessionState.Review, session.State);
+        Assert.Equal("s1", session.LiveReviewId);
+    }
+
+    [Fact]
+    public async Task AnImportShowsHowFarItsTranscriptionHasGotUntilTheEngineSealsIt()
+    {
+        var dialogs = new FakeDialogService { Import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4) };
+        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
+        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        engine.HoldImport = true;
+        engine.ImportStages.Clear();
+
+        var importing = controls.ImportRecordingCommand.ExecuteAsync(null);
+        Assert.Equal("Transcribing", controls.FinalisingLabel);
+        Assert.True(controls.ImportCancelVisible);
+        Assert.True(controls.CancelImportCommand.CanExecute(null));
+
+        engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
+        engine.ImportProgress(304.2, 760.4);
+        Assert.Equal("Transcribing · 40%", controls.FinalisingLabel);
+        Assert.Equal("Transcribing · 40%", session.Status.LatestActivity);
+        engine.ImportProgress(744.9, 760.4);
+        Assert.Equal("Transcribing · 97%", controls.FinalisingLabel);
+
+        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
+        Assert.Equal("Labelling speakers", controls.FinalisingLabel);
+        Assert.Equal("Finalising", session.Status.LatestActivity);
+        // A late figure is ignored
+        engine.ImportProgress(760.4, 760.4);
+        Assert.Equal("Finalising", session.Status.LatestActivity);
+
+        engine.FinishImport();
+        await importing;
+        Assert.False(session.Importing);
+        Assert.False(controls.ImportCancelVisible);
+        Assert.Equal(SessionState.Finalising, session.State);
+        engine.RaiseNotification("note/ready", Params(new { text = "The note" }));
+        Assert.Equal(SessionState.Review, session.State);
+    }
+
+    [Fact]
+    public async Task CancellingAnImportReturnsToReadyToStartWithoutAnError()
+    {
+        var dialogs = new FakeDialogService { Import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4) };
+        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
+        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        engine.HoldImport = true;
+
+        var importing = controls.ImportRecordingCommand.ExecuteAsync(null);
+        engine.ImportProgress(380.2, 760.4);
+        await controls.CancelImportCommand.ExecuteAsync(null);
+        await importing;
+
+        Assert.Contains(engine.Requests, r => r.Method == "session/cancel");
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.True(controls.IdleVisible);
+        Assert.Equal("Ready to start", controls.StartLabel);
+        Assert.False(controls.ImportCancelVisible);
+        Assert.Equal("Cancelled", session.Status.LatestActivity);
+        Assert.Equal("", session.Note.ClinicalNoteText);
+        Assert.True(controls.ImportRecordingCommand.CanExecute(null), "another import can start");
+    }
+
+    [Fact]
+    public async Task NoImportDuringARecordingAndARefusalLeavesItIdle()
+    {
+        var import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4);
+        var dialogs = new FakeDialogService { Import = import };
+        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
+        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+
+        await session.StartRecordingAsync();
+        Assert.False(controls.ImportRecordingCommand.CanExecute(null));
+        await session.Recorder.ImportRecordingAsync(import);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/import");
+        Assert.Equal(SessionState.Recording, session.State);
+
+        await session.CancelRecordingAsync();
+        engine.FailNext = method => method == "session/import"
+            ? new EngineErrorException(-32000, "recording too short", null)
+            : null;
+        await controls.ImportRecordingCommand.ExecuteAsync(null);
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.Equal("Could not import the recording: recording too short", session.Status.LatestActivity);
+    }
+}

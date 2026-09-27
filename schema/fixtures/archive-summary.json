@@ -1,0 +1,26 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 31,
+        "method": "archive/summary",
+        "params": {
+            "from": "2026-07-01T00:00:00Z",
+            "to": "2026-10-01T00:00:00Z",
+            "covered": {
+                "from": "2026-07-01T00:00:00Z",
+                "to": "2026-09-01T00:00:00Z",
+                "at": "2026-09-01T08:30:00Z"
+            }
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 31,
+        "result": {
+            "consultations": 38,
+            "reflections": 12,
+            "unfinished": 1,
+            "uncovered": 6
+        }
+    }
+}

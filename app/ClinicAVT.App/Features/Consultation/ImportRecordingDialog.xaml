@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="ClinicAVT.App.Features.Consultation.ImportRecordingDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:ClinicAVT.App.Controls"
+    Title="Add consultation recording"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="{x:Bind ViewModel.CanImport, Mode=OneWay}"
+    PrimaryButtonText="Add">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">560</x:Double>
+    </ContentDialog.Resources>
+
+    <!-- Scrolls so a large Windows text size never pushes a control out of reach -->
+    <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel
+            MinWidth="400"
+            Margin="0,0,12,0"
+            Spacing="16">
+            <Grid
+                x:Name="DropArea"
+                MinHeight="168"
+                Visibility="{x:Bind ViewModel.NoFile, Mode=OneWay}">
+                <Rectangle
+                    Fill="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    RadiusX="8"
+                    RadiusY="8"
+                    Stroke="{ThemeResource ControlStrongStrokeColorDefaultBrush}"
+                    StrokeDashArray="4,3"
+                    StrokeThickness="1.5" />
+                <Rectangle
+                    x:Name="DropHighlight"
+                    Opacity="0"
+                    RadiusX="8"
+                    RadiusY="8"
+                    Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                    StrokeDashArray="4,3"
+                    StrokeThickness="1.5">
+                    <Rectangle.OpacityTransition>
+                        <ScalarTransition Duration="0:0:0.15" />
+                    </Rectangle.OpacityTransition>
+                </Rectangle>
+                <StackPanel
+                    Padding="24"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="8">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Style="{ThemeResource BodyStrongTextBlockStyle}"
+                        Text="Drop your recording here" />
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource CaptionText}"
+                        Text="{x:Bind ViewModel.TypesLine}" />
+                    <Button
+                        Margin="0,4,0,0"
+                        HorizontalAlignment="Center"
+                        Command="{x:Bind ViewModel.ChooseCommand}"
+                        Content="Choose a file" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Headed and sized like the date and time pickers below -->
+            <StackPanel Visibility="{x:Bind ViewModel.HasFile, Mode=OneWay}">
+                <TextBlock Margin="0,0,0,8" Text="File" />
+                <Border
+                    Padding="12,0,0,0"
+                    CornerRadius="{ThemeResource ControlCornerRadius}"
+                    Style="{StaticResource InnerCardSurface}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{ThemeResource BodyStrongTextBlockStyle}"
+                            Text="{x:Bind ViewModel.FileName, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis"
+                            ToolTipService.ToolTip="{x:Bind ViewModel.Path, Mode=OneWay}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.LiveSetting="Polite"
+                            Style="{StaticResource CaptionText}"
+                            Text="{x:Bind ViewModel.LengthText, Mode=OneWay}"
+                            Typography.NumeralAlignment="Tabular" />
+                        <HyperlinkButton
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Change recording"
+                            Command="{x:Bind ViewModel.ChooseCommand}"
+                            Content="Change" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <controls:WarningLine Text="{x:Bind ViewModel.Problem, Mode=OneWay}" />
+
+            <!-- The headers are the pickers' accessible names -->
+            <Grid ColumnSpacing="12" Visibility="{x:Bind ViewModel.Inspected, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <!-- The date takes the spare width so the time ends in line with the file box -->
+                <CalendarDatePicker
+                    HorizontalAlignment="Stretch"
+                    Date="{x:Bind ViewModel.Day, Mode=TwoWay}"
+                    DateFormat="{}{day.integer} {month.abbreviated} {year.full}"
+                    Header="Date"
+                    MaxDate="{x:Bind ViewModel.Today}"
+                    PlaceholderText="Date" />
+                <TimePicker
+                    Grid.Column="1"
+                    Header="Time"
+                    SelectedTime="{x:Bind ViewModel.Time, Mode=TwoWay}" />
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

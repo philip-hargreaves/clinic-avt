@@ -196,7 +196,7 @@ public class SessionsViewModelTest
         await vm.RefreshAsync();
 
         Assert.Empty(vm.Sessions);
-        Assert.Contains("could not list sessions", status.LatestActivity);
+        Assert.Contains("could not list consultations", status.LatestActivity);
 
         engine.Failing.Remove("session/list");
         engine.Responses["session/list"] = new { sessions = Array.Empty<object>() };

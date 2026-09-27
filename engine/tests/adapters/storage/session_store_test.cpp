@@ -408,7 +408,7 @@ TEST(SessionStore, EachDocumentKindKeepsItsOwnSlotThroughSaveEditAndDelete) {
     EXPECT_NO_THROW(store.DeleteDocument(id, DocumentKind::kReflection)) << "gone already";
 }
 
-TEST(SessionStore, RewritingADocumentNeverReusesANonce) {
+TEST(SessionStore, RewritingOrRecreatingADocumentNeverReusesAnIv) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
     const SessionId id = store.Begin({16000, "", ""});
@@ -432,12 +432,27 @@ TEST(SessionStore, RewritingADocumentNeverReusesANonce) {
     store.SaveDocument(id, DocumentKind::kNote, note);
     record();
 
-    EXPECT_EQ(sequences, (std::vector<std::int64_t>{1, 2, 3}));
-    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kNote).revision, 3);
+    const std::int64_t first = sequences[0];
+    EXPECT_GT(first, 0);
+    EXPECT_EQ(sequences, (std::vector<std::int64_t>{first, first + 1, first + 2}));
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kNote).revision, first + 2);
     EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).revision, 0) << "absent";
     EXPECT_NE(payloads[0], payloads[1]) << "the same text, a different IV";
     EXPECT_NE(payloads[1], payloads[2]);
     EXPECT_NE(payloads[0], payloads[2]);
+
+    // A deleted slot keeps no count, so the next write starts somewhere fresh
+    auto reflection_seq = [&] {
+        Db db(root.DbPath());
+        Db::Stmt row = db.Prepare("SELECT seq FROM documents WHERE kind = 'reflection'");
+        return row.Step() ? row.ColumnInt64(0) : 0;
+    };
+    store.SaveDocument(id, DocumentKind::kReflection, {.text = "first"});
+    const std::int64_t before = reflection_seq();
+    store.DeleteDocument(id, DocumentKind::kReflection);
+    store.SaveDocument(id, DocumentKind::kReflection, {.text = "second"});
+    EXPECT_NE(reflection_seq(), before) << "a rewritten slot must not reuse the deleted IV";
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kReflection).text, "second");
 }
 
 // While the store is open its writes sit in the WAL; closing folds them into the file.
@@ -539,27 +554,247 @@ TEST(SessionStore, DeleteErasesTheSessionItsKeyAndEveryRowButNeverTheLiveOne) {
     EXPECT_TRUE(store.ListSessions().empty());
 }
 
+// Clear keeps the session but replaces its key, so the rows it erased are noise as after a delete
 TEST(SessionStore, ErasedKeysLeaveNoRemnantInTheFileOrWal) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
-    const SessionId id = store.Begin({16000, "", ""});
-    store.Finalise(id);
-    std::vector<std::uint8_t> wrapped;
-    {
+    const SessionId deleted = store.Begin({16000, "", ""});
+    store.Finalise(deleted);
+    const SessionId cleared = store.Begin({16000, "", ""});
+    store.ReplaceTurns(cleared, std::vector<asr::Turn>{{0, 16000, "doctor", "erased"}});
+    store.Finalise(cleared);
+    store.SaveDocument(cleared, DocumentKind::kNote, {.text = "erased"});
+    store.SaveDocument(cleared, DocumentKind::kReflection, {.text = "kept"});
+
+    std::vector<std::vector<std::uint8_t>> needles;
+    for (const SessionId& id : {deleted, cleared}) {
         Db db(root.DbPath());
         Db::Stmt key = db.Prepare("SELECT wrapped FROM session_keys WHERE session_id = ?");
         key.BindText(1, id);
         ASSERT_TRUE(key.Step());
-        wrapped = key.ColumnBlob(0);
+        const std::vector<std::uint8_t> wrapped = key.ColumnBlob(0);
+        ASSERT_GT(wrapped.size(), 96u);
+        // The tail: ciphertext and MAC. The head repeats the user's master key id and the
+        // description in every blob, so it would match the fresh key too
+        needles.emplace_back(wrapped.end() - 64, wrapped.end());
+        ASSERT_TRUE(FileHolds(root.DbPath(), needles.back()) ||
+                    FileHolds(root.WalPath(), needles.back()));
     }
-    ASSERT_GT(wrapped.size(), 96u);
-    // Past the header every DPAPI blob shares
-    const std::vector<std::uint8_t> needle(wrapped.begin() + 32, wrapped.begin() + 96);
-    ASSERT_TRUE(FileHolds(root.DbPath(), needle) || FileHolds(root.WalPath(), needle));
 
-    store.Delete(id);
-    EXPECT_FALSE(FileHolds(root.DbPath(), needle));
-    EXPECT_FALSE(FileHolds(root.WalPath(), needle));
+    store.Delete(deleted);
+    store.Clear(cleared);
+    for (const auto& needle : needles) {
+        EXPECT_FALSE(FileHolds(root.DbPath(), needle));
+        EXPECT_FALSE(FileHolds(root.WalPath(), needle));
+    }
+    EXPECT_EQ(store.ReadDocument(cleared, DocumentKind::kReflection).text, "kept");
+}
+
+void ExpectSameRecord(const SessionRecord& expected, const SessionRecord& actual) {
+    EXPECT_EQ(actual.id, expected.id);
+    EXPECT_EQ(actual.started_at, expected.started_at);
+    EXPECT_EQ(actual.ended_at, expected.ended_at);
+    EXPECT_EQ(actual.sample_rate, expected.sample_rate);
+    EXPECT_EQ(actual.device_id, expected.device_id);
+    EXPECT_EQ(actual.device_name, expected.device_name);
+    EXPECT_EQ(actual.lost_frames, expected.lost_frames);
+    ASSERT_EQ(actual.turns.size(), expected.turns.size());
+    for (std::size_t i = 0; i < expected.turns.size(); ++i) {
+        EXPECT_EQ(actual.turns[i].first_frame, expected.turns[i].first_frame);
+        EXPECT_EQ(actual.turns[i].frame_count, expected.turns[i].frame_count);
+        EXPECT_EQ(actual.turns[i].speaker, expected.turns[i].speaker);
+        EXPECT_EQ(actual.turns[i].text, expected.turns[i].text);
+    }
+    ASSERT_EQ(actual.documents.size(), expected.documents.size());
+    for (std::size_t i = 0; i < expected.documents.size(); ++i) {
+        SCOPED_TRACE(i);
+        const Document& want = expected.documents[i].document;
+        const Document& got = actual.documents[i].document;
+        EXPECT_EQ(actual.documents[i].kind, expected.documents[i].kind);
+        EXPECT_EQ(got.text, want.text);
+        EXPECT_EQ(got.language, want.language);
+        EXPECT_EQ(got.style, want.style);
+        EXPECT_EQ(got.detail, want.detail);
+        EXPECT_EQ(got.generated_at, want.generated_at);
+        EXPECT_EQ(got.edited_at, want.edited_at);
+        EXPECT_EQ(got.revision, want.revision);
+    }
+}
+
+// What a backup carries: read whole from one store, added whole to another, once
+TEST(SessionStore, ARecordMovesWholeIntoAnotherStoreUnderAFreshKeyAndOnlyOnce) {
+    TempRoot root;
+    TempRoot other_root;
+    other_root.path += "-other";
+    SqliteSessionStore source(root.path, kNever);
+    const SessionId id = source.Begin({16000, "usb-7", "Desk microphone"});
+    source.Append(id, Ramp(1600), 5);
+    source.ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "doctor", "how is the elbow"},
+                                                   {16000, 8000, "patient", "still swollen"}});
+    source.Finalise(id);
+    source.SaveDocument(id, DocumentKind::kNote,
+                        {.text = "generated", .style = "soap", .detail = "concise"});
+    source.EditDocument(id, DocumentKind::kNote, "the clinician's wording");
+    source.SaveDocument(id, DocumentKind::kPatient, {.text = "Your elbow is swollen."});
+    source.SaveDocument(id, DocumentKind::kTranslation, {.text = "Twój łokieć", .language = "pl"});
+    source.EditDocument(id, DocumentKind::kLabel, "");  // a cleared label is still a row
+    source.SaveDocument(id, DocumentKind::kSummary, {.text = "A patient in their forties."});
+    source.SaveDocument(id, DocumentKind::kReflection, {.text = R"({"happened":"x"})"});
+    source.SaveDocument(id, DocumentKind::kGuidance, {.text = R"({"version":1})"});
+
+    const SessionRecord record = source.ReadRecord(id);
+    EXPECT_EQ(record.lost_frames, 5u);
+    EXPECT_EQ(record.device_name, "Desk microphone");
+    ASSERT_EQ(record.documents.size(), 7u) << "every kind present, the empty label included";
+    std::string written_at;
+    for (const RecordDocument& entry : record.documents) {
+        EXPECT_GT(entry.document.revision, 0);
+        written_at = std::max({written_at, entry.document.generated_at, entry.document.edited_at});
+    }
+
+    SqliteSessionStore target(other_root.path, kNever);
+    ASSERT_EQ(target.AddRecord(record), AddOutcome::kAdded);
+    ExpectSameRecord(record, target.ReadRecord(id));
+    const auto listed = target.ListSessions();
+    ASSERT_EQ(listed.size(), 1u);
+    EXPECT_EQ(listed[0].state, "finalised");
+    EXPECT_FALSE(listed[0].demo);
+    EXPECT_FALSE(listed[0].cleared);
+    EXPECT_TRUE(listed[0].has_reflection);
+    EXPECT_EQ(listed[0].written_at, written_at);
+    {
+        Db db(other_root.DbPath());
+        EXPECT_EQ(db.QueryInt64("SELECT retain FROM sessions"), 1);
+        Db::Stmt turn = db.Prepare("SELECT payload FROM turns WHERE seq = 0");
+        ASSERT_TRUE(turn.Step());
+        EXPECT_THROW((void)CipherOf(root, id).Open(Domain::kTurns, id, 0, turn.ColumnBlob(0)),
+                     StoreError)
+            << "the target sealed under its own key";
+    }
+
+    // An id already stored wins: nothing is overwritten or added
+    SessionRecord changed = record;
+    changed.documents[0].document.text = "a different note";
+    changed.turns.pop_back();
+    EXPECT_EQ(target.AddRecord(changed), AddOutcome::kSkipped);
+    EXPECT_EQ(source.AddRecord(changed), AddOutcome::kSkipped);
+    ExpectSameRecord(record, target.ReadRecord(id));
+
+    // A record the store could not have written is refused before any write
+    SessionRecord invalid = record;
+    invalid.id = std::string(32, 'a');
+    invalid.started_at = "2026-03-09 14:20:00";
+    EXPECT_THROW((void)target.AddRecord(invalid), StoreError);
+    invalid = record;
+    invalid.id = "NOT-A-SESSION-ID";
+    EXPECT_THROW((void)target.AddRecord(invalid), StoreError);
+    invalid = record;
+    invalid.id = std::string(32, 'b');
+    invalid.documents.push_back(invalid.documents.front());
+    EXPECT_THROW((void)target.AddRecord(invalid), StoreError) << "one row per kind";
+    EXPECT_EQ(target.ListSessions().size(), 1u);
+}
+
+// Restoring a consultation removed with its reflection kept gives back what the clear took and
+// keeps what the clinician has written since
+TEST(SessionStore, ARecordCompletesAClearedSessionAndKeepsItsLocalReflection) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "doctor", "the history"}});
+    store.Finalise(id);
+    store.SaveDocument(id, DocumentKind::kNote,
+                       {.text = "a note", .style = "soap", .detail = "standard"});
+    store.SaveDocument(id, DocumentKind::kPatient, {.text = "a sheet"});
+    store.SaveDocument(id, DocumentKind::kReflection, {.text = "first thoughts"});
+    const SessionRecord backup = store.ReadRecord(id);
+
+    store.Clear(id);
+    store.EditDocument(id, DocumentKind::kReflection, "second thoughts");
+    ASSERT_TRUE(store.ListSessions()[0].cleared);
+
+    EXPECT_EQ(store.AddRecord(backup), AddOutcome::kCompleted);
+    const SessionRecord restored = store.ReadRecord(id);
+    ASSERT_EQ(restored.turns.size(), 1u);
+    EXPECT_EQ(restored.turns[0].text, "the history");
+    const Document note = store.ReadDocument(id, DocumentKind::kNote);
+    EXPECT_EQ(note.text, "a note");
+    EXPECT_EQ(note.style, "soap");
+    EXPECT_EQ(note.revision, backup.documents[0].document.revision)
+        << "the note's revision survives, so its guidance is not stale";
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).text, "a sheet");
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kReflection).text, "second thoughts");
+    EXPECT_FALSE(store.ListSessions()[0].cleared);
+    EXPECT_EQ(store.AddRecord(backup), AddOutcome::kSkipped) << "whole again, so left alone";
+}
+
+TEST(SessionStore, ClearingKeepsOnlyTheAppraisalEntryAndDeleteAllCanClearToo) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    auto consultation = [&](bool reflected) {
+        const SessionId id = store.Begin({16000, "", ""});
+        store.ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "doctor", "the history"}});
+        store.Finalise(id);
+        store.SaveDocument(id, DocumentKind::kNote,
+                           {.text = "a note", .style = "soap", .detail = "standard"});
+        store.SaveDocument(id, DocumentKind::kPatient, {.text = "a sheet"});
+        store.SaveDocument(id, DocumentKind::kGuidance, {.text = "{}"});
+        store.SaveDocument(id, DocumentKind::kLabel, {.text = "Elbow swelling"});
+        if (reflected) {
+            store.SaveDocument(id, DocumentKind::kSummary, {.text = "a case summary"});
+            store.SaveDocument(id, DocumentKind::kReflection, {.text = "what I learned"});
+        }
+        return id;
+    };
+    const SessionId reflected = consultation(true);
+    const SessionId plain = consultation(false);
+    const Document reflection = store.ReadDocument(reflected, DocumentKind::kReflection);
+
+    store.Clear(reflected);
+    store.Clear(plain);
+
+    EXPECT_TRUE(store.ReadTurns(reflected).empty());
+    for (const DocumentKind kind :
+         {DocumentKind::kNote, DocumentKind::kPatient, DocumentKind::kGuidance}) {
+        EXPECT_EQ(store.ReadDocument(reflected, kind).revision, 0) << "gone";
+    }
+    const Document kept = store.ReadDocument(reflected, DocumentKind::kReflection);
+    EXPECT_EQ(kept.text, reflection.text);
+    EXPECT_EQ(kept.generated_at, reflection.generated_at);
+    EXPECT_EQ(kept.revision, reflection.revision);
+    EXPECT_EQ(store.ReadDocument(reflected, DocumentKind::kSummary).text, "a case summary");
+    EXPECT_THROW((void)store.ReadTurns(plain), StoreError) << "no appraisal entry, nothing kept";
+    auto listed = store.ListSessions();
+    ASSERT_EQ(Ids(listed), (std::vector<SessionId>{reflected}));
+    EXPECT_TRUE(listed[0].cleared);
+    EXPECT_TRUE(listed[0].has_reflection);
+    EXPECT_EQ(listed[0].label, "Elbow swelling");
+    {
+        Db db(root.DbPath());
+        EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM documents"), 3);
+        EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM note_options"), 0);
+    }
+
+    // Delete all keeping reflections clears the same way and never touches the live session
+    const SessionId second = consultation(true);
+    const SessionId unreflected = consultation(false);
+    const SessionId crashed = store.Begin({16000, "", ""});
+    store.Append(crashed, Ramp(1600), 0);
+    store.Abandon(crashed);
+    const SessionId live = store.Begin({16000, "", ""});
+    EXPECT_THROW(store.Clear(crashed), StoreError) << "a crashed session waits for recovery";
+    EXPECT_THROW(store.Clear(live), StoreError);
+
+    EXPECT_EQ(store.DeleteAll(true), 3u) << "second cleared, the rest but the live one deleted";
+    listed = store.ListSessions();
+    EXPECT_EQ(Ids(listed), (std::vector<SessionId>{live, second, reflected}));
+    EXPECT_TRUE(listed[1].cleared);
+    EXPECT_THROW((void)store.ReadTurns(unreflected), StoreError);
+    EXPECT_EQ(store.DeleteAll(true), 0u) << "a cleared session has nothing more to remove";
+
+    store.Finalise(live);
+    EXPECT_EQ(store.DeleteAll(), 3u) << "without keeping, cleared sessions go too";
+    EXPECT_TRUE(store.ListSessions().empty());
 }
 
 TEST(SessionStore, RetainOffSessionsAreHiddenThenSweptButACrashedOneWaitsForRecovery) {

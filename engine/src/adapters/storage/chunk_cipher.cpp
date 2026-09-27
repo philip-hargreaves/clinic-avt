@@ -43,9 +43,16 @@ struct ChunkCipher::Impl {
     BCRYPT_KEY_HANDLE key = nullptr;
     std::uint8_t key_bytes[kKeyBytes] = {};
 
+    Impl() = default;
+
     explicit Impl(std::span<const std::uint8_t> key_material) {
         if (key_material.size() != kKeyBytes) throw StoreError(StoreCode::kOther, "bad key length");
         std::memcpy(key_bytes, key_material.data(), kKeyBytes);
+        Load();
+    }
+
+    // Makes the AES key from key_bytes
+    void Load() {
         Check(BCryptOpenAlgorithmProvider(&alg, BCRYPT_AES_ALGORITHM, nullptr, 0),
               "BCryptOpenAlgorithmProvider");
         Check(
@@ -100,6 +107,25 @@ ChunkCipher ChunkCipher::FromWrapped(std::span<const std::uint8_t> wrapped) {
     return ChunkCipher(std::move(impl));
 }
 
+ChunkCipher ChunkCipher::FromPassword(std::string_view password, std::span<const std::uint8_t> salt,
+                                      std::uint32_t iterations) {
+    // Derived straight into the heap Impl, whose destructor zeroes it on any throw
+    auto impl = std::make_unique<Impl>();
+    BCRYPT_ALG_HANDLE hmac = nullptr;
+    Check(BCryptOpenAlgorithmProvider(&hmac, BCRYPT_SHA256_ALGORITHM, nullptr,
+                                      BCRYPT_ALG_HANDLE_HMAC_FLAG),
+          "BCryptOpenAlgorithmProvider");
+    const NTSTATUS status =
+        BCryptDeriveKeyPBKDF2(hmac, reinterpret_cast<PUCHAR>(const_cast<char*>(password.data())),
+                              static_cast<ULONG>(password.size()), const_cast<PUCHAR>(salt.data()),
+                              static_cast<ULONG>(salt.size()), iterations, impl->key_bytes,
+                              static_cast<ULONG>(kKeyBytes), 0);
+    BCryptCloseAlgorithmProvider(hmac, 0);
+    Check(status, "BCryptDeriveKeyPBKDF2");
+    impl->Load();
+    return ChunkCipher(std::move(impl));
+}
+
 std::vector<std::uint8_t> ChunkCipher::Wrapped() const {
     DATA_BLOB in{static_cast<DWORD>(kKeyBytes), const_cast<std::uint8_t*>(impl_->key_bytes)};
     DATA_BLOB out{};
@@ -112,15 +138,15 @@ std::vector<std::uint8_t> ChunkCipher::Wrapped() const {
     return wrapped;
 }
 
-std::vector<std::uint8_t> ChunkCipher::Seal(Domain domain, std::string_view session_id,
+std::vector<std::uint8_t> ChunkCipher::Seal(Domain domain, std::string_view context,
                                             std::uint64_t seq,
                                             std::span<const std::uint8_t> plain) const {
     std::uint8_t iv[kIvBytes] = {static_cast<std::uint8_t>(domain)};
     PutSeq(iv + 4, seq);
-    std::vector<std::uint8_t> aad(1 + session_id.size() + 8);
+    std::vector<std::uint8_t> aad(1 + context.size() + 8);
     aad[0] = static_cast<std::uint8_t>(domain);
-    std::memcpy(aad.data() + 1, session_id.data(), session_id.size());
-    PutSeq(aad.data() + 1 + session_id.size(), seq);
+    std::memcpy(aad.data() + 1, context.data(), context.size());
+    PutSeq(aad.data() + 1 + context.size(), seq);
 
     std::vector<std::uint8_t> sealed(plain.size() + kTagBytes);
 
@@ -141,7 +167,7 @@ std::vector<std::uint8_t> ChunkCipher::Seal(Domain domain, std::string_view sess
     return sealed;
 }
 
-std::vector<std::uint8_t> ChunkCipher::Open(Domain domain, std::string_view session_id,
+std::vector<std::uint8_t> ChunkCipher::Open(Domain domain, std::string_view context,
                                             std::uint64_t seq,
                                             std::span<const std::uint8_t> sealed) const {
     if (sealed.size() < kTagBytes)
@@ -150,10 +176,10 @@ std::vector<std::uint8_t> ChunkCipher::Open(Domain domain, std::string_view sess
 
     std::uint8_t iv[kIvBytes] = {static_cast<std::uint8_t>(domain)};
     PutSeq(iv + 4, seq);
-    std::vector<std::uint8_t> aad(1 + session_id.size() + 8);
+    std::vector<std::uint8_t> aad(1 + context.size() + 8);
     aad[0] = static_cast<std::uint8_t>(domain);
-    std::memcpy(aad.data() + 1, session_id.data(), session_id.size());
-    PutSeq(aad.data() + 1 + session_id.size(), seq);
+    std::memcpy(aad.data() + 1, context.data(), context.size());
+    PutSeq(aad.data() + 1 + context.size(), seq);
 
     BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO info;
     BCRYPT_INIT_AUTH_MODE_INFO(info);

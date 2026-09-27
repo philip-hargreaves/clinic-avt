@@ -134,7 +134,7 @@ public class SessionCommandsTest
         Assert.True(session.ModelsReady);
         Assert.True(controls.StartRecordingCommand.CanExecute(null));
         Assert.Equal("Ready", session.Status.DisplayLabel);
-        Assert.Equal("Ready to start recording", controls.StartLabel);
+        Assert.Equal("Ready to start", controls.StartLabel);
 
         // A first-use compile holds recording, and only then does the status line show it
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
@@ -275,6 +275,6 @@ public class SessionCommandsTest
         engine.SetConnected(true);
 
         Assert.Equal(SessionState.Idle, session.State);
-        Assert.Equal("Could not resume - session kept", session.Status.LatestActivity);
+        Assert.Equal("Could not resume - consultation kept", session.Status.LatestActivity);
     }
 }

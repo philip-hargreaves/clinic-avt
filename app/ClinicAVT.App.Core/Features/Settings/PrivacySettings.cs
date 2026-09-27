@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Features.Backup;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Core.Shell;
@@ -36,6 +37,11 @@ public sealed partial class PrivacySettings : ObservableObject
         KeepConsultations = preferences?.KeepConsultations ?? false;
         SeedDataEnabled = preferences?.SeedDataEnabled ?? false;
         _initialising = false;
+        // A backup made from the Sessions page changes the Back up card's line too
+        if (preferences is not null)
+        {
+            preferences.Saved += () => OnPropertyChanged(nameof(BackupDescription));
+        }
     }
 
     /// <summary>On connect the seed follows the switch.</summary>
@@ -96,7 +102,33 @@ public sealed partial class PrivacySettings : ObservableObject
     private void PersistKeepConsultations(bool value) =>
         _preferences.Update(p => p.KeepConsultations = value);
 
-    /// <summary>Erases every stored consultation, seeded or real.</summary>
+    /// <summary>The Back up card's line: what a backup is, and when the last one was made.</summary>
+    public string BackupDescription =>
+        "Save consultations to a password-protected file. "
+        + (_preferences?.LastBackup is { } last
+            ? $"Last backup: {Words.ShortDate(last.CreatedAt)}, {Words.Count(last.Consultations, "consultation")}."
+            : "No backup yet.");
+
+    [RelayCommand]
+    private Task BackUp() => RunDialogAsync("backing up", dialogs => dialogs.RunBackupAsync());
+
+    [RelayCommand]
+    private Task Restore() => RunDialogAsync("restoring", dialogs => dialogs.RunRestoreAsync());
+
+    private async Task RunDialogAsync(string action, Func<IDialogService, Task> run)
+    {
+        if (_dialogs is null || !_client.IsConnected() || ConsultationGuard.Blocks(_session, _status, action))
+        {
+            return;
+        }
+
+        await run(_dialogs).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Erases every stored consultation, seeded or real. Reflections stay with their case summary
+    /// unless the clinician ticks them too.
+    /// </summary>
     [RelayCommand]
     private async Task DeleteAllConsultations()
     {
@@ -110,23 +142,61 @@ public sealed partial class PrivacySettings : ObservableObject
             return;
         }
 
-        if (_dialogs is not null && !await _dialogs.ConfirmAsync("Delete all consultation data?",
-                "Every stored consultation on this device is erased: transcripts, notes, patient "
-                + "sheets and appraisal reflections. Your guideline documents are kept. This cannot "
-                + "be undone.", "Delete all").ConfigureAwait(true))
+        var deleteReflections = false;
+        if (_dialogs is not null)
         {
-            return;
+            var coverage = await CoverageLineAsync(_client).ConfigureAwait(true);
+            var answer = await _dialogs.ConfirmWithOptionAsync("Delete all consultations from ClinicAVT?",
+                coverage + " This can't be undone.",
+                BackupWords.ReflectionsTick, "Delete all").ConfigureAwait(true);
+            if (answer is not { } ticked)
+            {
+                return;
+            }
+
+            deleteReflections = ticked;
         }
 
         await EngineCall.ReportAsync(_status, "could not delete", async () =>
         {
-            var removed = await _client.DeleteAllSessionsAsync().ConfigureAwait(true);
+            // Every consultation goes, including one open for review
+            if (_session is not null)
+            {
+                await _session.EndReviewAsync().ConfigureAwait(true);
+            }
+
+            var removed = await _client.DeleteAllSessionsAsync(deleteReflections).ConfigureAwait(true);
             _status?.Append($"{Words.Count(removed, "consultation")} deleted");
             // The seed was erased too. The switch follows, and switching on reseeds
             _seedFollowsStore = true;
             SeedDataEnabled = false;
             _seedFollowsStore = false;
         }).ConfigureAwait(true);
+    }
+
+    // The engine counts, since only it sees consultations recorded or edited after the backup
+    private async Task<string> CoverageLineAsync(IEngineApi client)
+    {
+        if (_preferences?.LastBackup is not { } last)
+        {
+            return "No consultations are backed up.";
+        }
+
+        try
+        {
+            var summary = await client.ArchiveSummaryAsync("", "",
+                new ArchiveCoverage(last.From, last.To, last.CreatedAt)).ConfigureAwait(true);
+            return summary.Uncovered switch
+            {
+                0 => "All consultations are backed up.",
+                1 => "1 consultation isn't backed up.",
+                var n => $"{Words.Count(n, "consultation")} aren't backed up.",
+            };
+        }
+        catch (Exception)
+        {
+            return "The last backup could not be checked.";
+        }
     }
 
     /// <summary>A year of sample consultations with reflections. A developer control.</summary>

@@ -28,6 +28,7 @@ public sealed partial class NoteViewModel : ObservableObject
 
     /// <summary>The translation's language, such as "Polish". It heads the output box.</summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TranslateAgainCommand))]
     public partial string TranslationLanguage { get; set; } = "";
 
     [ObservableProperty]
@@ -79,6 +80,7 @@ public sealed partial class NoteViewModel : ObservableObject
     /// <summary>True from the request until translate/ready or translate/failed.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(TranslateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(TranslateAgainCommand))]
     public partial bool TranslationRunning { get; set; }
 
     /// <summary>"Edited 10:31" when a person changed the stored note, empty otherwise.</summary>
@@ -91,6 +93,11 @@ public sealed partial class NoteViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial bool PatientStale { get; set; }
+
+    /// <summary>The sheet changed after it was translated. Cleared by a new translation.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TranslateAgainCommand))]
+    public partial bool TranslationStale { get; set; }
 
     /// <summary>Open while Regenerate waits for the clinician to confirm losing an edit.</summary>
     [ObservableProperty]
@@ -236,15 +243,26 @@ public sealed partial class NoteViewModel : ObservableObject
     private void KeepEdits() => RegenerateWarningOpen = false;
 
     [RelayCommand(CanExecute = nameof(CanTranslate))]
-    private Task Translate()
+    private Task Translate() => StartTranslation(SelectedLanguage!);
+
+    /// <summary>Translates again into the translation's own language, whatever the picker shows.</summary>
+    [RelayCommand(CanExecute = nameof(CanTranslateAgain))]
+    private Task TranslateAgain() => StartTranslation(TranslationLanguage);
+
+    private Task StartTranslation(string language)
     {
         TranslationRunning = true;
-        return TranslateRequested!(SelectedLanguage!);
+        return TranslateRequested!(language);
     }
+
+    private bool CanTranslate() => SelectedLanguage is not null && CanStartTranslation();
+
+    private bool CanTranslateAgain() =>
+        TranslationStale && TranslationLanguage.Length > 0 && CanStartTranslation();
 
     // The engine translates the stored sheet, which exists only once the
     // pipeline reports it ready. Text alone streams in before that
-    private bool CanTranslate() => SelectedLanguage is not null && TranslateRequested is not null
+    private bool CanStartTranslation() => TranslateRequested is not null
         && PipelineState == NotePipelineState.AllReady && !TranslationRunning && !AnyEditing;
 
     // An edited note is the clinician's wording. Regenerating replaces it,
@@ -354,6 +372,7 @@ public sealed partial class NoteViewModel : ObservableObject
         PatientInfoText = patient;
         TranslationText = translation;
         TranslationRunning = false;
+        TranslationStale = false;
         EditedStamp = editedStamp;
         RegenerateWarningOpen = false;
         PipelineState = NotePipelineState.AllReady;
@@ -399,6 +418,7 @@ public sealed partial class NoteViewModel : ObservableObject
     partial void OnPipelineStateChanged(NotePipelineState value)
     {
         TranslateCommand.NotifyCanExecuteChanged();
+        TranslateAgainCommand.NotifyCanExecuteChanged();
         RegenerateCommand.NotifyCanExecuteChanged();
         SaveNoteCommand.NotifyCanExecuteChanged();
         SavePatientCommand.NotifyCanExecuteChanged();
@@ -474,6 +494,7 @@ public sealed partial class NoteViewModel : ObservableObject
         RegenerateCommand.NotifyCanExecuteChanged();
         RegeneratePatientCommand.NotifyCanExecuteChanged();
         TranslateCommand.NotifyCanExecuteChanged();
+        TranslateAgainCommand.NotifyCanExecuteChanged();
     }
 
     // Clears every document and stamp, an open edit included, since the next text replaces them
@@ -490,6 +511,7 @@ public sealed partial class NoteViewModel : ObservableObject
         TranslationRunning = false;
         EditedStamp = "";
         PatientStale = false;
+        TranslationStale = false;
         ExampleCaseIndex = -1;
     }
 

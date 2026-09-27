@@ -36,6 +36,13 @@ TEST(Strings, SqueezeAndLowerTokensSplitWhereTheirCallersNeed) {
     EXPECT_TRUE(LowerTokens("--", alpha).empty());
 }
 
+TEST(Strings, UnixLinesTurnsEveryLineEndingIntoLf) {
+    EXPECT_EQ(UnixLines("Heading\rLine one.\r\rNext"), "Heading\nLine one.\n\nNext");
+    EXPECT_EQ(UnixLines("a\r\nb\nc\r"), "a\nb\nc\n");
+    EXPECT_EQ(UnixLines("caf\xC3\xA9"), "caf\xC3\xA9");
+    EXPECT_EQ(UnixLines(""), "");
+}
+
 TEST(Strings, EndsSentenceSetsClosersAside) {
     EXPECT_TRUE(EndsSentence("Done."));
     EXPECT_TRUE(EndsSentence("Really?\")  "));

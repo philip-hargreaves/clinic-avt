@@ -84,22 +84,55 @@ public class EngineStatusInShellTest
         Assert.Equal("Recording", bar.DisplayLabel);
     }
 
+    // A cancel puts up its own status line, and a recording can still start
     [Fact]
-    public async Task ConsultationActiveTracksTheSessionState()
+    public async Task TheConsentReminderShowsWhileARecordingCouldStart()
     {
         var (session, engine, _) = TestSession.Create();
-        Assert.False(session.ConsultationActive);
+        var bar = session.Status;
+        bar.SetEngineState(EngineStatus.Running);
+        Assert.False(bar.ConsentVisible);
+        bar.SetEngineReady(true);
+        Assert.True(bar.ConsentVisible);
+
+        bar.SetSettingUp(true);
+        Assert.False(bar.ConsentVisible);
+        bar.SetSettingUp(false);
 
         await session.StartRecordingAsync();
-        Assert.True(session.ConsultationActive);
+        Assert.False(bar.ConsentVisible);
+        await session.CancelRecordingAsync();
+        Assert.Equal("Cancelled", bar.DisplayLabel);
+        Assert.True(bar.ConsentVisible);
+
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        Assert.False(bar.ConsentVisible);
+        engine.RaiseNotification("note/ready");
+        Assert.False(bar.ConsentVisible);
+        await session.EndReviewAsync();
+        Assert.True(bar.ConsentVisible);
+    }
+
+    [Fact]
+    public async Task InProgressLastsFromRecordUntilTheNoteIsWritten()
+    {
+        var (session, engine, _) = TestSession.Create();
+        Assert.False(session.ConsultationInProgress);
+
+        await session.StartRecordingAsync();
+        Assert.True(session.ConsultationInProgress);
 
         await session.StopRecordingAsync();
-        Assert.True(session.ConsultationActive);
+        Assert.True(session.ConsultationInProgress);
 
+        // Written, it is only on screen for review
         engine.RaiseNotification("note/ready");
-        Assert.True(session.ConsultationActive);
+        Assert.False(session.ConsultationInProgress);
+        Assert.NotNull(session.ReviewedSessionId);
 
-        session.StartNewConsultation();
-        Assert.False(session.ConsultationActive);
+        await session.EndReviewAsync();
+        Assert.Null(session.ReviewedSessionId);
+        Assert.False(session.ConsultationInProgress);
     }
 }

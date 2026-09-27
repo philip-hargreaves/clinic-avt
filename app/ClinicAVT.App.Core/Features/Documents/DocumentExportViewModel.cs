@@ -38,7 +38,8 @@ public sealed partial class DocumentExportViewModel(
     // Export is the one action that writes outside the encrypted store
     private async Task ExportAsync(string suggestedName, string text)
     {
-        if (await picker.SaveTextAsync(suggestedName, "Text file", ".txt", DocumentExport.Marker + text)
+        if (await picker.SaveTextAsync(suggestedName, "Text file", ".txt",
+                DocumentExport.Marker + text.ReplaceLineEndings("\n"))
                 .ConfigureAwait(true) is { } path)
         {
             status.Append($"Saved to {Path.GetFileName(path)} - outside the encrypted store");

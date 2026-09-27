@@ -16,7 +16,9 @@ add_library(clinicavt_core STATIC
     src/core/session/note_lane.cpp
     src/core/session/playback.cpp
     src/core/session/session_controller.cpp
-    src/core/session/transcribe_recording.cpp)
+    src/core/session/transcribe_recording.cpp
+    src/core/archive/backup.cpp
+    src/core/archive/record_rules.cpp)
 target_include_directories(clinicavt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(clinicavt_core PRIVATE clinicavt_warnings)
 
@@ -79,6 +81,7 @@ target_link_libraries(clinicavt_guidance_record
     PRIVATE clinicavt_warnings)
 
 add_library(clinicavt_ipc STATIC
+    src/adapters/ipc/archive_handlers.cpp
     src/adapters/ipc/engine_handlers.cpp
     src/adapters/ipc/guidance_handlers.cpp
     src/adapters/ipc/session_handlers.cpp
@@ -87,7 +90,7 @@ add_library(clinicavt_ipc STATIC
     src/adapters/ipc/wire_events.cpp)
 target_link_libraries(clinicavt_ipc
     PUBLIC clinicavt_core clinicavt_guidance_record clinicavt_models nlohmann_json::nlohmann_json
-    PRIVATE clinicavt_warnings clinicavt_audio advapi32)
+    PRIVATE clinicavt_warnings clinicavt_archive clinicavt_audio advapi32)
 
 FetchContent_Declare(
     sqlite3
@@ -124,6 +127,16 @@ target_include_directories(clinicavt_storage PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
 target_link_libraries(clinicavt_storage
     PUBLIC clinicavt_core
     PRIVATE clinicavt_warnings sqlite3 bcrypt crypt32 nlohmann_json::nlohmann_json)
+
+# The backup file: password-keyed, one sealed record per consultation
+add_library(clinicavt_archive STATIC
+    src/adapters/archive/archive_file.cpp
+    src/adapters/archive/archive_lane.cpp
+    src/adapters/archive/archive_password.cpp
+    src/adapters/archive/archive_record.cpp)
+target_link_libraries(clinicavt_archive
+    PUBLIC clinicavt_core nlohmann_json::nlohmann_json
+    PRIVATE clinicavt_storage clinicavt_warnings bcrypt)
 
 add_library(clinicavt_models STATIC
     src/adapters/models/model_store.cpp
@@ -228,12 +241,15 @@ target_link_libraries(clinicavt_diarisation
 
 add_library(clinicavt_audio STATIC
     src/adapters/audio/capture_devices.cpp
+    src/adapters/audio/media_foundation_reader.cpp
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wasapi_player.cpp
     src/adapters/audio/wav_source.cpp)
 target_link_libraries(clinicavt_audio
     PUBLIC clinicavt_core
-    PRIVATE clinicavt_warnings ole32 advapi32)
+    PRIVATE clinicavt_warnings ole32 advapi32 mfplat mfreadwrite mfuuid delayimp)
+# Windows N editions and Server may lack Media Foundation; the engine must still start there
+target_link_options(clinicavt_audio INTERFACE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll)
 
 add_executable(clinicavt_engine src/engine_main.cpp)
 target_link_libraries(clinicavt_engine PRIVATE

@@ -132,7 +132,7 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     /// <summary>Reloads the list, keeping the open session selected if it is still there.</summary>
     public Task RefreshAsync() =>
-        EngineCall.ReportAsync(_status, "could not list sessions", async () =>
+        EngineCall.ReportAsync(_status, "could not list consultations", async () =>
         {
             var sessions = await _engine.ListSessionsAsync().ConfigureAwait(true);
             var keep = DetailOpen ? Selected?.Id : null;
@@ -296,18 +296,40 @@ public sealed partial class SessionsViewModel : ObservableObject
             return;
         }
 
-        await EngineCall.ReportAsync(_status, "could not delete session", async () =>
+        await EngineCall.ReportAsync(_status, "could not delete consultation", async () =>
         {
-            if (Selected?.Id == row.Id)
+            // Its review may be open here or, just recorded, on the Consultation page
+            if (Selected?.Id == row.Id || _consultation.ReviewedSessionId == row.Id)
             {
                 await _consultation.CloseReviewAsync().ConfigureAwait(true);
                 DetailOpen = false;
             }
 
             await _engine.DeleteSessionAsync(row.Id).ConfigureAwait(true);
-            _status.Append("Session deleted");
+            _status.Append("Consultation deleted");
             await RefreshAsync().ConfigureAwait(true);
         }).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The Back up dialog. It can remove what it backed up, so a stored review ends first and
+    /// keeps its edits.
+    /// </summary>
+    [RelayCommand]
+    private async Task BackUp()
+    {
+        if (!_engine.Connected || Settings.ConsultationGuard.Blocks(_consultation, _status, "backing up"))
+        {
+            return;
+        }
+
+        if (_consultation.ReviewingStored)
+        {
+            await LeaveAsync().ConfigureAwait(true);
+        }
+
+        await _dialogs.RunBackupAsync().ConfigureAwait(true);
+        await RefreshAsync().ConfigureAwait(true);
     }
 
     /// <summary>Ends the review and saves any edits.</summary>

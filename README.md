@@ -3,7 +3,9 @@
 On-device ambient AI for clinical consultations. A C++20 engine with a WinUI 3 shell that
 listens to the consultation, produces a labelled transcript, and drafts a structured clinical note.
 
-Everything runs locally. Audio, transcripts and notes never leave the machine.
+Everything runs locally and nothing is sent over the internet. The recording is not kept. Saved
+consultations are stored encrypted on the computer and leave it only when you copy, export or
+back them up.
 
 ## Run the release package
 
@@ -53,6 +55,16 @@ record the note header also offers **Example case**. A written case from `demo/c
 in as the note, the guidance search runs on it, and the patient sheet can be rewritten from it.
 
 The zip already contains the model weights.
+
+## Backing up
+
+Back up, in Settings > Your data or on the Sessions page, saves the consultations from a chosen
+period to a password-protected `.clinicavt` file. The password cannot be reset and the file cannot
+be opened without it, so keep it somewhere you can reach without this computer. Once the file is
+checked, Remove backed-up consultations clears them from this computer. Restore, in Settings > Your
+data, brings them back and leaves consultations already here unchanged. A backup holds patient
+information: keep it only where your practice allows, and restore only on a computer your practice
+has approved.
 
 ## Build and run with Visual Studio
 

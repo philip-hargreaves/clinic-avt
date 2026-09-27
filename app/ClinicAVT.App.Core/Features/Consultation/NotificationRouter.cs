@@ -52,6 +52,9 @@ public sealed class NotificationRouter
             case SessionProgress progress:
                 _recorder.AdvancePhase(progress.Stage);
                 break;
+            case ImportProgress progress:
+                _recorder.OnImportProgress(progress);
+                break;
             case NotePartial chunk when NoteExpected:
                 // Writing is claimed only once tokens stream
                 if (_note.ClinicalNoteText.Length == 0)
@@ -114,6 +117,12 @@ public sealed class NotificationRouter
                 _note.Apply(NotePipelineEvent.PatientInfoReady);
                 _review.LoadedPatient = _note.PatientInfoText;
                 _note.PatientStale = false;
+                // A rewritten sheet no longer matches a translation of the old one
+                if (_note.TranslationVisible)
+                {
+                    _note.TranslationStale = true;
+                }
+
                 _status.Append("Ready for review");
                 _ = SessionMetrics?.SessionFinishedAsync(null, _note.ClinicalNoteText.Length,
                     patientTokensPerSecond: ready.TokensPerSecond);

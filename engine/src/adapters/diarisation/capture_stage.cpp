@@ -95,13 +95,16 @@ const std::vector<float>& CaptureStage::EmbedSlice(std::span<const float> audio,
     return slot;
 }
 
-void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& decode, int budget) {
+void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& decode, int budget,
+                           const StopFn& stop) {
     auto& s = state_;
+    const auto stopped = [&stop] { return stop && stop(); };
 
     // Whole hops only. Finalise pads the final partial one
     AppendVadHops(vad_, audio, s.vad_probabilities, false);
 
     while (s.seg_done + kSegWindowFrames <= audio.size()) {
+        if (stopped()) return;
         AppendSeg(s.seg, segmenter_.Run(audio.subspan(s.seg_done, kSegWindowFrames)), s.seg_done);
         s.seg_done += kSegWindowFrames;
     }
@@ -122,10 +125,12 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
         CutSlices(s.vad_probabilities, s.vad_probabilities.size() * audio::kVadHopFrames,
                   s.seg.change_points, s.clip_cuts, settled);
     const auto t_embed = Clock::now();
-    const auto embedded =
-        EmbedSlices(slices, [&](const Region& slice) { return EmbedSlice(audio, slice); });
+    const auto embedded = EmbedSlices(slices, [&](const Region& slice) -> std::vector<float> {
+        if (stopped()) return {};
+        return EmbedSlice(audio, slice);
+    });
     const auto& kept = embedded.kept;
-    if (kept.size() < 2) return;
+    if (kept.size() < 2 || stopped()) return;
 
     // Provisional labels. A span that final clustering changes is never looked up
     const auto t_cluster = Clock::now();
@@ -173,6 +178,7 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
                 continue;
             }
             if (budget-- <= 0) break;
+            if (stopped()) return;
             auto chunks_of_span = decode(audio.subspan(a, b - a), a);
             const std::string text = asr::JoinedText(chunks_of_span);
             ++decoded;

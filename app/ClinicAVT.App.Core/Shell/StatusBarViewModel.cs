@@ -43,6 +43,8 @@ public sealed partial class StatusBarViewModel : ObservableObject
     private ITimer? _tick;
     // The store stopped taking writes. It stays on the line until the next consultation starts
     private string _storageFault = "";
+    // Nothing is being recorded, finalised or reviewed, so the next step is a recording
+    private bool _sessionIdle = true;
 
     /// <summary>
     /// The bar meters generation live. Whichever lane streams sends one partial per token, so
@@ -193,6 +195,9 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(DisplayLabel))]
     public partial string SetupElapsed { get; private set; } = "";
 
+    /// <summary>The consent reminder, shown only while a recording could start.</summary>
+    public bool ConsentVisible => _status == EngineStatus.Running && _ready && _sessionIdle && !_settingUp;
+
     public string SetupLine =>
         $"Setting up for this computer · {SetupElapsed} · this can take a few minutes";
 
@@ -267,6 +272,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowsSetup));
         OnPropertyChanged(nameof(DisplayLabel));
         OnPropertyChanged(nameof(Busy));
+        OnPropertyChanged(nameof(ConsentVisible));
     }
 
     // One clock for both counters, running only while one of them counts
@@ -348,6 +354,12 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public void Append(string line, bool busy = false)
     {
         _logger?.Line(line);
+        Show(line, busy);
+    }
+
+    /// <summary>Sets the status line without logging it, for a figure that ticks over.</summary>
+    public void Show(string line, bool busy = false)
+    {
         _activityBusy = busy;
         LatestActivity = line;
         OnPropertyChanged(nameof(DisplayLabel));
@@ -355,6 +367,12 @@ public sealed partial class StatusBarViewModel : ObservableObject
     }
 
     public void SetMicLevel(double level) => MicLevel = level;
+
+    public void SetSessionIdle(bool idle)
+    {
+        _sessionIdle = idle;
+        OnPropertyChanged(nameof(ConsentVisible));
+    }
 
     public void SetMicVisible(bool visible)
     {
@@ -457,6 +475,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
         };
         OnPropertyChanged(nameof(DisplayLabel));
         OnPropertyChanged(nameof(Busy));
+        OnPropertyChanged(nameof(ConsentVisible));
     }
 
     private double Now() => _time.GetElapsedTime(_started).TotalSeconds;
