@@ -71,32 +71,31 @@ Results Sample() {
     return out;
 }
 
-TEST(GuidanceRecord, ReadingBackAndWritingAgainChangesNothing) {
-    const json wire = ToJson(Sample());
-    EXPECT_EQ(wire["version"], kRecordVersion);
-    const Results back = FromJson(wire);
-    EXPECT_EQ(ToJson(back), wire) << wire.dump(2);
-}
-
-TEST(GuidanceRecord, EmptyFieldsStayEmptyStrings) {
-    const json wire = ToJson(Sample());
-    EXPECT_EQ(wire["shown"][1]["url"], "");
-    EXPECT_EQ(wire["shown"][1]["updateTag"], "");
-    EXPECT_TRUE(wire["searched"][0]["unavailable"].is_null());
-    EXPECT_EQ(FromJson(wire).shown[1].url, "");
-}
-
-TEST(GuidanceRecord, RoundsTheScore) {
-    EXPECT_EQ(FromJson(ToJson(Sample())).shown[0].score, 0.897);
-}
-
-TEST(GuidanceRecord, CarriesTheNoteRevision) {
+TEST(GuidanceRecord, ARecordRoundTripsWithEveryFieldIntact) {
     const Record record{Sample(), 7};
     const json wire = ToJson(record);
+    EXPECT_EQ(wire["version"], kRecordVersion);
     EXPECT_EQ(wire["noteRevision"], 7);
+    EXPECT_EQ(wire["shown"][1]["url"], "") << "empty fields stay empty strings";
+    EXPECT_EQ(wire["shown"][1]["updateTag"], "");
+    EXPECT_TRUE(wire["searched"][0]["unavailable"].is_null());
+
     const Record back = RecordFromJson(wire);
+    EXPECT_EQ(ToJson(back), wire) << "reading back and writing again changes nothing";
     EXPECT_EQ(back.note_revision, 7);
-    EXPECT_EQ(ToJson(back), wire);
+    const auto& results = back.results;
+    EXPECT_EQ(results.floor, 0.85);
+    EXPECT_EQ(results.considered, 42);
+    ASSERT_EQ(results.searched.size(), 1u);
+    EXPECT_EQ(results.searched[0].id, "fixture-nice");
+    EXPECT_EQ(results.searched[0].chunks, 40);
+    EXPECT_TRUE(results.searched[0].unavailable.empty());
+    ASSERT_EQ(results.shown.size(), 3u);
+    EXPECT_EQ(results.shown[0].score, 0.897) << "the score is rounded to 3 dp";
+    EXPECT_EQ(results.shown[1].url, "");
+    EXPECT_EQ(results.shown[2].document, 4870415453308932637) << "every bit of a 63-bit id";
+    EXPECT_EQ(results.shown[2].page, 5);
+    EXPECT_EQ(results.shown[2].pages, 36);
 }
 
 TEST(GuidanceRecord, StoresBytesTheWireWouldAlsoAccept) {
@@ -118,24 +117,6 @@ TEST(GuidanceRecord, RefusesWhatItCannotRead) {
     EXPECT_FALSE(CanRead(json{{"version", 1}, {"shown", json::array()}}));
     EXPECT_TRUE(CanRead(empty)) << "a record before version was written";
     EXPECT_EQ(RecordFromJson(empty).note_revision, 0);
-}
-
-TEST(GuidanceRecord, KeepsEveryBitOfADocumentId) {
-    const Results back = FromJson(ToJson(Sample()));
-    ASSERT_EQ(back.shown.size(), 3u);
-    EXPECT_EQ(back.shown[2].document, 4870415453308932637);
-    EXPECT_EQ(back.shown[2].page, 5);
-    EXPECT_EQ(back.shown[2].pages, 36);
-}
-
-TEST(GuidanceRecord, CarriesTheSearchedCorpusAndFloor) {
-    const Results back = FromJson(ToJson(Sample()));
-    EXPECT_EQ(back.floor, 0.85);
-    EXPECT_EQ(back.considered, 42);
-    ASSERT_EQ(back.searched.size(), 1u);
-    EXPECT_EQ(back.searched[0].id, "fixture-nice");
-    EXPECT_EQ(back.searched[0].chunks, 40);
-    EXPECT_TRUE(back.searched[0].unavailable.empty());
 }
 
 }  // namespace

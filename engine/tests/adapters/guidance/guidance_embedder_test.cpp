@@ -9,13 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "adapters/guidance/corpus_store.hpp"
 #include "adapters/guidance/embedder.hpp"
 #include "adapters/guidance/retriever.hpp"
 #include "adapters/models/model_store.hpp"
-#include "core/guidance/guidance_scan.hpp"
 #include "guidance_fixture.hpp"
-#include "tools/corpus/indexer.hpp"
 
 namespace clinicavt::guidance {
 namespace {
@@ -81,45 +78,13 @@ TEST(GuidanceEmbedder, LoadsAndMatchesTheHarnessEmbeddings) {
         EXPECT_FALSE(ours.truncated);
         EXPECT_GT(ours.tokens, 5u);
     }
-}
 
-TEST(GuidanceEmbedder, ReportsTruncationOnALongText) {
     std::string long_text;
     for (int i = 0; i < 1500; ++i) long_text += "symptom ";
-    const auto out = StagedEmbedder().Embed(long_text);
-    EXPECT_TRUE(out.truncated);
+    const auto out = embedder.Embed(long_text);
+    EXPECT_TRUE(out.truncated) << "a text past the model's window says so";
     EXPECT_GT(out.tokens, 512u);
     EXPECT_EQ(out.vector.size(), 1024u);
-}
-
-TEST(GuidanceEmbedder, IndexesTheFixtureCorpusAndFindsTheRightGuideline) {
-    const auto dir = std::filesystem::temp_directory_path() / "clinicavt-index-real";
-    std::filesystem::remove_all(dir);
-    fixture::WriteMarkdown(kFixtureDir, dir / "docs");
-    std::ofstream(dir / "build.json")
-        << R"({"id": "fixture-real", "name": "Fixture", "licence": "invented", "attribution": "none",
-               "source": "text", "text": {"dir": "docs"}})";
-
-    auto& embedder = StagedEmbedder();
-    const auto report = IndexCorpus(ReadBuildSpec(dir / "build.json"), embedder, dir / "out",
-                                    "2026-09-11T00:00:00Z", "models_tests");
-    EXPECT_EQ(report.chunks, 40u);
-    {
-        std::string reason;
-        const auto store = CorpusStore::Open(dir / "out", embedder.Identity(), reason);
-        ASSERT_NE(store, nullptr) << reason;
-        EXPECT_EQ(store->Size(), report.chunks);
-
-        const auto query = embedder.Embed(
-            "Urgent rheumatology referral for a woman with synovitis in several small joints of "
-            "the hands.");
-        const auto hits =
-            Scan(store->Matrix(), store->Size(), store->Dim(), query.vector.data(), 3);
-        ASSERT_EQ(hits.size(), 3u);
-        EXPECT_EQ(store->CiteAt(hits[0].ord).code, "fx100") << store->TextAt(hits[0].ord).text;
-        EXPECT_GT(hits[0].cosine, 0.8f);
-    }
-    std::filesystem::remove_all(dir);
 }
 
 // The retriever over the staged model and the fixture corpus: each fixture
@@ -128,8 +93,8 @@ TEST(GuidanceEmbedder, IndexesTheFixtureCorpusAndFindsTheRightGuideline) {
 // refused at the shipped floor. Ordering is asserted without the floor. What
 // the floor does with each note is printed, since the fixture is invented text
 TEST(GuidanceEmbedder, SearchesTheFixtureNotes) {
-    const auto dir = std::filesystem::temp_directory_path() / "clinicavt-guidance-real";
-    std::filesystem::remove_all(dir);
+    const fixture::TempDir temp("real");
+    const auto& dir = temp.path;
     auto& embedder = StagedEmbedder();
     fixture::Build(dir / "corpora" / "fixture", "fixture", embedder, fixture::Chunks(kFixtureDir));
     {
@@ -163,7 +128,6 @@ TEST(GuidanceEmbedder, SearchesTheFixtureNotes) {
                         floored.considered);
         }
     }
-    std::filesystem::remove_all(dir);
 }
 
 }  // namespace

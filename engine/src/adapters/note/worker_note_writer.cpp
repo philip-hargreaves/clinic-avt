@@ -23,19 +23,11 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/system/child_process.hpp"
 #include "adapters/system/gpu_lease.hpp"
+#include "core/note/model_failure.hpp"
 
 namespace clinicavt::note {
 
 using nlohmann::json;
-
-namespace {
-
-// The GPU lease gave up waiting on the host, which is wedged in a driver
-// call. The lane reports it rather than retrying
-constexpr const char* kWedged =
-    "the note process is stuck in the graphics driver; restart the computer";
-
-}  // namespace
 
 struct WorkerNoteWriter::Impl {
     std::filesystem::path host_exe;
@@ -47,6 +39,7 @@ struct WorkerNoteWriter::Impl {
     std::mutex write_mutex;     // frames are written whole
     std::mutex read_mutex;      // one reader of the pipe at a time: the attempt or the watcher
     system::ChildProcess host;  // kill-on-close: the engine's death is the worker's
+    std::vector<system::ChildProcess> stuck;  // hosts that would not exit, held so none is killed
     ipc::PipeClient pipe;
     std::int64_t next_id = 1;
     // Process-wide: a host winding down keeps its pipe name briefly, so a
@@ -55,12 +48,20 @@ struct WorkerNoteWriter::Impl {
     bool closing = false;
     bool respawning = false;                  // under state_mutex: Run is between attempts
     std::atomic<bool> attempt_active{false};  // the note thread owns the pipe's read side
+    // The prefill not yet answered, 0 for none. One at a time, so a host that
+    // stops reading can never fill the pipe and block the capture thread
+    std::atomic<std::int64_t> prefill_pending{0};
 
     // The lane: which tier, whether resident. lane_mutex is never held
     // across a call into the host or the listener
     mutable std::mutex lane_mutex;
     NoteModelState state;
     Listener listener;
+    // Under lane_mutex: why the last load failed, and the tiers whose cache
+    // has already been rebuilt once
+    LoadFailure last_failure = LoadFailure::kOther;
+    bool crashed_loading = false;
+    std::vector<std::string> cache_rebuilt;
     std::thread watcher;  // reads the host's load outcome while nothing else reads
     std::atomic<bool> watch_stop{false};
 
@@ -71,15 +72,37 @@ struct WorkerNoteWriter::Impl {
     // its own, longer bound
     static constexpr DWORD kInactivityTimeoutMs = 120'000;
     static constexpr DWORD kLoadTimeoutMs = 20 * 60'000;
+    // A host that has lost its pipe cancels any generation and exits. The
+    // slowest measured exit is 3.4 s after an unfinished prefill
+    static constexpr DWORD kExitGraceMs = 15'000;
 
     bool WorkerAlive() const {
         return host.Alive() && pipe.IsOpen();
     }
 
-    void CloseWorker() {
+    // False when the host would not exit. It is then stuck in a driver call,
+    // and is held rather than killed
+    bool CloseWorker() {
         pipe.Close();
-        // Losing the pipe ends the host's serve loop. The grace period lets it exit
-        host.End(2000);
+        prefill_pending = 0;
+        if (host.End(kExitGraceMs)) return true;
+        std::fprintf(stderr, "clinicavt-engine: note host %lu did not exit; leaving it\n",
+                     host.Pid());
+        stuck.push_back(std::move(host));
+        host = {};
+        system::GpuLease::Global().MarkWedged();
+        return false;
+    }
+
+    // A load cannot be cancelled, so a host is only closed once its load has
+    // settled. Bounded by the load's own timeout
+    void AwaitLoad() {
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(kLoadTimeoutMs);
+        while (Phase() == NoteModelState::Phase::kLoading && host.Alive() &&
+               std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
     }
 
     std::string Tier() const {
@@ -123,16 +146,25 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    void Send(const std::string& method, json params) {
-        json request{{"jsonrpc", "2.0"},
-                     {"id", next_id++},
-                     {"method", method},
-                     {"params", std::move(params)}};
+    // `pending` names the request before it goes, so its reply can never come first
+    std::int64_t Send(const std::string& method, json params,
+                      std::atomic<std::int64_t>* pending = nullptr) {
+        const std::int64_t id = next_id++;
+        if (pending != nullptr) *pending = id;
         const std::string frame =
-            ipc::EncodeFrame(request.dump(-1, ' ', false, json::error_handler_t::replace));
+            ipc::EncodeFrame(ipc::Serialize(ipc::MakeRequest(id, method, std::move(params))));
         std::lock_guard<std::mutex> lock(write_mutex);
         if (!pipe.Write(frame)) {
             throw std::runtime_error("note worker went away");
+        }
+        return id;
+    }
+
+    // A reply with no method answers a request. The prefill's frees the next
+    void OnReply(const json& message) {
+        if (message.contains("id") && message["id"].is_number_integer()) {
+            std::int64_t expected = message["id"].get<std::int64_t>();
+            prefill_pending.compare_exchange_strong(expected, 0);
         }
     }
 
@@ -153,6 +185,11 @@ struct WorkerNoteWriter::Impl {
         return state.phase;
     }
 
+    NoteModelState State() const {
+        std::lock_guard<std::mutex> lock(lane_mutex);
+        return state;
+    }
+
     // Names the model a tier resolves to, and whether its compile cache
     // exists. Throws the store's own message when nothing claims the tier
     void Describe(const std::string& tier, NoteModelState& into) const {
@@ -165,7 +202,7 @@ struct WorkerNoteWriter::Impl {
         const models::ModelInfo& info = store->Resolve("note", tier);
         into.id = info.id;
         into.name = info.name;
-        into.first_use = !std::filesystem::exists(info.dir / ".cache");
+        into.first_use = !models::Compiled(info);
     }
 
     // The host's two load outcomes, from whichever reader saw them
@@ -180,17 +217,96 @@ struct WorkerNoteWriter::Impl {
                 s.first_use = params.value("firstUse", s.first_use);
             });
         } else if (event == "loadFailed") {
-            Transition([&params](NoteModelState& s) {
+            const std::string raw = params.value("detail", "note model failed to load");
+            const LoadFailure failure = ClassifyLoadFailure(raw);
+            std::fprintf(stderr, "clinicavt-engine: note load failed (%.300s)%s\n", raw.c_str(),
+                         failure == LoadFailure::kMemory ? Headroom().c_str() : "");
+            Transition([&](NoteModelState& s) {
                 s.phase = NoteModelState::Phase::kFailed;
-                s.detail = params.value("detail", "note model failed to load");
+                s.detail = failure == LoadFailure::kOther ? raw : PlainLoadMessage(failure, s.name);
+                last_failure = failure;
+                crashed_loading = false;
             });
         }
     }
 
+    // What the machine had left when a load was refused memory
+    static std::string Headroom() {
+        MEMORYSTATUSEX memory{};
+        memory.dwLength = sizeof(memory);
+        ULARGE_INTEGER disk{};
+        GlobalMemoryStatusEx(&memory);
+        GetDiskFreeSpaceExW(L"C:\\", &disk, nullptr, nullptr);
+        char text[160];
+        std::snprintf(
+            text, sizeof(text), "; commit free %.1f GB, RAM free %.1f GB, C: free %.1f GB",
+            memory.ullAvailPageFile / 1e9, memory.ullAvailPhys / 1e9, disk.QuadPart / 1e9);
+        return text;
+    }
+
+    // A memory failure is not retried behind the user's back: only a switch
+    // or a restart tries again
+    bool Blocked() const {
+        std::lock_guard<std::mutex> lock(lane_mutex);
+        return state.phase == NoteModelState::Phase::kFailed &&
+               last_failure == LoadFailure::kMemory;
+    }
+
+    bool LoadFailed() const {
+        std::lock_guard<std::mutex> lock(lane_mutex);
+        return state.phase == NoteModelState::Phase::kFailed;
+    }
+
+    // A damaged compile cache fails the same way every time, and a crash
+    // during a load is most often one. Rebuilt once per tier per engine
+    bool TakeCacheRebuild() {
+        std::lock_guard<std::mutex> lock(lane_mutex);
+        if (state.phase != NoteModelState::Phase::kFailed) return false;
+        if (last_failure != LoadFailure::kCache && !crashed_loading) return false;
+        if (std::find(cache_rebuilt.begin(), cache_rebuilt.end(), state.tier) !=
+            cache_rebuilt.end()) {
+            return false;
+        }
+        cache_rebuilt.push_back(state.tier);
+        return true;
+    }
+
+    // Closes the host, deletes the tier's compile cache and loads again
+    bool RebuildCache() {
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            if (closing) return false;
+            if (!CloseWorker()) {
+                Wedged();
+                return false;
+            }
+        }
+        if (store != nullptr) {
+            const auto cache = models::CacheDir(store->Resolve("note", Tier()));
+            std::error_code ignored;
+            std::filesystem::remove_all(cache, ignored);
+            std::fprintf(stderr, "clinicavt-engine: rebuilding the note model cache\n");
+        }
+        return true;
+    }
+
     // Reads whatever frames are waiting and dispatches load events. The
-    // caller holds read_mutex. False when the pipe is gone
+    // caller holds read_mutex. Stops the moment an attempt starts, leaving
+    // its replies for it. False when the pipe is gone
     bool PumpFrames() {
         for (;;) {
+            while (!attempt_active.load()) {
+                const auto payload = pipe.NextFrame();
+                if (!payload) break;
+                const json message = json::parse(*payload, nullptr, false);
+                if (message.is_object() && message.contains("method")) {
+                    OnHostEvent(message["method"].get<std::string>(),
+                                message.value("params", json::object()));
+                } else if (message.is_object()) {
+                    OnReply(message);
+                }
+            }
+            if (attempt_active.load()) return true;
             switch (pipe.Read(4096)) {
                 case ipc::PipeClient::Poll::kGone:
                     return false;
@@ -198,13 +314,6 @@ struct WorkerNoteWriter::Impl {
                     return true;
                 case ipc::PipeClient::Poll::kRead:
                     break;
-            }
-            while (auto payload = pipe.NextFrame()) {
-                const json message = json::parse(*payload, nullptr, false);
-                if (message.is_object() && message.contains("method")) {
-                    OnHostEvent(message["method"].get<std::string>(),
-                                message.value("params", json::object()));
-                }
             }
         }
     }
@@ -230,14 +339,20 @@ struct WorkerNoteWriter::Impl {
                     // deliberate close stopped this thread first
                     std::lock_guard<std::mutex> lock(state_mutex);
                     if (closing || respawning) return;
-                    Transition([](NoteModelState& s) {
+                    const unsigned long code = host.ExitCode();
+                    Transition([&](NoteModelState& s) {
                         if (s.phase != NoteModelState::Phase::kLoading) return;
                         s.phase = NoteModelState::Phase::kFailed;
-                        s.detail = "note worker exited while loading";
+                        s.detail = PlainLoadMessage(LoadFailure::kOther, s.name);
+                        last_failure = LoadFailure::kOther;
+                        crashed_loading = true;
                     });
-                    return;
+                    std::fprintf(
+                        stderr, "clinicavt-engine: note host exited while loading (0x%lx)\n", code);
+                    break;
                 }
             }
+            if (!watch_stop.load() && TakeCacheRebuild() && RebuildCache()) Prepare();
         });
     }
 
@@ -310,7 +425,8 @@ struct WorkerNoteWriter::Impl {
                     message["error"].value("data", message["error"].value("message", "failed")));
             }
             if (!message.contains("method")) {
-                continue;  // an ack, ours or an earlier prepare's
+                OnReply(message);  // an ack, ours or an earlier prepare's or prefill's
+                continue;
             }
             const auto& event = message["method"].get_ref<const std::string&>();
             const json& p = message.value("params", json::object());
@@ -326,14 +442,56 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // True, and the lane marked failed, once Whisper's bounded lease wait
-    // has found the host wedged
+    void Prepare() {
+        if (Wedged() || Blocked()) return;
+        try {
+            EnsureWorker();
+            bool starting = false;
+            Transition([&starting](NoteModelState& s) {
+                if (s.phase == NoteModelState::Phase::kReady) return;
+                starting = s.phase != NoteModelState::Phase::kLoading;
+                s.phase = NoteModelState::Phase::kLoading;
+                s.detail.clear();
+            });
+            Send("prepare", json::object());
+            if (starting) StartWatcher();
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "clinicavt-engine: note worker prepare failed (%s)\n", e.what());
+            Transition([&e](NoteModelState& s) {
+                s.phase = NoteModelState::Phase::kFailed;
+                s.detail = e.what();
+            });
+        }
+    }
+
+    // For a GPU wait that has run on too long. A load holds the GPU for minutes
+    // and cannot be interrupted, and a request in flight has its own bound, so
+    // neither is probed. Otherwise the host is asked to exit: a healthy one does
+    // within seconds and starts again when next needed. One that cannot is stuck
+    bool ProbeStuck() {
+        if (Phase() == NoteModelState::Phase::kLoading || attempt_active.load()) return false;
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            if (closing || !host.Alive()) return false;
+            if (CloseWorker()) {
+                Transition([](NoteModelState& s) {
+                    if (s.phase == NoteModelState::Phase::kReady)
+                        s.phase = NoteModelState::Phase::kIdle;
+                });
+                return false;
+            }
+        }
+        Wedged();
+        return true;
+    }
+
+    // True, and the lane marked failed, once a stuck host has been found
     bool Wedged() {
-        if (!system::GpuLease::Global().Broken()) return false;
+        if (!system::GpuLease::Global().Wedged()) return false;
         Transition([](NoteModelState& s) {
-            if (s.phase == NoteModelState::Phase::kFailed && s.detail == kWedged) return;
+            if (s.phase == NoteModelState::Phase::kFailed && s.detail == kStuckInDriver) return;
             s.phase = NoteModelState::Phase::kFailed;
-            s.detail = kWedged;
+            s.detail = kStuckInDriver;
         });
         return true;
     }
@@ -341,17 +499,29 @@ struct WorkerNoteWriter::Impl {
     // One fresh process before failing: the fresh-context retry is the
     // configuration measured to work
     std::string Run(const std::string& method, json params, const Progress& progress) {
-        if (Wedged()) throw std::runtime_error(kWedged);
+        if (Wedged()) throw std::runtime_error(kStuckInDriver);
+        if (Blocked()) throw std::runtime_error(State().detail);
         try {
             return Attempt(method, params, progress);
         } catch (const std::exception& e) {
+            // The request waited on a load that failed: a fresh process would
+            // fail the same way, unless the cause was a damaged cache
+            if (LoadFailed()) {
+                if (!TakeCacheRebuild() || !RebuildCache())
+                    throw std::runtime_error(State().detail);
+                return Attempt(method, params, progress);
+            }
             {
                 std::lock_guard<std::mutex> lock(state_mutex);
                 if (closing) throw;
                 std::fprintf(stderr, "clinicavt-engine: note worker failed (%.100s); respawning\n",
                              e.what());
                 respawning = true;
-                CloseWorker();
+                if (!CloseWorker()) {
+                    respawning = false;
+                    Wedged();
+                    throw std::runtime_error(kStuckInDriver);
+                }
             }
             try {
                 const std::string text = Attempt(method, params, progress);
@@ -387,6 +557,7 @@ WorkerNoteWriter::WorkerNoteWriter(std::filesystem::path host_exe,
 }
 
 WorkerNoteWriter::~WorkerNoteWriter() {
+    impl_->AwaitLoad();
     impl_->StopWatcher();
     std::lock_guard<std::mutex> lock(impl_->state_mutex);
     impl_->closing = true;
@@ -395,25 +566,7 @@ WorkerNoteWriter::~WorkerNoteWriter() {
 
 // Spawn and load hide inside capture. Failure surfaces on Write
 void WorkerNoteWriter::Prepare() {
-    if (impl_->Wedged()) return;
-    try {
-        impl_->EnsureWorker();
-        bool starting = false;
-        impl_->Transition([&starting](NoteModelState& s) {
-            if (s.phase == NoteModelState::Phase::kReady) return;
-            starting = s.phase != NoteModelState::Phase::kLoading;
-            s.phase = NoteModelState::Phase::kLoading;
-            s.detail.clear();
-        });
-        impl_->Send("prepare", json::object());
-        if (starting) impl_->StartWatcher();
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: note worker prepare failed (%s)\n", e.what());
-        impl_->Transition([&e](NoteModelState& s) {
-            s.phase = NoteModelState::Phase::kFailed;
-            s.detail = e.what();
-        });
-    }
+    impl_->Prepare();
 }
 
 // A different tier is a new host. The same tier is a no-op unless its last
@@ -427,21 +580,28 @@ NoteModelState WorkerNoteWriter::Configure(const std::string& tier) {
         throw std::invalid_argument(e.what());
     }
     bool same;
+    bool loading;
     {
         std::lock_guard<std::mutex> lock(impl_->lane_mutex);
         same = impl_->state.tier == tier && impl_->state.phase != NoteModelState::Phase::kFailed;
+        loading = impl_->state.phase == NoteModelState::Phase::kLoading;
     }
     if (same) {
         return State();
+    }
+    if (loading) {
+        throw std::logic_error("the note model is still loading. Change it once it is ready");
     }
     impl_->StopWatcher();
     {
         std::lock_guard<std::mutex> lock(impl_->state_mutex);
         impl_->CloseWorker();
     }
-    impl_->Transition([&described](NoteModelState& s) {
+    impl_->Transition([&](NoteModelState& s) {
         s = described;
         s.phase = NoteModelState::Phase::kIdle;
+        impl_->last_failure = LoadFailure::kOther;
+        impl_->crashed_loading = false;
     });
     Prepare();
     return State();
@@ -457,23 +617,15 @@ void WorkerNoteWriter::SetListener(Listener listener) {
     impl_->listener = std::move(listener);
 }
 
-namespace {
-
-json TurnsJson(const std::vector<asr::Turn>& transcript) {
-    json turns = json::array();
-    for (const auto& turn : transcript) turns.push_back(ipc::TurnJson(turn));
-    return turns;
-}
-
-}  // namespace
-
 void WorkerNoteWriter::Prefill(const std::vector<asr::Turn>& transcript,
                                const NoteOptions& options) {
     if (transcript.empty() || impl_->attempt_active.load() || impl_->Wedged()) return;
     try {
         impl_->EnsureWorker();
         impl_->DrainAcks();
-        impl_->Send("prefill", {{"turns", TurnsJson(transcript)}, {"style", options.style}});
+        if (impl_->prefill_pending.load() != 0) return;  // the last guess is still running
+        impl_->Send("prefill", {{"turns", ipc::TurnsJson(transcript)}, {"style", options.style}},
+                    &impl_->prefill_pending);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "clinicavt-engine: note prefill not sent (%.100s)\n", e.what());
     }
@@ -485,7 +637,7 @@ std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
     return impl_->Run("write",
-                      {{"turns", TurnsJson(transcript)},
+                      {{"turns", ipc::TurnsJson(transcript)},
                        {"style", options.style},
                        {"detail", options.detail},
                        {"confirmed", options.confirmed}},
@@ -517,6 +669,10 @@ std::string WorkerNoteWriter::WriteLabel(const std::string& note) {
         std::fprintf(stderr, "clinicavt-engine: no label (%.100s)\n", e.what());
         return {};
     }
+}
+
+bool WorkerNoteWriter::CheckForStuckHost() {
+    return impl_->ProbeStuck();
 }
 
 void WorkerNoteWriter::Cancel() {

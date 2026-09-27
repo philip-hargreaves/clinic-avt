@@ -35,6 +35,7 @@ class WireEvents : public session::ISessionEvents {
     void OnNotePartial(const std::string& text) override;
     void OnNoteReady(const std::string& text) override;
     void OnNoteSaved(const std::string& session, const store::Document& note) override;
+    void OnStorageFault(const std::string& detail) override;
     void OnNoteFailed(const std::string& detail) override;
     void OnPatientPartial(const std::string& text) override;
     void OnPatientReady(const std::string& text) override;

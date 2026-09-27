@@ -102,118 +102,9 @@ struct Outcome {
     }
 };
 
-TEST(GuidanceLane, ReadyArrivesOffTheCallingThread) {
-    FakeRetriever retriever;
-    Outcome outcome;
-    GuidanceLane lane(retriever);
-    lane.Run(outcome.Request("Chest pain on exertion.", 4));
-    ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 1; }));
-    EXPECT_EQ(outcome.ready[0], "Chest pain on exertion.");
-    EXPECT_NE(outcome.last_thread, std::this_thread::get_id());
-    EXPECT_TRUE(outcome.failed.empty());
-}
-
-TEST(GuidanceLane, TheLatestRequestReplacesOneStillWaiting) {
-    FakeRetriever retriever;
-    retriever.hold = true;
-    Outcome outcome;
-    {
-        GuidanceLane lane(retriever);
-        lane.Run(outcome.Request("first"));
-        ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.searched.size() == 1; }));
-        lane.Run(outcome.Request("second"));
-        lane.Run(outcome.Request("third"));
-        retriever.Release();
-        ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 2; }));
-    }
-    EXPECT_EQ(retriever.searched, (std::vector<std::string>{"first", "third"}));
-    EXPECT_EQ(outcome.ready, (std::vector<std::string>{"first", "third"}));
-    EXPECT_EQ(outcome.failed, (std::vector<std::string>{"superseded"}));
-}
-
-TEST(GuidanceLane, AFailedSearchReportsTheDetail) {
-    FakeRetriever retriever;
-    retriever.search_throws = true;
-    Outcome outcome;
-    GuidanceLane lane(retriever);
-    lane.Run(outcome.Request("Chest pain on exertion."));
-    ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.failed.size() == 1; }));
-    EXPECT_EQ(outcome.failed[0], "corpus gone");
-    EXPECT_TRUE(outcome.ready.empty());
-}
-
-TEST(GuidanceLane, ALoadFailureIsLoggedAndSurfacesOnTheSearch) {
-    FakeRetriever retriever;
-    retriever.prepare_throws = true;
-    Outcome outcome;
-    GuidanceLane lane(retriever);
-    lane.Prepare();
-    lane.Run(outcome.Request("Chest pain on exertion."));
-    ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.failed.size() == 1; }));
-    EXPECT_EQ(outcome.failed[0], "no embedding model staged");
-    EXPECT_EQ(retriever.prepares, 1);
-}
-
-TEST(GuidanceLane, PrepareReportsHowLoadingEnded) {
-    std::vector<Readiness> heard;
-    auto listen = [&](const Readiness& readiness) { heard.push_back(readiness); };
-    {
-        FakeRetriever retriever;
-        GuidanceLane lane(retriever, listen);
-        lane.Prepare();
-        ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.prepares == 1; }));
-    }
-    {
-        FakeRetriever retriever;
-        retriever.prepare_throws = true;
-        GuidanceLane lane(retriever, listen);
-        lane.Prepare();
-        ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.prepares == 1; }));
-    }
-    ASSERT_EQ(heard.size(), 2u);
-    EXPECT_EQ(heard[0].phase, Readiness::Phase::kReady);
-    EXPECT_EQ(heard[1].phase, Readiness::Phase::kUnavailable);
-    EXPECT_EQ(heard[1].detail, "no embedding model staged");
-}
-
-TEST(GuidanceLane, TheNotesSearchAndATypedQueryWaitApart) {
-    FakeRetriever retriever;
-    retriever.hold = true;
-    Outcome outcome;
-    {
-        GuidanceLane lane(retriever);
-        lane.Run(outcome.Request("typed one"));
-        ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.searched.size() == 1; }));
-        lane.Run(outcome.Request("typed two"));
-        lane.Run(outcome.Request("note", 3, "s1"));
-        lane.Run(outcome.Request("typed three"));
-        retriever.Release();
-        ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 3; }));
-    }
-    EXPECT_EQ(retriever.searched, (std::vector<std::string>{"typed one", "note", "typed three"}));
-    EXPECT_EQ(retriever.modes,
-              (std::vector<SearchMode>{SearchMode::kQuery, SearchMode::kNote, SearchMode::kQuery}));
-    EXPECT_EQ(outcome.failed, (std::vector<std::string>{"superseded"}));
-}
-
-TEST(GuidanceLane, NoteSearchesForDifferentSessionsBothRun) {
-    FakeRetriever retriever;
-    retriever.hold = true;
-    Outcome outcome;
-    {
-        GuidanceLane lane(retriever);
-        lane.Run(outcome.Request("typed"));
-        ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.searched.size() == 1; }));
-        lane.Run(outcome.Request("note one", 3, "s1"));
-        lane.Run(outcome.Request("note two", 3, "s2"));
-        retriever.Release();
-        ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 3; }));
-    }
-    EXPECT_EQ(retriever.searched, (std::vector<std::string>{"typed", "note one", "note two"}));
-    EXPECT_TRUE(outcome.failed.empty());
-}
-
-TEST(GuidanceLane, ANewerNoteSearchReplacesOnlyItsOwnSessions) {
+// One typed slot and one slot per session: a newer request replaces the one
+// still waiting in its slot, and waiting notes run before typed text
+TEST(GuidanceLane, OnlyTheLatestWaitingSearchOfEachKindRunsAndNotesGoFirst) {
     FakeRetriever retriever;
     retriever.hold = true;
     Outcome outcome;
@@ -221,14 +112,56 @@ TEST(GuidanceLane, ANewerNoteSearchReplacesOnlyItsOwnSessions) {
         GuidanceLane lane(retriever);
         lane.Run(outcome.Request("busy"));
         ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.searched.size() == 1; }));
+        lane.Run(outcome.Request("typed two"));
         lane.Run(outcome.Request("s1 first", 3, "s1"));
         lane.Run(outcome.Request("s2 first", 3, "s2"));
+        lane.Run(outcome.Request("typed three"));
         lane.Run(outcome.Request("s1 second", 3, "s1"));
         retriever.Release();
-        ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 3; }));
+        ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 4; }));
     }
-    EXPECT_EQ(retriever.searched, (std::vector<std::string>{"busy", "s1 second", "s2 first"}));
-    EXPECT_EQ(outcome.failed, (std::vector<std::string>{"superseded"}));
+    EXPECT_EQ(retriever.searched,
+              (std::vector<std::string>{"busy", "s1 second", "s2 first", "typed three"}));
+    EXPECT_EQ(retriever.modes, (std::vector<SearchMode>{SearchMode::kQuery, SearchMode::kNote,
+                                                        SearchMode::kNote, SearchMode::kQuery}));
+    EXPECT_EQ(outcome.ready,
+              (std::vector<std::string>{"busy", "s1 second", "s2 first", "typed three"}));
+    EXPECT_NE(outcome.last_thread, std::this_thread::get_id()) << "results arrive off the caller";
+    EXPECT_EQ(outcome.failed, (std::vector<std::string>{"superseded", "superseded"}));
+}
+
+TEST(GuidanceLane, PrepareRunsOnceOnTheWorkerAndReportsHowLoadingEnded) {
+    std::vector<Readiness> heard;
+    auto listen = [&](const Readiness& readiness) { heard.push_back(readiness); };
+    {
+        FakeRetriever retriever;
+        retriever.hold = true;
+        Outcome outcome;
+        GuidanceLane lane(retriever, listen);
+        lane.Run(outcome.Request("busy"));
+        ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.searched.size() == 1; }));
+        lane.Prepare();
+        lane.Prepare();
+        retriever.Release();
+        lane.Run(outcome.Request("after prepare"));
+        ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 2; }));
+        EXPECT_EQ(retriever.prepares, 1) << "two requests while busy load once";
+    }
+    {
+        FakeRetriever retriever;
+        retriever.prepare_throws = true;
+        Outcome outcome;
+        GuidanceLane lane(retriever, listen);
+        lane.Prepare();
+        lane.Run(outcome.Request("Chest pain on exertion."));
+        ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.failed.size() == 1; }));
+        EXPECT_EQ(outcome.failed[0], "no embedding model staged") << "the load failure surfaces";
+        EXPECT_EQ(retriever.prepares, 1);
+    }
+    ASSERT_EQ(heard.size(), 2u);
+    EXPECT_EQ(heard[0].phase, Readiness::Phase::kReady);
+    EXPECT_EQ(heard[1].phase, Readiness::Phase::kUnavailable);
+    EXPECT_EQ(heard[1].detail, "no embedding model staged");
 }
 
 TEST(GuidanceLane, AFailureCallbackThatThrowsDoesNotStopTheWorker) {
@@ -241,22 +174,8 @@ TEST(GuidanceLane, AFailureCallbackThatThrowsDoesNotStopTheWorker) {
     lane.Run(std::move(throwing));
     lane.Run(outcome.Request("second"));
     ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.failed.size() == 1; }));
-    EXPECT_EQ(outcome.failed[0], "corpus gone");
-}
-
-TEST(GuidanceLane, PrepareRunsOnceOnTheWorker) {
-    FakeRetriever retriever;
-    retriever.hold = true;
-    Outcome outcome;
-    GuidanceLane lane(retriever);
-    lane.Run(outcome.Request("busy"));
-    ASSERT_TRUE(retriever.WaitUntil([&] { return retriever.searched.size() == 1; }));
-    lane.Prepare();
-    lane.Prepare();
-    retriever.Release();
-    lane.Run(outcome.Request("after prepare"));
-    ASSERT_TRUE(outcome.WaitUntil([&] { return outcome.ready.size() == 2; }));
-    EXPECT_EQ(retriever.prepares, 1);
+    EXPECT_EQ(outcome.failed[0], "corpus gone") << "the next search reports its detail";
+    EXPECT_TRUE(outcome.ready.empty());
 }
 
 }  // namespace

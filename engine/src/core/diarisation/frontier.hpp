@@ -5,7 +5,6 @@
 #include <span>
 
 #include "core/diarisation/diar_regions.hpp"
-#include "ports/transcriber.hpp"
 
 namespace clinicavt::diar {
 

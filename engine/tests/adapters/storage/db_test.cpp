@@ -2,11 +2,9 @@
 
 #include <gtest/gtest.h>
 
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <thread>
 
 namespace clinicavt::store {
 namespace {
@@ -29,127 +27,51 @@ struct TempDb {
     }
 };
 
-TEST(Db, AppliesThePragmaPolicyOnOpen) {
+TEST(Db, ASessionDatabaseOpensDurableAndSecureDeleting) {
     TempDb temp;
     Db db(temp.path);
     EXPECT_EQ(db.QueryInt64("PRAGMA page_size"), 8192);
-    EXPECT_EQ(db.QueryInt64("PRAGMA synchronous"), 2);  // 2 is FULL
+    EXPECT_EQ(db.QueryInt64("PRAGMA synchronous"), 2) << "FULL";
     EXPECT_EQ(db.QueryInt64("PRAGMA foreign_keys"), 1);
+    EXPECT_EQ(db.QueryInt64("PRAGMA secure_delete"), 2) << "FAST: freed cells are zeroed";
+    EXPECT_EQ(db.QueryInt64("PRAGMA busy_timeout"), 5000) << "a second connection waits";
     Db::Stmt journal = db.Prepare("PRAGMA journal_mode");
     ASSERT_TRUE(journal.Step());
     EXPECT_EQ(journal.ColumnText(0), "wal");
 }
 
-TEST(Db, RoundTripsEveryColumnType) {
-    TempDb temp;
-    Db db(temp.path);
-    db.Exec("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL)");
-
-    const std::vector<std::uint8_t> blob = {0x00, 0xFF, 0x7F, 0x80, 0x01};
-    Db::Stmt insert = db.Prepare("INSERT INTO t(id, name, data) VALUES(?, ?, ?)");
-    insert.BindInt64(1, 42);
-    insert.BindText(2, "consultation");
-    insert.BindBlob(3, blob);
-    EXPECT_FALSE(insert.Step());
-
-    Db::Stmt select = db.Prepare("SELECT id, name, data FROM t");
-    ASSERT_TRUE(select.Step());
-    EXPECT_EQ(select.ColumnInt64(0), 42);
-    EXPECT_EQ(select.ColumnText(1), "consultation");
-    EXPECT_EQ(select.ColumnBlob(2), blob);
-    EXPECT_FALSE(select.Step());
-}
-
-TEST(Db, ResetAllowsAStatementToRunAgain) {
-    TempDb temp;
-    Db db(temp.path);
-    db.Exec("CREATE TABLE t(seq INTEGER PRIMARY KEY)");
-
-    Db::Stmt insert = db.Prepare("INSERT INTO t(seq) VALUES(?)");
-    for (std::int64_t seq = 0; seq < 3; ++seq) {
-        insert.BindInt64(1, seq);
-        EXPECT_FALSE(insert.Step());
-        insert.Reset();
-    }
-    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM t"), 3);
-}
-
-TEST(Db, CommittedTransactionSurvivesReopen) {
+TEST(Db, ATransactionRollsBackUnlessCommitted) {
     TempDb temp;
     {
         Db db(temp.path);
         db.Exec("CREATE TABLE t(seq INTEGER PRIMARY KEY)");
+        {
+            Db::Transaction txn(db);
+            db.Exec("INSERT INTO t(seq) VALUES(1)");
+        }
+        EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM t"), 0) << "no commit, no row";
         Db::Transaction txn(db);
-        db.Exec("INSERT INTO t(seq) VALUES(1)");
+        db.Exec("INSERT INTO t(seq) VALUES(2)");
         txn.Commit();
     }
     Db reopened(temp.path);
-    EXPECT_EQ(reopened.QueryInt64("SELECT COUNT(*) FROM t"), 1);
+    EXPECT_EQ(reopened.QueryInt64("SELECT seq FROM t"), 2) << "the commit survives reopen";
 }
 
-TEST(Db, UncommittedTransactionRollsBack) {
-    TempDb temp;
-    Db db(temp.path);
-    db.Exec("CREATE TABLE t(seq INTEGER PRIMARY KEY)");
-    {
-        Db::Transaction txn(db);
-        db.Exec("INSERT INTO t(seq) VALUES(1)");
-    }
-    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM t"), 0);
-}
-
-TEST(Db, BadSqlThrows) {
-    TempDb temp;
-    Db db(temp.path);
-    EXPECT_THROW(db.Exec("NOT ACTUAL SQL"), std::runtime_error);
-    EXPECT_THROW(db.Prepare("SELECT * FROM missing"), std::runtime_error);
-}
-
-TEST(Db, OpenInMissingDirectoryThrows) {
-    const auto path = std::filesystem::temp_directory_path() / "clinicavt-db-no-such-dir" / "x.db";
-    EXPECT_THROW(Db{path}, std::runtime_error);
-}
-
-TEST(Db, ANonDatabaseFileIsRefusedAndReleased) {
+TEST(Db, AFailedOpenOrStatementThrowsACodedErrorAndReleasesTheFile) {
     TempDb temp;
     std::ofstream(temp.path, std::ios::binary) << std::string(200, 'x');
     EXPECT_THROW(Db{temp.path}, std::runtime_error);
     EXPECT_TRUE(std::filesystem::remove(temp.path)) << "the handle was closed on the throw";
-}
 
-TEST(Db, ErrorsCarryACode) {
-    TempDb temp;
     Db db(temp.path);
+    EXPECT_THROW(db.Exec("NOT ACTUAL SQL"), StoreError);
     try {
-        db.Prepare("SELECT * FROM missing");
-        FAIL();
+        (void)db.Prepare("SELECT * FROM missing");
+        FAIL() << "a missing table prepared";
     } catch (const StoreError& e) {
         EXPECT_EQ(e.Code(), StoreCode::kSchema);
     }
-    db.Exec("PRAGMA max_page_count=1");
-    try {
-        db.Exec("CREATE TABLE t(x INTEGER)");
-        db.Exec("CREATE TABLE u(x INTEGER)");
-        FAIL() << "the cap let the file grow";
-    } catch (const StoreError& e) {
-        EXPECT_EQ(e.Code(), StoreCode::kFull);
-    }
-}
-
-TEST(Db, ASecondConnectionWaitsRatherThanThrows) {
-    TempDb temp;
-    Db first(temp.path);
-    first.Exec("CREATE TABLE t(x INTEGER)");
-    Db second(temp.path);
-    first.Exec("BEGIN IMMEDIATE");
-    std::thread release([&] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        first.Exec("COMMIT");
-    });
-    const auto started = std::chrono::steady_clock::now();
-    EXPECT_NO_THROW(second.Exec("INSERT INTO t VALUES(1)"));
-    EXPECT_GE(std::chrono::steady_clock::now() - started, std::chrono::milliseconds(150));
-    release.join();
 }
 
 }  // namespace

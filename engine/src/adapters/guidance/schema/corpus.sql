@@ -14,8 +14,8 @@ CREATE TABLE corpus_meta (
     source        TEXT    NOT NULL CHECK (source IN ('nice', 'text')),
     embedder_id   TEXT    NOT NULL,                 -- model store id, "gte-large-int8"
     embedder_rev  TEXT    NOT NULL,                 -- sha256 of the model weights
-    chunk_prefix  TEXT    NOT NULL DEFAULT '',      -- prefix applied to chunks before embedding
-    query_prefix  TEXT    NOT NULL DEFAULT '',      -- must equal the staged embedder's, or the corpus is refused
+    chunk_prefix  TEXT    NOT NULL DEFAULT '',      -- unused, always ''
+    query_prefix  TEXT    NOT NULL DEFAULT '',      -- unused, always ''
     max_tokens    INTEGER NOT NULL,                 -- truncation length at index time
     dim           INTEGER NOT NULL CHECK (dim > 0),
     vector_format TEXT    NOT NULL CHECK (vector_format = 'f32le'),

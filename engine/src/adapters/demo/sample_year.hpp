@@ -4,13 +4,13 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "core/common/iso8601.hpp"
 #include "core/note/summary_scrub.hpp"
 #include "ports/session_store.hpp"
 
@@ -90,10 +90,6 @@ inline std::chrono::sys_seconds SampleStart(const Sample& sample, std::chrono::s
     const auto day_number = std::clamp(static_cast<unsigned>(sample.day), 1u, month_end);
     const year_month_day ymd{ym.year(), ym.month(), day{day_number}};
     return sys_days{ymd} + hours{sample.hour} + minutes{sample.minute};
-}
-
-inline std::string Iso8601(std::chrono::sys_seconds when) {
-    return std::format("{:%FT%T}Z", when);
 }
 
 // Writes each sample as a finalised session with its documents and returns the count

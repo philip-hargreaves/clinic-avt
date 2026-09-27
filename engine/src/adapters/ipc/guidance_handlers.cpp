@@ -2,20 +2,12 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdio>
-#include <memory>
-#include <openvino/core/version.hpp>
 #include <optional>
 #include <set>
-#include <stdexcept>
 
-#include "adapters/demo/sample_year.hpp"
 #include "adapters/guidance/guidance_record.hpp"
 #include "adapters/ipc/handlers.hpp"
-#include "adapters/models/ov_runtime.hpp"
-#include "adapters/system/power_throttling.hpp"
-#include "adapters/translate/translate_lane.hpp"
-#include "core/common/version.hpp"
-#include "core/note/summary_scrub.hpp"
+#include "core/common/utf8.hpp"
 #include "ports/store_error.hpp"
 
 namespace clinicavt::ipc {
@@ -168,11 +160,8 @@ bool DocumentsChangedSince(const clinicavt::guidance::Record& record,
 std::variant<json, Error> HandleSessionGuidance(clinicavt::store::ISessionStore& sessions,
                                                 const json& params,
                                                 clinicavt::guidance::IDocumentIngest* ingest) {
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    try {
+    return WithSession(params, [&](const std::string& session) {
         using clinicavt::store::DocumentKind;
-        const auto& session = std::get<std::string>(id);
         const auto stored = sessions.ReadDocument(session, DocumentKind::kGuidance);
         if (stored.text.empty()) return json{{"guidance", nullptr}};
         const json parsed = json::parse(stored.text, nullptr, false);
@@ -189,27 +178,20 @@ std::variant<json, Error> HandleSessionGuidance(clinicavt::store::ISessionStore&
             return json{{"guidance", nullptr}};
         }
         json guidance = clinicavt::guidance::ToJson(*record);
-        guidance["generatedAt"] = NullWhenEmpty(stored.generated_at);
         guidance["stale"] =
             record->note_revision != sessions.ReadDocument(session, DocumentKind::kNote).revision;
         guidance["documentsChanged"] = ingest != nullptr && DocumentsChangedSince(*record, *ingest);
         return json{{"guidance", guidance}};
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    });
 }
 
 json DocumentJson(const clinicavt::guidance::DocumentInfo& document) {
     return json{{"id", document.id},
                 {"name", document.name},
                 {"path", document.path},
-                {"sha256", document.sha256},
-                {"mime", document.mime},
                 {"state", document.state},
                 {"error", NullWhenEmpty(document.error)},
                 {"addedAt", document.added_at},
-                {"indexedAt", NullWhenEmpty(document.indexed_at)},
-                {"bytes", document.bytes},
                 {"pages", document.pages},
                 {"pagesWithoutText", document.pages_without_text},
                 {"chunks", document.chunks}};
@@ -227,11 +209,6 @@ bool ChangesReadySet(const clinicavt::guidance::DocumentInfo& document) {
 }
 
 namespace {
-
-std::string Utf8(const std::filesystem::path& path) {
-    const auto u8 = path.u8string();
-    return std::string(u8.begin(), u8.end());
-}
 
 Error DocumentsError(const std::exception& e) {
     return Error{kSessionError, "Document store error", json(e.what())};
@@ -255,13 +232,13 @@ json Param(const json& params, const char* key) {
 std::variant<json, Error> HandleDocumentsAdd(clinicavt::guidance::IDocumentIngest& ingest,
                                              const json& params) {
     const json paths = Param(params, "paths");
-    const Error invalid{kInvalidParams, "Invalid params", json("paths must be a list of strings")};
+    const auto invalid = InvalidParams("paths must be a list of strings");
     if (!paths.is_array() || paths.empty()) return invalid;
     std::vector<std::filesystem::path> files;
     for (const auto& path : paths) {
         if (!path.is_string()) return invalid;
         const auto text = path.get<std::string>();
-        files.emplace_back(std::u8string(text.begin(), text.end()));
+        files.push_back(clinicavt::utf8::ToPath(text));
     }
     try {
         const auto accepted = ingest.Add(files);
@@ -282,7 +259,7 @@ std::variant<json, Error> HandleDocumentsList(clinicavt::guidance::IDocumentInge
         const auto listing = ingest.List();
         json documents = json::array();
         for (const auto& document : listing.documents) documents.push_back(DocumentJson(document));
-        return json{{"folder", Utf8(listing.folder)},
+        return json{{"folder", clinicavt::utf8::FromPath(listing.folder)},
                     {"found", listing.found},
                     {"unsupported", listing.unsupported},
                     {"documents", documents}};
@@ -322,7 +299,7 @@ std::variant<json, Error> HandleDocumentsPage(clinicavt::guidance::IDocumentInge
     try {
         const auto ord = std::stoll(chunk_id.substr(dash + 1));
         const auto drawn = ingest.Render(id.get<std::int64_t>(), page.get<int>(), ord);
-        return json{{"path", Utf8(drawn.path)},
+        return json{{"path", clinicavt::utf8::FromPath(drawn.path)},
                     {"width", drawn.width},
                     {"height", drawn.height},
                     {"pages", drawn.pages},
@@ -339,7 +316,7 @@ std::variant<json, Error> HandleDocumentsOpen(clinicavt::guidance::IDocumentInge
         return InvalidParams("id must be an integer");
     }
     try {
-        return json{{"path", Utf8(ingest.Path(id.get<std::int64_t>()))}};
+        return json{{"path", clinicavt::utf8::FromPath(ingest.Path(id.get<std::int64_t>()))}};
     } catch (const std::exception& e) {
         return DocumentsRefused(e);
     }
@@ -350,10 +327,7 @@ void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::ISessionStore
                              clinicavt::guidance::IGuidanceLane& lane,
                              clinicavt::guidance::IDocumentIngest& ingest) {
     server.RegisterMethod("guidance/search", [&server, &sessions, &lane](const json& params) {
-        return HandleGuidanceSearch(sessions, lane, params,
-                                    [&server](const std::string& method, json notification) {
-                                        server.PushNotification(method, std::move(notification));
-                                    });
+        return HandleGuidanceSearch(sessions, lane, params, PushTo(server));
     });
     server.RegisterMethod("guidance/corpora", [&retriever](const json&) {
         return GuidanceCorporaJson(retriever.Status(), retriever.Corpora());

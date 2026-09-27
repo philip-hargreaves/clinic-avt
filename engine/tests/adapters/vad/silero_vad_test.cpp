@@ -14,7 +14,7 @@
 namespace clinicavt::audio {
 namespace {
 
-// Not in the repo. These tests skip without it
+// Not in the repo. The speech checks skip without it
 constexpr const char* kWav =
     "C:/dev/intelliscribe/bench/transcription/mixed/day1_consultation01_mixed.wav";
 
@@ -31,12 +31,14 @@ std::vector<float> FirstSeconds(int seconds) {
 
 // Thresholds under test are the validated hysteresis: enter 0.40, exit 0.25
 TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
-    if (!std::filesystem::exists(kWav)) {
-        GTEST_SKIP() << "research corpus not mounted";
-    }
     const models::ModelStore store(std::filesystem::path(CLINICAVT_MODELS_DIR));
     models::OvRuntime runtime;
     SileroVad vad(store, runtime);
+    const std::vector<float> wrong(100, 0.0f);
+    EXPECT_THROW(vad.SpeechProbability(wrong), std::runtime_error) << "a wrong hop size";
+    if (!std::filesystem::exists(kWav)) {
+        GTEST_SKIP() << "research corpus not mounted";
+    }
 
     const auto speech = FirstSeconds(10);
     float max_speech = 0;
@@ -52,6 +54,7 @@ TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
             .count() /
         static_cast<double>(hops);
 
+    // Every silent hop after a reset, the first included, proves no state leaks between sessions
     vad.Reset();
     const std::vector<float> silence(kVadHopFrames, 0.0f);
     float max_silence = 0;
@@ -66,33 +69,6 @@ TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
     // Release measures 0.097 ms, matching the spec's ~0.1. The slack is Debug
     // harness overhead, and a 32 ms hop budget keeps inline capture safe
     EXPECT_LT(per_hop, 2.0) << "inline on the audio pipeline requires margin";
-}
-
-TEST(SileroVad, ResetClearsTheRecurrentState) {
-    if (!std::filesystem::exists(kWav)) {
-        GTEST_SKIP() << "research corpus not mounted";
-    }
-    const models::ModelStore store(std::filesystem::path(CLINICAVT_MODELS_DIR));
-    models::OvRuntime runtime;
-    SileroVad vad(store, runtime);
-
-    const auto speech = FirstSeconds(2);
-    for (std::size_t at = 0; at + kVadHopFrames <= speech.size(); at += kVadHopFrames) {
-        vad.SpeechProbability(std::span(speech).subspan(at, kVadHopFrames));
-    }
-
-    vad.Reset();
-    const std::vector<float> silence(kVadHopFrames, 0.0f);
-    EXPECT_LT(vad.SpeechProbability(silence), 0.25f)
-        << "state from the previous session must not leak";
-}
-
-TEST(SileroVad, AWrongHopSizeIsRefused) {
-    const models::ModelStore store(std::filesystem::path(CLINICAVT_MODELS_DIR));
-    models::OvRuntime runtime;
-    SileroVad vad(store, runtime);
-    const std::vector<float> wrong(100, 0.0f);
-    EXPECT_THROW(vad.SpeechProbability(wrong), std::runtime_error);
 }
 
 }  // namespace

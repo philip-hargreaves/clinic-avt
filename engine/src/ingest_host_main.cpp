@@ -21,7 +21,6 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <fpdf_edit.h>
 #include <fpdf_text.h>
 #include <fpdfview.h>
 #include <werapi.h>
@@ -30,6 +29,7 @@
 #include <nlohmann/json.hpp>
 
 #include "adapters/guidance/ingest_exit.hpp"
+#include "adapters/system/exe_paths.hpp"
 #include "core/common/strings.hpp"
 #include "core/common/utf8.hpp"
 
@@ -79,18 +79,12 @@ struct Line {
 // page's rotation applied, origin top left
 json PageJson(FPDF_DOCUMENT doc, int index) {
     FPDF_PAGE page = FPDF_LoadPage(doc, index);
-    json out{{"width", 0}, {"height", 0}, {"rotation", 0}, {"images", 0}, {"lines", json::array()}};
+    json out{{"width", 0}, {"height", 0}, {"lines", json::array()}};
     if (page == nullptr) return out;
     const float width = FPDF_GetPageWidthF(page);
     const float height = FPDF_GetPageHeightF(page);
     out["width"] = width;
     out["height"] = height;
-    out["rotation"] = FPDFPage_GetRotation(page);
-    int images = 0;
-    for (int i = 0, n = FPDFPage_CountObjects(page); i < n; ++i) {
-        if (FPDFPageObj_GetType(FPDFPage_GetObject(page, i)) == FPDF_PAGEOBJ_IMAGE) ++images;
-    }
-    out["images"] = images;
 
     json lines = json::array();
     FPDF_TEXTPAGE text = FPDFText_LoadPage(page);
@@ -234,7 +228,7 @@ int Render(FPDF_DOCUMENT doc, int index, int dpi) {
 
 int main(int argc, char* argv[]) {
     // A crash writes no dump of the document
-    WerAddExcludedApplication(L"clinicavt_ingest_host.exe", FALSE);
+    WerAddExcludedApplication(clinicavt::system::kIngestHostExe, FALSE);
     const bool extract = argc == 2 && std::strcmp(argv[1], "extract") == 0;
     const bool render = argc == 4 && std::strcmp(argv[1], "render") == 0;
     if (!extract && !render) {

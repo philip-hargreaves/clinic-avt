@@ -16,8 +16,6 @@ json HandleSessionList(clinicavt::store::ISessionStore& sessions) {
         list.push_back({{"id", session.id},
                         {"startedAt", session.started_at},
                         {"endedAt", session.ended_at},
-                        {"state", session.state},
-                        {"sampleRate", session.sample_rate},
                         {"label", session.label},
                         {"editedAt", NullWhenEmpty(session.edited_at)},
                         {"audioSeconds", session.audio_seconds},
@@ -51,71 +49,52 @@ json HandleDemoClear(clinicavt::store::ISessionStore& sessions) {
 
 std::variant<json, Error> HandleSessionTranscript(clinicavt::store::ISessionStore& sessions,
                                                   const json& params) {
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    try {
-        json turns = json::array();
-        for (const auto& turn : sessions.ReadTurns(std::get<std::string>(id))) {
-            turns.push_back(TurnJson(turn));
-        }
-        return json{{"turns", std::move(turns)}};
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    return WithSession(params, [&](const std::string& id) {
+        return json{{"turns", TurnsJson(sessions.ReadTurns(id))}};
+    });
 }
 
 std::variant<json, Error> HandleSessionNote(clinicavt::store::ISessionStore& sessions,
                                             const json& params) {
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    try {
-        const auto note =
-            sessions.ReadDocument(std::get<std::string>(id), clinicavt::store::DocumentKind::kNote);
+    return WithSession(params, [&](const std::string& id) {
+        const auto note = sessions.ReadDocument(id, clinicavt::store::DocumentKind::kNote);
         return json{{"text", note.text},
                     {"style", note.style},
                     {"detail", note.detail},
                     {"generatedAt", NullWhenEmpty(note.generated_at)},
                     {"editedAt", NullWhenEmpty(note.edited_at)}};
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    });
 }
 
 std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& sessions,
                                                const json& params) {
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    try {
+    return WithSession(params, [&](const std::string& id) {
         using clinicavt::store::DocumentKind;
-        const auto patient =
-            sessions.ReadDocument(std::get<std::string>(id), DocumentKind::kPatient);
-        const auto translation =
-            sessions.ReadDocument(std::get<std::string>(id), DocumentKind::kTranslation);
+        const auto patient = sessions.ReadDocument(id, DocumentKind::kPatient);
+        const auto translation = sessions.ReadDocument(id, DocumentKind::kTranslation);
         json result{{"text", patient.text},
-                    {"language", patient.language},
                     {"generatedAt", NullWhenEmpty(patient.generated_at)},
-                    {"editedAt", NullWhenEmpty(patient.edited_at)},
                     {"translation", nullptr}};
         if (!translation.text.empty()) {
             result["translation"] =
                 json{{"language", translation.language}, {"text", translation.text}};
         }
         return result;
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    });
 }
 
 std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
                                               const json& params) {
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    try {
-        sessions.Delete(std::get<std::string>(id));
+    return WithSession(params, [&](const std::string& id) {
+        sessions.Delete(id);
         return json::object();
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    });
+}
+
+std::variant<json, Error> HandleSessionDeleteAll(clinicavt::store::ISessionStore& sessions,
+                                                 bool session_active) {
+    if (session_active) return SessionError("finish the consultation first");
+    return json{{"removed", sessions.DeleteAll()}};
 }
 
 namespace {
@@ -158,10 +137,7 @@ json AnswersFrom(const std::string& text) {
 std::variant<json, Error> HandleReflectionGet(clinicavt::store::ISessionStore& sessions,
                                               const json& params) {
     using clinicavt::store::DocumentKind;
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    try {
-        const auto& session = std::get<std::string>(id);
+    return WithSession(params, [&](const std::string& session) {
         json result{{"id", session},
                     {"label", sessions.ReadDocument(session, DocumentKind::kLabel).text},
                     {"summary", nullptr},
@@ -181,9 +157,7 @@ std::variant<json, Error> HandleReflectionGet(clinicavt::store::ISessionStore& s
             result["reflection"] = std::move(entry);
         }
         return result;
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    });
 }
 
 // Given answers and references replace stored ones and omitted ones stay. Only
@@ -191,25 +165,22 @@ std::variant<json, Error> HandleReflectionGet(clinicavt::store::ISessionStore& s
 std::variant<json, Error> HandleReflectionUpdate(clinicavt::store::ISessionStore& sessions,
                                                  const json& params) {
     using clinicavt::store::DocumentKind;
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    for (const char* key : kAnswers) {
-        if (params.contains(key) && !params[key].is_string()) {
-            return InvalidParams(std::string(key) + " must be a string");
+    return WithSession(params, [&](const std::string& session) -> std::variant<json, Error> {
+        for (const char* key : kAnswers) {
+            if (params.contains(key) && !params[key].is_string()) {
+                return InvalidParams(std::string(key) + " must be a string");
+            }
         }
-    }
-    if (params.contains("summary") && !params["summary"].is_string()) {
-        return InvalidParams("summary must be a string");
-    }
-    if (params.contains("references")) {
-        const auto& references = params["references"];
-        const bool objects =
-            references.is_array() && std::all_of(references.begin(), references.end(),
-                                                 [](const json& r) { return r.is_object(); });
-        if (!objects) return InvalidParams("references must be an array of objects");
-    }
-    try {
-        const auto& session = std::get<std::string>(id);
+        if (params.contains("summary") && !params["summary"].is_string()) {
+            return InvalidParams("summary must be a string");
+        }
+        if (params.contains("references")) {
+            const auto& references = params["references"];
+            const bool objects =
+                references.is_array() && std::all_of(references.begin(), references.end(),
+                                                     [](const json& r) { return r.is_object(); });
+            if (!objects) return InvalidParams("references must be an array of objects");
+        }
         if (params.contains("summary")) {
             sessions.EditDocument(
                 session, DocumentKind::kSummary,
@@ -234,23 +205,17 @@ std::variant<json, Error> HandleReflectionUpdate(clinicavt::store::ISessionStore
             sessions.EditDocument(session, DocumentKind::kReflection, answers.dump());
         }
         return json::object();
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    });
 }
 
 std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore& sessions,
                                                  const json& params) {
     using clinicavt::store::DocumentKind;
-    const auto id = IdFrom(params);
-    if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-    try {
-        sessions.DeleteDocument(std::get<std::string>(id), DocumentKind::kReflection);
-        sessions.DeleteDocument(std::get<std::string>(id), DocumentKind::kSummary);
+    return WithSession(params, [&](const std::string& id) {
+        sessions.DeleteDocument(id, DocumentKind::kReflection);
+        sessions.DeleteDocument(id, DocumentKind::kSummary);
         return json::object();
-    } catch (const std::exception& e) {
-        return SessionError(e.what());
-    }
+    });
 }
 
 // Every session with an appraisal entry, newest first
@@ -286,19 +251,14 @@ namespace {
 
 // The handler for a text edit of one stored document
 auto EditDocument(clinicavt::store::ISessionStore& sessions, clinicavt::store::DocumentKind kind) {
-    return [&sessions, kind](const json& params) -> std::variant<json, Error> {
-        const auto id = IdFrom(params);
-        if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-        if (!params.contains("text") || !params["text"].is_string()) {
-            return InvalidParams("text must be a string");
-        }
-        try {
-            sessions.EditDocument(std::get<std::string>(id), kind,
-                                  params["text"].get<std::string>());
+    return [&sessions, kind](const json& params) {
+        return WithSession(params, [&](const std::string& id) -> std::variant<json, Error> {
+            if (!params.contains("text") || !params["text"].is_string()) {
+                return InvalidParams("text must be a string");
+            }
+            sessions.EditDocument(id, kind, params["text"].get<std::string>());
             return json::object();
-        } catch (const std::exception& e) {
-            return SessionError(e.what());
-        }
+        });
     };
 }
 
@@ -346,25 +306,20 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         });
         // Translates the session's patient sheet off the RPC thread. Results
         // arrive as translate/partial then translate/ready
-        server.RegisterMethod(
-            "patient/translate",
-            [&sessions, translate_lane](const json& params) -> std::variant<json, Error> {
-                const auto id = IdFrom(params);
-                if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
-                if (!params.contains("language") || !params["language"].is_string()) {
-                    return InvalidParams("language must be a string");
-                }
-                try {
-                    const auto text = sessions
-                                          .ReadDocument(std::get<std::string>(id),
-                                                        clinicavt::store::DocumentKind::kPatient)
-                                          .text;
+        server.RegisterMethod("patient/translate", [&sessions, translate_lane](const json& params) {
+            return WithSession(
+                params, [&](const std::string& session_id) -> std::variant<json, Error> {
+                    if (!params.contains("language") || !params["language"].is_string()) {
+                        return InvalidParams("language must be a string");
+                    }
+                    const auto text =
+                        sessions.ReadDocument(session_id, clinicavt::store::DocumentKind::kPatient)
+                            .text;
                     if (text.empty()) {
                         return SessionError("no patient information to translate");
                     }
                     // Stored before translate/ready goes out, so the sheet
                     // read back after it already carries the translation
-                    const auto session_id = std::get<std::string>(id);
                     const auto on_ready = [&sessions, session_id](const std::string& translated,
                                                                   const std::string& language) {
                         try {
@@ -381,22 +336,16 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                         return SessionError("a translation is already running");
                     }
                     return json::object();
-                } catch (const std::exception& e) {
-                    return SessionError(e.what());
-                }
-            });
+                });
+        });
     }
     server.RegisterMethod("session/delete", [&sessions](const json& params) {
         return HandleSessionDelete(sessions, params);
     });
-    // One crypto-erase of everything stored. The shell confirms first
-    server.RegisterMethod("session/deleteAll",
-                          [&sessions, &controller](const json&) -> std::variant<json, Error> {
-                              if (controller.Running()) {
-                                  return SessionError("finish the consultation first");
-                              }
-                              return json{{"removed", sessions.DeleteAll()}};
-                          });
+    // The shell confirms first
+    server.RegisterMethod("session/deleteAll", [&sessions, &controller](const json&) {
+        return HandleSessionDeleteAll(sessions, controller.Running());
+    });
     server.RegisterMethod("reflection/get", [&sessions](const json& params) {
         return HandleReflectionGet(sessions, params);
     });

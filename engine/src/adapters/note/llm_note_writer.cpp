@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -15,7 +16,7 @@
 #include "adapters/note/text_pipeline.hpp"
 #include "adapters/system/awake_request.hpp"
 #include "adapters/system/gpu_lease.hpp"
-#include "core/metrics/metrics.hpp"
+#include "core/note/model_failure.hpp"
 
 namespace clinicavt::note {
 
@@ -41,13 +42,24 @@ double Seconds(std::chrono::steady_clock::time_point since) {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - since).count();
 }
 
+// The template the prompts were tuned with. The prefill must open with exactly
+// these bytes for its KV to be reused
+constexpr const char* kUserTurn = "<|im_start|>user\n";
+
+ov::genai::GenerationConfig Greedy(std::size_t max_new_tokens) {
+    ov::genai::GenerationConfig config;
+    config.max_new_tokens = max_new_tokens;
+    config.do_sample = false;
+    config.apply_chat_template = false;
+    return config;
+}
+
 }  // namespace
 
 struct LlmNoteWriter::Impl {
     const models::ModelStore& store;
     models::OvRuntime& runtime;
     std::filesystem::path prompt_dir;
-    metrics::Registry* metrics;
     std::string tier;
     std::mutex swap_mutex;      // guards pipeline
     std::mutex state_mutex;     // guards loader, load_error, loading, on_load
@@ -58,14 +70,34 @@ struct LlmNoteWriter::Impl {
     std::thread loader;
     std::atomic<bool> loading{false};
     std::atomic<bool> cancel{false};
+    std::atomic<bool> closed{false};
     LoadListener on_load;
+    std::function<void(double)> on_gpu_wait;  // under state_mutex
+
+    // Waits its turn on the GPU, telling the engine it is alive meanwhile.
+    // Throws when a stuck host holds the GPU, since the wait could never end
+    system::GpuLease::Guard TakeGpu(const char* who) {
+        auto& gpu = system::GpuLease::Global();
+        auto watch = system::WatchForStuckHosts(who);
+        auto guard = gpu.Acquire([this, &watch](double waited) {
+            std::function<void(double)> listener;
+            {
+                std::lock_guard<std::mutex> lock(state_mutex);
+                listener = on_gpu_wait;
+            }
+            if (listener) listener(waited);
+            return watch(waited);
+        });
+        if (gpu.Active() && !guard.Held() && gpu.Wedged()) throw std::runtime_error(kStuckInDriver);
+        return guard;
+    }
 
     LoadReport Load() {
         const models::ModelInfo& info = store.Resolve("note", tier);
         LoadReport report;
         report.id = info.id;
         report.name = info.name;
-        report.first_use = !std::filesystem::exists(info.dir / ".cache");
+        report.first_use = !models::Compiled(info);
         const auto t0 = std::chrono::steady_clock::now();
         store.Verify(info);
         const double verified = Seconds(t0);
@@ -73,19 +105,15 @@ struct LlmNoteWriter::Impl {
         // Build and warm hold the GPU lease (nothing runs beside them) and a
         // power request (no standby mid-load)
         const system::AwakeRequest awake(L"ClinicAVT: loading the note model");
-        const auto lease = system::GpuLease::Global().Acquire();
+        const auto lease = TakeGpu("note load");
         std::shared_ptr<TextPipeline> built = MakeTextPipeline(info, device);
         report.seconds = Seconds(t0);
         std::fprintf(
             stderr,
-            "clinicavt-engine: note %s (%s, %s) on %s, checked in %.1f s, loaded in %.1f s, "
+            "clinicavt-note-host: note %s (%s, %s) on %s, checked in %.1f s, loaded in %.1f s, "
             "lease wait %.2f s\n",
             info.id.c_str(), tier.c_str(), info.pipeline.c_str(), device.c_str(), verified,
             report.seconds, lease.waited());
-        if (metrics != nullptr) {
-            metrics->RecordDevice("note", device);
-            metrics->RecordLoad("note", report.seconds);
-        }
         WarmPromptPrefix(*built);
         std::lock_guard<std::mutex> lock(swap_mutex);
         pipeline = std::move(built);
@@ -98,15 +126,13 @@ struct LlmNoteWriter::Impl {
     void WarmPromptPrefix(TextPipeline& built) {
         try {
             const auto t0 = std::chrono::steady_clock::now();
-            ov::genai::GenerationConfig config;
-            config.max_new_tokens = 1;
-            config.do_sample = false;
-            config.apply_chat_template = false;
-            built.Generate("<|im_start|>user\n" + LoadPrompt(prompt_dir / "note-narrative.md"),
-                           config, nullptr);
-            std::fprintf(stderr, "clinicavt-engine: note prefix warmed in %.1f s\n", Seconds(t0));
+            built.Generate(kUserTurn + LoadPrompt(prompt_dir / "note-narrative.md"), Greedy(1),
+                           nullptr);
+            std::fprintf(stderr, "clinicavt-note-host: note prefix warmed in %.1f s\n",
+                         Seconds(t0));
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "clinicavt-engine: note prefix warm failed (%s)\n", e.what());
+            if (PoisonsGpuContext(e.what())) throw;
+            std::fprintf(stderr, "clinicavt-note-host: note prefix warm failed (%s)\n", e.what());
         }
     }
 
@@ -137,9 +163,8 @@ struct LlmNoteWriter::Impl {
 };
 
 LlmNoteWriter::LlmNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                             std::filesystem::path prompt_dir, metrics::Registry* metrics,
-                             std::string tier)
-    : impl_(new Impl{store, runtime, std::move(prompt_dir), metrics, std::move(tier)}) {}
+                             std::filesystem::path prompt_dir, std::string tier)
+    : impl_(new Impl{store, runtime, std::move(prompt_dir), std::move(tier)}) {}
 
 LlmNoteWriter::~LlmNoteWriter() {
     impl_->JoinLoader();
@@ -148,6 +173,11 @@ LlmNoteWriter::~LlmNoteWriter() {
 void LlmNoteWriter::SetLoadListener(LoadListener listener) {
     std::lock_guard<std::mutex> lock(impl_->state_mutex);
     impl_->on_load = std::move(listener);
+}
+
+void LlmNoteWriter::SetGpuWaitListener(std::function<void(double)> listener) {
+    std::lock_guard<std::mutex> lock(impl_->state_mutex);
+    impl_->on_gpu_wait = std::move(listener);
 }
 
 // Starts the one background load. The ~14 s cost lands during capture, not
@@ -173,7 +203,7 @@ void LlmNoteWriter::Prepare() {
                 }
                 report.ok = false;
                 report.detail = e.what();
-                std::fprintf(stderr, "clinicavt-engine: note load failed (%s)\n", e.what());
+                std::fprintf(stderr, "clinicavt-note-host: note load failed (%s)\n", e.what());
             }
             impl->loading = false;
             impl->Report(report);
@@ -224,33 +254,33 @@ void LlmNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Note
     if (pipeline == nullptr) return;
     std::unique_lock<std::mutex> lock(impl_->generate_mutex, std::try_to_lock);
     if (!lock.owns_lock()) return;
-    const std::string prompt = "<|im_start|>user\n" +
-                               LoadPrompt(impl_->prompt_dir / StyleFile(options)) +
+    const std::string prompt = kUserTurn + LoadPrompt(impl_->prompt_dir / StyleFile(options)) +
                                TranscriptBlock(transcript);
     if (prompt == impl_->last_prefill) return;
     try {
-        ov::genai::GenerationConfig config;
-        config.max_new_tokens = 1;
-        config.do_sample = false;
-        config.apply_chat_template = false;
-        const auto lease = system::GpuLease::Global().Acquire();
+        // A guess is only worth making now. A busy GPU means no guess this time
+        auto& gpu = system::GpuLease::Global();
+        const auto lease = gpu.TryAcquire();
+        if (gpu.Active() && !lease.Held()) return;
         const auto t0 = std::chrono::steady_clock::now();
-        const TextPipeline::Result result = pipeline->Generate(prompt, config, nullptr);
-        std::fprintf(stderr,
-                     "clinicavt-note-host: prefill %zu turns, %zu tokens, %zu shared chars, "
-                     "%.2f s, lease wait %.2f s\n",
-                     transcript.size(), result.input_tokens,
-                     SharedPrefix(prompt, impl_->last_prefill), Seconds(t0), lease.waited());
+        const TextPipeline::Result result = pipeline->Generate(prompt, Greedy(1), nullptr);
+        std::fprintf(
+            stderr,
+            "clinicavt-note-host: prefill %zu turns, %zu tokens, %zu shared chars, %.2f s\n",
+            transcript.size(), result.input_tokens, SharedPrefix(prompt, impl_->last_prefill),
+            Seconds(t0));
         impl_->last_prefill = prompt;
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-note-host: prefill failed (%s)\n", e.what());
         impl_->last_prefill.clear();
+        // The host decides whether the process can go on
+        if (PoisonsGpuContext(e.what())) throw;
+        std::fprintf(stderr, "clinicavt-note-host: prefill failed (%s)\n", e.what());
     }
 }
 
 std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& progress,
                                     std::size_t max_new_tokens) {
-    impl_->cancel = false;
+    impl_->cancel = impl_->closed.load();
     Prepare();
     impl_->JoinLoader();
     // Waits behind any prefill still running. The guess is then measured against the prompt
@@ -266,13 +296,9 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
         throw std::runtime_error("note model unavailable");
     }
 
-    ov::genai::GenerationConfig config;
-    config.max_new_tokens = max_new_tokens;
-    config.do_sample = false;
-    config.apply_chat_template = false;
-    // The template the prompt was tuned with: user turn, empty think block
-    const std::string wrapped = "<|im_start|>user\n" + prompt +
-                                "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
+    // The user turn, then an empty think block
+    const std::string wrapped =
+        kUserTurn + prompt + "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
 
     if (!impl_->last_prefill.empty()) {
         const std::size_t shared = SharedPrefix(wrapped, impl_->last_prefill);
@@ -297,16 +323,21 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
     // Generation holds the GPU lease. A recording started meanwhile decodes
     // after it ends
     const system::AwakeRequest awake(L"ClinicAVT: writing the note");
-    const auto lease = system::GpuLease::Global().Acquire();
+    const auto lease = impl_->TakeGpu("note");
     if (lease.waited() > 0.25) {
         std::fprintf(stderr, "clinicavt-note-host: generation waited %.2f s for the GPU lease\n",
                      lease.waited());
     }
-    pipeline->Generate(wrapped, config, streamer);
+    pipeline->Generate(wrapped, Greedy(max_new_tokens), streamer);
     return Trimmed(text);
 }
 
 void LlmNoteWriter::Cancel() {
+    impl_->cancel = true;
+}
+
+void LlmNoteWriter::Close() {
+    impl_->closed = true;
     impl_->cancel = true;
 }
 

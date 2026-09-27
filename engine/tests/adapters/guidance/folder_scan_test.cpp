@@ -7,63 +7,42 @@
 #include <set>
 #include <string>
 
+#include "guidance_fixture.hpp"
+
 namespace clinicavt::guidance {
 namespace {
 
-struct TempFolder {
-    std::filesystem::path path;
-    TempFolder() {
-        path = std::filesystem::temp_directory_path() / "clinicavt-folder-scan-test";
-        std::filesystem::remove_all(path);
-        std::filesystem::create_directories(path);
-    }
-    ~TempFolder() {
-        std::error_code ignored;
-        std::filesystem::remove_all(path, ignored);
-    }
-    void Put(const std::string& relative, const std::string& text = "x") {
-        std::filesystem::create_directories((path / relative).parent_path());
-        std::ofstream(path / relative, std::ios::binary) << text;
-    }
-};
-
-TEST(FolderScan, MimeByExtensionCaseInsensitive) {
-    EXPECT_EQ(Mime("a.PDF"), "application/pdf");
-    EXPECT_EQ(Mime("a.md"), "text/markdown");
-    EXPECT_EQ(Mime("a.txt"), "text/plain");
-    EXPECT_EQ(Mime("a.docx"), "");
-}
-
 TEST(FolderScan, ListsSupportedFilesToTheDepthAndCountsTheRest) {
-    TempFolder folder;
-    folder.Put("one.pdf", "pdf");
-    folder.Put("Instructions.txt");
-    folder.Put("~lock.pdf");
-    folder.Put("notes.docx");
-    folder.Put("a/two.txt");
-    folder.Put("a/b/three.md");
-    folder.Put("a/b/c/four.md");
-    folder.Put("a/b/c/d/five.md");  // one deeper than the limit
+    fixture::TempDir dir{"folder-scan"};
+    const auto put = [&](const std::string& relative, const std::string& text = "x") {
+        std::filesystem::create_directories((dir.path / relative).parent_path());
+        std::ofstream(dir.path / relative, std::ios::binary) << text;
+    };
+    put("one.PDF", "pdf");  // the extension is matched in any case
+    put("Instructions.txt");
+    put("~lock.pdf");
+    put("notes.docx");
+    put("a/two.txt");
+    put("a/b/three.md");
+    put("a/b/c/four.md");
+    put("a/b/c/d/five.md");  // one deeper than the limit
 
-    const auto listing = ListFolder(
-        folder.path, 3, [](const std::string& mime) { return !mime.empty(); }, "Instructions.txt");
+    const auto supported = [](const std::string& mime) { return !mime.empty(); };
+    const auto listing = ListFolder(dir.path, 3, supported, "Instructions.txt");
 
     std::set<std::string> paths;
     for (const auto& file : listing.files) paths.insert(file.path);
-    EXPECT_EQ(paths, (std::set<std::string>{"one.pdf", "a\\two.txt", "a\\b\\three.md",
+    EXPECT_EQ(paths, (std::set<std::string>{"one.PDF", "a\\two.txt", "a\\b\\three.md",
                                             "a\\b\\c\\four.md"}));
-    EXPECT_EQ(listing.unsupported, 1);
+    EXPECT_EQ(listing.unsupported, 1) << "the docx";
     for (const auto& file : listing.files) {
         EXPECT_GT(file.size, 0);
         EXPECT_NE(file.modified, 0);
     }
-}
 
-TEST(FolderScan, AMissingFolderListsNothing) {
-    const auto listing = ListFolder(
-        "C:/no/such/folder/for/clinicavt", 3, [](const std::string&) { return true; }, "");
-    EXPECT_TRUE(listing.files.empty());
-    EXPECT_EQ(listing.unsupported, 0);
+    const auto missing = ListFolder(dir.path / "missing", 3, supported, "");
+    EXPECT_TRUE(missing.files.empty());
+    EXPECT_EQ(missing.unsupported, 0);
 }
 
 }  // namespace

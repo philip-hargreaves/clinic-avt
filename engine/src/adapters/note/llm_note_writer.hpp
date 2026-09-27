@@ -13,10 +13,6 @@ class ModelStore;
 class OvRuntime;
 }  // namespace clinicavt::models
 
-namespace clinicavt::metrics {
-class Registry;
-}  // namespace clinicavt::metrics
-
 namespace clinicavt::note {
 
 // Qwen behind the note port: one background load, resident pipeline,
@@ -37,8 +33,7 @@ class LlmNoteWriter : public INoteWriter {
     using LoadListener = std::function<void(const LoadReport&)>;
 
     LlmNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                  std::filesystem::path prompt_dir, metrics::Registry* metrics = nullptr,
-                  std::string tier = "default");
+                  std::filesystem::path prompt_dir, std::string tier = "default");
     ~LlmNoteWriter() override;
 
     std::string Write(const std::vector<asr::Turn>& transcript, const NoteOptions& options,
@@ -57,14 +52,22 @@ class LlmNoteWriter : public INoteWriter {
     void Prepare() override;
 
     // One discarded token over the guessed prompt prefix. Skipped while a
-    // generation runs, the model is still loading, or its pipeline does
-    // not extend the KV
+    // generation runs, the model is still loading, the GPU is busy, or its
+    // pipeline does not extend the KV. Only a driver fault is thrown
     void Prefill(const std::vector<asr::Turn>& transcript, const NoteOptions& options) override;
 
     void Cancel() override;
 
+    // Cancels the running generation and every later one, for a host whose
+    // engine has gone
+    void Close();
+
     // Called from the loader thread when a load ends, either way
     void SetLoadListener(LoadListener listener);
+
+    // Called every few seconds while a load or generation waits for the GPU,
+    // with the seconds waited, so the engine knows the host is alive
+    void SetGpuWaitListener(std::function<void(double)> listener);
 
    private:
     std::string Generate(const std::string& prompt, const Progress& progress,

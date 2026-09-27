@@ -1,10 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <string>
 #include <vector>
 
+#include "core/diarisation/embeddings.hpp"
 #include "ports/diariser.hpp"
 
 namespace clinicavt::diar {
@@ -19,8 +19,6 @@ inline constexpr std::uint64_t kResplitMinFrames = 9600;  // 0.6 s
 
 inline constexpr double kResplitMargin = 0.20;  // cosine, calibrated by cross-validation
 
-using EmbedSpanFn = std::function<std::vector<float>(std::uint64_t first, std::uint64_t end)>;
-
 struct ResplitTurn {
     LabelledSlice slice;
     std::string text;
@@ -29,7 +27,7 @@ struct ResplitTurn {
 std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSlice>& turns,
                                             const std::vector<std::string>& texts,
                                             const std::vector<std::vector<asr::Turn>>& chunks,
-                                            const EmbedSpanFn& embed,
+                                            const EmbedRangeFn& embed,
                                             const std::vector<std::vector<float>>& centroids,
                                             double margin = kResplitMargin);
 

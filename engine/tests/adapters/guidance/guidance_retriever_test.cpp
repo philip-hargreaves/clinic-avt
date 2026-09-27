@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "adapters/guidance/retriever.hpp"
+#include "core/guidance/guidance_query.hpp"
 #include "guidance_fixture.hpp"
 
 namespace clinicavt::guidance {
@@ -22,7 +23,7 @@ constexpr int kDim = 256;
 // Hashed bag of words, four letters and up, unit length: texts sharing words
 // score high, so the fixture notes find their guidelines without a model
 struct WordEmbedder : IEmbedder {
-    EmbedderIdentity identity{"fx-words", "rev-a", kDim, 512, ""};
+    EmbedderIdentity identity{"fx-words", "rev-a", kDim, 512};
     const EmbedderIdentity& Identity() const override {
         return identity;
     }
@@ -88,7 +89,7 @@ std::string NoteText(const char* id) {
     throw std::runtime_error(std::string("no fixture note ") + id);
 }
 
-TEST(Retriever, ListsEveryCorpusDirectoryWithTheStaleOneUnavailable) {
+TEST(Retriever, ListsEveryCorpusWithTheStaleOneUnavailableAndAMissingRootEmpty) {
     Root root;
     auto retriever = root.Make();
     EXPECT_EQ(retriever->Status().phase, Readiness::Phase::kLoading);
@@ -108,6 +109,16 @@ TEST(Retriever, ListsEveryCorpusDirectoryWithTheStaleOneUnavailable) {
     EXPECT_EQ(corpora[2].id, "stale");
     EXPECT_FALSE(corpora[2].unavailable.empty());
     EXPECT_EQ(corpora[2].chunks, 0);
+
+    // A root with nothing installed loads, lists nothing and finds nothing
+    Retriever none([] { return std::make_unique<WordEmbedder>(); }, root.dir.path / "missing");
+    none.Prepare();
+    EXPECT_TRUE(none.Corpora().empty());
+    EXPECT_EQ(none.Status().phase, Readiness::Phase::kReady);
+    const auto results = none.Search("Chest pain on exertion.", 3, SearchMode::kNote);
+    EXPECT_TRUE(results.shown.empty());
+    EXPECT_FALSE(results.abstained);
+    EXPECT_EQ(results.considered, 0);
 }
 
 TEST(Retriever, AResearchCorpusIsHiddenUntilAskedForAndReloadsLive) {
@@ -139,7 +150,7 @@ TEST(Retriever, AResearchCorpusIsHiddenUntilAskedForAndReloadsLive) {
     EXPECT_EQ(plain.Corpora().size(), 1u) << "and goes again";
 }
 
-TEST(Retriever, CitesTheGuidelineTheNoteDescribes) {
+TEST(Retriever, ANoteFindsItsGuidelineAcrossEveryCorpusWithinTheLimit) {
     Root root;
     auto retriever = root.Make();
     const auto note = NoteText("joint-referral");
@@ -174,9 +185,35 @@ TEST(Retriever, CitesTheGuidelineTheNoteDescribes) {
                 << "a trigger is a sentence of the note";
         }
     }
+
+    // A note on two topics draws from both corpora
+    const auto both = retriever->Search(
+        "Synovitis of the small joints of both hands with morning stiffness. "
+        "Also reports frequent migraine with aura and asks about a triptan.",
+        6, SearchMode::kNote);
+    bool from_a = false, from_b = false;
+    for (const auto& r : both.shown) {
+        from_a |= r.corpus == "fixture-a";
+        from_b |= r.corpus == "fixture-b";
+    }
+    EXPECT_TRUE(from_a);
+    EXPECT_TRUE(from_b);
+
+    EXPECT_EQ(retriever->Search(note, 1, SearchMode::kNote).shown.size(), 1u);
+    EXPECT_TRUE(retriever->Search(note, 0, SearchMode::kNote).shown.empty());
 }
 
-TEST(Retriever, AbstainsWhenTheGuardDropsEveryMatch) {
+TEST(Retriever, AbstainsWhenTheFloorOrThePopulationGuardLeavesNothing) {
+    {
+        Root root;
+        const auto floored =
+            root.Make(0.999)->Search(NoteText("joint-referral"), 3, SearchMode::kNote);
+        EXPECT_TRUE(floored.abstained);
+        EXPECT_TRUE(floored.shown.empty());
+        EXPECT_GT(floored.considered, 0);
+    }
+
+    // A match for another population is dropped, leaving nothing
     fixture::TempDir dir("guarded");
     WordEmbedder live;
     Chunk only;
@@ -199,47 +236,7 @@ TEST(Retriever, AbstainsWhenTheGuardDropsEveryMatch) {
     EXPECT_TRUE(guarded.abstained) << "the population guard emptied the list";
 }
 
-TEST(Retriever, MergesHitsFromEveryCorpusIntoOneList) {
-    Root root;
-    auto retriever = root.Make();
-    const auto note =
-        "Synovitis of the small joints of both hands with morning stiffness. "
-        "Also reports frequent migraine with aura and asks about a triptan.";
-    const auto results = retriever->Search(note, 6, SearchMode::kNote);
-    bool from_a = false, from_b = false;
-    for (const auto& r : results.shown) {
-        from_a |= r.corpus == "fixture-a";
-        from_b |= r.corpus == "fixture-b";
-    }
-    EXPECT_TRUE(from_a);
-    EXPECT_TRUE(from_b);
-}
-
-TEST(Retriever, AbstainsWhenNothingClearsTheFloor) {
-    Root root;
-    auto retriever = root.Make(0.999);
-    const auto results = retriever->Search(NoteText("joint-referral"), 3, SearchMode::kNote);
-    EXPECT_TRUE(results.abstained);
-    EXPECT_TRUE(results.shown.empty());
-    EXPECT_GT(results.considered, 0);
-}
-
-TEST(Retriever, LimitBoundsWhatIsShown) {
-    Root root;
-    auto retriever = root.Make();
-    EXPECT_EQ(retriever->Search(NoteText("joint-referral"), 1, SearchMode::kNote).shown.size(), 1u);
-    EXPECT_TRUE(retriever->Search(NoteText("joint-referral"), 0, SearchMode::kNote).shown.empty());
-}
-
-TEST(Retriever, AnEmptyNoteAbstainsWithoutEmbedding) {
-    Root root;
-    auto retriever = root.Make();
-    const auto results = retriever->Search("  ", 3, SearchMode::kNote);
-    EXPECT_TRUE(results.abstained);
-    EXPECT_EQ(results.considered, 0);
-}
-
-TEST(Retriever, ATypedQueryIsSearchedWholeAtAnyLength) {
+TEST(Retriever, ATypedQueryIsSearchedWholeAndANoteSentenceBySentence) {
     Root root;
     auto retriever = root.Make();
     const auto as_note = retriever->Search("persistent synovitis", 3, SearchMode::kNote);
@@ -257,20 +254,22 @@ TEST(Retriever, ATypedQueryIsSearchedWholeAtAnyLength) {
     ASSERT_FALSE(two_sentences.shown.empty());
     for (const auto& r : two_sentences.shown) EXPECT_TRUE(r.trigger.empty()) << "split as a note";
     EXPECT_TRUE(retriever->Search("  ", 3, SearchMode::kQuery).abstained);
-}
 
-TEST(Retriever, TheWholeNoteIsTheTriggerWhenEverySentenceIsFiltered) {
-    Root root;
-    auto retriever = root.Make();
-    const auto results = retriever->Search(
+    // Blank text abstains without embedding anything
+    const auto blank = retriever->Search("  ", 3, SearchMode::kNote);
+    EXPECT_TRUE(blank.abstained);
+    EXPECT_EQ(blank.considered, 0);
+
+    // With every sentence filtered out, the whole note is the trigger
+    const auto filtered = retriever->Search(
         "No persistent synovitis of the small joints of the hands. "
         "Denies any urgent referral to a specialist.",
         3, SearchMode::kNote);
-    ASSERT_FALSE(results.shown.empty());
-    for (const auto& r : results.shown) EXPECT_TRUE(r.trigger.empty());
+    ASSERT_FALSE(filtered.shown.empty());
+    for (const auto& r : filtered.shown) EXPECT_TRUE(r.trigger.empty());
 }
 
-TEST(Retriever, KeepsALoadFailureAndRethrowsIt) {
+TEST(Retriever, AMissingEmbedderIsLoadedOnceAndReportedUnavailable) {
     int loads = 0;
     Retriever retriever(
         [&]() -> std::unique_ptr<IEmbedder> {
@@ -290,18 +289,6 @@ TEST(Retriever, KeepsALoadFailureAndRethrowsIt) {
     EXPECT_TRUE(retriever.Corpora().empty());
     EXPECT_EQ(retriever.Status().phase, Readiness::Phase::kUnavailable);
     EXPECT_EQ(retriever.Status().detail, "no embedding model staged");
-}
-
-TEST(Retriever, AMissingRootHasNoCorporaAndReturnsNothing) {
-    Retriever retriever([] { return std::make_unique<WordEmbedder>(); },
-                        std::filesystem::temp_directory_path() / "clinicavt-retriever-none");
-    retriever.Prepare();
-    EXPECT_TRUE(retriever.Corpora().empty());
-    EXPECT_EQ(retriever.Status().phase, Readiness::Phase::kReady) << "loaded, nothing installed";
-    const auto results = retriever.Search("Chest pain on exertion.", 3, SearchMode::kNote);
-    EXPECT_TRUE(results.shown.empty());
-    EXPECT_FALSE(results.abstained);
-    EXPECT_EQ(results.considered, 0);
 }
 
 }  // namespace

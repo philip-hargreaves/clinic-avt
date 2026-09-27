@@ -8,6 +8,10 @@
 
 namespace clinicavt::system {
 
+// The helper processes beside the engine. The orphan scan and the spawn must agree
+inline constexpr const wchar_t* kNoteHostExe = L"clinicavt_note_host.exe";
+inline constexpr const wchar_t* kIngestHostExe = L"clinicavt_ingest_host.exe";
+
 inline std::filesystem::path ExeDir() {
     wchar_t exe_path[MAX_PATH]{};
     GetModuleFileNameW(nullptr, exe_path, MAX_PATH);

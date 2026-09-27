@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -21,9 +22,20 @@
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/note/llm_note_writer.hpp"
 #include "adapters/system/power_throttling.hpp"
+#include "core/note/model_failure.hpp"
 #include "ports/transcriber.hpp"
 
 namespace {
+
+// OpenVINO's own workaround: after a driver fault any further GPU call can
+// hang the process, so it reports and leaves at once, before any teardown
+void ExitIfPoisoned(const std::string& detail) {
+    if (!clinicavt::note::PoisonsGpuContext(detail)) return;
+    std::fprintf(stderr, "clinicavt-note-host: the GPU context is corrupt (%.200s); exiting\n",
+                 detail.c_str());
+    std::fflush(stderr);
+    std::_Exit(3);
+}
 
 // One generation at a time, off the RPC thread so partials stream while
 // the pipe stays responsive to cancel
@@ -37,9 +49,11 @@ class GenerationLane {
         }
     }
 
-    bool Run(std::function<std::string(const clinicavt::note::INoteWriter::Progress&)> generate) {
+    // The reply to the request: refused while another generation runs
+    std::variant<clinicavt::ipc::json, clinicavt::ipc::Error> Start(
+        std::function<std::string(const clinicavt::note::INoteWriter::Progress&)> generate) {
         if (running_.exchange(true)) {
-            return false;
+            return clinicavt::ipc::SessionError("a generation is running");
         }
         if (thread_.joinable()) {
             thread_.join();
@@ -68,12 +82,13 @@ class GenerationLane {
                 server_.PushNotification("ready", {{"text", text}});
             } catch (const std::exception& e) {
                 server_.PushNotification("failed", {{"detail", e.what()}});
+                ExitIfPoisoned(e.what());
             } catch (...) {
                 server_.PushNotification("failed", {{"detail", "note generation failed"}});
             }
             running_ = false;
         });
-        return true;
+        return clinicavt::ipc::json::object();
     }
 
    private:
@@ -83,11 +98,7 @@ class GenerationLane {
 };
 
 std::vector<clinicavt::asr::Turn> TurnsFrom(const nlohmann::json& params) {
-    std::vector<clinicavt::asr::Turn> turns;
-    for (const auto& t : params.value("turns", nlohmann::json::array())) {
-        turns.push_back(clinicavt::ipc::TurnFromJson(t));
-    }
-    return turns;
+    return clinicavt::ipc::TurnsFromJson(params.value("turns", nlohmann::json::array()));
 }
 
 }  // namespace
@@ -117,12 +128,10 @@ int main(int argc, char* argv[]) {
         clinicavt::ipc::PipeServer server(pipe_name);
         clinicavt::models::ModelStore store(models_root);
         clinicavt::models::OvRuntime runtime;
-        clinicavt::note::LlmNoteWriter writer(store, runtime, prompt_path, nullptr, tier);
+        clinicavt::note::LlmNoteWriter writer(store, runtime, prompt_path, tier);
         GenerationLane lane(server);
 
-        using clinicavt::ipc::Error;
         using clinicavt::ipc::json;
-        using clinicavt::ipc::kSessionError;
         // The engine supervises the load through these two events
         writer.SetLoadListener([&server](const clinicavt::note::LlmNoteWriter::LoadReport& r) {
             if (r.ok) {
@@ -133,7 +142,13 @@ int main(int argc, char* argv[]) {
             } else {
                 server.PushNotification("loadFailed",
                                         {{"id", r.id}, {"name", r.name}, {"detail", r.detail}});
+                ExitIfPoisoned(r.detail);
             }
+        });
+        // Any frame tells the engine the host is alive, so a wait behind another
+        // engine's work is never taken for a hang
+        writer.SetGpuWaitListener([&server](double waited) {
+            server.PushNotification("gpuWait", {{"seconds", waited}});
         });
         server.RegisterMethod("prepare", [&writer](const json&) {
             writer.Prepare();
@@ -150,57 +165,40 @@ int main(int argc, char* argv[]) {
                 writer.Prefill(TurnsFrom(params), {params.value("style", "prose"), "standard"});
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "clinicavt-note-host: prefill dropped (%s)\n", e.what());
+                ExitIfPoisoned(e.what());
             }
             return json::object();
         });
-        server.RegisterMethod(
-            "write", [&writer, &lane](const json& params) -> std::variant<json, Error> {
-                auto turns = TurnsFrom(params);
-                clinicavt::note::NoteOptions options{params.value("style", "prose"),
-                                                     params.value("detail", "standard")};
-                options.confirmed = params.value("confirmed", false);
-                if (!lane.Run([&writer, turns = std::move(turns),
+        server.RegisterMethod("write", [&writer, &lane](const json& params) {
+            clinicavt::note::NoteOptions options{params.value("style", "prose"),
+                                                 params.value("detail", "standard")};
+            options.confirmed = params.value("confirmed", false);
+            return lane.Start([&writer, turns = TurnsFrom(params),
                                options = std::move(options)](const auto& progress) {
-                        return writer.Write(turns, options, progress);
-                    })) {
-                    return Error{kSessionError, "Session error", json("a generation is running")};
-                }
-                return json::object();
+                return writer.Write(turns, options, progress);
             });
-        server.RegisterMethod(
-            "label", [&writer, &lane](const json& params) -> std::variant<json, Error> {
-                std::string note = params.value("note", "");
-                if (!lane.Run([&writer, note = std::move(note)](const auto&) {
-                        return writer.WriteLabel(note);
-                    })) {
-                    return Error{kSessionError, "Session error", json("a generation is running")};
-                }
-                return json::object();
+        });
+        server.RegisterMethod("label", [&writer, &lane](const json& params) {
+            return lane.Start([&writer, note = params.value("note", "")](const auto&) {
+                return writer.WriteLabel(note);
             });
-        server.RegisterMethod(
-            "summary", [&writer, &lane](const json& params) -> std::variant<json, Error> {
-                std::string note = params.value("note", "");
-                if (!lane.Run([&writer, note = std::move(note)](const auto&) {
-                        return writer.WriteSummary(note);
-                    })) {
-                    return Error{kSessionError, "Session error", json("a generation is running")};
-                }
-                return json::object();
+        });
+        server.RegisterMethod("summary", [&writer, &lane](const json& params) {
+            return lane.Start([&writer, note = params.value("note", "")](const auto&) {
+                return writer.WriteSummary(note);
             });
-        server.RegisterMethod(
-            "writePatient", [&writer, &lane](const json& params) -> std::variant<json, Error> {
-                std::string note = params.value("note", "");
-                if (!lane.Run([&writer, note = std::move(note)](const auto& progress) {
-                        return writer.WritePatient(note, progress);
-                    })) {
-                    return Error{kSessionError, "Session error", json("a generation is running")};
-                }
-                return json::object();
+        });
+        server.RegisterMethod("writePatient", [&writer, &lane](const json& params) {
+            return lane.Start([&writer, note = params.value("note", "")](const auto& progress) {
+                return writer.WritePatient(note, progress);
             });
+        });
 
-        // The engine is the one client. Its death ends this serve loop and
-        // the process with it, so a worker can never outlive its engine
+        // The engine is the one client. Losing it ends this serve loop and
+        // cancels any generation, so the host exits within seconds. A load
+        // cannot be cancelled and finishes first
         server.ServeOneClient();
+        writer.Close();
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "clinicavt-note-host: fatal: %s\n", e.what());

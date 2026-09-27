@@ -80,10 +80,12 @@ void WireEvents::OnNoteReady(const std::string& text) {
 
 void WireEvents::OnNoteSaved(const std::string& session, const store::Document& note) {
     if (guidance_ == nullptr) return;
-    guidance_->Run(GuidanceSearchRequest(sessions_, session, note, kGuidanceLimit,
-                                         [this](const std::string& method, nlohmann::json params) {
-                                             server_.PushNotification(method, std::move(params));
-                                         }));
+    guidance_->Run(
+        GuidanceSearchRequest(sessions_, session, note, kGuidanceLimit, PushTo(server_)));
+}
+
+void WireEvents::OnStorageFault(const std::string& detail) {
+    server_.PushNotification("storage/fault", {{"detail", detail}});
 }
 
 void WireEvents::OnNoteFailed(const std::string& detail) {

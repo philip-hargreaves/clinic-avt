@@ -38,5 +38,41 @@
   {
     "in": "Reviewed May 12, 2026 with no change in the plan.",
     "out": "Reviewed recently with no change in the plan."
+  },
+  {
+    "in": "aged 3",
+    "out": "under ten"
+  },
+  {
+    "in": "aged 14",
+    "out": "in their teens"
+  },
+  {
+    "in": "aged 20",
+    "out": "in their twenties"
+  },
+  {
+    "in": "a 99-year-old",
+    "out": "a patient in their nineties"
+  },
+  {
+    "in": "aged 104",
+    "out": "in their nineties"
+  },
+  {
+    "in": "a 45 yo man",
+    "out": "a man in their forties"
+  },
+  {
+    "in": "a 45 y/o",
+    "out": "a patient in their forties"
+  },
+  {
+    "in": "45 years old",
+    "out": "in their forties"
+  },
+  {
+    "in": "a 45-yr-old woman",
+    "out": "a woman in their forties"
   }
 ]

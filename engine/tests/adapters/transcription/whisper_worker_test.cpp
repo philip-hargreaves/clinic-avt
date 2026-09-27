@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -15,125 +16,133 @@
 namespace clinicavt::asr {
 namespace {
 
-Turn Labelled(std::uint64_t first_frame, std::size_t count) {
+Turn At(std::uint64_t first, std::uint64_t count, std::string text) {
     Turn turn;
-    turn.first_frame = first_frame;
+    turn.first_frame = first;
     turn.frame_count = count;
-    turn.text = "w" + std::to_string(first_frame);
+    turn.text = std::move(text);
     return turn;
 }
 
-TEST(WhisperWorker, ClipSegmentEdgesInsideTheClipAreTakenAsCuts) {
-    // Two segments in a 3 s clip starting at frame 16000: the interior edge at
-    // 1.2 s (and the segment end short of the clip end) are cuts. The clip's own
-    // edges are excluded
-    WhisperTranscriber transcriber([](std::span<const float> f, std::uint64_t first) {
-        return std::vector<Turn>{{first, 19200, "", "have you had any clots"},
-                                 {first + 19200, static_cast<std::uint64_t>(f.size()) - 19200 - 800,
-                                  "", "not that I know of"}};
-    });
-    const std::vector<float> frames(48000, 0.1f);
-    ASSERT_EQ(transcriber.DecodeClip(frames, 16000), "have you had any clots not that I know of");
-    const auto cuts = transcriber.TakeClipCuts();
-    EXPECT_EQ(cuts,
-              (std::vector<std::uint64_t>{16000 + 19200, 16000 + 19200, 16000 + 48000 - 800}));
-    EXPECT_TRUE(transcriber.TakeClipCuts().empty()) << "taking drains";
+// A transcriber whose load hands back `decode` at once
+DecodeLoader Ready(DecodeFn decode) {
+    return [decode] { return decode; };
 }
 
-TEST(WhisperWorker, DecodesAccumulateIntoTheMetrics) {
+// Whisper's chunk edges inside a clip are where a short answer begins and
+// ends, so they become cut points. The clip's own edges are not
+TEST(WhisperWorker, DecodeClipJoinsChunkTextsAndInteriorEdgesBecomeCuts) {
+    // A 3 s clip at frame 16000: chunks of 1.2 s and 1.75 s, then an empty one
+    WhisperTranscriber transcriber(Ready([](std::span<const float>, std::uint64_t first) {
+        return std::vector<Turn>{At(first, 19200, "have you had any clots"),
+                                 At(first + 19200, 28000, "not that I know of"),
+                                 At(first + 47200, 800, "")};
+    }));
+    const std::vector<float> clip(48000, 0.1f);
+
+    const auto chunks = transcriber.DecodeClipChunks(clip, 16000);
+    ASSERT_EQ(chunks.size(), 2u) << "empty chunks are dropped";
+    EXPECT_EQ(chunks[1].text, "not that I know of");
+    EXPECT_EQ(transcriber.TakeClipCuts(), (std::vector<std::uint64_t>{35200, 35200, 63200}))
+        << "the interior edge from both sides, and a chunk end short of the clip end";
+    EXPECT_TRUE(transcriber.TakeClipCuts().empty()) << "taking drains";
+
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 16000)),
+              "have you had any clots not that I know of");
+}
+
+TEST(WhisperWorker, AClipWaitsForTheOneLoadAndItsDecodeIsMetered) {
     metrics::Registry registry;
+    std::atomic<int> loads{0};
+    const DecodeLoader slow_load = [&loads] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        ++loads;
+        return DecodeFn([](std::span<const float>, std::uint64_t first) {
+            return std::vector<Turn>{At(first, 1, "w" + std::to_string(first))};
+        });
+    };
     {
-        WhisperTranscriber transcriber(
-            DecodeLoader([] {
-                return DecodeFn(
-                    [](std::span<const float>, std::uint64_t) { return std::vector<Turn>{}; });
-            }),
-            &registry);
+        WhisperTranscriber transcriber(slow_load, &registry);
         const std::vector<float> clip(16000);
-        (void)transcriber.DecodeClip(clip, 0);
-        (void)transcriber.DecodeClip(clip, 16000);
+        EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 40)), "w40")
+            << "waits for the load";
+        EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 16040)), "w16040");
     }
 
+    EXPECT_EQ(loads.load(), 1) << "one load serves every clip";
     const auto s = registry.Take();
     EXPECT_EQ(s.decoded_audio_seconds, 2.0);
     EXPECT_GE(s.decode_busy_seconds, 0.0);
 }
 
-TEST(WhisperWorker, AClipWaitsForTheLoadThenDecodes) {
-    std::atomic<int> loads{0};
-    WhisperTranscriber transcriber(DecodeLoader([&loads] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(30));
-        ++loads;
-        return DecodeFn([](std::span<const float> f, std::uint64_t first) {
-            return std::vector<Turn>{Labelled(first, f.size())};
-        });
-    }));
-
-    const std::vector<float> clip(10);
-    EXPECT_EQ(transcriber.DecodeClip(clip, 40), "w40");
-    EXPECT_EQ(loads.load(), 1) << "one load serves every clip";
-    EXPECT_EQ(transcriber.DecodeClip(clip, 50), "w50");
-    EXPECT_EQ(loads.load(), 1);
-}
-
-TEST(WhisperWorker, AThrowingDecodeResolvesTheClipEmpty) {
-    WhisperTranscriber transcriber([](std::span<const float>, std::uint64_t) -> std::vector<Turn> {
-        throw std::runtime_error("driver");
-    });
-
-    const std::vector<float> clip(10);
-    EXPECT_EQ(transcriber.DecodeClip(clip, 0), "")
-        << "a failed decode loses the text, not the session";
-    EXPECT_TRUE(transcriber.TakeClipCuts().empty());
-}
-
-TEST(WhisperWorker, DecodeClipReturnsTheJoinedTurnTexts) {
-    WhisperTranscriber transcriber([](std::span<const float>, std::uint64_t first) {
-        std::vector<Turn> turns{Labelled(first, 100), Labelled(first + 100, 100)};
-        turns.push_back(Labelled(first + 200, 100));
-        turns.back().text.clear();  // empty texts are skipped
-        return turns;
-    });
-
-    const std::vector<float> clip(300);
-    EXPECT_EQ(transcriber.DecodeClip(clip, 7000), "w7000 w7100");
-}
-
-TEST(WhisperWorker, AFailedLoadResolvesClipsEmpty) {
+// The same model moves to another device in place: the old one is released
+// first, so two are never resident, and a failed load says why without
+// leaving later clips hanging
+TEST(WhisperWorker, SwitchingDeviceLoadsThereAtOnceAndAFailedSwitchSaysWhy) {
+    struct Load {
+        std::string device;
+        bool previous_released;
+    };
+    std::mutex mutex;
+    std::vector<Load> loads;
+    std::weak_ptr<std::string> resident;
     WhisperTranscriber transcriber(
-        DecodeLoader([]() -> DecodeFn { throw std::runtime_error("no GPU"); }));
+        DeviceLoader([&](const std::string& device) {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                loads.push_back({device, resident.expired()});
+            }
+            if (device == "BROKEN") throw std::runtime_error("no BROKEN device");
+            auto model = std::make_shared<std::string>(device);
+            resident = model;
+            return DecodeFn([model](std::span<const float>, std::uint64_t first) {
+                return std::vector<Turn>{At(first, 1, *model)};
+            });
+        }),
+        "GPU");
+    const std::vector<float> clip(10);
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 0)), "GPU");
+
+    const auto switch_to = [&transcriber](const std::string& device) {
+        auto settled = std::make_shared<std::promise<std::string>>();
+        auto done = settled->get_future();
+        EXPECT_TRUE(transcriber.SwitchDevice(
+            device, [settled](const std::string& error) { settled->set_value(error); }));
+        // Settles at once, before any clip asks
+        if (done.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+            return std::string("not settled");
+        }
+        return done.get();
+    };
+
+    EXPECT_EQ(switch_to("NPU"), "");
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 10)), "NPU");
+
+    EXPECT_EQ(switch_to("BROKEN"), "no BROKEN device");
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 20)), "")
+        << "drained without text, not hung";
+
+    std::lock_guard<std::mutex> lock(mutex);
+    ASSERT_EQ(loads.size(), 3u);
+    EXPECT_EQ(loads[1].device, "NPU");
+    EXPECT_EQ(loads[2].device, "BROKEN");
+    for (const auto& load : loads) {
+        EXPECT_TRUE(load.previous_released)
+            << "a model was still resident when " << load.device << " loaded";
+    }
+}
+
+// A driver fault in one decode loses that clip's text, not the session
+TEST(WhisperWorker, AThrowingDecodeLosesOnlyThatClipsText) {
+    WhisperTranscriber transcriber(Ready([](std::span<const float>, std::uint64_t first) {
+        if (first == 0) throw std::runtime_error("driver");
+        return std::vector<Turn>{At(first, 1, "later")};
+    }));
 
     const std::vector<float> clip(10);
-    EXPECT_EQ(transcriber.DecodeClip(clip, 0), "") << "an aborted re-split keeps the original";
-}
-
-}  // namespace
-}  // namespace clinicavt::asr
-
-namespace clinicavt::asr {
-namespace {
-
-Turn At(std::uint64_t first, std::uint64_t count, const char* text) {
-    Turn t;
-    t.first_frame = first;
-    t.frame_count = count;
-    t.text = text;
-    return t;
-}
-
-TEST(WhisperWorker, ChunksReachTheClipCallerAndTheirEdgesBecomeCuts) {
-    WhisperTranscriber transcriber(DecodeFn([](std::span<const float>, std::uint64_t first) {
-        return std::vector<Turn>{At(first, 16000, "have you had clots?"),
-                                 At(first + 16000, 8000, "No.")};
-    }));
-    const std::vector<float> clip(24000, 0.0f);
-    const auto chunks = transcriber.DecodeClipChunks(clip, 32000);
-    ASSERT_EQ(chunks.size(), 2u);
-    EXPECT_EQ(chunks[1].text, "No.");
-    const auto cuts = transcriber.TakeClipCuts();
-    EXPECT_EQ(cuts, (std::vector<std::uint64_t>{48000u, 48000u}))
-        << "the interior chunk edge, both sides";
-    EXPECT_EQ(transcriber.DecodeClip(clip, 32000), "have you had clots? No.");
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 0)), "");
+    EXPECT_TRUE(transcriber.TakeClipCuts().empty());
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 10)), "later");
 }
 
 }  // namespace

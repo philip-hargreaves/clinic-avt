@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "core/common/utf8.hpp"
 #include "sqlite3.h"
 
 namespace clinicavt::store {
@@ -71,7 +72,7 @@ Db::Db(const std::filesystem::path& path, Mode mode) {
         case Mode::kSession:
         case Mode::kIndex:
         case Mode::kBuild:
-            name = std::string(reinterpret_cast<const char*>(path.u8string().c_str()));
+            name = utf8::FromPath(path);
             flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
             break;
         case Mode::kImmutableReadOnly:

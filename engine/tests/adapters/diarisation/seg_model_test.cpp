@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "adapters/diarisation/segmenter.hpp"
+#include "dev_wav.hpp"
 
 namespace clinicavt::diar {
 namespace {
@@ -22,32 +23,19 @@ namespace {
 constexpr const char* kFixtureDir = CLINICAVT_DIAR_FIXTURE_DIR;
 constexpr std::uint64_t kFrameTolerance = 300;  // one seg frame is ~272 samples
 
-std::vector<float> LoadWav(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in.is_open()) throw std::runtime_error("missing dev wav: " + path);
-    in.seekg(0, std::ios::end);
-    const auto bytes = static_cast<std::size_t>(in.tellg()) - 44;
-    in.seekg(44);
-    std::vector<std::int16_t> pcm(bytes / 2);
-    in.read(reinterpret_cast<char*>(pcm.data()), static_cast<std::streamsize>(bytes));
-    std::vector<float> frames(pcm.size());
-    for (std::size_t i = 0; i < pcm.size(); ++i) frames[i] = pcm[i] / 32768.0f;
-    return frames;
-}
-
 nlohmann::json LoadMeta() {
     std::ifstream in(std::filesystem::path(kFixtureDir) / "seg_fixtures.json");
     if (!in.is_open()) throw std::runtime_error("missing segmentation fixtures");
     return nlohmann::json::parse(in);
 }
 
-TEST(SegModel, StagedExportMatchesTheResearchArgmax) {
+TEST(SegModel, MatchesTheResearchArgmaxAndReferenceDecode) {
     const auto meta = LoadMeta();
     // The fixture names a wav that is not in the repo
     if (!std::filesystem::exists(meta.at("wav").get<std::string>())) {
         GTEST_SKIP() << "research corpus not mounted";
     }
-    const auto audio = LoadWav(meta.at("wav"));
+    const auto audio = LoadDevWav(meta.at("wav"));
     const std::size_t windows = meta.at("windows");
     const std::size_t frames = meta.at("frames_per_window");
 
@@ -61,44 +49,37 @@ TEST(SegModel, StagedExportMatchesTheResearchArgmax) {
 
     const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
     models::OvRuntime runtime;
-    auto loaded = runtime.Load(store, "segmentation", "default", "model.onnx");
-    EXPECT_EQ(loaded.device, "CPU");
-    auto request = loaded.model.create_infer_request();
+    {
+        auto loaded = runtime.Load(store, "segmentation", "default", "model.onnx");
+        EXPECT_EQ(loaded.device, "CPU");
+        auto request = loaded.model.create_infer_request();
 
-    std::size_t agree = 0;
-    ov::Tensor input(ov::element::f32, {1, 1, kSegWindowFrames});
-    for (std::size_t w = 0; w < windows; ++w) {
-        float* x = input.data<float>();
-        const std::uint64_t offset = w * kSegWindowFrames;
-        const std::size_t have = std::min<std::size_t>(kSegWindowFrames, audio.size() - offset);
-        std::copy_n(audio.data() + offset, have, x);
-        std::fill(x + have, x + kSegWindowFrames, 0.0f);
-        request.set_input_tensor(input);
-        request.infer();
-        const ov::Tensor output = request.get_output_tensor();
-        const float* logits = output.data<float>();
-        const std::size_t classes = output.get_shape()[2];
-        for (std::size_t i = 0; i < frames; ++i) {
-            const float* row = logits + i * classes;
-            const auto argmax = std::max_element(row, row + classes) - row;
-            if (argmax == reference[w * frames + i]) ++agree;
+        std::size_t agree = 0;
+        ov::Tensor input(ov::element::f32, {1, 1, kSegWindowFrames});
+        for (std::size_t w = 0; w < windows; ++w) {
+            float* x = input.data<float>();
+            const std::uint64_t offset = w * kSegWindowFrames;
+            const std::size_t have = std::min<std::size_t>(kSegWindowFrames, audio.size() - offset);
+            std::copy_n(audio.data() + offset, have, x);
+            std::fill(x + have, x + kSegWindowFrames, 0.0f);
+            request.set_input_tensor(input);
+            request.infer();
+            const ov::Tensor output = request.get_output_tensor();
+            const float* logits = output.data<float>();
+            const std::size_t classes = output.get_shape()[2];
+            for (std::size_t i = 0; i < frames; ++i) {
+                const float* row = logits + i * classes;
+                const auto argmax = std::max_element(row, row + classes) - row;
+                if (argmax == reference[w * frames + i]) ++agree;
+            }
         }
+        const double agreement = static_cast<double>(agree) / static_cast<double>(windows * frames);
+        std::printf("seg argmax agreement %.4f%% (%zu/%zu frames)\n", agreement * 100, agree,
+                    windows * frames);
+        EXPECT_GE(agreement, 0.9999);
     }
-    const double agreement = static_cast<double>(agree) / static_cast<double>(windows * frames);
-    std::printf("seg argmax agreement %.4f%% (%zu/%zu frames)\n", agreement * 100, agree,
-                windows * frames);
-    EXPECT_GE(agreement, 0.9999);
-}
 
-TEST(SegModel, TheDecodeReproducesTheReferenceChangePointsAndOverlap) {
-    const auto meta = LoadMeta();
-    if (!std::filesystem::exists(meta.at("wav").get<std::string>())) {
-        GTEST_SKIP() << "research corpus not mounted";
-    }
-    const auto audio = LoadWav(meta.at("wav"));
-
-    const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
-    models::OvRuntime runtime;
+    // The decode over the same audio holds the reference change points and overlap spans
     Segmenter segmenter(store, runtime);
     const auto result = segmenter.Run(audio);
 
@@ -115,9 +96,11 @@ TEST(SegModel, TheDecodeReproducesTheReferenceChangePointsAndOverlap) {
     ASSERT_EQ(result.overlap_spans.size(), ref_spans.size());
     for (std::size_t i = 0; i < ref_spans.size(); ++i) {
         EXPECT_NEAR(static_cast<double>(result.overlap_spans[i].first_frame),
-                    static_cast<double>(ref_spans[i][0]), static_cast<double>(kFrameTolerance));
+                    static_cast<double>(ref_spans[i][0]), static_cast<double>(kFrameTolerance))
+            << "overlap span " << i;
         EXPECT_NEAR(static_cast<double>(result.overlap_spans[i].end_frame),
-                    static_cast<double>(ref_spans[i][1]), static_cast<double>(kFrameTolerance));
+                    static_cast<double>(ref_spans[i][1]), static_cast<double>(kFrameTolerance))
+            << "overlap span " << i;
     }
 }
 

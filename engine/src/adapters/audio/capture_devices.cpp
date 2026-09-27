@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "adapters/system/com_apartment.hpp"
+
 namespace clinicavt::audio {
 
 namespace {
@@ -22,16 +24,6 @@ constexpr GUID kDeviceGuid{
 constexpr PROPERTYKEY kFriendlyName{kDeviceGuid, 14};    // endpoint (adapter)
 constexpr PROPERTYKEY kDeviceDesc{kDeviceGuid, 2};       // endpoint alone
 constexpr PROPERTYKEY kEnumeratorName{kDeviceGuid, 24};  // "BTHENUM" is Bluetooth
-
-struct ComApartment {
-    HRESULT hr;
-    ComApartment() : hr(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
-    ~ComApartment() {
-        if (SUCCEEDED(hr)) CoUninitialize();
-    }
-    ComApartment(const ComApartment&) = delete;
-    ComApartment& operator=(const ComApartment&) = delete;
-};
 
 std::string Utf8(const wchar_t* wide) {
     if (wide == nullptr || *wide == L'\0') return {};
@@ -65,7 +57,7 @@ std::wstring EndpointId(IMMDevice* device) {
 
 std::vector<CaptureDevice> ListCaptureDevices() {
     std::vector<CaptureDevice> devices;
-    const ComApartment com;
+    const system::ComApartment com;
     if (FAILED(com.hr)) return devices;
 
     ComPtr<IMMDeviceEnumerator> enumerator;

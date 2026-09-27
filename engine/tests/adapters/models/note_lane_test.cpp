@@ -76,22 +76,15 @@ struct Transitions {
     }
 };
 
-TEST(NoteLane, StartsIdleOnTheDefaultTierWithItsModelNamed) {
+TEST(NoteLane, ConfiguringATierLoadsItAtOnceAndTheHostServesIt) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
     WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
-
-    const auto state = lane.State();
-    EXPECT_EQ(state.phase, Phase::kIdle);
-    EXPECT_EQ(state.tier, "default");
-    EXPECT_EQ(state.id, "qwen3.5-9b-int4");
-    EXPECT_EQ(state.name, "Qwen3.5 9B");
-}
-
-TEST(NoteLane, ConfiguringAnotherTierLoadsItAtOnceAndReportsReady) {
-    TieredStore staged;
-    const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
+    const auto start = lane.State();
+    EXPECT_EQ(start.phase, Phase::kIdle);
+    EXPECT_EQ(start.tier, "default");
+    EXPECT_EQ(start.id, "qwen3.5-9b-int4");
+    EXPECT_EQ(start.name, "Qwen3.5 9B");
     Transitions seen;
     lane.SetListener(seen.Listener());
 
@@ -106,60 +99,98 @@ TEST(NoteLane, ConfiguringAnotherTierLoadsItAtOnceAndReportsReady) {
     EXPECT_EQ(states.back().tier, "accuracy");
     EXPECT_EQ(states.back().name, "Qwen3.6 35B");
     EXPECT_GT(states.back().seconds, 0.0);
+
+    EXPECT_EQ(lane.Configure("accuracy").phase, Phase::kReady);
+    EXPECT_EQ(seen.Snapshot().size(), states.size()) << "the same tier again: no respawn";
+
+    EXPECT_EQ(lane.Write({{0, 16000, "doctor", "hello"}}, {}, nullptr),
+              "A note from qwen3.6-35b-a3b-int4");
+    EXPECT_EQ(lane.State().phase, Phase::kReady);
+    // The case summary goes through the host like the label: one call, one text
+    EXPECT_EQ(lane.WriteSummary("the note"), "A summary from qwen3.6-35b-a3b-int4");
+    EXPECT_THROW(lane.WriteSummary(""), std::runtime_error);
 }
 
-TEST(NoteLane, TheSameTierAgainIsANoOp) {
+TEST(NoteLane, WhatTheLaneCannotServeFailsLoudlyAndChangesNothing) {
     TieredStore staged;
+    const models::ModelStore store(staged.root);
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
+    Transitions seen;
+    lane.SetListener(seen.Listener());
+
+    EXPECT_THROW(lane.Write({}, {}, nullptr), std::runtime_error) << "an empty transcript";
+
+    try {
+        lane.Configure("fast");
+        FAIL() << "nothing claims note/fast";
+    } catch (const std::invalid_argument& e) {
+        EXPECT_NE(std::string(e.what()).find("qwen3.5-9b-int4"), std::string::npos)
+            << "names what is staged: " << e.what();
+    }
+    EXPECT_EQ(lane.State().tier, "default") << "a refused switch changes nothing";
+
+    lane.Configure("constrained");
+    ASSERT_TRUE(seen.WaitFor(Phase::kFailed));
+    const auto failed = seen.Snapshot().back();
+    EXPECT_EQ(failed.tier, "constrained");
+    EXPECT_EQ(failed.detail, "no such device") << "a failed load reports its reason";
+    const auto from = seen.Snapshot().size();
+    lane.Configure("default");
+    ASSERT_TRUE(seen.WaitFor(Phase::kReady, from)) << "the previous tier loads again";
+    EXPECT_EQ(seen.Snapshot().back().id, "qwen3.5-9b-int4");
+
+    WorkerNoteWriter missing("C:/nowhere/clinicavt_note_host.exe", staged.root, staged.root);
+    EXPECT_THROW(missing.Write({{0, 16000, "doctor", "hello"}}, {}, nullptr), std::runtime_error)
+        << "a missing host";
+}
+
+// A load cannot be cancelled, so a switch waits for it rather than killing the
+// host, and the stuck-host probe leaves it alone
+TEST(NoteLane, ASwitchDuringALoadIsRefusedUntilTheLoadSettles) {
+    TieredStore staged;
+    std::filesystem::remove_all(staged.root / "qwen3.6-35b-a3b-int4");
+    staged.Stage("qwen-slow-int4", "Slow", "accuracy");
     const models::ModelStore store(staged.root);
     WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
     Transitions seen;
     lane.SetListener(seen.Listener());
     lane.Configure("accuracy");
+
+    EXPECT_THROW(lane.Configure("default"), std::logic_error);
+    EXPECT_EQ(lane.State().tier, "accuracy");
+    EXPECT_FALSE(lane.CheckForStuckHost()) << "a load is never probed";
+    EXPECT_EQ(lane.State().phase, Phase::kLoading) << "the host is left to finish it";
+
     ASSERT_TRUE(seen.WaitFor(Phase::kReady));
-    const auto before = seen.Snapshot().size();
-
-    const auto reply = lane.Configure("accuracy");
-
-    EXPECT_EQ(reply.phase, Phase::kReady);
-    EXPECT_EQ(seen.Snapshot().size(), before) << "no transition, no respawn";
-}
-
-TEST(NoteLane, AFailedLoadIsReportedWithItsReason) {
-    TieredStore staged;
-    const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
-    Transitions seen;
-    lane.SetListener(seen.Listener());
-
-    lane.Configure("constrained");
-
-    ASSERT_TRUE(seen.WaitFor(Phase::kFailed));
-    const auto failed = seen.Snapshot().back();
-    EXPECT_EQ(failed.tier, "constrained");
-    EXPECT_EQ(failed.detail, "no such device");
-    // The revert: the previous tier loads again
     const auto from = seen.Snapshot().size();
     lane.Configure("default");
     ASSERT_TRUE(seen.WaitFor(Phase::kReady, from));
     EXPECT_EQ(seen.Snapshot().back().id, "qwen3.5-9b-int4");
 }
 
-TEST(NoteLane, AnUnstagedTierIsRefusedNamingWhatIsStaged) {
+// A host busy with one guess reads nothing else. A second large one sent then
+// would block the capture thread until the first ends, so it is skipped
+TEST(NoteLane, APrefillWaitsForTheLastOneRatherThanBlockingTheCaller) {
     TieredStore staged;
-    std::filesystem::remove_all(staged.root / "qwen3.6-35b-a3b-int4");
     const models::ModelStore store(staged.root);
     WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
-
-    try {
-        lane.Configure("accuracy");
-        FAIL() << "nothing claims note/accuracy";
-    } catch (const std::invalid_argument& e) {
-        EXPECT_NE(std::string(e.what()).find("qwen3.5-9b-int4"), std::string::npos);
+    Transitions seen;
+    lane.SetListener(seen.Listener());
+    lane.Configure("accuracy");
+    ASSERT_TRUE(seen.WaitFor(Phase::kReady));
+    std::vector<asr::Turn> transcript;
+    for (int i = 0; i < 400; ++i) {
+        transcript.push_back({0, 16000, "doctor", std::string(400, 'a')});
     }
-    EXPECT_EQ(lane.State().tier, "default") << "a refused switch changes nothing";
+
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < 3; ++i) lane.Prefill(transcript, {});
+
+    EXPECT_LT(std::chrono::steady_clock::now() - t0, std::chrono::milliseconds(1000));
 }
 
-TEST(NoteLane, TheHostServesTheConfiguredTier) {
+// Asked whether it is stuck, a healthy host exits and the next note starts it again
+TEST(NoteLane, AHealthyHostAskedIfStuckExitsAndServesTheNextNote) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
     WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
@@ -168,20 +199,11 @@ TEST(NoteLane, TheHostServesTheConfiguredTier) {
     lane.Configure("accuracy");
     ASSERT_TRUE(seen.WaitFor(Phase::kReady));
 
-    const std::string note = lane.Write({{0, 16000, "doctor", "hello"}}, {}, nullptr);
+    EXPECT_FALSE(lane.CheckForStuckHost());
 
-    EXPECT_EQ(note, "A note from qwen3.6-35b-a3b-int4");
-    EXPECT_EQ(lane.State().phase, Phase::kReady);
-}
-
-// The case summary goes through the host like the label: one call, one text
-TEST(NoteLane, TheSummaryComesBackFromTheHost) {
-    TieredStore staged;
-    const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
-
-    EXPECT_EQ(lane.WriteSummary("the note"), "A summary from qwen3.5-9b-int4");
-    EXPECT_THROW(lane.WriteSummary(""), std::runtime_error);
+    EXPECT_EQ(lane.State().phase, Phase::kIdle);
+    EXPECT_EQ(lane.Write({{0, 16000, "doctor", "hello"}}, {}, nullptr),
+              "A note from qwen3.6-35b-a3b-int4");
 }
 
 }  // namespace

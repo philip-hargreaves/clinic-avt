@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -51,6 +52,16 @@ inline void Encode(std::string& out, char32_t cp) {
         out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
         out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
     }
+}
+
+// A path as UTF-8 text, and back
+inline std::string FromPath(const std::filesystem::path& path) {
+    const auto u8 = path.u8string();
+    return std::string(u8.begin(), u8.end());
+}
+
+inline std::filesystem::path ToPath(std::string_view text) {
+    return std::filesystem::path(std::u8string(text.begin(), text.end()));
 }
 
 }  // namespace clinicavt::utf8

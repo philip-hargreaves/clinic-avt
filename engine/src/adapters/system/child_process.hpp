@@ -106,10 +106,6 @@ class ChildProcess {
         return child;
     }
 
-    bool Started() const {
-        return static_cast<bool>(process_);
-    }
-
     bool Alive() const {
         return process_ && WaitForSingleObject(process_.get(), 0) == WAIT_TIMEOUT;
     }
@@ -138,11 +134,14 @@ class ChildProcess {
         return code;
     }
 
-    // Waits `grace_ms` for a voluntary exit, kills otherwise, and lets the handles go
-    void End(DWORD grace_ms) {
-        if (process_ && !WaitFor(grace_ms)) TerminateProcess(process_.get(), 1);
+    // Waits up to `grace_ms` for the child to exit on its own, then lets the
+    // handles go. False keeps a child that is still running held, because
+    // closing the job would kill it
+    bool End(DWORD grace_ms) {
+        if (process_ && !WaitFor(grace_ms)) return false;
         process_.Reset();
         job_.Reset();
+        return true;
     }
 
    private:

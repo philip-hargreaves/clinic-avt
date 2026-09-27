@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,29 +13,15 @@ namespace clinicavt::diar {
 
 namespace {
 
-double Dot(const std::vector<float>& a, const std::vector<float>& b) {
-    double sum = 0.0;
-    for (std::size_t i = 0; i < a.size() && i < b.size(); ++i) sum += a[i] * b[i];
-    return sum;
-}
-
 // The other cluster the chunk's voice fits better by the margin, or -1
 int BetterCluster(const std::vector<float>& e, int own,
-                  const std::vector<std::vector<float>>& centroids, double margin,
-                  double* own_score, double* best_score) {
+                  const std::vector<std::vector<float>>& centroids, double margin) {
     if (e.empty() || own < 0 || static_cast<std::size_t>(own) >= centroids.size()) return -1;
-    *own_score = Dot(e, centroids[static_cast<std::size_t>(own)]);
-    int best = -1;
-    *best_score = -2.0;
-    for (std::size_t c = 0; c < centroids.size(); ++c) {
-        if (static_cast<int>(c) == own) continue;
-        const double s = Dot(e, centroids[c]);
-        if (s > *best_score) {
-            *best_score = s;
-            best = static_cast<int>(c);
-        }
-    }
-    return best >= 0 && *best_score - *own_score >= margin ? best : -1;
+    const int best = NearestOther(e, centroids, own);
+    if (best < 0) return -1;
+    const double gain = Dot(e, centroids[static_cast<std::size_t>(best)]) -
+                        Dot(e, centroids[static_cast<std::size_t>(own)]);
+    return gain >= margin ? best : -1;
 }
 
 }  // namespace
@@ -42,7 +29,7 @@ int BetterCluster(const std::vector<float>& e, int own,
 std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSlice>& turns,
                                             const std::vector<std::string>& texts,
                                             const std::vector<std::vector<asr::Turn>>& chunks,
-                                            const EmbedSpanFn& embed,
+                                            const EmbedRangeFn& embed,
                                             const std::vector<std::vector<float>>& centroids,
                                             double margin) {
     std::vector<ResplitTurn> out;
@@ -61,10 +48,7 @@ std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSlice>& tu
             const std::uint64_t lo = std::max(p.first_frame, turn.first_frame);
             const std::uint64_t hi = std::min(p.first_frame + p.frame_count, turn.end_frame);
             if (hi <= lo || hi - lo < kResplitMinFrames) return false;
-            double own = 0.0;
-            double best = 0.0;
-            const int other =
-                BetterCluster(embed(lo, hi), turn.cluster, centroids, margin, &own, &best);
+            const int other = BetterCluster(embed(lo, hi), turn.cluster, centroids, margin);
             if (other < 0) return false;
             owner[j] = other;
             return true;
@@ -82,11 +66,7 @@ std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSlice>& tu
             ResplitTurn r;
             r.slice = {parts[from].first_frame,
                        parts[to - 1].first_frame + parts[to - 1].frame_count, cluster};
-            for (std::size_t k = from; k < to; ++k) {
-                if (parts[k].text.empty()) continue;
-                if (!r.text.empty()) r.text += ' ';
-                r.text += parts[k].text;
-            }
+            r.text = asr::JoinedText(std::span(parts).subspan(from, to - from));
             return r;
         };
         for (std::size_t j = 0; j < front; ++j) out.push_back(piece(j, j + 1, owner[j]));

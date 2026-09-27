@@ -97,7 +97,7 @@ struct SystemSid {
     SystemSid& operator=(const SystemSid&) = delete;
 };
 
-TEST(PipeSecurity, AttributesAreWellFormedAndNotInheritable) {
+TEST(PipeSecurity, TheDescriptorIsExplicitAndNotInheritable) {
     PipeSecurity security;
     auto* attributes = AttributesOf(security);
 
@@ -106,59 +106,17 @@ TEST(PipeSecurity, AttributesAreWellFormedAndNotInheritable) {
     EXPECT_NE(attributes->lpSecurityDescriptor, nullptr);
     // An inheritable handle would hand the pipe to any child process
     EXPECT_FALSE(attributes->bInheritHandle);
-}
 
-TEST(PipeSecurity, DaclIsPresentAndNotDefaulted) {
-    PipeSecurity security;
     BOOL present = FALSE;
     BOOL defaulted = FALSE;
-
     PACL dacl = DaclOf(security, present, defaulted);
-
     // A missing DACL is not an empty one: it grants everyone everything
     EXPECT_TRUE(present);
     EXPECT_NE(dacl, nullptr);
     EXPECT_FALSE(defaulted);
 }
 
-TEST(PipeSecurity, GrantsExactlyTwoAllowAces) {
-    PipeSecurity security;
-
-    const auto aces = AcesOf(security);
-
-    ASSERT_EQ(aces.size(), 2u);
-    for (const auto& ace : aces) {
-        EXPECT_EQ(ace.type, ACCESS_ALLOWED_ACE_TYPE);
-    }
-}
-
-TEST(PipeSecurity, WithholdsCreatePipeInstance) {
-    PipeSecurity security;
-
-    const auto aces = AcesOf(security);
-
-    // FILE_APPEND_DATA and FILE_CREATE_PIPE_INSTANCE are the same bit, so
-    // granting the convenient combined right would let a client squat the name
-    ASSERT_FALSE(aces.empty());
-    for (const auto& ace : aces) {
-        EXPECT_EQ(ace.mask & FILE_APPEND_DATA, 0u);
-        EXPECT_EQ(ace.mask & FILE_CREATE_PIPE_INSTANCE, 0u);
-        EXPECT_NE(ace.mask & FILE_GENERIC_WRITE, FILE_GENERIC_WRITE);
-    }
-}
-
-TEST(PipeSecurity, GrantsOnlyTheExpectedRights) {
-    PipeSecurity security;
-
-    const auto aces = AcesOf(security);
-
-    ASSERT_FALSE(aces.empty());
-    for (const auto& ace : aces) {
-        EXPECT_EQ(ace.mask, kExpectedRights);
-    }
-}
-
-TEST(PipeSecurity, TrusteesAreThisLogonSessionAndSystem) {
+TEST(PipeSecurity, OnlyThisLogonAndSystemGetTheIntendedRights) {
     PipeSecurity security;
     const auto groups = ProcessTokenGroups();
     PSID logon_sid = LogonSidWithin(groups);
@@ -171,6 +129,13 @@ TEST(PipeSecurity, TrusteesAreThisLogonSessionAndSystem) {
     bool has_logon = false;
     bool has_system = false;
     for (const auto& ace : aces) {
+        EXPECT_EQ(ace.type, ACCESS_ALLOWED_ACE_TYPE);
+        EXPECT_EQ(ace.mask, kExpectedRights);
+        // FILE_APPEND_DATA and FILE_CREATE_PIPE_INSTANCE are the same bit, so
+        // granting the convenient combined right would let a client squat the name
+        EXPECT_EQ(ace.mask & FILE_APPEND_DATA, 0u);
+        EXPECT_EQ(ace.mask & FILE_CREATE_PIPE_INSTANCE, 0u);
+        EXPECT_NE(ace.mask & FILE_GENERIC_WRITE, FILE_GENERIC_WRITE);
         ASSERT_NE(ace.sid, nullptr);
         ASSERT_TRUE(IsValidSid(ace.sid));
         if (EqualSid(ace.sid, logon_sid)) has_logon = true;

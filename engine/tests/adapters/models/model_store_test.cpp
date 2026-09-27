@@ -5,8 +5,11 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <map>
+#include <functional>
 #include <string>
+#include <vector>
+
+#include "adapters/system/sha256.hpp"
 
 namespace clinicavt::models {
 namespace {
@@ -35,37 +38,62 @@ struct TempRoot {
 };
 
 void WriteFile(const std::filesystem::path& path, const std::string& content) {
+    std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary);
     out << content;
 }
 
-void MakeModel(const std::filesystem::path& root, const std::string& id, const std::string& task,
-               const std::string& tier, const std::string& weights_hash = kHelloHash,
-               const std::string& manifest_version = "1") {
-    const auto dir = root / id;
-    std::filesystem::create_directories(dir);
+std::string Files(const char* name, const char* hash) {
+    return std::string(R"({")") + name + R"(": ")" + hash + R"("})";
+}
+
+// A staged model: weights.bin holding "hello" and a manifest with the
+// required fields. Rows vary what they need
+struct Manifest {
+    std::string id = "m";
+    std::string task = "asr";
+    std::string tier = "default";
+    std::string runtime = R"({"device": "GPU"})";
+    std::string files = Files("weights.bin", kHelloHash);
+    std::string extra;  // further top-level fields, each with a leading comma
+};
+
+std::filesystem::path Stage(const std::filesystem::path& root, const Manifest& m) {
+    const auto dir = root / m.id;
     WriteFile(dir / "weights.bin", "hello");
-    WriteFile(dir / "manifest.json",
-              "{\"manifestVersion\": " + manifest_version + ", \"id\": \"" + id +
-                  "\", \"task\": \"" + task + "\", \"tier\": \"" + tier +
-                  "\", \"licence\": \"MIT\", \"runtime\": {\"device\": \"GPU\"},"
-                  "\"files\": {\"weights.bin\": \"" +
-                  weights_hash + "\"}}");
+    WriteFile(dir / "manifest.json", R"({"manifestVersion": 1, "id": ")" + m.id +
+                                         R"(", "task": ")" + m.task + R"(", "tier": ")" + m.tier +
+                                         R"(", "licence": "MIT", "runtime": )" + m.runtime +
+                                         R"(, "files": )" + m.files + m.extra + "}");
+    return dir;
 }
 
-TEST(ModelStore, AMissingOrEmptyRootIsAValidEmptyStore) {
-    TempRoot root;
-    EXPECT_TRUE(ModelStore(root.path / "nowhere").List().empty());
-    EXPECT_TRUE(ModelStore(root.path).List().empty());
+// What a refused check says, empty when it passes
+std::string Refusal(const std::function<void()>& check) {
+    try {
+        check();
+    } catch (const std::runtime_error& e) {
+        return e.what();
+    }
+    return "";
 }
 
-TEST(ModelStore, EnumeratesStagedManifests) {
+bool Says(const std::string& message, const std::string& part) {
+    return message.find(part) != std::string::npos;
+}
+
+TEST(ModelStore, AScanListsOnlyManifestedModelsById) {
     TempRoot root;
-    MakeModel(root.path, "whisper-turbo-int8", "asr", "default");
-    MakeModel(root.path, "silero-vad", "vad", "default");
+    EXPECT_TRUE(ModelStore(root.path / "nowhere").List().empty()) << "a missing root";
+    EXPECT_TRUE(ModelStore(root.path).List().empty()) << "an empty root";
+
+    WriteFile(root.path / "half-staged" / "weights.bin", "hello");
+    WriteFile(root.path / "stray.txt", "not a model");
+    Stage(root.path, {.id = "whisper-turbo-int8"});
+    Stage(root.path, {.id = "silero-vad", .task = "vad"});
 
     const ModelStore store(root.path);
-    ASSERT_EQ(store.List().size(), 2u);
+    ASSERT_EQ(store.List().size(), 2u) << "a directory without a manifest is invisible";
     EXPECT_EQ(store.List()[0].id, "silero-vad");
     EXPECT_EQ(store.List()[1].id, "whisper-turbo-int8");
     EXPECT_EQ(store.List()[1].task, "asr");
@@ -73,9 +101,11 @@ TEST(ModelStore, EnumeratesStagedManifests) {
     EXPECT_EQ(store.List()[1].licence, "MIT");
 }
 
+// A second spelling of the root would mean a second compile cache, and a
+// recompile of every model that takes minutes for the largest
 TEST(ModelStore, EverySpellingOfTheRootGivesOneModelDirectory) {
     TempRoot root;
-    MakeModel(root.path, "silero-vad", "vad", "default");
+    Stage(root.path, {.id = "silero-vad", .task = "vad"});
     const auto expected = ModelStore(root.path).List().at(0).dir;
 
     const auto roundabout = (root.path / "silero-vad" / "..").generic_string();
@@ -90,253 +120,131 @@ TEST(ModelStore, EverySpellingOfTheRootGivesOneModelDirectory) {
     EXPECT_EQ(through_link, expected);
 }
 
-TEST(ModelStore, ADirectoryWithoutAManifestIsInvisible) {
+TEST(ModelStore, VerifyAcceptsEveryWellStagedLayout) {
     TempRoot root;
-    std::filesystem::create_directories(root.path / "half-staged");
-    WriteFile(root.path / "half-staged" / "weights.bin", "hello");
-    WriteFile(root.path / "stray.txt", "not a model");
+    Stage(root.path, {.id = "plain"});
+    Stage(root.path,
+          {.id = "uppercase-hash",
+           .files = Files("weights.bin",
+                          "2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824")});
+    const auto nested =
+        Stage(root.path, {.id = "subdirectory", .files = Files("sub/config.json", kEmptyHash)});
+    WriteFile(nested / "sub" / "config.json", "");
+    const auto empty =
+        Stage(root.path, {.id = "empty-file", .files = Files("weights.bin", kEmptyHash)});
+    WriteFile(empty / "weights.bin", "");
+    WriteFile(Stage(root.path, {.id = "unlisted-extra"}) / "notes.txt", "left by a human");
 
-    EXPECT_TRUE(ModelStore(root.path).List().empty());
-}
-
-TEST(ModelStore, VerifyPassesWhenEveryHashMatches) {
-    TempRoot root;
-    MakeModel(root.path, "m", "asr", "default");
     const ModelStore store(root.path);
-    EXPECT_NO_THROW(store.Verify(store.List()[0]));
-    EXPECT_NO_THROW(store.VerifyHashes(store.List()[0]));
+    ASSERT_EQ(store.List().size(), 5u);
+    for (const auto& model : store.List()) {
+        EXPECT_EQ(Refusal([&] { store.Verify(model); }), "") << model.id;
+        for (const auto& [name, hash] : model.file_hashes) {
+            EXPECT_EQ(system::Sha256File(model.dir / name), hash)
+                << model.id << ": the hash is kept lower-case, as the tools compute it";
+        }
+    }
 }
 
 // Integrity is established when a model arrives. The load-time check reads
-// no bytes, so it is free at any size. The full hash stays for the tools
-TEST(ModelStore, TheLoadTimeCheckReadsNoBytesTheFullCheckDoes) {
+// no bytes, so it is free at any size
+TEST(ModelStore, VerifyRefusesAMissingOrChangedFileByName) {
     TempRoot root;
-    MakeModel(root.path, "m", "asr", "default");
-    WriteFile(root.path / "m" / "weights.bin", "jello");  // same size, different bytes
-
+    std::filesystem::remove(Stage(root.path, {.id = "missing"}) / "weights.bin");
+    const auto sized =
+        Stage(root.path, {.id = "sized", .extra = R"(, "bytes": {"weights.bin": 5})"});
+    const auto changed = Stage(root.path, {.id = "changed"});
     const ModelStore store(root.path);
-    EXPECT_NO_THROW(store.Verify(store.List()[0]));
-    try {
-        store.VerifyHashes(store.List()[0]);
-        FAIL() << "the full check passed on changed content";
-    } catch (const std::runtime_error& e) {
-        EXPECT_NE(std::string(e.what()).find("weights.bin"), std::string::npos);
+    ASSERT_EQ(store.List().size(), 3u);
+    const ModelInfo& changed_model = store.List()[0];
+    const ModelInfo& missing_model = store.List()[1];
+    const ModelInfo& sized_model = store.List()[2];
+
+    EXPECT_TRUE(Says(Refusal([&] { store.Verify(missing_model); }), "missing file weights.bin"));
+
+    EXPECT_EQ(Refusal([&] { store.Verify(sized_model); }), "");
+    WriteFile(sized / "weights.bin", "hel");
+    const auto truncated = Refusal([&] { store.Verify(sized_model); });
+    EXPECT_TRUE(Says(truncated, "weights.bin") && Says(truncated, "3 bytes"))
+        << "a manifest that records sizes makes truncation loud at load: " << truncated;
+
+    WriteFile(changed / "weights.bin", "jello");  // same size, different bytes
+    EXPECT_EQ(Refusal([&] { store.Verify(changed_model); }), "") << "the load check reads no bytes";
+}
+
+// A manifest this build cannot read is a corrupt one, refused outright at scan
+TEST(ModelStore, AManifestThisBuildCannotReadIsRefusedAtScan) {
+    const std::string head = R"({"manifestVersion": 1, "id": "broken")";
+    const std::string body = R"(, "task": "note", "tier": "default", "licence": "MIT", "files": )" +
+                             Files("weights.bin", kHelloHash) + R"(, "runtime": )";
+    const std::vector<std::pair<const char*, std::string>> rows = {
+        {"a newer manifest version",
+         R"({"manifestVersion": 2, "id": "broken")" + body + R"({"device": "GPU"}})"},
+        {"malformed JSON", "{not json"},
+        {"missing required fields", head + R"(, "task": "asr"})"},
+        {"an unknown pipeline", head + body + R"({"device": "GPU", "pipeline": "diffusion"}})"},
+        {"a nested property",
+         head + body + R"({"device": "GPU", "properties": {"NESTED": {"a": 1}}}})"},
+        {"array properties", head + body + R"({"device": "GPU", "properties": [1, 2]}})"},
+    };
+    for (const auto& [what, manifest] : rows) {
+        TempRoot root;
+        WriteFile(root.path / "broken" / "weights.bin", "hello");
+        WriteFile(root.path / "broken" / "manifest.json", manifest);
+
+        const auto refusal = Refusal([&] { ModelStore store(root.path); });
+        EXPECT_TRUE(Says(refusal, "broken"))
+            << what << " must be refused naming its directory, got: " << refusal;
     }
 }
 
-// A manifest that records sizes makes truncation and replacement loud at load
-TEST(ModelStore, AWrongSizeIsRefusedByNameWhenTheManifestRecordsSizes) {
+TEST(ModelStore, ResolvePicksByTaskAndTierAndOtherwiseNamesWhatIsInstalled) {
     TempRoot root;
-    const auto dir = root.path / "m";
-    std::filesystem::create_directories(dir);
-    WriteFile(dir / "weights.bin", "hello");
-    WriteFile(
-        dir / "manifest.json",
-        std::string(R"({"manifestVersion": 1, "id": "m", "task": "asr", "tier": "default",)") +
-            R"( "licence": "MIT", "runtime": {"device": "GPU"}, "files": {"weights.bin": ")" +
-            kHelloHash + R"("}, "bytes": {"weights.bin": 5}})");
-    const ModelStore store(root.path);
-    EXPECT_NO_THROW(store.Verify(store.List()[0]));
-
-    WriteFile(dir / "weights.bin", "hel");  // truncated
-    try {
-        store.Verify(store.List()[0]);
-        FAIL() << "a truncated file passed the load-time check";
-    } catch (const std::runtime_error& e) {
-        const std::string what = e.what();
-        EXPECT_NE(what.find("weights.bin"), std::string::npos);
-        EXPECT_NE(what.find("3 bytes"), std::string::npos);
-    }
-}
-
-TEST(ModelStore, AMissingFileIsRefusedByName) {
-    TempRoot root;
-    MakeModel(root.path, "m", "asr", "default");
-    std::filesystem::remove(root.path / "m" / "weights.bin");
-
-    const ModelStore store(root.path);
-    try {
-        store.Verify(store.List()[0]);
-        FAIL() << "verification passed with a listed file missing";
-    } catch (const std::runtime_error& e) {
-        EXPECT_NE(std::string(e.what()).find("missing file weights.bin"), std::string::npos);
-    }
-}
-
-TEST(ModelStore, AnUnlistedExtraFileIsTolerated) {
-    TempRoot root;
-    MakeModel(root.path, "m", "asr", "default");
-    WriteFile(root.path / "m" / "notes.txt", "left by a human");
-
-    const ModelStore store(root.path);
-    EXPECT_NO_THROW(store.Verify(store.List()[0]));
-}
-
-TEST(ModelStore, UppercaseManifestHashesStillVerify) {
-    TempRoot root;
-    MakeModel(root.path, "m", "asr", "default",
-              "2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824");
-    const ModelStore store(root.path);
-    EXPECT_NO_THROW(store.Verify(store.List()[0]));
-}
-
-TEST(ModelStore, FilesInSubdirectoriesVerify) {
-    TempRoot root;
-    std::filesystem::create_directories(root.path / "m" / "sub");
-    WriteFile(root.path / "m" / "sub" / "config.json", "");
-    WriteFile(root.path / "m" / "manifest.json",
-              std::string("{\"manifestVersion\": 1, \"id\": \"m\", \"task\": \"asr\","
-                          " \"tier\": \"default\", \"licence\": \"MIT\","
-                          " \"runtime\": {\"device\": \"GPU\"},"
-                          " \"files\": {\"sub/config.json\": \"") +
-                  kEmptyHash + "\"}}");
-
-    const ModelStore store(root.path);
-    EXPECT_NO_THROW(store.Verify(store.List()[0]));
-}
-
-TEST(ModelStore, AnEmptyFileHashesCorrectly) {
-    TempRoot root;
-    MakeModel(root.path, "m", "asr", "default", kEmptyHash);
-    WriteFile(root.path / "m" / "weights.bin", "");
-    const ModelStore store(root.path);
-    EXPECT_NO_THROW(store.Verify(store.List()[0]));
-}
-
-TEST(ModelStore, ANewerManifestVersionIsRefused) {
-    TempRoot root;
-    MakeModel(root.path, "m", "asr", "default", kHelloHash, "2");
-    EXPECT_THROW(ModelStore{root.path}, std::runtime_error);
-}
-
-TEST(ModelStore, AMalformedManifestNamesItsDirectory) {
-    TempRoot root;
-    std::filesystem::create_directories(root.path / "broken");
-    WriteFile(root.path / "broken" / "manifest.json", "{not json");
-
-    try {
-        ModelStore store(root.path);
-        FAIL() << "a corrupt manifest must be a loud failure";
-    } catch (const std::runtime_error& e) {
-        EXPECT_NE(std::string(e.what()).find("broken"), std::string::npos);
-    }
-}
-
-TEST(ModelStore, AManifestMissingRequiredFieldsIsRefused) {
-    TempRoot root;
-    std::filesystem::create_directories(root.path / "partial");
-    WriteFile(root.path / "partial" / "manifest.json",
-              R"({"manifestVersion": 1, "id": "partial", "task": "asr"})");
-
-    EXPECT_THROW(ModelStore{root.path}, std::runtime_error);
-}
-
-TEST(ModelStore, ResolvePicksByTaskAndTier) {
-    TempRoot root;
-    MakeModel(root.path, "whisper-turbo-int8", "asr", "default");
-    MakeModel(root.path, "whisper-large-int8", "asr", "accuracy");
+    Stage(root.path, {.id = "whisper-turbo-int8"});
+    Stage(root.path, {.id = "whisper-large-int8", .tier = "accuracy"});
+    Stage(root.path, {.id = "one", .task = "vad"});
+    Stage(root.path, {.id = "two", .task = "vad"});
 
     const ModelStore store(root.path);
     EXPECT_EQ(store.Resolve("asr", "default").id, "whisper-turbo-int8");
     EXPECT_EQ(store.Resolve("asr", "accuracy").id, "whisper-large-int8");
-}
 
-TEST(ModelStore, AnAmbiguousRoleIsRefusedNamingBoth) {
-    TempRoot root;
-    MakeModel(root.path, "one", "asr", "default");
-    MakeModel(root.path, "two", "asr", "default");
+    const auto ambiguous = Refusal([&] { store.Resolve("vad", "default"); });
+    EXPECT_TRUE(Says(ambiguous, "one") && Says(ambiguous, "two"))
+        << "two models claiming one role are refused naming both: " << ambiguous;
 
-    const ModelStore store(root.path);
-    try {
-        store.Resolve("asr", "default");
-        FAIL() << "two models claiming one role must be refused";
-    } catch (const std::runtime_error& e) {
-        const std::string what = e.what();
-        EXPECT_NE(what.find("one"), std::string::npos);
-        EXPECT_NE(what.find("two"), std::string::npos);
-    }
-}
-
-TEST(ModelStore, AnAbsentRoleReportsWhatIsInstalled) {
-    TempRoot root;
-    MakeModel(root.path, "silero-vad", "vad", "default");
-
-    const ModelStore store(root.path);
-    try {
-        store.Resolve("asr", "default");
-        FAIL() << "an absent role must be refused";
-    } catch (const std::runtime_error& e) {
-        EXPECT_NE(std::string(e.what()).find("silero-vad"), std::string::npos);
-    }
+    EXPECT_TRUE(Says(Refusal([&] { store.Resolve("note", "default"); }), "whisper-turbo-int8"))
+        << "an absent role names what is installed";
 }
 
 // How a model loads is the manifest's fact: absent means the LLM pipeline
-// with no properties, so every manifest written before the fields existed
-// reads exactly as it did
-TEST(ModelStore, RuntimeFieldsDefaultToTheLlmPipeline) {
+// with no properties, so a manifest written before the fields existed reads
+// exactly as it did
+TEST(ModelStore, RuntimeFieldsAreReadAndDefaultToTheLlmPipeline) {
     TempRoot root;
-    MakeModel(root.path, "qwen3.5-9b-int4", "note", "default");
+    Stage(root.path, {.id = "qwen3.5-9b-int4", .task = "note"});
+    Stage(root.path,
+          {.id = "qwen3.6-35b-a3b-int4",
+           .task = "note",
+           .tier = "accuracy",
+           .runtime = R"({"device": "GPU", "pipeline": "vlm", "properties": )"
+                      R"({"ACTIVATIONS_SCALE_FACTOR": 32, "KV_CACHE_PRECISION": "u8"}})"});
+    Stage(root.path, {.id = "gte-large-int8",
+                      .task = "embedding",
+                      .runtime = R"({"device": "CPU", "pipeline": "embedding"})"});
 
     const ModelStore store(root.path);
-    const auto& info = store.Resolve("note", "default");
-    EXPECT_EQ(info.pipeline, "llm");
-    EXPECT_TRUE(info.properties.is_object());
-    EXPECT_TRUE(info.properties.empty());
-}
+    const auto& plain = store.Resolve("note", "default");
+    EXPECT_EQ(plain.pipeline, "llm");
+    EXPECT_TRUE(plain.properties.is_object());
+    EXPECT_TRUE(plain.properties.empty());
 
-TEST(ModelStore, RuntimePipelineAndPropertiesAreRead) {
-    TempRoot root;
-    const auto dir = root.path / "qwen3.6-35b-a3b-int4";
-    std::filesystem::create_directories(dir);
-    WriteFile(dir / "weights.bin", "hello");
-    WriteFile(dir / "manifest.json",
-              R"({"manifestVersion": 1, "id": "qwen3.6-35b-a3b-int4", "task": "note",)"
-              R"( "tier": "accuracy", "licence": "Apache-2.0",)"
-              R"( "runtime": {"device": "GPU", "pipeline": "vlm",)"
-              R"(  "properties": {"ACTIVATIONS_SCALE_FACTOR": 32, "KV_CACHE_PRECISION": "u8"}},)"
-              R"( "files": {"weights.bin": ")" +
-                  std::string(kHelloHash) + R"("}})");
+    const auto& vlm = store.Resolve("note", "accuracy");
+    EXPECT_EQ(vlm.pipeline, "vlm");
+    EXPECT_EQ(vlm.properties["ACTIVATIONS_SCALE_FACTOR"], 32);
+    EXPECT_EQ(vlm.properties["KV_CACHE_PRECISION"], "u8");
 
-    const ModelStore store(root.path);
-    const auto& info = store.Resolve("note", "accuracy");
-    EXPECT_EQ(info.pipeline, "vlm");
-    EXPECT_EQ(info.properties["ACTIVATIONS_SCALE_FACTOR"], 32);
-    EXPECT_EQ(info.properties["KV_CACHE_PRECISION"], "u8");
-}
-
-TEST(ModelStore, TheEmbeddingPipelineIsAccepted) {
-    TempRoot root;
-    const auto dir = root.path / "gte-large-int8";
-    std::filesystem::create_directories(dir);
-    WriteFile(dir / "weights.bin", "hello");
-    WriteFile(dir / "manifest.json",
-              R"({"manifestVersion": 1, "id": "gte-large-int8", "task": "embedding",)"
-              R"( "tier": "default", "licence": "Apache-2.0",)"
-              R"( "runtime": {"device": "CPU", "pipeline": "embedding"},)"
-              R"( "files": {"weights.bin": ")" +
-                  std::string(kHelloHash) + R"("}})");
-
-    const ModelStore store(root.path);
     EXPECT_EQ(store.Resolve("embedding", "default").pipeline, "embedding");
-}
-
-// A pipeline this build cannot construct, or a property it cannot pass, is
-// a corrupt manifest for this build, refused outright at scan
-TEST(ModelStore, AnUnknownPipelineOrANonScalarPropertyIsRefused) {
-    for (const char* runtime : {R"({"device": "GPU", "pipeline": "diffusion"})",
-                                R"({"device": "GPU", "properties": {"NESTED": {"a": 1}}})",
-                                R"({"device": "GPU", "properties": [1, 2]})"}) {
-        TempRoot root;
-        const auto dir = root.path / "broken";
-        std::filesystem::create_directories(dir);
-        WriteFile(dir / "weights.bin", "hello");
-        WriteFile(dir / "manifest.json",
-                  std::string(R"({"manifestVersion": 1, "id": "broken", "task": "note",)") +
-                      R"( "tier": "default", "licence": "MIT", "runtime": )" + runtime +
-                      R"(, "files": {"weights.bin": ")" + kHelloHash + R"("}})");
-
-        EXPECT_THROW(ModelStore{root.path}, std::runtime_error) << runtime;
-    }
 }
 
 }  // namespace

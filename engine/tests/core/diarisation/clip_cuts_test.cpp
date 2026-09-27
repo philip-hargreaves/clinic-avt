@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <string>
 #include <vector>
 
 namespace clinicavt::diar {
@@ -16,27 +18,23 @@ std::vector<float> Probabilities() {
     return p;
 }
 
-TEST(SnapClipCuts, AnEdgeNearAPauseMovesOntoThePause) {
-    const std::vector<std::uint64_t> cuts{41 * 512 + 3000};  // 190 ms after the pause
-    const auto kept = SnapClipCuts(cuts, Probabilities(), {});
-    ASSERT_EQ(kept.size(), 1u);
-    EXPECT_EQ(kept[0], 41u * 512u);
-}
-
-TEST(SnapClipCuts, AnEdgeWithNoPauseNearbyIsDropped) {
-    const std::vector<std::uint64_t> cuts{120 * 512};
-    EXPECT_TRUE(SnapClipCuts(cuts, Probabilities(), {}).empty());
-}
-
-TEST(SnapClipCuts, AnEdgeTooCloseToAnotherCutIsDropped) {
-    const std::vector<std::uint64_t> cuts{41 * 512};
-    const std::vector<std::uint64_t> seg{41 * 512 + 4000};  // 250 ms away
-    EXPECT_TRUE(SnapClipCuts(cuts, Probabilities(), seg).empty());
-}
-
-TEST(SnapClipCuts, TwoEdgesOnOnePauseKeepOne) {
-    const std::vector<std::uint64_t> cuts{41 * 512 - 2000, 41 * 512 + 2000};
-    EXPECT_EQ(SnapClipCuts(cuts, Probabilities(), {}).size(), 1u);
+TEST(SnapClipCuts, EdgesSnapOntoAPauseOrAreDropped) {
+    struct Case {
+        std::string name;
+        std::vector<std::uint64_t> cuts;
+        std::vector<std::uint64_t> seg;
+        std::vector<std::uint64_t> kept;
+    };
+    const std::vector<Case> cases = {
+        {"an edge 190 ms after the pause moves onto it", {41 * 512 + 3000}, {}, {41 * 512}},
+        {"an edge with no pause nearby is dropped", {120 * 512}, {}, {}},
+        {"an edge 250 ms from a segmenter cut is dropped", {41 * 512}, {41 * 512 + 4000}, {}},
+        {"two edges on one pause keep one", {41 * 512 - 2000, 41 * 512 + 2000}, {}, {41 * 512}},
+    };
+    for (const auto& c : cases) {
+        SCOPED_TRACE(c.name);
+        EXPECT_EQ(SnapClipCuts(c.cuts, Probabilities(), c.seg), c.kept);
+    }
 }
 
 }  // namespace

@@ -5,19 +5,15 @@
 #include <cmath>
 #include <cstdio>
 #include <exception>
-#include <format>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
+#include "core/common/iso8601.hpp"
 #include "ports/audio_source.hpp"
 
 namespace clinicavt::session {
 namespace {
-
-std::string Iso8601(std::chrono::sys_seconds at) {
-    return std::format("{:%FT%T}Z", at);
-}
 
 // A hook failing never ends the playback
 void Call(const std::function<void(const store::SessionId&)>& hook, const store::SessionId& id,

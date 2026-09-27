@@ -9,6 +9,8 @@
 #include <system_error>
 
 #include "adapters/guidance/folder_scan.hpp"
+#include "adapters/system/sha256.hpp"
+#include "core/common/utf8.hpp"
 #include "core/guidance/document_units.hpp"
 #include "core/guidance/patient_screen.hpp"
 #include "ports/store_error.hpp"
@@ -22,8 +24,6 @@ constexpr auto kProgressEvery = std::chrono::milliseconds(250);
 constexpr std::size_t kDrawnPages = 8;
 constexpr int kRenderDpi = 144;
 constexpr int kMaxDepth = 3;
-
-constexpr const char* kPdf = "application/pdf";
 
 constexpr const char* kReadMeText =
     "Guidelines for ClinicAVT\n\n"
@@ -110,7 +110,7 @@ DocumentIngest::~DocumentIngest() {
 }
 
 std::filesystem::path DocumentIngest::Absolute(const std::string& relative) const {
-    return folder_ / std::filesystem::path(std::u8string(relative.begin(), relative.end()));
+    return folder_ / utf8::ToPath(relative);
 }
 
 bool DocumentIngest::Supported(const std::string& mime) const {
@@ -120,7 +120,7 @@ bool DocumentIngest::Supported(const std::string& mime) const {
 Accepted DocumentIngest::Add(const std::vector<std::filesystem::path>& paths) {
     Accepted out;
     const auto skip = [&out](const std::filesystem::path& path, const char* reason) {
-        out.skipped.push_back({Utf8(path), reason});
+        out.skipped.push_back({utf8::FromPath(path), reason});
     };
     std::set<std::string> fresh;
     std::error_code ec;
@@ -149,7 +149,7 @@ Accepted DocumentIngest::Add(const std::vector<std::filesystem::path>& paths) {
                 continue;
             }
         }
-        fresh.insert(Utf8(path.filename()));
+        fresh.insert(utf8::FromPath(path.filename()));
     }
     Scan(fresh);
     std::lock_guard<std::mutex> lock(store_mutex_);
@@ -337,8 +337,8 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
                 } catch (const store::StoreError&) {  // NOLINT(bugprone-empty-catch)
                 }
             }
-            const auto held_now =
-                index_.Hold({path, 0, seen.size, seen.modified}, Sha256Hex(bytes), Mime(full));
+            const auto held_now = index_.Hold({path, 0, seen.size, seen.modified},
+                                              system::Sha256Hex(bytes), Mime(full));
             if (held_now.released != 0 && held_now.released == previous.id) {
                 changed.push_back(Removed(previous));
             }

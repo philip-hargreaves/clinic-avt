@@ -22,6 +22,7 @@
 
 #include "adapters/audio/capture_errors.hpp"
 #include "adapters/audio/capture_timeline.hpp"
+#include "adapters/system/com_apartment.hpp"
 
 namespace clinicavt::audio {
 
@@ -65,16 +66,6 @@ bool ConsentDenied() {
     return ConsentStoreValue(store + L"\\NonPackaged") == L"Deny";
 }
 
-struct ComApartment {
-    HRESULT hr;
-    ComApartment() : hr(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
-    ~ComApartment() {
-        if (SUCCEEDED(hr)) CoUninitialize();
-    }
-    ComApartment(const ComApartment&) = delete;
-    ComApartment& operator=(const ComApartment&) = delete;
-};
-
 struct OwnedHandle {
     HANDLE handle = nullptr;
     ~OwnedHandle() {
@@ -117,7 +108,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
         return {SourceEndReason::kFailed, "stop event could not be created"};
     }
 
-    const ComApartment com;
+    const system::ComApartment com;
     if (FAILED(com.hr)) {
         return Fail("CoInitializeEx", com.hr);
     }
@@ -254,8 +245,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
                 return Fail("GetBuffer", hr);
             }
 
-            const std::uint64_t lost = timeline.OnPacket(
-                position, frames, (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) != 0);
+            const std::uint64_t lost = timeline.OnPacket(position, frames);
             if (frames > packet.size()) {
                 packet.resize(frames);
             }

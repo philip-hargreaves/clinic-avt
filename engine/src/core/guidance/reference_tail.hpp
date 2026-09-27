@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <vector>
 
-#include "core/guidance/guidance_query.hpp"
 #include "core/guidance/page_text.hpp"
 
 namespace clinicavt::guidance {

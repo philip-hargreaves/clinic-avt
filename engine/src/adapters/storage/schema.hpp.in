@@ -1,28 +1,12 @@
 #pragma once
 
-// Generated at configure time from src/adapters/storage/schema/*.sql;
-// edit the .sql files, not this header
+// Generated at configure time from src/adapters/storage/schema/clinicavt.sql;
+// edit the .sql file, not this header
 
 namespace clinicavt::store {
 
 inline constexpr const char* kSchemaSql = R"sql(
 @CLINICAVT_SCHEMA_SQL@
-)sql";
-
-inline constexpr const char* kMigrate2To3Sql = R"sql(
-@CLINICAVT_MIGRATE_2_TO_3_SQL@
-)sql";
-
-inline constexpr const char* kMigrate3To4Sql = R"sql(
-@CLINICAVT_MIGRATE_3_TO_4_SQL@
-)sql";
-
-inline constexpr const char* kMigrate4To5Sql = R"sql(
-@CLINICAVT_MIGRATE_4_TO_5_SQL@
-)sql";
-
-inline constexpr const char* kMigrate5To6Sql = R"sql(
-@CLINICAVT_MIGRATE_5_TO_6_SQL@
 )sql";
 
 }  // namespace clinicavt::store

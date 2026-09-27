@@ -12,12 +12,7 @@ namespace {
 
 std::vector<std::vector<float>> Normalised(const std::vector<std::vector<float>>& embeddings) {
     auto out = embeddings;
-    for (auto& embedding : out) {
-        double norm = 0.0;
-        for (const float x : embedding) norm += static_cast<double>(x) * x;
-        norm = std::sqrt(norm) + 1e-9;
-        for (float& x : embedding) x = static_cast<float>(x / norm);
-    }
+    for (auto& embedding : out) Normalise(embedding);
     return out;
 }
 

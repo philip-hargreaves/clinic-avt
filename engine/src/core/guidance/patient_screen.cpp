@@ -44,7 +44,7 @@ bool LooksLikePatientData(std::string_view text) {
         // The app marks its own note and sheet exports, so a filed one is refused
         "clinicavt export"};
     for (const char* phrase : kPhrases) {
-        if (lower.find(phrase) != std::string::npos) return true;
+        if (strings::Contains(lower, phrase)) return true;
     }
     return HoldsNhsNumber(text);
 }

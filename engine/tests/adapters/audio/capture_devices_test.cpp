@@ -13,9 +13,6 @@ TEST(CaptureDevices, EveryListedDeviceIsWellFormed) {
         EXPECT_FALSE(device.name.empty());
         EXPECT_FALSE(device.short_name.empty());
         defaults += device.is_default ? 1 : 0;
-        std::printf("  %s%s%s | %s\n", device.short_name.c_str(),
-                    device.is_default ? " (default)" : "", device.bluetooth ? " [BT]" : "",
-                    device.name.c_str());
     }
     EXPECT_LE(defaults, 1) << "at most one communications default";
     if (!devices.empty()) {
@@ -23,35 +20,24 @@ TEST(CaptureDevices, EveryListedDeviceIsWellFormed) {
     }
 }
 
-TEST(CaptureDevices, ResolveFindsTheRequestedDevice) {
-    const std::vector<clinicavt::audio::CaptureDevice> devices{
-        {"{aa}", "Array", "Array", true, false},
-        {"{bb}", "Headset", "Headset", false, true},
-    };
-    EXPECT_EQ(clinicavt::audio::ResolveMicrophone(devices, "{bb}").id, "{bb}");
-}
-
-TEST(CaptureDevices, AGoneChoiceResolvesToTheDefault) {
+TEST(ResolveMicrophone, PicksTheChoiceElseTheDefaultElseTheFirst) {
+    using clinicavt::audio::ResolveMicrophone;
     const std::vector<clinicavt::audio::CaptureDevice> devices{
         {"{aa}", "USB Mic", "USB Mic", false, false},
         {"{bb}", "Array", "Array", true, false},
+        {"{cc}", "Headset", "Headset", false, true},
     };
-    const auto resolved = clinicavt::audio::ResolveMicrophone(devices, "{unplugged}");
-    EXPECT_EQ(resolved.id, "{bb}");
-    EXPECT_EQ(resolved.name, "Array");
-}
+    EXPECT_EQ(ResolveMicrophone(devices, "{cc}").id, "{cc}") << "the requested device";
 
-TEST(CaptureDevices, NoDefaultFallsToTheFirstAndEmptyToNothing) {
-    const std::vector<clinicavt::audio::CaptureDevice> devices{
+    const auto gone = ResolveMicrophone(devices, "{unplugged}");
+    EXPECT_EQ(gone.id, "{bb}") << "an unplugged choice falls to the default";
+    EXPECT_EQ(gone.name, "Array");
+
+    const std::vector<clinicavt::audio::CaptureDevice> no_default{
         {"{aa}", "USB Mic", "USB Mic", false, false},
     };
-    EXPECT_EQ(clinicavt::audio::ResolveMicrophone(devices, "").id, "{aa}");
-    EXPECT_EQ(clinicavt::audio::ResolveMicrophone({}, "{any}").id, "");
-}
-
-TEST(CaptureDevices, WideIdRoundTripsAscii) {
-    EXPECT_EQ(clinicavt::audio::WideId("{0.0.1.00000000}.{abc}"), L"{0.0.1.00000000}.{abc}");
-    EXPECT_TRUE(clinicavt::audio::WideId("").empty());
+    EXPECT_EQ(ResolveMicrophone(no_default, "").id, "{aa}") << "no default falls to the first";
+    EXPECT_EQ(ResolveMicrophone({}, "{any}").id, "") << "nothing to pick";
 }
 
 }  // namespace

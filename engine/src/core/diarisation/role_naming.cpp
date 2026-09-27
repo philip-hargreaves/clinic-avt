@@ -5,7 +5,10 @@
 #include <cmath>
 #include <numeric>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include "core/common/strings.hpp"
 
 namespace clinicavt::diar {
 
@@ -13,19 +16,9 @@ namespace {
 
 // Lowercase tokens, apostrophes kept, so "i'm" and "we'll" compare exactly
 std::vector<std::string> WordsOf(const std::string& text) {
-    std::vector<std::string> words;
-    std::string word;
-    for (const char raw : text) {
-        const char c = static_cast<char>(std::tolower(static_cast<unsigned char>(raw)));
-        if ((c >= 'a' && c <= 'z') || c == '\'') {
-            word.push_back(c);
-        } else if (!word.empty()) {
-            words.push_back(word);
-            word.clear();
-        }
-    }
-    if (!word.empty()) words.push_back(word);
-    return words;
+    return strings::LowerTokens(text, [](unsigned char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '\'';
+    });
 }
 
 bool In(const std::vector<std::string>& set, const std::string& word) {
@@ -108,8 +101,8 @@ double LexicalDoctorScore(const std::string& text) {
     return bonus + 7.0 * (second / n) - 11.0 * (first / n);
 }
 
-RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
-                     const std::vector<double>& anchor_similarity) {
+RoleResult NameRoles(const std::vector<LabelledSlice>& turns, const std::vector<std::string>& texts,
+                     int cluster_count, const std::vector<double>& anchor_similarity) {
     RoleResult result;
     if (cluster_count < 1) return result;
     result.role_of_cluster.assign(static_cast<std::size_t>(cluster_count), "unknown");
@@ -117,7 +110,8 @@ RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
     std::vector<double> talk(static_cast<std::size_t>(cluster_count), 0.0);
     for (const auto& turn : turns) {
         if (turn.cluster >= 0 && turn.cluster < cluster_count) {
-            talk[static_cast<std::size_t>(turn.cluster)] += static_cast<double>(turn.frame_count);
+            talk[static_cast<std::size_t>(turn.cluster)] +=
+                static_cast<double>(turn.end_frame - turn.first_frame);
         }
     }
     std::vector<int> order(static_cast<std::size_t>(cluster_count));
@@ -142,14 +136,14 @@ RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
     } else {
         double sum1 = 0.0, sum2 = 0.0;
         int n1 = 0, n2 = 0;
-        for (const auto& turn : turns) {
-            if (turn.text.empty()) continue;  // no lexical evidence, would dilute the mean
-            const double score = LexicalDoctorScore(turn.text);
-            if (turn.cluster == top1) {
+        for (std::size_t i = 0; i < turns.size(); ++i) {
+            if (texts[i].empty()) continue;  // no lexical evidence, would dilute the mean
+            const double score = LexicalDoctorScore(texts[i]);
+            if (turns[i].cluster == top1) {
                 sum1 += score;
                 ++n1;
             }
-            if (turn.cluster == top2) {
+            if (turns[i].cluster == top2) {
                 sum2 += score;
                 ++n2;
             }
@@ -174,6 +168,24 @@ RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
     result.role_of_cluster[static_cast<std::size_t>(doctor)] = "doctor";
     if (patient != doctor) result.role_of_cluster[static_cast<std::size_t>(patient)] = "patient";
     return result;
+}
+
+NamedTurns NameTurns(const std::vector<LabelledSlice>& turns, const std::vector<std::string>& texts,
+                     int cluster_count, const std::vector<double>& anchor_similarity) {
+    NamedTurns named;
+    named.roles = NameRoles(turns, texts, cluster_count, anchor_similarity);
+    const auto& roles = named.roles.role_of_cluster;
+    for (std::size_t i = 0; i < turns.size(); ++i) {
+        if (texts[i].empty()) continue;
+        const auto cluster = static_cast<std::size_t>(turns[i].cluster);
+        asr::Turn turn;
+        turn.first_frame = turns[i].first_frame;
+        turn.frame_count = turns[i].end_frame - turns[i].first_frame;
+        turn.speaker = cluster < roles.size() ? roles[cluster] : "unknown";
+        turn.text = texts[i];
+        named.turns.push_back(std::move(turn));
+    }
+    return named;
 }
 
 }  // namespace clinicavt::diar

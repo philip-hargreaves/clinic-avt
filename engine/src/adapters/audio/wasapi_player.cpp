@@ -9,28 +9,15 @@
 #include <cstdio>
 #include <cstring>
 
+#include "adapters/system/com_apartment.hpp"
 #include "ports/audio_source.hpp"
 
 namespace clinicavt::audio {
 
-namespace {
-
-struct ComApartment {
-    HRESULT hr;
-    ComApartment() : hr(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
-    ~ComApartment() {
-        if (SUCCEEDED(hr)) CoUninitialize();
-    }
-    ComApartment(const ComApartment&) = delete;
-    ComApartment& operator=(const ComApartment&) = delete;
-};
-
-}  // namespace
-
 // The apartment is declared first so it outlives every COM pointer. The
 // replay thread never initialises COM itself
 struct WasapiPlayer::Impl {
-    ComApartment com;
+    system::ComApartment com;
     Microsoft::WRL::ComPtr<IMMDeviceEnumerator> enumerator;
     Microsoft::WRL::ComPtr<IMMDevice> device;
     Microsoft::WRL::ComPtr<IAudioClient> client;

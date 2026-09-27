@@ -16,8 +16,8 @@
 
 #include "adapters/guidance/corpus_store.hpp"
 #include "adapters/guidance/schema.hpp"
-#include "adapters/models/model_store.hpp"
 #include "adapters/storage/db.hpp"
+#include "adapters/system/sha256.hpp"
 
 namespace clinicavt::guidance {
 namespace {
@@ -61,9 +61,9 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
             store::Db::Transaction txn(db);
             auto meta = db.Prepare(
                 "INSERT INTO corpus_meta(id, corpus_id, name, licence, attribution, source,"
-                " embedder_id, embedder_rev, chunk_prefix, query_prefix, max_tokens, dim,"
-                " vector_format, normalised, chunk_count, shard_count, built_at, builder)"
-                " VALUES(1, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, 'f32le', 1, ?, ?, ?, ?)");
+                " embedder_id, embedder_rev, max_tokens, dim, vector_format, normalised,"
+                " chunk_count, shard_count, built_at, builder)"
+                " VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'f32le', 1, ?, ?, ?, ?)");
             meta.BindText(1, spec.id);
             meta.BindText(2, spec.name);
             meta.BindText(3, spec.licence);
@@ -71,13 +71,12 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
             meta.BindText(5, spec.source);
             meta.BindText(6, spec.embedder.id);
             meta.BindText(7, spec.embedder.rev);
-            meta.BindText(8, spec.embedder.query_prefix);
-            meta.BindInt64(9, spec.embedder.max_tokens);
-            meta.BindInt64(10, spec.embedder.dim);
-            meta.BindInt64(11, static_cast<std::int64_t>(chunks.size()));
-            meta.BindInt64(12, shard_count);
-            meta.BindText(13, spec.built_at);
-            meta.BindText(14, spec.builder);
+            meta.BindInt64(8, spec.embedder.max_tokens);
+            meta.BindInt64(9, spec.embedder.dim);
+            meta.BindInt64(10, static_cast<std::int64_t>(chunks.size()));
+            meta.BindInt64(11, shard_count);
+            meta.BindText(12, spec.built_at);
+            meta.BindText(13, spec.builder);
             meta.Step();
 
             auto insert = db.Prepare(
@@ -143,14 +142,13 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
                             {"research", spec.research},
                             {"embedder_id", spec.embedder.id},
                             {"embedder_rev", spec.embedder.rev},
-                            {"query_prefix", spec.embedder.query_prefix},
                             {"max_tokens", spec.embedder.max_tokens},
                             {"dim", spec.embedder.dim},
                             {"chunks", chunks.size()},
                             {"shards", shard_count},
                             {"file", kCorpusFile},
                             {"bytes", std::filesystem::file_size(final_path)},
-                            {"sha256", models::Sha256File(final_path)},
+                            {"sha256", system::Sha256File(final_path)},
                             {"built_at", spec.built_at},
                             {"builder", spec.builder}};
     std::ofstream out(dir / kManifestFile, std::ios::binary | std::ios::trunc);

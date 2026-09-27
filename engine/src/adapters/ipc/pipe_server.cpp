@@ -16,12 +16,6 @@ namespace {
 
 constexpr DWORD kIoBufferBytes = 64 * 1024;
 
-// Waits out a pending overlapped operation. False means the pipe is gone
-bool CompleteOverlapped(HANDLE pipe, OVERLAPPED& ov, DWORD& transferred) {
-    if (GetOverlappedResult(pipe, &ov, &transferred, TRUE)) return true;
-    return false;
-}
-
 struct OverlappedEvent {
     OVERLAPPED ov{};
     OverlappedEvent() {
@@ -48,7 +42,7 @@ PipeServer::PipeServer(const std::wstring& pipe_name) {
     if (pipe == INVALID_HANDLE_VALUE) {
         const DWORD error = GetLastError();
         if (error == ERROR_ACCESS_DENIED) {
-            throw std::runtime_error("pipe name already claimed by another process");
+            throw PipeTaken();
         }
         throw std::system_error(static_cast<int>(error), std::system_category(),
                                 "CreateNamedPipeW");
@@ -80,20 +74,59 @@ void PipeServer::PushNotification(const std::string& method, json params) {
     }
 }
 
-void PipeServer::ServeOneClient() {
+PipeServer::Accept PipeServer::AwaitClient(std::chrono::milliseconds idle,
+                                           const std::function<bool()>& busy) {
     HANDLE pipe = static_cast<HANDLE>(pipe_);
-
-    OverlappedEvent connect;
-    if (!ConnectNamedPipe(pipe, &connect.ov)) {
-        const DWORD error = GetLastError();
-        if (error == ERROR_IO_PENDING) {
-            DWORD ignored = 0;
-            if (!CompleteOverlapped(pipe, connect.ov, ignored)) return;
-        } else if (error != ERROR_PIPE_CONNECTED) {
-            return;
+    const bool forever = idle == std::chrono::milliseconds::max();
+    auto quiet_since = std::chrono::steady_clock::now();
+    for (;;) {
+        OverlappedEvent connect;
+        bool connected = false;
+        if (!ConnectNamedPipe(pipe, &connect.ov)) {
+            const DWORD error = GetLastError();
+            if (error == ERROR_PIPE_CONNECTED) {
+                connected = true;
+            } else if (error == ERROR_NO_DATA) {
+                DisconnectNamedPipe(pipe);  // came and went before the accept
+                continue;
+            } else if (error != ERROR_IO_PENDING) {
+                return Accept::kIdle;
+            }
         }
+        while (!connected) {
+            if (WaitForSingleObject(connect.ov.hEvent, 1000) == WAIT_OBJECT_0) {
+                DWORD ignored = 0;
+                connected = GetOverlappedResult(pipe, &connect.ov, &ignored, FALSE) != 0;
+                if (!connected) break;
+                continue;
+            }
+            if (forever) continue;
+            if (busy && busy()) quiet_since = std::chrono::steady_clock::now();
+            if (std::chrono::steady_clock::now() - quiet_since >= idle) {
+                CancelIoEx(pipe, &connect.ov);
+                DWORD ignored = 0;
+                GetOverlappedResult(pipe, &connect.ov, &ignored, TRUE);
+                return Accept::kIdle;
+            }
+        }
+        if (!connected) {
+            DisconnectNamedPipe(pipe);
+            continue;
+        }
+        std::lock_guard<std::mutex> lock(write_mutex_);
+        write_failed_ = false;
+        notifications_.clear();
+        return Accept::kClient;
     }
+}
 
+void PipeServer::ServeOneClient() {
+    if (AwaitClient(std::chrono::milliseconds::max()) == Accept::kClient) Serve();
+}
+
+bool PipeServer::Serve() {
+    HANDLE pipe = static_cast<HANDLE>(pipe_);
+    bool spoke = false;
     FrameDecoder decoder;
     char buffer[kIoBufferBytes];
     for (;;) {
@@ -102,17 +135,19 @@ void PipeServer::ServeOneClient() {
         if (!ReadFile(pipe, buffer, sizeof(buffer), nullptr, &read.ov)) {
             if (GetLastError() != ERROR_IO_PENDING) break;
         }
-        if (!CompleteOverlapped(pipe, read.ov, transferred)) break;
+        if (!GetOverlappedResult(pipe, &read.ov, &transferred, TRUE)) break;  // pipe gone
         if (transferred == 0) break;
 
         decoder.Push(std::string_view(buffer, transferred));
         std::optional<std::string> payload;
         while ((payload = decoder.Next())) {
+            spoke = true;
             HandleFrame(*payload);
         }
         if (decoder.failed()) break;
     }
     DisconnectNamedPipe(pipe);
+    return spoke;
 }
 
 void PipeServer::HandleFrame(const std::string& payload) {
@@ -195,12 +230,12 @@ bool PipeServer::WriteFrame(const std::string& payload, unsigned timeout_ms) {
             if (timeout_ms != 0 &&
                 WaitForSingleObject(write.ov.hEvent, timeout_ms) != WAIT_OBJECT_0) {
                 CancelIoEx(pipe, &write.ov);
-                CompleteOverlapped(pipe, write.ov, written);
+                GetOverlappedResult(pipe, &write.ov, &written, TRUE);
                 write_failed_ = true;
                 return false;
             }
         }
-        if (!CompleteOverlapped(pipe, write.ov, written)) return false;
+        if (!GetOverlappedResult(pipe, &write.ov, &written, TRUE)) return false;
         written_total += written;
     }
     return true;

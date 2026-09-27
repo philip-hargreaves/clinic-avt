@@ -45,76 +45,77 @@ struct Counts {
     }
 };
 
-TEST(Residency, WantLoadsInTheBackgroundOnce) {
-    Counts counts;
-    Residency residency(counts.Load(), counts.Unload(), kLong);
-    residency.Want();
-    residency.Want();
-    ASSERT_TRUE(Eventually([&] { return residency.Loaded(); }));
-    residency.Want();
-    std::this_thread::sleep_for(20ms);
-    EXPECT_EQ(counts.loads, 1);
-}
-
-TEST(Residency, UseLoadsFirstWhenNothingIsLoaded) {
-    Counts counts;
-    Residency residency(counts.Load(), counts.Unload(), kLong);
-    EXPECT_EQ(residency.Use([] { return 7; }), 7);
-    EXPECT_EQ(counts.loads, 1);
-    EXPECT_EQ(residency.Use([] { return 8; }), 8);
-    EXPECT_EQ(counts.loads, 1);
-}
-
-TEST(Residency, ReleaseWaitsForWorkInProgress) {
-    Counts counts;
-    Residency residency(counts.Load(), counts.Unload(), kLong);
+// A Use that keeps the model busy until Finish
+struct HeldWork {
     std::promise<void> started;
     std::promise<void> finish;
-    auto work = std::async(std::launch::async, [&] {
-        residency.Use([&] {
-            started.set_value();
-            finish.get_future().wait();
-        });
-    });
-    started.get_future().wait();
-    residency.Release();
-    std::this_thread::sleep_for(30ms);
-    EXPECT_EQ(counts.unloads, 0);
-    EXPECT_TRUE(residency.Loaded());
-    finish.set_value();
-    work.get();
-    EXPECT_TRUE(Eventually([&] { return counts.unloads == 1; }));
-    EXPECT_FALSE(residency.Loaded());
-}
+    std::future<void> work;
 
-TEST(Residency, AnIdleSpellUnloadsAndTheNextUseReloads) {
+    explicit HeldWork(Residency& residency) {
+        work = std::async(std::launch::async, [this, &residency] {
+            residency.Use([this] {
+                started.set_value();
+                finish.get_future().wait();
+            });
+        });
+        started.get_future().wait();
+    }
+
+    ~HeldWork() {
+        if (work.valid()) Finish();
+    }
+
+    void Finish() {
+        finish.set_value();
+        work.get();
+    }
+};
+
+TEST(Residency, LoadsOnceOnWantOrUseAndReloadsAfterAnIdleSpell) {
+    {
+        Counts counts;
+        Residency residency(counts.Load(), counts.Unload(), kLong);
+        residency.Want();
+        residency.Want();
+        ASSERT_TRUE(Eventually([&] { return residency.Loaded(); }))
+            << "Want loads in the background";
+        residency.Want();
+        std::this_thread::sleep_for(20ms);
+        EXPECT_EQ(residency.Use([] { return 7; }), 7);
+        EXPECT_EQ(counts.loads, 1) << "one load serves every Want and Use";
+    }
+
     Counts counts;
     Residency residency(counts.Load(), counts.Unload(), 40ms);
-    residency.Use([] {});
-    ASSERT_TRUE(Eventually([&] { return counts.unloads == 1; }));
+    EXPECT_EQ(residency.Use([] { return 8; }), 8);
+    EXPECT_EQ(counts.loads, 1) << "Use loads first when nothing is loaded";
+    ASSERT_TRUE(Eventually([&] { return counts.unloads == 1; })) << "an idle spell unloads";
     residency.Use([] {});
     EXPECT_EQ(counts.loads, 2);
 }
 
-TEST(Residency, WantCancelsAPendingRelease) {
+// Unloading under a running GPU call would pull the model from under it
+TEST(Residency, ReleaseNeverUnloadsUnderWorkAndWantCancelsIt) {
     Counts counts;
     Residency residency(counts.Load(), counts.Unload(), kLong);
-    std::promise<void> started;
-    std::promise<void> finish;
-    auto work = std::async(std::launch::async, [&] {
-        residency.Use([&] {
-            started.set_value();
-            finish.get_future().wait();
-        });
-    });
-    started.get_future().wait();
+    {
+        HeldWork busy(residency);
+        residency.Release();
+        residency.Want();
+        busy.Finish();
+        std::this_thread::sleep_for(30ms);
+        EXPECT_EQ(counts.unloads, 0) << "Want cancelled the pending release";
+        EXPECT_TRUE(residency.Loaded());
+    }
+
+    HeldWork busy(residency);
     residency.Release();
-    residency.Want();
-    finish.set_value();
-    work.get();
     std::this_thread::sleep_for(30ms);
     EXPECT_EQ(counts.unloads, 0);
-    EXPECT_TRUE(residency.Loaded());
+    EXPECT_TRUE(residency.Loaded()) << "the release waits for the work";
+    busy.Finish();
+    EXPECT_TRUE(Eventually([&] { return counts.unloads == 1; }));
+    EXPECT_FALSE(residency.Loaded());
 }
 
 TEST(Residency, ReleaseDuringABackgroundLoadUnloadsWhenItEnds) {

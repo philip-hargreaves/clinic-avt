@@ -11,6 +11,7 @@
 
 #include <filesystem>
 
+#include "adapters/system/com_apartment.hpp"
 #include "ports/store_error.hpp"
 
 namespace clinicavt::system {
@@ -18,13 +19,7 @@ namespace clinicavt::system {
 // Sends a file to the Recycle Bin, so a removed guideline is one click from
 // coming back. Throws a store error when it cannot
 inline void RecycleFile(const std::filesystem::path& path) {
-    struct Apartment {
-        HRESULT hr;
-        Apartment() : hr(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
-        ~Apartment() {
-            if (SUCCEEDED(hr)) CoUninitialize();
-        }
-    } com;
+    const ComApartment com;
     IFileOperation* op = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileOperation, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&op)))) {
         throw store::StoreError(store::StoreCode::kOther, "the Recycle Bin is not available");

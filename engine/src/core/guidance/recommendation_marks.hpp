@@ -16,6 +16,10 @@ bool StartsRecommendation(const std::string& paragraph);
 // "Recommendation 3a" or "R3"
 enum class Scheme { kNone, kDotted, kRoman, kBracketed, kNumbered, kWord, kLetterR };
 
+// Every scheme with a mark. Detection prefers the earlier on a tie
+inline constexpr Scheme kMarkSchemes[] = {Scheme::kDotted,   Scheme::kRoman, Scheme::kBracketed,
+                                          Scheme::kNumbered, Scheme::kWord,  Scheme::kLetterR};
+
 // A scheme is the document's own once this many paragraphs open with it
 inline constexpr int kSchemeMarks = 2;
 

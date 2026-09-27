@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -15,9 +14,6 @@ namespace clinicavt::guidance {
 inline constexpr std::uint32_t kIndexApplicationId = 0x414D4249;  // "AMBI"
 inline constexpr int kIndexFormat = 3;
 inline constexpr const char* kIndexFile = "index.db";
-
-std::string Sha256Hex(std::span<const std::uint8_t> bytes);
-std::string Utf8(const std::filesystem::path& path);
 
 struct IndexedFile {
     std::string path;  // relative to the folder, UTF-8

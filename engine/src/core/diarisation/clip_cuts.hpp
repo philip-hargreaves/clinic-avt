@@ -2,12 +2,10 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstdio>
 #include <span>
 #include <vector>
 
 #include "core/diarisation/diar_regions.hpp"
-#include "ports/audio_source.hpp"
 
 namespace clinicavt::diar {
 

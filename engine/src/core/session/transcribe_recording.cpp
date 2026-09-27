@@ -105,12 +105,8 @@ Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& di
             metrics->RecordTranscript(static_cast<int>(with_text), result.cluster_count);
         }
     }
-    std::vector<diar::RoleTurn> role_turns;
-    for (std::size_t i = 0; i < turns.size(); ++i) {
-        role_turns.push_back(
-            {turns[i].cluster, turns[i].end_frame - turns[i].first_frame, turn_texts[i]});
-    }
-    const auto roles = diar::NameRoles(role_turns, result.cluster_count, similarity);
+    auto named = diar::NameTurns(turns, turn_texts, result.cluster_count, similarity);
+    const auto& roles = named.roles;
     // How much each speaker resembled the stored print, and what was decided:
     // the record a wrong role can be diagnosed from
     {
@@ -126,19 +122,9 @@ Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& di
                      roles.from_anchor ? "print" : "content");
     }
     transcript.doctor_cluster = roles.doctor_cluster;
-    std::vector<asr::Turn> attributed;
-    for (std::size_t i = 0; i < turns.size(); ++i) {
-        if (turn_texts[i].empty()) continue;
-        asr::Turn turn;
-        turn.first_frame = turns[i].first_frame;
-        turn.frame_count = turns[i].end_frame - turns[i].first_frame;
-        turn.speaker = roles.role_of_cluster[static_cast<std::size_t>(turns[i].cluster)];
-        turn.text = turn_texts[i];
-        attributed.push_back(std::move(turn));
-    }
     // Fragments merged, slivers dropped, capitals and full stops. No word
     // changes speaker
-    transcript.turns = diar::TidyTranscript(std::move(attributed));
+    transcript.turns = diar::TidyTranscript(std::move(named.turns));
     return transcript;
 }
 

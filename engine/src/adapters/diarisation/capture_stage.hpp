@@ -1,14 +1,18 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <limits>
 #include <map>
 #include <span>
 #include <utility>
 #include <vector>
 
 #include "adapters/diarisation/segmenter.hpp"
+#include "adapters/diarisation/speaker_clustering.hpp"
 #include "adapters/diarisation/speaker_embedder.hpp"
 #include "adapters/vad/silero_vad.hpp"
+#include "core/diarisation/embeddings.hpp"
 #include "ports/diariser.hpp"
 #include "ports/transcriber.hpp"
 
@@ -18,6 +22,33 @@ namespace clinicavt::diar {
 // causal stages that keep the settled frontier fresh
 inline constexpr int kSpeculateBudget = 4;
 inline constexpr int kEdgeEmbedBudget = 2;  // edge chunks embedded per capture tick
+
+// The slicing, embedding and labelling that capture and finalise share, so a
+// capture-phase label is the one finalise gives the same span
+
+// Speech regions ending by `frontier`, cut at the change points and at the
+// clip cuts that snap onto a pause
+std::vector<Region> CutSlices(std::span<const float> probabilities, std::uint64_t total_frames,
+                              std::vector<std::uint64_t> change_points,
+                              std::span<const std::uint64_t> clip_cuts,
+                              std::uint64_t frontier = std::numeric_limits<std::uint64_t>::max());
+
+struct EmbeddedSlices {
+    std::vector<Region> kept;  // the slices long enough to embed
+    std::vector<std::vector<float>> embeddings;
+    std::vector<std::uint64_t> durations;
+};
+
+// embed gives a slice's embedding, empty when it is too short
+EmbeddedSlices EmbedSlices(const std::vector<Region>& slices,
+                           const std::function<std::vector<float>(const Region&)>& embed);
+
+// The kept slices under their labels, plus long overlaps as second turns,
+// in time order
+std::vector<LabelledSlice> LabelSlices(const std::vector<Region>& kept,
+                                       const ClusterResult& clusters,
+                                       const std::vector<Region>& overlap_spans,
+                                       const EmbedRangeFn& embed_span);
 
 // What capture accumulates for finalise to consume
 struct CaptureDiarisation {

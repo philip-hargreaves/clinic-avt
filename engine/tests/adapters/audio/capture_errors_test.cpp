@@ -21,34 +21,29 @@ static_assert(hresults::kResourcesInvalidated ==
               static_cast<std::uint32_t>(AUDCLNT_E_RESOURCES_INVALIDATED));
 static_assert(hresults::kAccessDenied == static_cast<std::uint32_t>(E_ACCESSDENIED));
 
-TEST(CaptureErrors, EveryDeviceGoneCodeIsDeviceLost) {
+TEST(EndForCaptureError, ClassifiesDeviceLossConsentAndOtherFailures) {
     const std::uint32_t device_gone[] = {
         hresults::kDeviceInvalidated,
         hresults::kServiceNotRunning,
         hresults::kEndpointCreateFailed,
         hresults::kResourcesInvalidated,
     };
-
     for (const auto hr : device_gone) {
         const auto end = EndForCaptureError("GetBuffer", hr);
         EXPECT_EQ(end.reason, SourceEndReason::kDeviceLost) << end.detail;
-        EXPECT_NE(end.detail.find("GetBuffer"), std::string::npos);
+        EXPECT_NE(end.detail.find("GetBuffer"), std::string::npos) << end.detail;
     }
-}
 
-TEST(CaptureErrors, AccessDeniedNamesThePrivacySettings) {
-    const auto end = EndForCaptureError("Initialize", hresults::kAccessDenied);
+    // Consent: the clinician is told where to grant microphone access
+    const auto denied = EndForCaptureError("Initialize", hresults::kAccessDenied);
+    EXPECT_EQ(denied.reason, SourceEndReason::kFailed);
+    EXPECT_NE(denied.detail.find("privacy settings"), std::string::npos) << denied.detail;
+    EXPECT_NE(denied.detail.find("0x80070005"), std::string::npos) << denied.detail;
 
-    EXPECT_EQ(end.reason, SourceEndReason::kFailed);
-    EXPECT_NE(end.detail.find("privacy settings"), std::string::npos) << end.detail;
-    EXPECT_NE(end.detail.find("0x80070005"), std::string::npos);
-}
-
-TEST(CaptureErrors, AnythingElseCarriesTheCallAndCode) {
-    const auto end = EndForCaptureError("Activate", 0x8007000E);  // E_OUTOFMEMORY
-
-    EXPECT_EQ(end.reason, SourceEndReason::kFailed);
-    EXPECT_EQ(end.detail, "Activate failed, hr=0x8007000E");
+    const auto other = EndForCaptureError("Activate", 0x8007000E);  // E_OUTOFMEMORY
+    EXPECT_EQ(other.reason, SourceEndReason::kFailed);
+    EXPECT_NE(other.detail.find("Activate"), std::string::npos) << other.detail;
+    EXPECT_NE(other.detail.find("0x8007000E"), std::string::npos) << other.detail;
 }
 
 }  // namespace

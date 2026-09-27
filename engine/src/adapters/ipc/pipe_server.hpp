@@ -1,8 +1,10 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <map>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -12,8 +14,14 @@
 
 namespace clinicavt::ipc {
 
+// Another process already serves the pipe name
+class PipeTaken : public std::runtime_error {
+   public:
+    PipeTaken() : std::runtime_error("pipe name already claimed by another process") {}
+};
+
 // One duplex pipe, one client at a time. Construction claims the pipe
-// name, so a name already taken is treated as an attack and throws.
+// name, so a name already taken is treated as an attack and throws PipeTaken.
 class PipeServer {
    public:
     using MethodHandler = std::function<std::variant<json, Error>(const json& params)>;
@@ -31,6 +39,17 @@ class PipeServer {
     // Callable from any thread. Bounded so a client that stops draining never
     // stalls the capture thread
     void PushNotification(const std::string& method, json params);
+
+    enum class Accept { kClient, kIdle };
+
+    // Waits for the next client. Gives up once nobody has come for `idle`
+    // while `busy` was false. A client that leaves before speaking is
+    // dropped and the wait goes on
+    Accept AwaitClient(std::chrono::milliseconds idle, const std::function<bool()>& busy = {});
+
+    // Serves the connected client until it disconnects or the stream corrupts.
+    // False when it left without sending a whole frame
+    bool Serve();
 
     // Blocks: accept one client, serve until it disconnects or the stream corrupts
     void ServeOneClient();

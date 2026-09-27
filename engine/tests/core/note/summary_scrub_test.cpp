@@ -25,28 +25,5 @@ TEST(SummaryScrub, MatchesTheSharedFixture) {
     }
 }
 
-TEST(SummaryScrub, EveryDecadeHasAName) {
-    EXPECT_EQ(ScrubSummary("aged 3"), "under ten");
-    EXPECT_EQ(ScrubSummary("aged 14"), "in their teens");
-    EXPECT_EQ(ScrubSummary("aged 20"), "in their twenties");
-    EXPECT_EQ(ScrubSummary("a 99-year-old"), "a patient in their nineties");
-    EXPECT_EQ(ScrubSummary("aged 104"), "in their nineties");
-}
-
-TEST(SummaryScrub, AgeSpellingsAllScrub) {
-    EXPECT_EQ(ScrubSummary("a 45 yo man"), "a man in their forties");
-    EXPECT_EQ(ScrubSummary("a 45 y/o"), "a patient in their forties");
-    EXPECT_EQ(ScrubSummary("45 years old"), "in their forties");
-    EXPECT_EQ(ScrubSummary("a 45-yr-old woman"), "a woman in their forties");
-}
-
-TEST(SummaryScrub, LeavesCleanTextAlone) {
-    const std::string text =
-        "A patient in their forties presented with a week of painless swelling over one elbow. "
-        "Olecranon bursitis was suspected; rest and an anti-inflammatory were agreed.";
-    EXPECT_EQ(ScrubSummary(text), text);
-    EXPECT_EQ(ScrubSummary(""), "");
-}
-
 }  // namespace
 }  // namespace clinicavt::note

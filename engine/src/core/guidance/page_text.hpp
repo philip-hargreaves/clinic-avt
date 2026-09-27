@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 
-#include "core/guidance/guidance_query.hpp"
 #include "core/guidance/recommendation_marks.hpp"
 
 namespace clinicavt::guidance {
@@ -25,8 +24,6 @@ struct PageLine {
 struct Page {
     float width = 0;  // points, as displayed
     float height = 0;
-    int rotation = 0;  // quarter turns clockwise
-    int images = 0;
     std::vector<PageLine> lines;
 };
 

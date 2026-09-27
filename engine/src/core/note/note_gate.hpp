@@ -1,9 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
+
+#include "core/common/strings.hpp"
 
 namespace clinicavt::note {
 
@@ -11,27 +14,15 @@ namespace clinicavt::note {
 // consultation. The engine reports a refusal instead of saving a note
 inline constexpr std::string_view kNotAConsultation = "NOT A CONSULTATION:";
 
-inline std::string_view TrimmedView(std::string_view text) {
-    while (!text.empty() && (text.front() == ' ' || text.front() == '\n' || text.front() == '\r' ||
-                             text.front() == '\t')) {
-        text.remove_prefix(1);
-    }
-    while (!text.empty() && (text.back() == ' ' || text.back() == '\n' || text.back() == '\r' ||
-                             text.back() == '\t')) {
-        text.remove_suffix(1);
-    }
-    return text;
-}
-
 // The reason after the sentinel when the note is a refusal, else nothing
 inline std::optional<std::string> RefusalReason(std::string_view note) {
-    const auto text = TrimmedView(note);
+    const auto text = strings::Trim(note);
     if (text.substr(0, kNotAConsultation.size()) != kNotAConsultation) return std::nullopt;
     auto reason = text.substr(kNotAConsultation.size());
     if (const auto line_end = reason.find('\n'); line_end != std::string_view::npos) {
         reason = reason.substr(0, line_end);
     }
-    return std::string(TrimmedView(reason));
+    return std::string(strings::Trim(reason));
 }
 
 // Holds the streamed note back until its opening shows it is not a refusal,
@@ -45,7 +36,7 @@ class RefusalFilter {
     void operator()(const std::string& text) {
         if (refused_) return;
         if (!decided_) {
-            const auto opening = TrimmedView(text);
+            const auto opening = strings::Trim(text);
             const auto n = std::min(opening.size(), kNotAConsultation.size());
             if (opening.substr(0, n) == kNotAConsultation.substr(0, n)) {
                 if (opening.size() < kNotAConsultation.size()) return;  // still could be

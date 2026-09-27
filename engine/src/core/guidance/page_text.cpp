@@ -53,8 +53,7 @@ bool Short(const PageLine& line, const std::array<float, 2>& edges) {
 // the line with a capital after it, as NICE and numbered lists set one item
 // after another at the same leading
 bool OpensMarked(const std::string& text) {
-    for (const auto scheme : {Scheme::kDotted, Scheme::kRoman, Scheme::kBracketed,
-                              Scheme::kNumbered, Scheme::kWord, Scheme::kLetterR}) {
+    for (const auto scheme : kMarkSchemes) {
         const auto mark = MarkOf(text, scheme);
         if (!mark.empty() && mark.size() + 1 < text.size() && text[mark.size()] == ' ' &&
             std::isupper(static_cast<unsigned char>(text[mark.size() + 1]))) {
@@ -121,18 +120,7 @@ std::vector<Paragraph> ParagraphsFromText(const std::string& text) {
     while (at <= text.size()) {
         const auto end = text.find('\n', at);
         const auto raw = text.substr(at, end == std::string::npos ? std::string::npos : end - at);
-        std::string line;
-        bool space = true;
-        for (const unsigned char c : raw) {
-            if (std::isspace(c)) {
-                if (!space) line.push_back(' ');
-                space = true;
-            } else {
-                line.push_back(static_cast<char>(c));
-                space = false;
-            }
-        }
-        if (!line.empty() && line.back() == ' ') line.pop_back();
+        const std::string line = strings::Squeeze(raw);
         if (line.empty()) {
             flush();
         } else {

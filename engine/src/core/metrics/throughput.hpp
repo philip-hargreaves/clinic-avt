@@ -9,7 +9,7 @@ namespace clinicavt::metrics {
 // window for display, Average() the whole stream
 class ThroughputMeter {
    public:
-    explicit ThroughputMeter(double window_seconds = 2.0) : window_(window_seconds) {}
+    static constexpr double kWindowSeconds = 2.0;
 
     void Token(double now) {
         if (total_ == 0) {
@@ -39,20 +39,13 @@ class ThroughputMeter {
         return static_cast<double>(total_ - 1) / (last_ - first_);
     }
 
-    void Reset() {
-        stamps_.clear();
-        total_ = 0;
-        first_ = last_ = 0;
-    }
-
    private:
     void Trim(double now) {
-        while (!stamps_.empty() && now - stamps_.front() > window_) {
+        while (!stamps_.empty() && now - stamps_.front() > kWindowSeconds) {
             stamps_.pop_front();
         }
     }
 
-    double window_;
     std::deque<double> stamps_;
     std::size_t total_ = 0;
     double first_ = 0;

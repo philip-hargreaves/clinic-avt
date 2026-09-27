@@ -5,25 +5,17 @@
 #include <cstdint>
 #include <vector>
 
-namespace {
-
-TEST(SegSettledFrontier, TrailsVadByTheRegionMargin) {
-    using clinicavt::diar::kSegFrontierMarginFrames;
-    EXPECT_EQ(clinicavt::diar::SegSettledFrontier(320000, 160000),
-              160000u - kSegFrontierMarginFrames);                            // vad behind
-    EXPECT_EQ(clinicavt::diar::SegSettledFrontier(100000, 320000), 100000u);  // seg behind
-}
-
-TEST(SegSettledFrontier, NothingSettlesInsideTheFirstMargin) {
-    EXPECT_EQ(
-        clinicavt::diar::SegSettledFrontier(320000, clinicavt::diar::kSegFrontierMarginFrames), 0u);
-    EXPECT_EQ(clinicavt::diar::SegSettledFrontier(320000, 0), 0u);
-}
-
-}  // namespace
-
 namespace clinicavt::diar {
 namespace {
+
+TEST(SegSettledFrontier, TrailsTheSlowerSideAndSettlesNothingInTheFirstMargin) {
+    EXPECT_EQ(SegSettledFrontier(320000, 160000), 160000u - kSegFrontierMarginFrames)
+        << "vad behind: trails it by the region margin";
+    EXPECT_EQ(SegSettledFrontier(100000, 320000), 100000u) << "seg behind";
+    EXPECT_EQ(SegSettledFrontier(320000, kSegFrontierMarginFrames), 0u)
+        << "inside the first margin";
+    EXPECT_EQ(SegSettledFrontier(320000, 0), 0u) << "no underflow at the start";
+}
 
 // 32 ms hops: speech to hop 50, silence after
 std::vector<float> SpeechThenSilence(std::size_t hops) {
@@ -32,21 +24,14 @@ std::vector<float> SpeechThenSilence(std::size_t hops) {
     return p;
 }
 
-TEST(TurnClosed, SilenceAfterTheEndClosesTheTurn) {
+TEST(TurnClosed, ClosesOnlyAfterAFullSilentWindow) {
     const auto end = 51u * audio::kVadHopFrames;
-    EXPECT_TRUE(TurnClosed(SpeechThenSilence(120), end));
-}
-
-TEST(TurnClosed, NotClosedWhileTheAudioIsShorterThanTheSilenceWindow) {
-    const auto end = 51u * audio::kVadHopFrames;
-    EXPECT_FALSE(TurnClosed(SpeechThenSilence(60), end));
-}
-
-TEST(TurnClosed, SpeechInsideTheWindowKeepsItOpen) {
-    auto p = SpeechThenSilence(120);
-    p[65] = 0.8f;
-    const auto end = 51u * audio::kVadHopFrames;
-    EXPECT_FALSE(TurnClosed(p, end));
+    EXPECT_TRUE(TurnClosed(SpeechThenSilence(120), end)) << "silence after the end closes the turn";
+    EXPECT_FALSE(TurnClosed(SpeechThenSilence(60), end))
+        << "not closed while the audio is shorter than the silence window";
+    auto blip = SpeechThenSilence(120);
+    blip[65] = 0.8f;
+    EXPECT_FALSE(TurnClosed(blip, end)) << "speech inside the window keeps it open";
 }
 
 }  // namespace

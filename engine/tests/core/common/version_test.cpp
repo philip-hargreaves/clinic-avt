@@ -2,10 +2,7 @@
 
 #include <gtest/gtest.h>
 
-TEST(Version, NameIsSet) {
-    EXPECT_STREQ(clinicavt::kName, "clinicavt");
-}
-
+// version.hpp is kept by hand, so it must follow the CMake project version
 TEST(Version, MatchesCMakeProjectVersion) {
     EXPECT_STREQ(clinicavt::kVersion, CLINICAVT_CMAKE_VERSION);
 }

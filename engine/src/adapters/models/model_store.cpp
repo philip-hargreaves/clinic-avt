@@ -7,13 +7,6 @@
 #include <stdexcept>
 #include <vector>
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-// clang-format off
-#include <windows.h>
-#include <bcrypt.h>
-// clang-format on
-
 #include "core/common/strings.hpp"
 
 namespace clinicavt::models {
@@ -25,42 +18,6 @@ constexpr std::int64_t kManifestVersion = 1;
 [[noreturn]] void Broken(const std::filesystem::path& dir, const std::string& why) {
     throw std::runtime_error("model manifest " + dir.string() + ": " + why);
 }
-
-}  // namespace
-
-std::string Sha256File(const std::filesystem::path& path) {
-    BCRYPT_ALG_HANDLE alg = nullptr;
-    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) < 0) {
-        throw std::runtime_error("BCryptOpenAlgorithmProvider failed");
-    }
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    if (BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) < 0) {
-        BCryptCloseAlgorithmProvider(alg, 0);
-        throw std::runtime_error("BCryptCreateHash failed");
-    }
-
-    std::ifstream in(path, std::ios::binary);
-    std::vector<char> chunk(1 << 20);
-    while (in.read(chunk.data(), static_cast<std::streamsize>(chunk.size())) || in.gcount() > 0) {
-        BCryptHashData(hash, reinterpret_cast<PUCHAR>(chunk.data()),
-                       static_cast<ULONG>(in.gcount()), 0);
-    }
-
-    unsigned char digest[32];
-    BCryptFinishHash(hash, digest, sizeof(digest), 0);
-    BCryptDestroyHash(hash);
-    BCryptCloseAlgorithmProvider(alg, 0);
-
-    std::string hex;
-    for (const unsigned char byte : digest) {
-        constexpr char kDigits[] = "0123456789abcdef";
-        hex += kDigits[byte >> 4];
-        hex += kDigits[byte & 0xF];
-    }
-    return hex;
-}
-
-namespace {
 
 ModelInfo ParseManifest(const std::filesystem::path& dir) {
     std::ifstream in(dir / "manifest.json");
@@ -164,15 +121,6 @@ void ModelStore::Verify(const ModelInfo& model) const {
             throw std::runtime_error(model.id + ": " + name + " is " +
                                      std::to_string(std::filesystem::file_size(path)) +
                                      " bytes, the manifest says " + std::to_string(bytes->second));
-        }
-    }
-}
-
-void ModelStore::VerifyHashes(const ModelInfo& model) const {
-    Verify(model);
-    for (const auto& [name, expected] : model.file_hashes) {
-        if (Sha256File(model.dir / name) != expected) {
-            throw std::runtime_error(model.id + ": " + name + " does not match its manifest hash");
         }
     }
 }

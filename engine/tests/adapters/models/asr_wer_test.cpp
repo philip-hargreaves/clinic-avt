@@ -117,9 +117,20 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
     const auto decode_start = std::chrono::steady_clock::now();
     const auto result = diariser.Diarise(frames);
     const auto turns = diar::MergeByCluster(result.slices);
+    // Whisper pads its window to 30 s, so its stamps can overrun a clip. Every
+    // chunk must still land inside its turn's clip (a second of slack)
+    std::size_t outside = 0;
     const auto texts = diar::DecodeTurnTexts(
-        turns, frames, [&transcriber](std::span<const float> clip, std::uint64_t first) {
-            return transcriber.DecodeClipChunks(clip, first);
+        turns, frames, [&transcriber, &outside](std::span<const float> clip, std::uint64_t first) {
+            auto chunks = transcriber.DecodeClipChunks(clip, first);
+            for (const auto& chunk : chunks) {
+                if (chunk.text.empty() || chunk.first_frame < first ||
+                    chunk.first_frame + chunk.frame_count >
+                        first + clip.size() + audio::kSampleRate) {
+                    ++outside;
+                }
+            }
+            return chunks;
         });
     const auto decode =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - decode_start);
@@ -133,6 +144,7 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
     std::printf("per-turn WER %.2f%% (baseline 21.28%%), %.1fx realtime, load %lld ms, %zu turns\n",
                 wer * 100, speed, static_cast<long long>(load_ms.count()), turns.size());
     EXPECT_LE(wer, kMaxWer);
+    EXPECT_EQ(outside, 0u) << "chunks empty or outside their clip";
     // Release measures well past realtime. The floor tolerates the Debug harness
     // and the diarisation inside the timed span
     EXPECT_GT(speed, 3.0) << "decode must stay well past realtime";

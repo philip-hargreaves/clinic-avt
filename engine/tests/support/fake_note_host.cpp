@@ -1,6 +1,8 @@
 // A note host that loads nothing: speaks the host protocol so the lane's
 // state machine can be exercised with no weights and no GPU. A tier whose
-// model id contains "broken" fails to load. Everything else loads in 100 ms
+// model id contains "broken" fails to load, one containing "slow" takes 2 s.
+// Everything else loads in 100 ms. A prefill takes 2 s, holding the serve loop
+// as the real one does
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -27,7 +29,8 @@ int main(int argc, char* argv[]) {
         server.RegisterMethod("prepare", [&](const json&) {
             if (loader.joinable()) loader.join();
             loader = std::thread([&] {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                const bool slow = info.id.find("slow") != std::string::npos;
+                std::this_thread::sleep_for(std::chrono::milliseconds(slow ? 2000 : 100));
                 if (info.id.find("broken") != std::string::npos) {
                     server.PushNotification(
                         "loadFailed",
@@ -42,7 +45,10 @@ int main(int argc, char* argv[]) {
             return json::object();
         });
         server.RegisterMethod("cancel", [](const json&) { return json::object(); });
-        server.RegisterMethod("prefill", [](const json&) { return json::object(); });
+        server.RegisterMethod("prefill", [](const json&) {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            return json::object();
+        });
         server.RegisterMethod("write", [&](const json&) {
             server.PushNotification("partial", {{"text", "A note from " + info.id}});
             server.PushNotification("ready", {{"text", "A note from " + info.id}});

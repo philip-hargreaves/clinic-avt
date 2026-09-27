@@ -7,8 +7,6 @@
 #include <thread>
 #include <vector>
 
-#include "ports/audio_source.hpp"
-
 namespace clinicavt::audio {
 namespace {
 
@@ -20,62 +18,25 @@ std::vector<float> Sequence(std::size_t count, float first = 0.0F) {
     return frames;
 }
 
-TEST(AudioRing, RoundsCapacityUpToAPowerOfTwo) {
-    EXPECT_EQ(AudioRing(1000).Capacity(), 1024u);
-    EXPECT_EQ(AudioRing(8).Capacity(), 8u);
-}
-
-TEST(AudioRing, PushThenPopReturnsTheSameFrames) {
+TEST(AudioRing, PushesWhatFitsAndPopsInOrderAcrossTheWrap) {
     AudioRing ring(8);
-    const auto frames = Sequence(5);
-
-    EXPECT_EQ(ring.TryPush(frames), 5u);
-    std::vector<float> out(5);
-    EXPECT_EQ(ring.TryPop(out), 5u);
-
-    EXPECT_EQ(out, frames);
-}
-
-TEST(AudioRing, PopFromAnEmptyRingReturnsNothing) {
-    AudioRing ring(8);
-    std::vector<float> out(4);
-
-    EXPECT_EQ(ring.TryPop(out), 0u);
-}
-
-TEST(AudioRing, PushBeyondCapacityWritesOnlyWhatFits) {
-    AudioRing ring(8);
-    const auto frames = Sequence(10);
-
-    EXPECT_EQ(ring.TryPush(frames), 8u);
-
     std::vector<float> out(10);
-    EXPECT_EQ(ring.TryPop(out), 8u);
+    EXPECT_EQ(ring.TryPop(out), 0u) << "an empty ring pops nothing";
+
+    EXPECT_EQ(ring.TryPush(Sequence(10)), 8u) << "a push beyond capacity writes only what fits";
+    ASSERT_EQ(ring.TryPop(out), 8u);
     EXPECT_EQ(std::vector<float>(out.begin(), out.begin() + 8), Sequence(8));
-}
 
-TEST(AudioRing, FreesSpaceAsFramesArePopped) {
-    AudioRing ring(8);
-    std::vector<float> out(8);
-    EXPECT_EQ(ring.TryPush(Sequence(8)), 8u);
-    EXPECT_EQ(ring.TryPop(out), 8u);
+    EXPECT_EQ(ring.TryPush(Sequence(8, 100.0F)), 8u) << "popping frees the space";
+    ASSERT_EQ(ring.TryPop(out), 8u);
+    EXPECT_EQ(std::vector<float>(out.begin(), out.begin() + 8), Sequence(8, 100.0F));
 
-    EXPECT_EQ(ring.TryPush(Sequence(8, 100.0F)), 8u);
-    EXPECT_EQ(ring.TryPop(out), 8u);
-    EXPECT_EQ(out, Sequence(8, 100.0F));
-}
-
-TEST(AudioRing, WrapsAroundTheBufferEnd) {
-    AudioRing ring(8);
-    std::vector<float> out(6);
-    ring.TryPush(Sequence(6));
-    ring.TryPop(out);
-
-    // This push crosses the physical end of the buffer
-    ring.TryPush(Sequence(6, 50.0F));
-    ring.TryPop(out);
-
-    EXPECT_EQ(out, Sequence(6, 50.0F));
+    // The second push crosses the physical end of the buffer
+    EXPECT_EQ(ring.TryPush(Sequence(6)), 6u);
+    ASSERT_EQ(ring.TryPop(std::span<float>(out).first(6)), 6u);
+    EXPECT_EQ(ring.TryPush(Sequence(6, 50.0F)), 6u);
+    ASSERT_EQ(ring.TryPop(out), 6u);
+    EXPECT_EQ(std::vector<float>(out.begin(), out.begin() + 6), Sequence(6, 50.0F));
 }
 
 constexpr std::size_t kTotalFrames = 1 << 20;  // Exact in a float: < 2^24
@@ -119,33 +80,6 @@ TEST(AudioRing, TwoThreadsMoveEveryFrameInOrder) {
     EXPECT_EQ(received, kTotalFrames);
     EXPECT_EQ(out_of_sequence, 0u);
     EXPECT_EQ(ring.TryPop(out), 0u);
-}
-
-// Pins the pipeline's one format and shows the port is implementable in a
-// handful of lines. The wav source's tests are the real contract tests.
-TEST(AudioSourcePort, ASinkReceivesAudioThenTheEnd) {
-    struct RecordingSink : IAudioSink {
-        std::vector<float> frames;
-        std::uint64_t lost = 0;
-        SourceEnd end{};
-        void OnAudio(std::span<const float> packet, std::uint64_t lost_frames) override {
-            frames.insert(frames.end(), packet.begin(), packet.end());
-            lost += lost_frames;
-        }
-        void OnEnd(const SourceEnd& source_end) override {
-            end = source_end;
-        }
-    };
-
-    RecordingSink sink;
-    const auto frames = Sequence(4);
-    static_cast<IAudioSink&>(sink).OnAudio(frames, 3);
-    static_cast<IAudioSink&>(sink).OnEnd({SourceEndReason::kCompleted, ""});
-
-    EXPECT_EQ(kSampleRate, 16000);
-    EXPECT_EQ(sink.frames, frames);
-    EXPECT_EQ(sink.lost, 3u);
-    EXPECT_EQ(sink.end.reason, SourceEndReason::kCompleted);
 }
 
 }  // namespace

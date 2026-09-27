@@ -16,8 +16,6 @@ namespace clinicavt::diar {
 // The text is their join
 using DecodeClipFn = std::function<std::vector<asr::Turn>(std::span<const float>, std::uint64_t)>;
 
-using asr::JoinedText;
-
 // Exact decode span -> speculated text
 using TurnTexts = std::map<std::pair<std::uint64_t, std::uint64_t>, std::string>;
 // Exact decode span -> that decode's chunks

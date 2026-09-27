@@ -73,6 +73,9 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore
 json HandleReflectionList(clinicavt::store::ISessionStore& sessions);
 std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
                                               const json& params);
+// One crypto-erase of everything stored, refused while a consultation records
+std::variant<json, Error> HandleSessionDeleteAll(clinicavt::store::ISessionStore& sessions,
+                                                 bool session_active);
 
 // Seed data from demo_dir, a no-op while present. Clearing leaves real sessions untouched
 std::variant<json, Error> HandleDemoSeed(clinicavt::store::ISessionStore& sessions,
@@ -82,6 +85,11 @@ json HandleDemoClear(clinicavt::store::ISessionStore& sessions);
 // Guidance: the panel shows the top three
 inline constexpr int kGuidanceLimit = 3;
 using Notify = std::function<void(const std::string& method, json params)>;
+inline Notify PushTo(PipeServer& server) {
+    return [&server](const std::string& method, json params) {
+        server.PushNotification(method, std::move(params));
+    };
+}
 // guidance/corpora: whether the embedder is loading, ready or unavailable, and
 // every corpus directory. guidance/model carries the state alone once loading ends
 json GuidanceCorporaJson(const clinicavt::guidance::Readiness& readiness,
@@ -134,6 +142,17 @@ void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::ISessionStore
                              clinicavt::guidance::IGuidanceLane& lane,
                              clinicavt::guidance::IDocumentIngest& ingest);
 
+// Moves speech recognition to another device ("GPU" or "NPU") in place. `done`
+// runs once the load settles, with the error or an empty string. False when it
+// cannot move
+using AsrSwitch =
+    std::function<bool(const std::string& device, std::function<void(const std::string&)> done)>;
+
+// asr/device: refused during a session. The reply says loading, and an
+// asr/device notification says ready or failed once the load settles
+std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool session_active,
+                                          const json& params, std::function<void(json)> notify);
+
 // Everything the methods reach. The controller, models and store are always
 // present. The rest is wired when its model or feature is staged. first_use:
 // model caches were cold at launch, so the one-off compiles are running and
@@ -152,6 +171,7 @@ struct EngineServices {
     bool stray_note_host = false;  // one from an earlier engine is wedged in the GPU driver
     std::filesystem::path demo_dir;
     clinicavt::session::Playback* playback = nullptr;
+    AsrSwitch switch_asr;
 };
 
 // engine/*, note/tier, anchor/* and audio/inputs

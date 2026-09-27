@@ -6,13 +6,11 @@
 
 #include <system_error>
 
-#include "adapters/guidance/document_index.hpp"
 #include "core/common/strings.hpp"
+#include "core/common/utf8.hpp"
 
 namespace clinicavt::guidance {
 namespace {
-
-constexpr const char* kPdf = "application/pdf";
 
 std::string LowerExtension(const std::filesystem::path& path) {
     return strings::Lower(path.extension().string());
@@ -69,7 +67,7 @@ FolderListing ListFolder(const std::filesystem::path& folder, int max_depth,
         if (it.depth() >= max_depth || symlink) it.disable_recursion_pending();
         if (symlink || !entry.is_regular_file(ec)) continue;
         if (HiddenOrSystem(entry.path()) || Transient(entry.path())) continue;
-        const auto relative = Utf8(entry.path().lexically_relative(folder));
+        const auto relative = utf8::FromPath(entry.path().lexically_relative(folder));
         if (relative == skip) continue;
         if (!supported(Mime(entry.path()))) {
             ++listing.unsupported;

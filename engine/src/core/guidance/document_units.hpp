@@ -1,16 +1,12 @@
 #pragma once
 
-#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include "core/guidance/guidance_query.hpp"
-#include "core/guidance/page_clean.hpp"
 #include "core/guidance/page_text.hpp"
 #include "core/guidance/recommendation_marks.hpp"
-#include "core/guidance/reference_tail.hpp"
 
 namespace clinicavt::guidance {
 
@@ -79,12 +75,7 @@ Scheme DetectScheme(const std::vector<Paragraph>& paragraphs);
 // kMinUnitWords, and a paragraph past kMaxUnitWords is split
 std::vector<Unit> UnitsFromParagraphs(const std::vector<Paragraph>& paragraphs);
 
-// Not guidance. A short unmarked run that never ends a sentence is figure
-// labels or a table fragment, a shorter one a sentence's tail. Front matter
-// and captions are known by their opening, tables and addresses by what they
-// hold, unless they say what to do
-bool IsFragment(const Unit& unit);
-
+// Strips a proof's line numbers, then drops the units that are not guidance
 std::vector<Unit> DropFragments(std::vector<Unit> units);
 
 // From the host's pages to the units stored: cleaned, in paragraphs, the
