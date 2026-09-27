@@ -27,13 +27,6 @@ public sealed partial class TranscriptPaneView : UserControl
         TurnList.VerticalAlignment = capped ? VerticalAlignment.Top : VerticalAlignment.Stretch;
     }
 
-    /// <summary>Hides the heading and padding for a host whose tab already names the pane.</summary>
-    public void ShowHeading(bool shown)
-    {
-        Heading.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
-        Root.Padding = shown ? new Thickness(16, 12, 16, 8) : new Thickness(0);
-    }
-
     // Keeps the newest turn in view
     private void OnTurnsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {

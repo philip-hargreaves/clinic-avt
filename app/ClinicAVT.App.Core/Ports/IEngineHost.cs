@@ -12,11 +12,11 @@ public interface IEngineHost
 
     EngineStatus Status { get; }
 
-    EngineFault? Fault { get; }
-
     int? EnginePid { get; }
 
     void Start();
 
-    void Shutdown();
+    /// <summary>Asks the engine to leave and stops supervising it without waiting, so it can
+    /// finish a load after the app has closed.</summary>
+    Task ReleaseAsync();
 }

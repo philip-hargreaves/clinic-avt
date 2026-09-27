@@ -36,27 +36,12 @@ public class ShellHelpersTest
         Assert.Equal(expected, WebLinks.IsWeb(link));
 
     [Fact]
-    public async Task NavigationGoesThroughThePortAndHistoryGoesBackThroughWhatWasShown()
+    public async Task NavigationGoesThroughThePort()
     {
         var navigation = new RecordingNavigationService();
         var (shell, _, _, _) = Shell(navigation);
         await shell.ShowSettingsCommand.ExecuteAsync(null);
         Assert.Equal(Routes.Settings, navigation.Current);
-
-        var history = new NavigationHistory<string>();
-        Assert.Null(history.Current);
-        Assert.False(history.CanGoBack);
-
-        history.Show("consultation");
-        history.Show("settings");
-        Assert.Equal("settings", history.Current);
-        Assert.True(history.CanGoBack);
-
-        Assert.Equal("consultation", history.Back());
-        Assert.Equal("consultation", history.Current);
-        Assert.False(history.CanGoBack);
-        Assert.Null(history.Back());
-        Assert.Equal("consultation", history.Current);
     }
 
     [Fact]

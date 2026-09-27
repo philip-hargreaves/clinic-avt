@@ -3,6 +3,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using ClinicAVT.App.Composition;
 using ClinicAVT.App.Core.Hosting;
+using ClinicAVT.App.Platform;
 using ClinicAVT.App.Shell;
 
 namespace ClinicAVT.App;
@@ -15,27 +16,21 @@ public partial class App : Application
 
     public App()
     {
-        InitializeComponent();
-        var paths = AppPaths.Default;
-        IReadOnlyList<(string, string)> moved = [];
-        try
+        // Before anything opens the app's files, so a second launch never races the first
+        if (!SingleInstance.Claim())
         {
-            moved = EarlierNames.Migrate(paths);
-        }
-        catch (IOException)
-        {
-            // A folder that cannot move stays put and the app starts fresh beside it
-        }
-        catch (UnauthorizedAccessException)
-        {
+            SingleInstance.ShowOther();
+            Environment.Exit(0);
         }
 
+        InitializeComponent();
+        var paths = AppPaths.Default;
         _services = new ServiceCollection()
             .AddPlatform(paths)
             .AddEngine(paths)
             .AddViewModels(paths)
             .AddViews()
-            .AddStartupTasks(paths, moved)
+            .AddStartupTasks(paths)
             .BuildServiceProvider();
     }
 

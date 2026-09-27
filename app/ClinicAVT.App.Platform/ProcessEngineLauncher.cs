@@ -5,6 +5,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.System.Threading;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
+using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Platform;
 
@@ -76,7 +77,57 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
         }
     }
 
-    // The file is appended across launches and rotated once per run. The handle
+    public IEngineProcess? Adopt()
+    {
+        if (PipeTransport.ServingProcessId(EngineInfo.PipeName, TimeSpan.FromSeconds(2))
+            is not uint pid)
+        {
+            return null;
+        }
+
+        using var opened = PInvoke.OpenProcess_SafeHandle(
+            PROCESS_ACCESS_RIGHTS.PROCESS_SYNCHRONIZE
+            | PROCESS_ACCESS_RIGHTS.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (opened.IsInvalid)
+        {
+            return null;
+        }
+
+        var handle = new SafeProcessHandle(opened.DangerousGetHandle(), ownsHandle: true);
+        opened.SetHandleAsInvalid();
+        // Another program squatting on the pipe is never taken for the engine
+        if (!string.Equals(ImagePath(handle), Path.GetFullPath(exePath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            handle.Dispose();
+            return null;
+        }
+
+        try
+        {
+            _job.Assign(handle);
+        }
+        catch (Win32Exception)
+        {
+            // Already in another app's job: it is watched all the same
+        }
+
+        return new EngineProcess(handle, pid);
+    }
+
+    public void Release() => _job.KeepProcessesOnClose();
+
+    private static string? ImagePath(SafeProcessHandle process)
+    {
+        Span<char> buffer = stackalloc char[1024];
+        var length = (uint)buffer.Length;
+        return PInvoke.QueryFullProcessImageName(
+            process, PROCESS_NAME_FORMAT.PROCESS_NAME_WIN32, buffer, ref length)
+            ? new string(buffer[..(int)length])
+            : null;
+    }
+
+    // The file is appended across launches and rotated once it is large. The handle
     // must be inheritable for CreateProcess to pass it on
     private FileStream? OpenStderr()
     {

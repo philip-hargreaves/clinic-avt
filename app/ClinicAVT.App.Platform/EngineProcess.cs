@@ -1,6 +1,5 @@
 using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
-using Windows.Win32.Foundation;
 using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Platform;
@@ -38,18 +37,6 @@ internal sealed class EngineProcess : IEngineProcess
             _exitSignal, (_, _) => OnExited(), null, Timeout.Infinite, executeOnlyOnce: true);
     }
 
-    public void Kill()
-    {
-        lock (_gate)
-        {
-            if (!_disposed)
-            {
-                // This fails harmlessly when the process has already exited
-                PInvoke.TerminateProcess(Handle, 1);
-            }
-        }
-    }
-
     public void Dispose()
     {
         lock (_gate)
@@ -65,8 +52,6 @@ internal sealed class EngineProcess : IEngineProcess
             _handle.Dispose();
         }
     }
-
-    private HANDLE Handle => new(_handle.DangerousGetHandle());
 
     private void OnExited()
     {

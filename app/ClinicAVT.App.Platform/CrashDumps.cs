@@ -28,20 +28,4 @@ public static class CrashDumps
             }
         }
     }
-
-    /// <summary>Removes the entries for retired process names.</summary>
-    public static void Unregister(RegistryKey hive, params string[] exeNames)
-    {
-        foreach (var exe in exeNames)
-        {
-            try
-            {
-                hive.DeleteSubKeyTree($@"{LocalDumps}\{exe}", throwOnMissingSubKey: false);
-            }
-            catch (Exception)
-            {
-                // Diagnostics must never block startup
-            }
-        }
-    }
 }

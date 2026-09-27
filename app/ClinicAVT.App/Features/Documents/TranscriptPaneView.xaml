@@ -6,18 +6,11 @@
     xmlns:views="using:ClinicAVT.App.Features.Documents"
     xmlns:vm="using:ClinicAVT.App.Core.Features.Documents">
 
-    <Grid x:Name="Root" Padding="16,12,16,8" RowSpacing="8">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <TextBlock x:Name="Heading" Style="{StaticResource PaneHeaderText}" Text="Transcript" />
-
+    <Grid>
         <!-- The item container is the card, so the platform hover and theme behaviour still apply -->
         <ListView
             x:Name="TurnList"
-            Grid.Row="1"
+            Margin="0,8,0,0"
             ItemsSource="{x:Bind ViewModel.Turns}"
             Padding="0,0,0,8"
             SelectionMode="None">

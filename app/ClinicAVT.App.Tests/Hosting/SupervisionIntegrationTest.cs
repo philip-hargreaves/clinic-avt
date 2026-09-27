@@ -25,6 +25,10 @@ public class SupervisionIntegrationTest
             Launched.Add(process);
             return process;
         }
+
+        public IEngineProcess? Adopt() => inner.Adopt();
+
+        public void Release() => inner.Release();
     }
 
     private sealed class Rig : IDisposable
@@ -56,12 +60,15 @@ public class SupervisionIntegrationTest
         public void Dispose()
         {
             Host.Dispose();
-            _inner.Dispose();
+            DisposeLauncher();
             if (Directory.Exists(_directory))
             {
                 Directory.Delete(_directory, recursive: true);
             }
         }
+
+        // The app's own end: its job takes down whatever it was not told to release
+        public void DisposeLauncher() => _inner.Dispose();
     }
 
     private static Task WhenStatusAsync(IEngineHost host, EngineStatus wanted)
@@ -120,18 +127,20 @@ public class SupervisionIntegrationTest
 
         Assert.Single(File.ReadAllLines(rig.CrashPath));
 
-        rig.Host.Shutdown();
+        rig.Host.Dispose();
+        rig.DisposeLauncher();
         await WaitUntilGoneAsync(secondPid);
     }
 
     [Fact]
-    public async Task ShutdownLeavesNothingBehind()
+    public async Task AnAppThatEndsLeavesNothingBehind()
     {
         using var rig = new Rig();
         rig.Host.Start();
         var pid = rig.Pid(0);
 
-        rig.Host.Shutdown();
+        rig.Host.Dispose();
+        rig.DisposeLauncher();
 
         await WaitUntilGoneAsync(pid);
         Assert.False(File.Exists(rig.CrashPath));

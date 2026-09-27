@@ -15,6 +15,51 @@ public class StatusBarMetricsTest
         return (new StatusBarViewModel(new EngineApi(engine), new InlineDispatcher(), memoryGb: memoryGb), engine);
     }
 
+    // A load behind a ready app stays off the status line: nothing waits on it. The time is
+    // counted for the places that do wait, and a switch's idle step cannot end the count
+    [Fact]
+    public void AModelLoadCountsItsTimeAndClearsWhenReady()
+    {
+        var engine = new FakeEngineClient(autoNotify: false);
+        var clock = new FakeTimeProvider();
+        var status = new StatusBarViewModel(new EngineApi(engine), new InlineDispatcher(), clock);
+        status.SetEngineState(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
+        status.SetEngineReady(true);
+
+        engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "loading" }));
+        // A switch announces idle between the old model and the new: no flash of Ready
+        engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "idle" }));
+        engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "loading" }));
+        clock.Advance(TimeSpan.FromSeconds(48));
+
+        Assert.True(status.ModelLoading);
+        Assert.Equal("Loading the note model · 0:48 · this can take a few minutes", status.ModelLoadLine);
+        Assert.Equal("Ready", status.DisplayLabel);
+        Assert.False(status.ShowsSetup);
+
+        engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "ready" }));
+        Assert.False(status.ModelLoading);
+        Assert.Equal("Ready", status.DisplayLabel);
+    }
+
+    // At start the model list is fetched before the shell sends its saved tier, so it names the
+    // engine's default. The lane's own messages name the model being loaded, from the start
+    [Fact]
+    public async Task TheNoteChipNamesTheModelBeingLoadedNotTheEnginesDefault()
+    {
+        var (status, engine) = Create();
+        await WaitUntilAsync(() => status.NoteChip.Length > 0);
+        Assert.StartsWith("Qwen3.5 9B", status.NoteChip);
+
+        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "loading" }));
+        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
+
+        // The list fetched again on ready still has the engine's default first here
+        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "ready" }));
+        await WaitUntilAsync(() => engine.Requests.Count(r => r.Method == "engine/models") >= 2);
+        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
+    }
+
     [Fact]
     public async Task TheNoteChipThroughAGeneration()
     {
@@ -83,10 +128,9 @@ public class StatusBarMetricsTest
         Assert.Equal("Qwen3.5 9B · GPU", status.NoteChip);
         Assert.False(status.AsrActive);
 
-        // While idle the poll reads the engine's figure, but a low one would not warn
+        // While idle the poll reads the engine's figure
         await status.PollMetricsOnceAsync();
         Assert.Equal(33.4, status.RealtimeFactor);  // FakeEngineClient's figure
-        Assert.False(status.RealtimeLow, "not recording: no warning");
         Assert.Equal("Memory · 5.1 GB", status.MemoryChip);
 
         // While recording the realtime factor joins Whisper's chip and the dot lights
@@ -94,27 +138,23 @@ public class StatusBarMetricsTest
         Assert.True(status.AsrActive);
         await status.PollMetricsOnceAsync();
         Assert.Equal("Whisper Large v3 Turbo · GPU · 33× RT", status.AsrChip);
-        Assert.False(status.RealtimeLow, "33x is healthy");
 
-        // A slow factor keeps a decimal and warns
+        // A slow factor keeps a decimal
         engine.MetricsRealtimeFactor = 1.4;
         await status.PollMetricsOnceAsync();
         Assert.Equal("Whisper Large v3 Turbo · GPU · 1.4× RT", status.AsrChip);
-        Assert.True(status.RealtimeLow);
 
         // After stop the tail still decodes, the NPU's longest stage, so the
-        // figure, the warning and the dot stay until the transcript seals
+        // figure and the dot stay until the transcript seals
         status.SetMicVisible(false);
         status.SetDecodeActive(true);
         Assert.True(status.AsrActive);
         Assert.Equal("Whisper Large v3 Turbo · GPU · 1.4× RT", status.AsrChip);
-        Assert.True(status.RealtimeLow);
 
         // Once sealed the session's average holds, labelled as an average
         status.SetDecodeActive(false);
         Assert.False(status.AsrActive, "sealed: the dot rests while Averaged shows");
         Assert.Equal("Whisper Large v3 Turbo · GPU · Averaged 1.4× RT", status.AsrChip);
-        Assert.False(status.RealtimeLow, "the warning is a transcribing-time signal");
 
         status.ResetThroughput();  // the next consultation starts clean
         Assert.Equal("Whisper Large v3 Turbo · GPU", status.AsrChip);

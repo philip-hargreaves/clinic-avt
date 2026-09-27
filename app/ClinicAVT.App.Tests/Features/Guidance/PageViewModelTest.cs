@@ -1,5 +1,4 @@
 using ClinicAVT.App.Core.Features.Guidance;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
@@ -24,7 +23,7 @@ public class PageViewModelTest
         object? reply, FakeLauncher launcher, FakeClipboard clipboard)
     {
         var engine = new FakeEngineClient { PageReply = reply };
-        var view = new PageViewModel(new EngineApi(engine), launcher, clipboard, new StatusBarViewModel());
+        var view = new PageViewModel(new EngineApi(engine), launcher, clipboard, TestSession.Status(engine));
         return (view, engine);
     }
 

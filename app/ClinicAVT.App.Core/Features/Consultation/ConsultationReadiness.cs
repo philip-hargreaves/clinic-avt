@@ -95,8 +95,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
         if (model.State == "loading" && model.FirstUse)
         {
             ModelsReady = false;
-            _status.Append("Preparing note model for this computer - this can take a few minutes",
-                busy: true);
+            _status.SetSettingUp(true);
         }
         else if (model.State is "ready" or "failed")
         {
@@ -109,6 +108,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
         if (!ModelsReady)
         {
             ModelsReady = true;
+            _status.SetSettingUp(false);
             _status.Append("Ready");
         }
     }
@@ -137,8 +137,13 @@ public sealed partial class ConsultationReadiness : ObservableObject
     {
         if (_engine.Connected)
         {
-            await EngineCall.TryAsync(_status, "note/tier",
-                () => _engine.SetNoteTierAsync(_preferences?.NoteTier ?? "default")).ConfigureAwait(true);
+            // A shell that reconnects mid-load learns of it from the reply
+            await EngineCall.TryAsync(_status, "note/tier", async () =>
+            {
+                var reply = await _engine.SetNoteTierAsync(_preferences?.NoteTier ?? "default")
+                    .ConfigureAwait(true);
+                _status.ApplyNoteModel(reply.State, firstUse: null, reply.Name);
+            }).ConfigureAwait(true);
             await EngineCall.TryAsync(_status, "note/options",
                 () => _engine.SetNoteOptionsAsync(_note.Style, _note.Detail)).ConfigureAwait(true);
         }
@@ -164,7 +169,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
                     // ends it
                     if (readiness.StrayNoteHost)
                     {
-                        _status.Append("A previous note process is stuck in the graphics driver - restart the computer");
+                        _status.Append("A note process is stuck in the graphics driver. Use Restart on the power menu to free it");
                         _status.Log("stray note host detected at engine start");
                     }
 
@@ -179,7 +184,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
                         if (ModelsReady)
                         {
                             ModelsReady = false;
-                            _status.Append("First-time setup - this can take a few minutes", busy: true);
+                            _status.SetSettingUp(true);
                         }
 
                         await Task.Delay(_pollInterval).ConfigureAwait(true);
@@ -190,6 +195,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
                 }).ConfigureAwait(true))
             {
                 ModelsReady = true;
+                _status.SetSettingUp(false);
             }
         }
         finally

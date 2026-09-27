@@ -1,7 +1,7 @@
 using System.Text.Json;
 using ClinicAVT.App.Core.Features.Settings;
 using ClinicAVT.App.Core.Preferences;
-using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
 using static ClinicAVT.App.Tests.Support.Waits;
@@ -14,8 +14,10 @@ public class SettingsViewModelTest
     private static AppPreferences TempPreferences() =>
         new(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
 
+    // Low-power mode moves speech recognition inside the running engine, so the note model
+    // stays loaded and nothing restarts
     [Fact]
-    public void LaunchRestoresWithoutRestartingAndTheNpuToggleSavesAndRestarts()
+    public void LaunchRestoresQuietlyAndTheNpuToggleSavesAndMovesSpeechRecognitionInPlace()
     {
         var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         var preferences = new AppPreferences(path)
@@ -25,24 +27,35 @@ public class SettingsViewModelTest
             DemoTrayEnabled = true,
             Theme = "light",
         };
-        var engine = new FakeEngineHost();
+        var engine = new FakeEngineClient();
+        var status = TestSession.Status(engine);
         var asked = 0;
 
         var dialogs = new FakeDialogService { Answer = false, OnConfirm = () => asked++ };
-        var settings = new SettingsViewModel(preferences, engine, new FakeSession(), dialogs: dialogs);
+        var settings = new SettingsViewModel(preferences, new FakeSession(), status,
+            client: new EngineApi(engine), dialogs: dialogs);
 
         Assert.True(settings.Appearance.NpuTranscription);
         Assert.True(settings.Privacy.KeepConsultations);
         Assert.True(settings.Appearance.DemoTrayEnabled);
         Assert.Equal("light", settings.Appearance.Theme);
-        Assert.Empty(engine.Calls);  // a launch must never restart the engine
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "asr/device");  // a launch moves nothing
         Assert.Equal(0, asked);
         Assert.False(File.Exists(path), "launch restore must not re-save");
 
         settings.Appearance.NpuTranscription = false;
 
         Assert.False(preferences.NpuTranscription);
-        Assert.Equal(["shutdown", "start"], engine.Calls);
+        Assert.Contains("\"GPU\"", engine.Requests.Single(r => r.Method == "asr/device").Params);
+        engine.RaiseNotification("asr/device", Params(new { device = "GPU", state = "ready" }));
+        Assert.Equal("Ready", status.LatestActivity);
+
+        // A move that fails puts the toggle and the saved choice back
+        settings.Appearance.NpuTranscription = true;
+        engine.RaiseNotification("asr/device", Params(new { device = "NPU", state = "failed", detail = "no NPU" }));
+        Assert.False(settings.Appearance.NpuTranscription);
+        Assert.False(preferences.NpuTranscription);
+        Assert.Contains("no NPU", status.LatestActivity);
     }
 
     [Fact]
@@ -50,7 +63,7 @@ public class SettingsViewModelTest
     {
         var preferences = TempPreferences();
         var engine = new FakeEngineClient();
-        var status = new StatusBarViewModel();
+        var status = TestSession.Status(engine);
         var settings = new SettingsViewModel(preferences, status: status, client: new EngineApi(engine));
         Assert.False(settings.Privacy.SeedDataEnabled);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "demo/seed");
@@ -69,7 +82,7 @@ public class SettingsViewModelTest
         preferences.SeedDataEnabled = true;
         engine.SamplesSeeded = true;
         engine.Requests.Clear();
-        var relaunched = new StatusBarViewModel();
+        var relaunched = TestSession.Status(engine);
         var again = new SettingsViewModel(preferences, status: relaunched, client: new EngineApi(engine));
 
         Assert.True(again.Privacy.SeedDataEnabled);
@@ -83,7 +96,7 @@ public class SettingsViewModelTest
         var preferences = TempPreferences();
         var engine = new FakeEngineClient { StoredSessions = 3 };
         engine.GuidanceDocuments.Add(Document(1, "Gout", "ready", 41));
-        var status = new StatusBarViewModel();
+        var status = TestSession.Status(engine);
         var dialogs = new FakeDialogService { Answer = false };
         var settings = new SettingsViewModel(preferences, status: status, client: new EngineApi(engine), dialogs: dialogs);
         settings.Privacy.SeedDataEnabled = true;
@@ -110,9 +123,8 @@ public class SettingsViewModelTest
         var preferences = TempPreferences();
         var engine = TieredEngine();
         engine.StoredSessions = 3;
-        var host = new FakeEngineHost();
-        var status = new StatusBarViewModel();
-        var settings = new SettingsViewModel(preferences, host, new FakeSession { ConsultationActive = true },
+        var status = TestSession.Status(engine);
+        var settings = new SettingsViewModel(preferences, new FakeSession { ConsultationActive = true },
             status: status, client: new EngineApi(engine), dialogs: new FakeDialogService());
 
         await settings.Privacy.DeleteAllConsultationsCommand.ExecuteAsync(null);
@@ -122,7 +134,7 @@ public class SettingsViewModelTest
         settings.Appearance.NpuTranscription = true;
         Assert.False(settings.Appearance.NpuTranscription);
         Assert.False(preferences.NpuTranscription);
-        Assert.Empty(host.Calls);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "asr/device");
 
         settings.NoteModel.NoteModelIndex = 2;
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
@@ -212,13 +224,31 @@ public class SettingsViewModelTest
         Params(
             new { state, tier, name, id = tier, seconds = 12.0, firstUse = false, detail });
 
+    // A saved model other than the default loads on connect, before the page exists. The
+    // picker still waits for it, since the engine refuses a switch mid-load
+    [Fact]
+    public void APageOpenedMidLoadGreysThePickerUntilTheLoadEnds()
+    {
+        var preferences = TempPreferences();
+        preferences.NoteTier = "accuracy";
+        var status = TestSession.Status();
+        status.ApplyNoteModel("loading", firstUse: false);
+
+        var settings = new SettingsViewModel(preferences, client: new EngineApi(TieredEngine()), session: new FakeSession(), status: status);
+
+        Assert.True(settings.NoteModel.NoteModelEnabled);
+        Assert.False(settings.NoteModel.PickerEnabled);
+        status.ApplyNoteModel("ready", firstUse: false);
+        Assert.True(settings.NoteModel.PickerEnabled);
+    }
+
     [Fact]
     public void TheSavedTierSelectsQuietlyAndChoosingAnotherConfiguresTheEngineAndGreysUntilReady()
     {
         var preferences = TempPreferences();
         preferences.NoteTier = "accuracy";
         var engine = TieredEngine();
-        var status = new StatusBarViewModel();
+        var status = TestSession.Status(engine);
         var settings = new SettingsViewModel(preferences, client: new EngineApi(engine), session: new FakeSession(), status: status);
 
         Assert.Equal(["Qwen3.5 4B", "Qwen3.5 9B", "Qwen3.6 35B"], settings.NoteModel.NoteModelOptions);
@@ -232,9 +262,12 @@ public class SettingsViewModelTest
         var request = engine.Requests.Single(r => r.Method == "note/tier");
         Assert.Contains("constrained", request.Params);
         Assert.False(settings.NoteModel.NoteModelEnabled, "greyed while the lane loads");
-        Assert.Equal("Loading", settings.NoteModel.NoteModelStatus);
-        Assert.Equal("Loading Qwen3.5 4B", status.LatestActivity);
-        Assert.True(status.Busy);
+        Assert.True(settings.NoteModel.ModelLoading);
+        Assert.False(settings.NoteModel.PickerEnabled);
+        Assert.Equal(
+            "Loading the note model · 0:00 · this can take a few minutes",
+            settings.NoteModel.NoteModelCaption);
+        Assert.False(status.Busy, "the load's bar stands in for the ring");
 
         engine.RaiseNotification("note/model", NoteModel("loading", "constrained", "Qwen3.5 4B"));
         Assert.False(settings.NoteModel.NoteModelEnabled);
@@ -311,6 +344,7 @@ public class SettingsViewModelTest
         Assert.Contains("out of memory", settings.NoteModel.NoteModelStatus);
         var back = engine.Requests.Single(r => r.Method == "note/tier");
         Assert.Contains("default", back.Params);
+        engine.RaiseNotification("note/model", NoteModel("ready", "default", "Qwen3.5 9B"));
 
         engine.FailNext = method => method == "note/tier" ? new IOException("no such device") : null;
         settings.NoteModel.NoteModelIndex = 0;
@@ -367,13 +401,6 @@ public class SettingsViewModelTest
         Assert.True(File.Exists(chosen), "written where the picker chose");
         Assert.Contains("picked.html", settings.Appearance.ExportResult);
         Assert.Contains("TestCpu", File.ReadAllText(chosen));
-
-        // Without a picker, as in the shell, the report lands in the export folder under its own name
-        var unpicked = new SettingsViewModel(
-            machine: new FixedMachine(), metrics: collector, exportDirectory: dir);
-        unpicked.Appearance.ExportPerformanceReportCommand.Execute(null);
-        Assert.StartsWith("saved ", unpicked.Appearance.ExportResult);
-        Assert.Single(Directory.GetFiles(dir, "clinicavt-perf-*.html"));
         Directory.Delete(dir, recursive: true);
     }
 
@@ -401,7 +428,7 @@ public class SettingsViewModelTest
     {
         var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         var preferences = new AppPreferences(path);
-        var bar = new StatusBarViewModel();
+        var bar = TestSession.Status();
         var settings = new SettingsViewModel(preferences, status: bar);
         Assert.False(settings.Appearance.ShowPerformanceMetrics, "chips are for testing, not GPs");
         Assert.False(bar.MetricsVisible);

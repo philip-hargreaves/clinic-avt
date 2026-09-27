@@ -81,8 +81,8 @@ public static class ReportBuilder
         html.Append("<h1>ClinicAVT Performance Report</h1>");
         html.Append(CultureInfo.InvariantCulture,
             $"<p class=\"sub\">Exported {exported:yyyy-MM-dd HH:mm} UTC · "
-            + $"{Plural(consultations.Count, "consultation")}, {Plural(replays.Count, "test replay")}, "
-            + $"{Plural(shorts.Count, "short recording")}</p>");
+            + $"{Words.Count(consultations.Count, "consultation")}, {Words.Count(replays.Count, "test replay")}, "
+            + $"{Words.Count(shorts.Count, "short recording")}</p>");
 
         AppendMachine(html, machine, sessions);
         AppendSummary(html, consultations);
@@ -151,7 +151,7 @@ public static class ReportBuilder
         {
             html.Append(CultureInfo.InvariantCulture,
                 $"<th class=\"n\">{WebUtility.HtmlEncode(g.Key.Model)} · {WebUtility.HtmlEncode(g.Key.Device)}"
-                + $"<br><span class=\"w\">{Plural(g.Count(), "consultation")}</span></th>");
+                + $"<br><span class=\"w\">{Words.Count(g.Count(), "consultation")}</span></th>");
         }
 
         html.Append("</tr>");
@@ -414,8 +414,6 @@ public static class ReportBuilder
         sorted.Count % 2 == 1
             ? sorted[sorted.Count / 2]
             : (sorted[sorted.Count / 2 - 1] + sorted[sorted.Count / 2]) / 2;
-
-    private static string Plural(int n, string noun) => Words.Count(n, noun);
 
     private static string Clock(double? seconds) => seconds is null ? "-" : Words.Clock(seconds.Value);
 

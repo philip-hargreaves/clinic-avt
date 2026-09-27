@@ -41,7 +41,8 @@ ClinicAVT.App/                      ClinicAVT.App.Core/
 ```
 
 `ClinicAVT.App.Tests` mirrors `ClinicAVT.App.Core`. Its fakes are in `TestDoubles/` and shared
-helpers in `Support/`. Tests that need the built engine carry `Requires=Engine`. They are the whole
+helpers in `Support/`. Helpers both test projects need (wire fixtures, the silence wav, the engine
+locator) live once in `TestSupport/` and are linked into each. Tests that need the built engine carry `Requires=Engine`. They are the whole
 of `ClinicAVT.Client.Tests/Contract/` plus the replay and transport-recovery tests in `App.Tests`.
 `Requires=EngineSlow` marks the ten-minute 1x replay, `Requires=CrashBattery` the crash set and
 `Requires=Processes` the tests that start real processes. The fast filter is

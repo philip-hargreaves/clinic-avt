@@ -34,6 +34,18 @@ public sealed partial class NoteModelSettings : ObservableObject
         _session = session;
         _status = status;
         _noteTier = preferences?.NoteTier ?? "default";
+        if (status is not null)
+        {
+            status.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(StatusBarViewModel.ModelLoadLine))
+                {
+                    OnPropertyChanged(nameof(NoteModelCaption));
+                    OnPropertyChanged(nameof(ModelLoading));
+                    OnPropertyChanged(nameof(PickerEnabled));
+                }
+            };
+        }
     }
 
     /// <summary>Display names of the staged note models, smallest first.</summary>
@@ -45,7 +57,12 @@ public sealed partial class NoteModelSettings : ObservableObject
 
     /// <summary>False while the lane loads, and when there is nothing to choose between.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PickerEnabled))]
     public partial bool NoteModelEnabled { get; set; }
+
+    /// <summary>A load cannot be interrupted, so the picker waits for any load, including one
+    /// that began before this page did.</summary>
+    public bool PickerEnabled => NoteModelEnabled && !ModelLoading;
 
     /// <summary>Lane status, empty when nothing is happening.</summary>
     [ObservableProperty]
@@ -53,14 +70,19 @@ public sealed partial class NoteModelSettings : ObservableObject
     public partial string NoteModelStatus { get; set; } = "";
 
     public string NoteModelCaption =>
-        string.IsNullOrEmpty(NoteModelStatus) ? "Larger models are more accurate and use more memory." : NoteModelStatus;
+        ModelLoading ? _status!.ModelLoadLine
+        : string.IsNullOrEmpty(NoteModelStatus) ? "Larger models are more accurate and use more memory."
+        : NoteModelStatus;
+
+    /// <summary>A load is running: the picker waits and a bar shows under it.</summary>
+    public bool ModelLoading => _status?.ModelLoading == true;
 
     /// <summary>On connect the options load from the engine's store.</summary>
     public void Connected() => _ = LoadNoteModelsAsync();
 
     /// <summary>The lane's state drives the control.</summary>
     public void Apply(NoteModelState model) =>
-        ApplyNoteModel(model.State, model.Tier, model.FirstUse, model.Detail ?? "");
+        ApplyNoteModel(model.State, model.Tier, model.Detail ?? "");
 
     private async Task LoadNoteModelsAsync()
     {
@@ -75,11 +97,7 @@ public sealed partial class NoteModelSettings : ObservableObject
             var models = await _client.ListModelsAsync().ConfigureAwait(true);
             var staged = models
                 .Where(m => m.Task == "note" && ladder.Contains(m.Tier))
-                .Select(m => (
-                    m.Tier,
-                    Name: string.IsNullOrWhiteSpace(m.Name)
-                        ? ModelNames.Friendly(m.Id)
-                        : m.Name))
+                .Select(m => (m.Tier, Name: ModelNames.Display(m)))
                 .OrderBy(m => ladder.IndexOf(m.Tier))
                 .ToList();
 
@@ -117,12 +135,6 @@ public sealed partial class NoteModelSettings : ObservableObject
         _populating = false;
     }
 
-    private string NameOf(string tier)
-    {
-        var index = _tiers.IndexOf(tier);
-        return index >= 0 && index < NoteModelOptions.Count ? NoteModelOptions[index] : tier;
-    }
-
     partial void OnNoteModelIndexChanged(int value)
     {
         if (_reverting || _populating || value < 0 || value >= _tiers.Count)
@@ -137,10 +149,9 @@ public sealed partial class NoteModelSettings : ObservableObject
         }
 
         // The switch ends the resident model. A consultation needs it
-        if (_session?.ConsultationActive == true)
+        if (ConsultationGuard.Blocks(_session, _status, "changing the note model"))
         {
             Reselect(_noteTier);
-            _status?.Append("finish the consultation before changing the note model");
             return;
         }
 
@@ -148,8 +159,8 @@ public sealed partial class NoteModelSettings : ObservableObject
         _noteTier = tier;
         PersistTier();
         NoteModelEnabled = false;
-        NoteModelStatus = "Loading";
-        _status?.Append($"Loading {NameOf(tier)}", busy: true);
+        NoteModelStatus = "";
+        _status?.ApplyNoteModel("loading", firstUse: false);
         _ = SendTierAsync(tier);
     }
 
@@ -173,10 +184,11 @@ public sealed partial class NoteModelSettings : ObservableObject
         try
         {
             var reply = await _client.SetNoteTierAsync(tier).ConfigureAwait(true);
+            _status?.ApplyNoteModel(reply.State, firstUse: null, reply.Name);
             // Nothing to wait for when the tier is already resident, as after a restart
             if (reply.State == "ready")
             {
-                ApplyNoteModel(reply.State, reply.Tier, firstUse: false, detail: "");
+                ApplyNoteModel(reply.State, reply.Tier, detail: "");
             }
         }
         catch (Exception e)
@@ -191,8 +203,9 @@ public sealed partial class NoteModelSettings : ObservableObject
     {
         var back = _revertTier;
         _revertTier = null;
-        NoteModelStatus = $"Could not switch: {reason}";
-        _status?.Append($"Could not switch note model: {reason}");
+        // Without a switch in hand this is the model failing where it is
+        NoteModelStatus = back is null ? reason : $"Could not switch: {reason}";
+        _status?.Append(back is null ? $"Note model: {reason}" : $"Could not switch note model: {reason}");
         if (back is null)
         {
             NoteModelEnabled = _tiers.Count > 1;
@@ -205,26 +218,27 @@ public sealed partial class NoteModelSettings : ObservableObject
         _ = SendTierAsync(back);
     }
 
-    private void ApplyNoteModel(string state, string tier, bool firstUse, string detail)
+    private void ApplyNoteModel(string state, string tier, string detail)
     {
         switch (state)
         {
             case "loading":
+                // The caption shows the load's own line while it runs
                 NoteModelEnabled = false;
-                NoteModelStatus = firstUse
-                    ? "Preparing for this computer, a few minutes the first time"
-                    : "Loading";
+                NoteModelStatus = "";
                 break;
             case "ready":
-                // A switch in flight puts a busy line on the status bar. The ready state ends it
+                // A switch in flight puts a busy line on the status bar. The ready state ends it.
+                // A revert lands on the model still resident, whose ready must not wipe the
+                // reason the switch failed
                 if (_revertTier is not null)
                 {
                     _status?.Append("Ready");
+                    NoteModelStatus = "";
                 }
 
                 _revertTier = null;
                 NoteModelEnabled = _tiers.Count > 1;
-                NoteModelStatus = "";
                 // The engine is authoritative about what is resident
                 if (_tiers.Contains(tier) && tier != _noteTier)
                 {

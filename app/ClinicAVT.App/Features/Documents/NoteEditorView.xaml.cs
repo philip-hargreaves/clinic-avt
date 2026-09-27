@@ -4,29 +4,25 @@ using ClinicAVT.App.Controls;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Core.Preferences;
-using ClinicAVT.App.Features.Guidance;
 
 namespace ClinicAVT.App.Features.Documents;
 
 public sealed partial class NoteEditorView : UserControl
 {
     private readonly TabFit _fit;
-    private bool _guidanceBelow = true;
 
     public NoteEditorView(
-        NoteViewModel viewModel, DocumentExportViewModel export, GuidanceSectionView guidance)
+        NoteViewModel viewModel, DocumentExportViewModel export, GuidanceViewModel guidance)
     {
         ViewModel = viewModel;
         Export = export;
-        Guidance = guidance;
         InitializeComponent();
-        GuidanceHost.Content = guidance;
         _fit = new TabFit(NoteBox, 0.5);
-        guidance.ViewModel.PropertyChanged += (_, e) =>
+        guidance.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(GuidanceViewModel.Hovered))
             {
-                LightSentence(guidance.ViewModel.Hovered);
+                LightSentence(guidance.Hovered);
             }
         };
         ViewModel.PropertyChanged += (_, e) =>
@@ -47,25 +43,9 @@ public sealed partial class NoteEditorView : UserControl
 
     public DocumentExportViewModel Export { get; }
 
-    /// <summary>The Guidelines section, for a host that shows it beside the note.</summary>
-    public GuidanceSectionView Guidance { get; }
-
-    public void PlaceGuidance(bool below)
-    {
-        _guidanceBelow = below;
-        GuidanceHost.Content = below ? Guidance : null;
-    }
-
-    // With guidance below, the note takes at most half the area. Otherwise it takes the
-    // area less the rows around it
+    // The note takes the area less the rows around it
     public void FitTabContent(FrameworkElement area)
     {
-        if (_guidanceBelow)
-        {
-            _fit.Fit(area);
-            return;
-        }
-
         var chrome = StateRow.ActualHeight + ActionRow.ActualHeight
             + 2 * Editor.RowSpacing + Editor.Padding.Top + Editor.Padding.Bottom;
         _fit.FitWithin(area, chrome);

@@ -23,7 +23,6 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 or nameof(ConsultationViewModel.Phase)
                 or nameof(ConsultationViewModel.ModelsReady))
             {
-                OnPropertyChanged(nameof(State));
                 OnPropertyChanged(nameof(IdleVisible));
                 OnPropertyChanged(nameof(RecordingVisible));
                 OnPropertyChanged(nameof(ReviewVisible));
@@ -53,23 +52,28 @@ public sealed partial class SessionControlsViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(Level));
             }
+            else if (e.PropertyName is nameof(StatusBarViewModel.ModelLoadLine))
+            {
+                OnPropertyChanged(nameof(FinalisingLabel));
+            }
         };
     }
 
     /// <summary>Microphone level, 0 to 1, for the ring around the disc.</summary>
     public double Level => _session.Status.MicLevel;
 
-    /// <summary>The centre-stage caption for the current finalise phase.</summary>
+    /// <summary>The centre-stage caption for the current finalise phase. A note that waits on
+    /// the note model's load says so, with the time.</summary>
     public string FinalisingLabel => _session.Phase switch
     {
         FinalisePhase.Transcript => "Writing transcript",
         FinalisePhase.Speakers => "Labelling speakers",
         FinalisePhase.Turns => "Writing transcript",
+        FinalisePhase.Note when _session.Status.ModelLoading =>
+            $"Waiting for the note model to load · {_session.Status.ModelLoadElapsed}",
         FinalisePhase.Note => "Preparing note",
         _ => "Finalising",
     };
-
-    public SessionState State => _session.State;
 
     // The view swaps by state. Computed here so it is testable
     public bool IdleVisible => _session.State == SessionState.Idle;

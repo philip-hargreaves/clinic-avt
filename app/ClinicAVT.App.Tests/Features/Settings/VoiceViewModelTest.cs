@@ -1,5 +1,5 @@
 using ClinicAVT.App.Core.Features.Settings;
-using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
 
@@ -11,7 +11,7 @@ public class VoiceViewModelTest
     public async Task SettingUpRunsTheDialogRereadsTheEngineAndTheHeadlineNamesEachStateOfThePrint()
     {
         var engine = new FakeEngineClient();
-        var status = new StatusBarViewModel();
+        var status = TestSession.Status(engine);
         var dialogs = new FakeDialogService
         {
             OnEnrolment = () =>
@@ -57,7 +57,7 @@ public class VoiceViewModelTest
     public async Task ForgettingIsConfirmedThenClearsAndReportsBack()
     {
         var engine = new FakeEngineClient { AnchorOrigin = "accrued", AnchorSessions = 4 };
-        var status = new StatusBarViewModel();
+        var status = TestSession.Status(engine);
         var dialogs = new FakeDialogService { Answer = false };
         var voice = new VoiceViewModel(new EngineApi(engine), dialogs, new FakeSession(), status);
         await voice.RefreshAsync();
@@ -79,7 +79,7 @@ public class VoiceViewModelTest
     public async Task NothingChangesDuringAConsultation()
     {
         var engine = new FakeEngineClient { AnchorOrigin = "accrued", AnchorSessions = 4 };
-        var status = new StatusBarViewModel();
+        var status = TestSession.Status(engine);
         var session = new FakeSession { ConsultationActive = true };
         var voice = new VoiceViewModel(new EngineApi(engine), new FakeDialogService(), session, status);
         await voice.RefreshAsync();

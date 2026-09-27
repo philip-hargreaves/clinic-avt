@@ -3,12 +3,15 @@ CloseHandle
 CreateJobObject
 CreateProcess
 GetExitCodeProcess
-GetProcessInformation
 GetSystemPowerStatus
+OpenProcess
+QueryFullProcessImageName
 PROCESS_POWER_THROTTLING_STATE
 PROCESS_POWER_THROTTLING_CURRENT_VERSION
 PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+SetForegroundWindow
 SetProcessInformation
+ShowWindow
 JOB_OBJECT_LIMIT
 JOBOBJECT_EXTENDED_LIMIT_INFORMATION
 ResumeThread

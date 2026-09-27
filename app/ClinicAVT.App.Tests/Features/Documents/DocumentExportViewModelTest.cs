@@ -1,5 +1,6 @@
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 
 namespace ClinicAVT.App.Tests.Features.Documents;
@@ -12,7 +13,7 @@ public class DocumentExportViewModelTest
         var note = new NoteViewModel();
         var clipboard = new FakeClipboard();
         var picker = new FakeFilePicker();
-        var status = new StatusBarViewModel();
+        var status = TestSession.Status();
         return (new DocumentExportViewModel(note, clipboard, picker, status), note, clipboard, picker, status);
     }
 

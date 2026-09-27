@@ -13,6 +13,4 @@ public interface IEngineProcess : IDisposable
     bool HasExited { get; }
 
     int ExitCode { get; }
-
-    void Kill();
 }

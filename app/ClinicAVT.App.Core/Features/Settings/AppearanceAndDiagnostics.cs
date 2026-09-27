@@ -6,6 +6,7 @@ using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Core.Shell;
+using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
@@ -16,7 +17,7 @@ namespace ClinicAVT.App.Core.Features.Settings;
 public sealed partial class AppearanceAndDiagnostics : ObservableObject
 {
     private readonly AppPreferences? _preferences;
-    private readonly IEngineHost? _engine;
+    private readonly IEngineApi? _client;
     private readonly ISessionState? _session;
     private readonly StatusBarViewModel? _status;
     private readonly IMachineInfoProvider? _machine;
@@ -24,17 +25,16 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     private readonly DemoMode? _demo;
     private readonly IFilePicker? _picker;
     private readonly IThemeService? _theme;
-    private readonly string _exportDirectory;
     private readonly bool _initialising;
     private bool _reverting;
 
     public AppearanceAndDiagnostics(
-        AppPreferences? preferences, IEngineHost? engine, ISessionState? session,
+        AppPreferences? preferences, IEngineApi? client, ISessionState? session,
         StatusBarViewModel? status, IMachineInfoProvider? machine, PerformanceCollector? metrics,
-        string? exportDirectory, DemoMode? demo, IFilePicker? picker, IThemeService? theme)
+        DemoMode? demo, IFilePicker? picker, IThemeService? theme)
     {
         _preferences = preferences;
-        _engine = engine;
+        _client = client;
         _session = session;
         _status = status;
         _machine = machine;
@@ -42,8 +42,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         _demo = demo;
         _picker = picker;
         _theme = theme;
-        _exportDirectory = exportDirectory
-            ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         // Restoring saved values is not the clinician changing them
         _initialising = true;
         DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
@@ -82,7 +80,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         set => Theme = AppPreferences.Themes[Math.Clamp(value, 0, AppPreferences.Themes.Count - 1)];
     }
 
-    /// <summary>Runs transcription on the NPU. The engine restarts to apply it.</summary>
+    /// <summary>Runs transcription on the NPU. A running engine moves it in place.</summary>
     [ObservableProperty]
     public partial bool NpuTranscription { get; set; }
 
@@ -94,24 +92,59 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         }
 
         // A restart would kill a live session
-        if (_session?.ConsultationActive == true)
+        if (ConsultationGuard.Blocks(_session, _status, "switching transcription device"))
         {
             _reverting = true;
             NpuTranscription = !value;
             _reverting = false;
-            _status?.Append("finish the consultation before switching transcription device");
             return;
         }
 
+        // Saved for the next start. A running engine moves speech recognition in place, and
+        // the note model stays loaded
         _preferences.Update(p => p.NpuTranscription = value);
-        if (_engine is not null)
+        if (_client.IsConnected())
         {
             _status?.Append(value
                 ? "preparing the low-power model - the first switch can take a few minutes"
                 : "switching speech recognition to the GPU", busy: true);
-            _engine.Shutdown();
-            _engine.Start();
+            _ = MoveSpeechRecognitionAsync(value);
         }
+    }
+
+    /// <summary>The engine's word on a move in progress.</summary>
+    public void Apply(AsrDeviceState state)
+    {
+        if (state.State == "ready")
+        {
+            _status?.Append("Ready");
+        }
+        else if (state.State == "failed")
+        {
+            TakeBack(state.Device == "NPU", state.Detail ?? "failed");
+        }
+    }
+
+    private async Task MoveSpeechRecognitionAsync(bool npu)
+    {
+        try
+        {
+            await _client!.SetAsrDeviceAsync(npu ? "NPU" : "GPU").ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            TakeBack(npu, e.Message);
+        }
+    }
+
+    // A move that could not happen leaves the toggle and the saved choice where they were
+    private void TakeBack(bool npu, string reason)
+    {
+        _reverting = true;
+        NpuTranscription = !npu;
+        _reverting = false;
+        _preferences.Update(p => p.NpuTranscription = !npu);
+        _status?.Append($"Could not switch transcription device: {reason}");
     }
 
     /// <summary>The Developer tools group, closed on every launch.</summary>
@@ -222,14 +255,9 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
             var html = ReportBuilder.Build(
                 _machine.Describe(), File.ReadAllLines(_metrics.Path), DateTimeOffset.UtcNow);
             var suggested = $"clinicavt-perf-{Environment.MachineName}-{DateTime.Now:yyyyMMdd}.html";
-            string? path;
-            if (_picker is null)
-            {
-                path = Path.Combine(_exportDirectory, suggested);
-                File.WriteAllText(path, html);
-            }
-            else if ((path = await _picker.SaveTextAsync(suggested, "HTML report", ".html", html)
-                         .ConfigureAwait(true)) is null)
+            var path = _picker is null ? null
+                : await _picker.SaveTextAsync(suggested, "HTML report", ".html", html).ConfigureAwait(true);
+            if (path is null)
             {
                 return; // cancelled, so no file and no caption
             }

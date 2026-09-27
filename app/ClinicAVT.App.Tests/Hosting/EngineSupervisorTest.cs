@@ -6,24 +6,15 @@ namespace ClinicAVT.App.Tests.Hosting;
 
 public class EngineSupervisorTest
 {
-    private sealed class FakeProcess(bool stillborn = false) : IEngineProcess
+    private sealed class FakeProcess(int? diedWith = null, int id = 1234) : IEngineProcess
     {
         public event Action? Exited;
 
-        public int Id => 1234;
+        public int Id => id;
 
-        public bool HasExited { get; private set; } = stillborn;
+        public bool HasExited { get; private set; } = diedWith is not null;
 
-        // A process dead at launch crashed. Only a requested exit is 0
-        public int ExitCode { get; private set; } = stillborn ? 1 : 0;
-
-        public bool Killed { get; private set; }
-
-        public void Kill()
-        {
-            Killed = true;
-            Crash(1);
-        }
+        public int ExitCode { get; private set; } = diedWith ?? 0;
 
         public void Crash(int exitCode)
         {
@@ -43,7 +34,11 @@ public class EngineSupervisorTest
 
         public bool FailNext { get; set; }
 
-        public bool NextIsStillborn { get; set; }
+        public int? NextDiesWith { get; set; }
+
+        public FakeProcess? Serving { get; set; }
+
+        public bool Released { get; private set; }
 
         public IEngineProcess Launch()
         {
@@ -53,11 +48,15 @@ public class EngineSupervisorTest
                 throw new InvalidOperationException("no engine");
             }
 
-            var process = new FakeProcess(NextIsStillborn);
-            NextIsStillborn = false;
+            var process = new FakeProcess(NextDiesWith);
+            NextDiesWith = null;
             Launched.Add(process);
             return process;
         }
+
+        public IEngineProcess? Adopt() => Serving;
+
+        public void Release() => Released = true;
     }
 
     private sealed class FakeCrashLog : ICrashLog
@@ -81,11 +80,17 @@ public class EngineSupervisorTest
 
         public string? InFlight { get; set; }
 
+        public int ExitRequests { get; private set; }
+
         public EngineSupervisor Host { get; }
 
         public Harness()
         {
-            Host = new EngineSupervisor(Launcher, Session, Clock, Log, () => InFlight);
+            Host = new EngineSupervisor(Launcher, Session, Clock, Log, () => InFlight, () =>
+            {
+                ExitRequests++;
+                return Task.CompletedTask;
+            });
             Host.StatusChanged += Statuses.Add;
         }
 
@@ -101,7 +106,7 @@ public class EngineSupervisorTest
     }
 
     [Fact]
-    public void ACrashRestartsSilentlyIsLoggedAndTheNextOneWaits()
+    public async Task ACrashRestartsSilentlyIsLoggedAndTheNextOneWaits()
     {
         var h = new Harness();
 
@@ -118,7 +123,6 @@ public class EngineSupervisorTest
         h.Current.Crash(-7);
 
         Assert.Equal(EngineStatus.Running, h.Host.Status);
-        Assert.Null(h.Host.Fault);
         Assert.Equal(2, h.Launcher.Launched.Count);
         Assert.Equal(
             new[] { EngineStatus.Running, EngineStatus.Restarting, EngineStatus.Running },
@@ -140,10 +144,10 @@ public class EngineSupervisorTest
         Assert.Equal(EngineStatus.Running, h.Host.Status);
         Assert.Equal(3, h.Launcher.Launched.Count);
 
-        // Shutdown during the wait cancels the relaunch
+        // Releasing during the wait cancels the relaunch
         h.Current.Crash(-1);
         Assert.Equal(EngineStatus.Restarting, h.Host.Status);
-        h.Host.Shutdown();
+        await h.Host.ReleaseAsync();
         h.Clock.Advance(RestartPolicy.MaxBackoff);
         Assert.Equal(EngineStatus.Stopped, h.Host.Status);
         Assert.Equal(3, h.Launcher.Launched.Count);
@@ -161,7 +165,6 @@ public class EngineSupervisorTest
         }
 
         Assert.Equal(EngineStatus.Faulted, h.Host.Status);
-        Assert.Equal(EngineFaultKind.CrashLoop, h.Host.Fault!.Kind);
         Assert.Equal(RestartPolicy.StormLimit, h.Launcher.Launched.Count);
         Assert.Equal(RestartPolicy.StormLimit, h.Log.Reports.Count);
         Assert.Equal(RecoveryAction.GiveUp, h.Log.Reports[^1].Action);
@@ -169,7 +172,6 @@ public class EngineSupervisorTest
         h.Host.Start();
 
         Assert.Equal(EngineStatus.Running, h.Host.Status);
-        Assert.Null(h.Host.Fault);
         h.Current.Crash(-1);
         Assert.Equal(EngineStatus.Running, h.Host.Status);
     }
@@ -187,34 +189,50 @@ public class EngineSupervisorTest
         }
 
         Assert.Equal(EngineStatus.Running, h.Host.Status);
-        Assert.Null(h.Host.Fault);
     }
 
     [Fact]
-    public void ShutdownAndACleanExitAreStopsNotCrashes()
+    public async Task ReleaseLetsTheEngineOutliveTheApp()
     {
         var h = new Harness();
         h.Host.Start();
 
-        h.Host.Shutdown();
+        await h.Host.ReleaseAsync();
 
+        Assert.Equal(1, h.ExitRequests);
+        Assert.True(h.Launcher.Released);
         Assert.Equal(EngineStatus.Stopped, h.Host.Status);
-        Assert.True(h.Current.Killed);
-        Assert.Single(h.Launcher.Launched);
-        Assert.Null(h.Host.Fault);
-        Assert.Null(h.Host.EnginePid);
-        Assert.Empty(h.Log.Reports);
+    }
 
+    // The engine only leaves on its own once no shell is connected. Doing so under a
+    // running app is a failure, and it comes back
+    [Fact]
+    public void AnExitNobodyAskedForIsACrash()
+    {
+        var h = new Harness();
         h.Host.Start();
-        Assert.Equal(EngineStatus.Running, h.Host.Status);
+
         h.Current.Crash(0);
 
-        Assert.Equal(EngineStatus.Stopped, h.Host.Status);
-        Assert.Null(h.Host.Fault);
-        Assert.Equal(2, h.Launcher.Launched.Count);
-        Assert.Empty(h.Log.Reports);
-        h.Host.Start();
         Assert.Equal(EngineStatus.Running, h.Host.Status);
+        Assert.Equal(2, h.Launcher.Launched.Count);
+        Assert.Equal(0, Assert.Single(h.Log.Reports).ExitCode);
+    }
+
+    // A closed app leaves its engine to finish a load. The next one takes it over
+    [Fact]
+    public void AnEngineStillServingIsTakenOverRatherThanCounted()
+    {
+        var h = new Harness();
+        h.Launcher.NextDiesWith = EngineSupervisor.AlreadyServing;
+        h.Launcher.Serving = new FakeProcess(id: 4321);
+
+        h.Host.Start();
+
+        Assert.Equal(EngineStatus.Running, h.Host.Status);
+        Assert.Equal(4321, h.Host.EnginePid);
+        Assert.Empty(h.Log.Reports);
+        Assert.Single(h.Launcher.Launched);
     }
 
     [Fact]
@@ -226,14 +244,14 @@ public class EngineSupervisorTest
         h.Host.Start();
 
         Assert.Equal(EngineStatus.Faulted, h.Host.Status);
-        Assert.Equal(new EngineFault(EngineFaultKind.LaunchFailed), h.Host.Fault);
+        Assert.Empty(h.Log.Reports);
     }
 
     [Fact]
     public void DeathBeforeTheHandlerAttachesIsStillHandled()
     {
         var h = new Harness();
-        h.Launcher.NextIsStillborn = true;
+        h.Launcher.NextDiesWith = 1;
 
         h.Host.Start();
 

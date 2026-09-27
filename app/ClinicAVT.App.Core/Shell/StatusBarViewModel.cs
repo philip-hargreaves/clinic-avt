@@ -15,11 +15,12 @@ namespace ClinicAVT.App.Core.Shell;
 /// </summary>
 public sealed partial class StatusBarViewModel : ObservableObject
 {
-    private readonly IEngineApi? _engine;
+    private readonly IEngineApi _engine;
+    private readonly IUiDispatcher _dispatcher;
     private readonly ILogger? _logger;
-    private readonly TimeProvider _time = TimeProvider.System;
+    private readonly TimeProvider _time;
     private readonly ThroughputMeter _meter = new();
-    private readonly Func<double> _memoryGb = () => 0;
+    private readonly Func<double>? _memoryGb;
     private readonly long _started;
 
     private EngineStatus _status = EngineStatus.Stopped;
@@ -31,12 +32,21 @@ public sealed partial class StatusBarViewModel : ObservableObject
     private string _noteName = "";
     private string _asrDevice = "";
     private string _noteDevice = "";
-
-    public StatusBarViewModel(ILogger? logger = null) => _logger = logger;
+    private DateTimeOffset _loadSince;
+    // The lane has named its model since this connection began. The model list, fetched
+    // before the shell sends its saved tier, would name the engine's default instead
+    private bool _laneNamed;
+    private bool _preparing;
+    // First-time setup holds recording while the models compile for this computer
+    private bool _settingUp;
+    private DateTimeOffset _setupSince;
+    private ITimer? _tick;
+    // The store stopped taking writes. It stays on the line until the next consultation starts
+    private string _storageFault = "";
 
     /// <summary>
-    /// With an engine the bar meters generation live. Whichever lane streams sends one partial
-    /// per token, so the number moves with every token.
+    /// The bar meters generation live. Whichever lane streams sends one partial per token, so
+    /// the number moves with every token. Without a memory probe there is no memory chip.
     /// </summary>
     public StatusBarViewModel(IEngineApi engine, IUiDispatcher dispatcher,
         TimeProvider? time = null, Func<double>? memoryGb = null, ILogger? logger = null)
@@ -44,12 +54,22 @@ public sealed partial class StatusBarViewModel : ObservableObject
         _engine = engine;
         _logger = logger;
         _time = time ?? TimeProvider.System;
-        _memoryGb = memoryGb ?? (() => 0);
+        _memoryGb = memoryGb;
         _started = _time.GetTimestamp();
+        _dispatcher = dispatcher;
         engine.OnConnected(dispatcher, () =>
         {
             _ = LoadModelsAsync();
             StartPolling();
+        });
+        // A load in progress is lost with the engine that was running it
+        engine.ConnectedChanged += connected => dispatcher.Post(() =>
+        {
+            if (!connected)
+            {
+                EndModelLoad();
+                _laneNamed = false;
+            }
         });
 
         engine.NotificationReceived += notification => dispatcher.Post(() =>
@@ -70,16 +90,18 @@ public sealed partial class StatusBarViewModel : ObservableObject
                     PublishThroughput(null);
                     break;
                 // A tier switch changes which model the chip names. The notification
-                // carries the name, so the chip is right even when the store call
-                // behind it times out on a busy engine
-                case NoteModelState { State: "ready" } resident:
-                    if (!string.IsNullOrWhiteSpace(resident.Name))
+                // carries the name, so the chip is right from the start of the load and
+                // even when the store call behind it times out on a busy engine
+                case NoteModelState model:
+                    ApplyNoteModel(model.State, model.FirstUse, model.Name);
+                    if (model.State == "ready")
                     {
-                        _noteName = resident.Name;
-                        RecomputeChips();
+                        _ = LoadModelsAsync();
                     }
 
-                    _ = LoadModelsAsync();
+                    break;
+                case StorageFault fault:
+                    ShowStorageFault(fault.Detail);
                     break;
                 default:
                     break;
@@ -149,20 +171,140 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(MemoryChipVisible))]
     public partial string MemoryChip { get; private set; } = "";
 
-    // One status on screen, replaced as things happen. Abnormal readiness outranks activity,
-    // and activity outranks Ready
+    // One status on screen, replaced as things happen. A storage fault outranks everything
+    // while the engine runs, abnormal readiness outranks activity, and activity outranks Ready.
+    // A note model loading behind a ready app is not shown here: nothing waits on it, and the
+    // places that do wait say so themselves
     public string DisplayLabel =>
-        !_ready || _status != EngineStatus.Running ? EngineStateLabel
+        _status == EngineStatus.Running && _storageFault.Length > 0 ? _storageFault
+        : _status == EngineStatus.Running && ShowsSetup ? SetupLine
+        : !_ready || _status != EngineStatus.Running ? EngineStateLabel
         : LatestActivity.Length > 0 ? LatestActivity
         : EngineStateLabel;
 
-    public bool Busy => EngineStarting || _activityBusy;
+    // Setup shows its own bar in place of the ring
+    public bool Busy => !ShowsSetup && (EngineStarting || _activityBusy);
+
+    public bool ShowsSetup => _settingUp && !MicVisible;
+
+    /// <summary>Time since first-time setup began, as 2:10.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SetupLine))]
+    [NotifyPropertyChangedFor(nameof(DisplayLabel))]
+    public partial string SetupElapsed { get; private set; } = "";
+
+    public string SetupLine =>
+        $"Setting up for this computer · {SetupElapsed} · this can take a few minutes";
+
+    /// <summary>A note model is loading. Loads can take minutes, so the line counts the time.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ModelLoadLine))]
+    public partial bool ModelLoading { get; private set; }
+
+    /// <summary>Time since the load began, as 0:48.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ModelLoadLine))]
+    public partial string ModelLoadElapsed { get; private set; } = "";
+
+    public string ModelLoadLine => ModelLoading
+        ? $"{(_preparing ? "Preparing the note model for this computer" : "Loading the note model")} · {ModelLoadElapsed} · this can take a few minutes"
+        : "";
+
+    /// <summary>The note lane's state as the engine reports it, in a notification or a reply.
+    /// A reply does not say whether the load is a first use, so it passes null.</summary>
+    public void ApplyNoteModel(string state, bool? firstUse, string? name = null)
+    {
+        if (!string.IsNullOrWhiteSpace(name) && state is "loading" or "ready")
+        {
+            _noteName = name;
+            _laneNamed = true;
+            RecomputeChips();
+        }
+
+        // A switch passes through idle between the old model and the new one, so only an
+        // outcome ends a load
+        if (state is "ready" or "failed")
+        {
+            EndModelLoad();
+            return;
+        }
+
+        if (state != "loading")
+        {
+            return;
+        }
+
+        _preparing = firstUse ?? _preparing;
+        if (ModelLoading)
+        {
+            OnPropertyChanged(nameof(ModelLoadLine));
+            return;
+        }
+
+        _loadSince = _time.GetUtcNow();
+        ModelLoadElapsed = "0:00";
+        ModelLoading = true;
+        Tick();
+    }
+
+    /// <summary>Recording is held while the models compile for this computer.</summary>
+    public void SetSettingUp(bool settingUp)
+    {
+        if (settingUp == _settingUp)
+        {
+            return;
+        }
+
+        _settingUp = settingUp;
+        if (settingUp)
+        {
+            _setupSince = _time.GetUtcNow();
+            SetupElapsed = "0:00";
+            _logger?.Line("first-time setup: compiling the models for this computer");
+        }
+
+        Tick();
+        OnPropertyChanged(nameof(ShowsSetup));
+        OnPropertyChanged(nameof(DisplayLabel));
+        OnPropertyChanged(nameof(Busy));
+    }
+
+    // One clock for both counters, running only while one of them counts
+    private void Tick()
+    {
+        if (ModelLoading || _settingUp)
+        {
+            _tick ??= _time.CreateTimer(
+                _ => _dispatcher.Post(OnTick), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
+        else
+        {
+            _tick?.Dispose();
+            _tick = null;
+        }
+    }
+
+    private void OnTick()
+    {
+        var now = _time.GetUtcNow();
+        if (ModelLoading)
+        {
+            ModelLoadElapsed = Words.Clock((now - _loadSince).TotalSeconds);
+        }
+
+        if (_settingUp)
+        {
+            SetupElapsed = Words.Clock((now - _setupSince).TotalSeconds);
+        }
+    }
+
+    private void EndModelLoad()
+    {
+        ModelLoading = false;
+        Tick();
+    }
 
     public string DemoLabel => Demo ? "Demo" : "";
-
-    /// <summary>Amber when transcription is barely keeping up with the room.</summary>
-    public bool RealtimeLow =>
-        (MicVisible || DecodeActive) && RealtimeFactor > 0 && RealtimeFactor < 2;
 
     public bool AsrChipVisible => MetricsVisible && AsrChip.Length > 0;
 
@@ -175,13 +317,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
 
     public bool NoteActive => TokensStreaming;
 
-    // The resting dot and healthy text are the visible-inverse halves of the
-    // colour pairs the view swaps, exposed as properties for XAML binding
+    // The resting dot is the visible-inverse half of the colour pair the view
+    // swaps, exposed as a property for XAML binding
     public bool AsrResting => !AsrActive;
 
     public bool NoteResting => !NoteActive;
-
-    public bool RealtimeHealthy => !RealtimeLow;
 
     public void SetEngineState(EngineStatus status)
     {
@@ -219,11 +359,23 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public void SetMicVisible(bool visible)
     {
         MicVisible = visible;
-        OnPropertyChanged(nameof(RealtimeLow));
+        OnPropertyChanged(nameof(ShowsSetup));
+        OnPropertyChanged(nameof(DisplayLabel));
+        OnPropertyChanged(nameof(Busy));
         RecomputeChips();
         if (!visible)
         {
             SetMicLevel(0);
+        }
+    }
+
+    /// <summary>A new consultation starts with the storage fault line cleared.</summary>
+    public void ClearStorageFault()
+    {
+        if (_storageFault.Length > 0)
+        {
+            _storageFault = "";
+            OnPropertyChanged(nameof(DisplayLabel));
         }
     }
 
@@ -245,7 +397,6 @@ public sealed partial class StatusBarViewModel : ObservableObject
         }
 
         DecodeActive = active;
-        OnPropertyChanged(nameof(RealtimeLow));
         RecomputeChips();
     }
 
@@ -254,12 +405,12 @@ public sealed partial class StatusBarViewModel : ObservableObject
     // last value
     public async Task PollMetricsOnceAsync()
     {
-        var memory = await Task.Run(_memoryGb).ConfigureAwait(true);
+        var memory = _memoryGb is null ? 0 : await Task.Run(_memoryGb).ConfigureAwait(true);
         MemoryChip = memory > 0
             ? $"Memory · {memory.ToString("0.0", CultureInfo.CurrentCulture)} GB"
             : "";
 
-        if (!_engine.IsConnected())
+        if (!_engine.Connected)
         {
             return;
         }
@@ -281,10 +432,15 @@ public sealed partial class StatusBarViewModel : ObservableObject
         }).ConfigureAwait(true);
     }
 
-    partial void OnRealtimeFactorChanged(double value)
+    partial void OnRealtimeFactorChanged(double value) => RecomputeChips();
+
+    private void ShowStorageFault(string detail)
     {
-        OnPropertyChanged(nameof(RealtimeLow));
-        RecomputeChips();
+        _storageFault = detail.Length > 0
+            ? $"Can't save to disk: {detail}. Recording continues; free some space."
+            : "Can't save to disk. Recording continues; free some space.";
+        _logger?.Line(_storageFault);
+        OnPropertyChanged(nameof(DisplayLabel));
     }
 
     private void Recompute()
@@ -314,7 +470,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
 
     private async Task LoadModelsAsync()
     {
-        if (!_engine.IsConnected())
+        if (!_engine.Connected)
         {
             return;
         }
@@ -324,12 +480,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
             var models = await _engine.ListModelsAsync().ConfigureAwait(true);
             // The chip names the model the engine marks active for the role. Without that flag
             // the default tier is assumed
+            var laneName = _noteName;
             _asrName = _noteName = "";
             foreach (var model in models.OrderBy(m => m.Active ? 0 : m.Tier == "default" ? 1 : 2))
             {
-                var name = string.IsNullOrWhiteSpace(model.Name)
-                    ? ModelNames.Friendly(model.Id)
-                    : model.Name;
+                var name = ModelNames.Display(model);
                 var device = ShortDevice(model.Device);
                 if (model.Task == "asr" && _asrName.Length == 0)
                 {
@@ -339,6 +494,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
                 {
                     (_noteName, _noteDevice) = (name, device);
                 }
+            }
+
+            if (_laneNamed && laneName.Length > 0)
+            {
+                _noteName = laneName;
             }
         }).ConfigureAwait(true);
 
@@ -354,7 +514,6 @@ public sealed partial class StatusBarViewModel : ObservableObject
         OnPropertyChanged(nameof(NoteActive));
         OnPropertyChanged(nameof(AsrResting));
         OnPropertyChanged(nameof(NoteResting));
-        OnPropertyChanged(nameof(RealtimeHealthy));
         AsrChip = Chip(_asrName, _asrDevice,
             (MicVisible || DecodeActive) && RealtimeFactor > 0
                 ? $"{Figure(RealtimeFactor)}× RT"
@@ -382,7 +541,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
 
     private void StartPolling()
     {
-        if (_engine is not null && !_polling)
+        if (!_polling)
         {
             _ = PollWhileConnectedAsync();
         }
@@ -395,7 +554,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
         _polling = true;
         try
         {
-            while (_engine!.Connected)
+            while (_engine.Connected)
             {
                 await PollMetricsOnceAsync().ConfigureAwait(true);
                 await Task.Delay(TimeSpan.FromSeconds(MicVisible || DecodeActive ? 1 : 5), _time)

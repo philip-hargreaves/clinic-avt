@@ -5,8 +5,8 @@ using ClinicAVT.App.Core.Hosting;
 namespace ClinicAVT.App.Platform;
 
 /// <summary>
-/// The shell's diagnostics log beside the engine's log, one line per event. It rotates at
-/// launch so a crash's file survives the next start.
+/// The shell's diagnostics log beside the engine's log, one line per event. Launches append
+/// until the file is large, so a crash's lines survive many starts.
 /// </summary>
 public sealed class FileLoggerProvider : ILoggerProvider
 {

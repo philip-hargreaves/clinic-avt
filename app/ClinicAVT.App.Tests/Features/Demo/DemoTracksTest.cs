@@ -33,7 +33,7 @@ public class DemoTracksTest
             root.Delete(recursive: true);
         }
 
-        var real = SessionContractWav.Write(seconds: 3);
+        var real = SilenceWav.Write(seconds: 3);
         try
         {
             Assert.Equal(3.0, DemoTracks.DurationSeconds(real), 3);

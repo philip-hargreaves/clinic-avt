@@ -25,6 +25,7 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
     private readonly IDialogService _dialogs;
     private readonly StatusBarViewModel _status;
     private readonly Action<EngineNotification> _onNotification;
+    private readonly Action<bool> _onConnected;
     private string _savedHappened = "";
     private string _savedLearned = "";
     private string _savedNext = "";
@@ -43,7 +44,10 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         _dialogs = dialogs;
         _status = status;
         _onNotification = notification => dispatcher.Post(() => HandleNotification(notification));
+        _onConnected = connected => dispatcher.Post(() => HandleConnected(connected));
         _engine.NotificationReceived += _onNotification;
+        _engine.ConnectedChanged += _onConnected;
+        _status.PropertyChanged += OnStatusChanged;
     }
 
     /// <summary>The consultation's label. Typing here renames the consultation.</summary>
@@ -57,14 +61,21 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
     public partial string Month { get; private set; } = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSummary))]
     [NotifyPropertyChangedFor(nameof(Warning))]
     [NotifyPropertyChangedFor(nameof(HasWarning))]
     public partial string Summary { get; set; } = "";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RewriteSummaryCommand))]
+    [NotifyPropertyChangedFor(nameof(SummaryPlaceholder))]
     public partial bool SummaryPending { get; private set; }
+
+    /// <summary>Said only while a summary is on its way, never over a failed one. A summary
+    /// asked for during a load waits for it, and says so.</summary>
+    public string SummaryPlaceholder =>
+        !SummaryPending ? ""
+        : _status.ModelLoading ? $"Waiting for the note model to load · {_status.ModelLoadElapsed}"
+        : "Writing the case study";
 
     /// <summary>Why there is no summary, when the engine could not write one.</summary>
     [ObservableProperty]
@@ -96,8 +107,6 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
     /// The title as shown and exported. It is the label, or the month until there is one.
     /// </summary>
     public string DisplayTitle => Title.Trim().Length > 0 ? Title.Trim() : Month;
-
-    public bool HasSummary => Summary.Length > 0;
 
     public bool HasSummaryProblem => SummaryProblem.Length > 0;
 
@@ -150,7 +159,7 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
             await LoadReferencesAsync(got.Answers?.References ?? []).ConfigureAwait(true);
         }).ConfigureAwait(true);
 
-        if (opened && !HasSummary)
+        if (opened && Summary.Length == 0)
         {
             await RequestSummaryAsync().ConfigureAwait(true);
         }
@@ -217,7 +226,20 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void Dispose() => _engine.NotificationReceived -= _onNotification;
+    public void Dispose()
+    {
+        _engine.NotificationReceived -= _onNotification;
+        _engine.ConnectedChanged -= _onConnected;
+        _status.PropertyChanged -= OnStatusChanged;
+    }
+
+    private void OnStatusChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (SummaryPending && e.PropertyName is nameof(StatusBarViewModel.ModelLoadLine))
+        {
+            OnPropertyChanged(nameof(SummaryPlaceholder));
+        }
+    }
 
     // One row per review card, in card order. A ticked guideline the review does not show keeps
     // its row from the stored words. No guidance at all leaves no section
@@ -331,10 +353,25 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         {
             await _engine.SummariseReflectionAsync(SessionId).ConfigureAwait(true);
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            SummaryPending = false;
+            SummaryProblem = "No summary: the engine did not answer. Rewrite to try again";
+        }
+        catch (Exception e)
         {
             SummaryPending = false;
             SummaryProblem = $"No summary: {e.Message}";
+        }
+    }
+
+    // A summary on its way is lost with the engine that was writing it
+    private void HandleConnected(bool connected)
+    {
+        if (!connected && SummaryPending)
+        {
+            SummaryPending = false;
+            SummaryProblem = "No summary: the engine restarted. Rewrite to try again";
         }
     }
 

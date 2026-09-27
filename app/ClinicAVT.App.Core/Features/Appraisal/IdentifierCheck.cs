@@ -51,7 +51,8 @@ public static partial class IdentifierCheck
         @"\b(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)\b\.?(?:,?\s+\d{4})?|(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)\b\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\b)")]
     private static partial Regex WrittenDate();
 
-    [GeneratedRegex(@"\b(?:aged\s+\d{1,3}|\d{1,3}[\s-]year[\s-]old|\d{1,3}\s*y/?o)\b",
+    // Every spelling the engine's scrub removes
+    [GeneratedRegex(@"\b(?:(?:aged?|age of)\s+\d{1,3}|\d{1,3}(?:[ -]?(?:year|yr)s?[ -]old|\s*y/?o))\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex ExactAge();
 

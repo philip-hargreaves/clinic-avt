@@ -1,7 +1,6 @@
 using System.Text.Json;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Features.Appraisal;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
@@ -13,7 +12,7 @@ public class ReflectionViewModelTest
     private static (ReflectionViewModel Reflection, FakeEngineClient Engine) Create()
     {
         var engine = new FakeEngineClient();
-        return (new ReflectionViewModel(new EngineApi(engine), new InlineDispatcher(), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService(), new StatusBarViewModel()), engine);
+        return (new ReflectionViewModel(new EngineApi(engine), new InlineDispatcher(), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService(), TestSession.Status(engine)), engine);
     }
 
     [Fact]
@@ -218,13 +217,13 @@ public class ReflectionViewModelTest
 
         await reflection.LoadAsync("abc");
 
-        Assert.False(reflection.HasSummary);
+        Assert.Equal("", reflection.Summary);
         Assert.Contains("the model is not loaded", reflection.SummaryProblem);
         Assert.False(reflection.SummaryPending);
 
         engine.SummaryFails = false;
         await reflection.RewriteSummaryCommand.ExecuteAsync(null);
-        Assert.True(reflection.HasSummary);
+        Assert.NotEqual("", reflection.Summary);
         Assert.Equal("", reflection.SummaryProblem);
         var mine = reflection.Summary;
 
@@ -232,6 +231,39 @@ public class ReflectionViewModelTest
             JsonSerializer.SerializeToElement(new { id = "other", text = "theirs" }));
 
         Assert.Equal(mine, reflection.Summary);
+    }
+
+    // A summary on its way is lost with the engine writing it, and the sheet stops waiting
+    [Fact]
+    public async Task ASummaryLostWithTheEngineSaysSoInsteadOfWaiting()
+    {
+        var (reflection, engine) = Create();
+        engine.SummarySilent = true;
+        await reflection.LoadAsync("abc");
+        Assert.True(reflection.SummaryPending);
+        Assert.Equal("Writing the case study", reflection.SummaryPlaceholder);
+
+        engine.SetConnected(false);
+
+        Assert.False(reflection.SummaryPending);
+        Assert.Contains("the engine restarted", reflection.SummaryProblem);
+        Assert.Equal("", reflection.SummaryPlaceholder);
+    }
+
+    // A summary asked for while the model loads waits for it, and says so
+    [Fact]
+    public async Task ASummaryWaitingOnALoadSaysSo()
+    {
+        var engine = new FakeEngineClient { SummarySilent = true };
+        var status = TestSession.Status(engine);
+        using var reflection = new ReflectionViewModel(new EngineApi(engine), new InlineDispatcher(), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService(), status);
+        status.ApplyNoteModel("loading", firstUse: false);
+
+        await reflection.LoadAsync("abc");
+
+        Assert.StartsWith("Waiting for the note model to load · 0:00", reflection.SummaryPlaceholder);
+        status.ApplyNoteModel("ready", firstUse: false);
+        Assert.Equal("Writing the case study", reflection.SummaryPlaceholder);
     }
 
     [Fact]

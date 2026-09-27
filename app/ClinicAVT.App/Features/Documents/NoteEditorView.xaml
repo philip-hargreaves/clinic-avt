@@ -6,13 +6,11 @@
     xmlns:controls="using:ClinicAVT.App.Controls">
 
     <Grid x:Name="Editor" Padding="0,10,0,8" RowSpacing="10">
-        <!-- The note sizes to its text up to a cap set in code. Guidance takes the last row,
-             which stays empty when the host shows guidance elsewhere -->
+        <!-- The note sizes to its text up to a cap set in code -->
         <Grid.RowDefinitions>
             <RowDefinition x:Name="StateRow" Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition x:Name="ActionRow" Height="Auto" />
-            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <Grid ColumnSpacing="8">
@@ -119,13 +117,6 @@
                 </Button>
             </StackPanel>
         </Grid>
-
-        <ContentControl
-            x:Name="GuidanceHost"
-            Grid.Row="3"
-            Margin="0,12,0,0"
-            HorizontalContentAlignment="Stretch"
-            VerticalContentAlignment="Stretch" />
 
         <!-- Regenerate asks first because an edited note holds the clinician's own wording -->
         <TeachingTip

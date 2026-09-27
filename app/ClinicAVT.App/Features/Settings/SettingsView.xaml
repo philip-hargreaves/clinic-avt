@@ -12,7 +12,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <controls:PageHeader Title="{x:Bind ViewModel.Heading, Mode=OneWay}" />
+        <controls:PageHeader Title="Settings" />
         <ScrollViewer Grid.Row="1">
             <Grid Margin="24,0,24,24">
                 <Grid.ColumnDefinitions>
@@ -72,11 +72,15 @@
 
                 <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Performance" />
                 <toolkit:SettingsCard Description="{x:Bind ViewModel.NoteModel.NoteModelCaption, Mode=OneWay}" Header="Note model">
-                    <ComboBox
-                        MinWidth="160"
-                        IsEnabled="{x:Bind ViewModel.NoteModel.NoteModelEnabled, Mode=OneWay}"
-                        ItemsSource="{x:Bind ViewModel.NoteModel.NoteModelOptions}"
-                        SelectedIndex="{x:Bind ViewModel.NoteModel.NoteModelIndex, Mode=TwoWay}" />
+                    <StackPanel Spacing="8">
+                        <ComboBox
+                            MinWidth="160"
+                            AutomationProperties.Name="Note model"
+                            IsEnabled="{x:Bind ViewModel.NoteModel.PickerEnabled, Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.NoteModel.NoteModelOptions}"
+                            SelectedIndex="{x:Bind ViewModel.NoteModel.NoteModelIndex, Mode=TwoWay}" />
+                        <ProgressBar IsIndeterminate="True" Visibility="{x:Bind ViewModel.NoteModel.ModelLoading, Mode=OneWay}" />
+                    </StackPanel>
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard Description="Runs speech recognition on the NPU to save battery. Transcripts may take a little longer." Header="Low-power mode">
                     <ToggleSwitch

@@ -70,7 +70,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         if (method == "engine/hello")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(
-                new PeerInfo(EngineInfo.Name, EngineInfo.Version, Protocol.ProtocolVersion),
+                new PeerInfo(ExpectedEngine.Name, ExpectedEngine.Version, Protocol.ProtocolVersion),
                 Protocol.JsonOptions));
         }
 
@@ -157,6 +157,11 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         if (method == "reflection/summary")
         {
             var id = JsonDocument.Parse(Requests[^1].Params).RootElement.GetProperty("id").GetString();
+            if (SummarySilent)
+            {
+                return Task.FromResult(JsonSerializer.SerializeToElement(new { }));
+            }
+
             if (SummaryFails)
             {
                 RaiseNotification("reflection/summaryFailed",
@@ -217,13 +222,15 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         {
             var tier = JsonDocument.Parse(Requests[^1].Params).RootElement
                 .GetProperty("tier").GetString() ?? "default";
+            // The loaded tier answers ready, as a warm engine does. A new one starts loading
+            var state = tier == NoteTier ? "ready" : "loading";
             NoteTier = tier;
             return Task.FromResult(JsonSerializer.SerializeToElement(new
             {
                 tier,
                 id = tier == "default" ? "qwen3.5-9b-int4" : "",
                 name = tier == "default" ? "Qwen3.5 9B" : "",
-                state = "loading",
+                state,
             }));
         }
 
@@ -407,6 +414,11 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
     public List<ReflectionReference> ReflectionReferences { get; } = [];
 
     public bool SummaryFails { get; set; }
+
+
+    // The request is taken and nothing ever comes back, as when the engine dies writing it
+
+    public bool SummarySilent { get; set; }
 
     /// <summary>Served by reflection/list.</summary>
     public List<(string Id, string StartedAt, string Label, string Learned, string Summary)> Reflections { get; } = [];
