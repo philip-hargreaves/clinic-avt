@@ -28,6 +28,12 @@ public sealed record AudioInput(
 /// <summary>A file replayed as the session's audio source.</summary>
 public sealed record ReplayRequest(string Path, double Speed, bool Monitor);
 
+/// <summary>
+/// An audio file's length, and when it was recorded as an ISO UTC instant: the container's
+/// own time, else the file's modified time.
+/// </summary>
+public sealed record RecordingInfo(double Seconds = 0, string? RecordedAt = null);
+
 public sealed record SessionSummary(
     string Id = "", string StartedAt = "", string EndedAt = "", string? Label = null,
     string? EditedAt = null, double AudioSeconds = 0, bool Demo = false, bool HasReflection = false);

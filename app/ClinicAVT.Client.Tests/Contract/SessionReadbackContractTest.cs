@@ -61,9 +61,10 @@ public class SessionReadbackContractTest
             Assert.Equal(JsonValueKind.Null, note.GetProperty("editedAt").ValueKind);
             Assert.Equal("", sessions[0].GetProperty("label").GetString());
 
-            await client.RequestAsync("note/update", new { id, text = "edited" }, Timeout);
+            // A WinUI text box ends its lines with CR alone; the store keeps LF
+            await client.RequestAsync("note/update", new { id, text = "Plan\redited\r\n" }, Timeout);
             note = await client.RequestAsync("session/note", new { id }, Timeout);
-            Assert.Equal("edited", note.GetProperty("text").GetString());
+            Assert.Equal("Plan\nedited\n", note.GetProperty("text").GetString());
             Assert.False(string.IsNullOrEmpty(note.GetProperty("editedAt").GetString()));
 
             var patient = await client.RequestAsync("session/patient", new { id }, Timeout);

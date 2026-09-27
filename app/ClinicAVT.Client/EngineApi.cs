@@ -74,6 +74,29 @@ public sealed class EngineApi : IEngineApi
     public async Task<string> StopSessionAsync() =>
         Text(await CallAsync("session/stop", null, StopTimeout).ConfigureAwait(false), "sessionId");
 
+    public Task<RecordingInfo> InspectRecordingAsync(string path) =>
+        ReplyAsync<RecordingInfo>("recording/inspect", new { path }, LongTimeout);
+
+    // The engine answers with the session at once and ends the import with a notification, which
+    // can overtake the answer. So the wait starts before the request
+    public async Task<string> ImportRecordingAsync(string path, string startedAt, bool retain)
+    {
+        var end = new ImportEnd();
+        NotificationReceived += end.Seen;
+        _transport.ConnectedChanged += end.Lost;
+        try
+        {
+            var reply = await CallAsync("session/import", new { path, startedAt, retain }, LongTimeout)
+                .ConfigureAwait(false);
+            return await end.For(Text(reply, "sessionId")).ConfigureAwait(false);
+        }
+        finally
+        {
+            NotificationReceived -= end.Seen;
+            _transport.ConnectedChanged -= end.Lost;
+        }
+    }
+
     public Task CancelSessionAsync() => CallAsync("session/cancel");
 
     public Task PauseSessionAsync(bool paused) => CallAsync("session/pause", new { paused });
@@ -252,6 +275,76 @@ public sealed class EngineApi : IEngineApi
     }
 
     private static string Text(JsonElement reply, string property) => reply.Text(property) ?? "";
+
+    // One import runs at a time. Its end is held until the answer names the session
+    private sealed class ImportEnd
+    {
+        private readonly object _gate = new();
+        private readonly List<EngineNotification> _early = [];
+        private readonly TaskCompletionSource<string> _outcome =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private string? _id;
+
+        public void Seen(EngineNotification notification)
+        {
+            if (notification is not (ImportDone or ImportFailed))
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                if (_id is null)
+                {
+                    _early.Add(notification);
+                }
+                else
+                {
+                    Settle(notification);
+                }
+            }
+        }
+
+        public void Lost(bool connected)
+        {
+            if (!connected)
+            {
+                _outcome.TrySetException(new IOException("the engine stopped during the import"));
+            }
+        }
+
+        public Task<string> For(string id)
+        {
+            lock (_gate)
+            {
+                _id = id;
+                foreach (var notification in _early)
+                {
+                    Settle(notification);
+                }
+            }
+
+            return _outcome.Task;
+        }
+
+        private void Settle(EngineNotification notification)
+        {
+            switch (notification)
+            {
+                case ImportDone done when done.SessionId == _id:
+                    _outcome.TrySetResult(done.SessionId);
+                    break;
+                case ImportFailed { Error: "cancelled" } failed when failed.SessionId == _id:
+                    _outcome.TrySetException(new ImportCancelledException());
+                    break;
+                case ImportFailed failed when failed.SessionId == _id:
+                    _outcome.TrySetException(new EngineErrorException(
+                        Protocol.SessionErrorCode, "Session error",
+                        JsonSerializer.SerializeToElement(failed.Error)));
+                    break;
+            }
+        }
+    }
 
     private static int Int(JsonElement reply, string property) =>
         reply.TryProperty(property, JsonValueKind.Number, out var value) ? value.GetInt32() : 0;

@@ -361,7 +361,51 @@ public class FixtureTest
         Assert.Equal(new ArchiveFailed("restore", "wrong-password"), Parse("archive-failed.json"));
     }
 
-    // The error's data is the engine's reason, and it is what the shell shows
+    [Fact]
+    public async Task ImportFixturesAreWhatTheClientSendsAndReads()
+    {
+        var transport = new ReplayingTransport();
+        var api = new EngineApi(transport);
+
+        var inspect = Fixtures.Load("recording-inspect.json");
+        var inspectParams = inspect.GetProperty("request").GetProperty("params");
+        transport.Reply = inspect.GetProperty("response").GetProperty("result");
+        var info = await api.InspectRecordingAsync(inspectParams.GetProperty("path").GetString()!);
+        transport.AssertSent("recording/inspect", inspectParams);
+        Assert.Equal(new RecordingInfo(760.4, "2026-09-26T13:05:00Z"), info);
+
+        Assert.Equal(new ImportProgress("a1b2c3d4e5f60718293a4b5c6d7e8f90", 304.2, 760.4),
+            Parse("session-importProgress.json"));
+        Assert.Equal(new ImportDone("a1b2c3d4e5f60718293a4b5c6d7e8f90"), Parse("session-imported.json"));
+        Assert.Equal(new ImportFailed("a1b2c3d4e5f60718293a4b5c6d7e8f90", "cancelled"),
+            Parse("session-importFailed.json"));
+
+        // The engine answers at once. Its end, here sent before the answer, completes the call
+        var import = Fixtures.Load("session-import.json");
+        var importParams = import.GetProperty("request").GetProperty("params");
+        var path = importParams.GetProperty("path").GetString()!;
+        var startedAt = importParams.GetProperty("startedAt").GetString()!;
+        transport.Reply = import.GetProperty("response").GetProperty("result");
+        transport.Then.AddRange([Fixtures.Load("session-importProgress.json"), Fixtures.Load("session-imported.json")]);
+        var id = await api.ImportRecordingAsync(path, startedAt, importParams.GetProperty("retain").GetBoolean());
+        transport.AssertSent("session/import", importParams);
+        Assert.Equal("a1b2c3d4e5f60718293a4b5c6d7e8f90", id);
+        Assert.Equal(TimeSpan.FromSeconds(30), transport.Timeout);
+
+        transport.Then.Clear();
+        transport.Then.Add(Fixtures.Load("session-importFailed.json"));
+        await Assert.ThrowsAsync<ImportCancelledException>(() => api.ImportRecordingAsync(path, startedAt, true));
+
+        transport.Then.Clear();
+        transport.Then.Add(JsonSerializer.SerializeToElement(new
+        {
+            method = "session/importFailed",
+            @params = new { sessionId = "a1b2c3d4e5f60718293a4b5c6d7e8f90", error = "this file is not a sound recording" },
+        }));
+        var failed = await Assert.ThrowsAsync<EngineErrorException>(() => api.ImportRecordingAsync(path, startedAt, true));
+        Assert.Equal("this file is not a sound recording", failed.Message);
+    }
+
     [Fact]
     public void AnEngineErrorCarriesTheReasonFromItsData()
     {
@@ -380,17 +424,18 @@ public class FixtureTest
             notification.GetProperty("method").GetString()!, notification.GetProperty("params"));
     }
 
-    /// <summary>Records the last request and answers every one with the scripted reply.</summary>
+    /// <summary>
+    /// Records the last request and answers every one with the scripted reply, after sending the
+    /// notifications in Then.
+    /// </summary>
     private sealed class ReplayingTransport : IEngineTransport
     {
         private string _method = "";
         private JsonElement _params;
 
-        public event Action<string, JsonElement>? NotificationReceived
-        {
-            add { }
-            remove { }
-        }
+        public event Action<string, JsonElement>? NotificationReceived;
+
+        public List<JsonElement> Then { get; } = [];
 
         public event Action<bool>? ConnectedChanged
         {
@@ -402,11 +447,20 @@ public class FixtureTest
 
         public JsonElement Reply { get; set; } = JsonSerializer.SerializeToElement(new { });
 
+        public TimeSpan Timeout { get; private set; }
+
         public Task<JsonElement> RequestAsync(
             string method, object? parameters, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             _method = method;
+            Timeout = timeout;
             _params = JsonSerializer.SerializeToElement(parameters, Protocol.JsonOptions);
+            foreach (var notification in Then)
+            {
+                NotificationReceived?.Invoke(
+                    notification.GetProperty("method").GetString()!, notification.GetProperty("params"));
+            }
+
             return Task.FromResult(Reply);
         }
 

@@ -19,6 +19,16 @@ public sealed record SessionInterrupted(string? Reason = null, string? Detail = 
 
 public sealed record SessionProgress(string Stage = "") : EngineNotification;
 
+/// <summary>An import's transcription pass: seconds of the recording done out of its total.</summary>
+public sealed record ImportProgress(string SessionId = "", double Seconds = 0, double Total = 0)
+    : EngineNotification;
+
+/// <summary>An import sealed and stored. The note follows as after a stop.</summary>
+public sealed record ImportDone(string SessionId = "") : EngineNotification;
+
+/// <summary>An import that left nothing behind: the engine's reason, or "cancelled".</summary>
+public sealed record ImportFailed(string SessionId = "", string Error = "") : EngineNotification;
+
 public sealed record EnrolmentProgress(
     double Level = 0, double Elapsed = 0, double Speech = 0, bool Clipped = false)
     : EngineNotification;
@@ -115,6 +125,9 @@ public static class EngineNotifications
         "audio.level" => Protocol.Parse<AudioLevel>(parameters),
         "session/interrupted" => Protocol.Parse<SessionInterrupted>(parameters) ?? new SessionInterrupted(),
         "session/progress" => Protocol.Parse<SessionProgress>(parameters),
+        "session/importProgress" => Protocol.Parse<ImportProgress>(parameters),
+        "session/imported" => Protocol.Parse<ImportDone>(parameters),
+        "session/importFailed" => Protocol.Parse<ImportFailed>(parameters),
         "anchor/progress" => Protocol.Parse<EnrolmentProgress>(parameters),
         "anchor/enrolled" => Protocol.Parse<EnrolmentDone>(parameters),
         "note/model" => Protocol.Parse<NoteModelState>(parameters),

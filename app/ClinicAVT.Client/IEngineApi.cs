@@ -35,6 +35,15 @@ public interface IEngineApi
 
     Task<string> StopSessionAsync();
 
+    /// <summary>Reads an audio file's length and recording time without importing it.</summary>
+    Task<RecordingInfo> InspectRecordingAsync(string path);
+
+    /// <summary>
+    /// Imports an audio file and finalises it as a stop does, completing with the session once
+    /// sealed. A cancel throws ImportCancelledException and a lost engine IOException.
+    /// </summary>
+    Task<string> ImportRecordingAsync(string path, string startedAt, bool retain);
+
     Task CancelSessionAsync();
 
     Task PauseSessionAsync(bool paused);
