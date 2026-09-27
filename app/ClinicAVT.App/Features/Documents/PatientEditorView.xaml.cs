@@ -16,8 +16,8 @@ public sealed partial class PatientEditorView : UserControl
         ViewModel = viewModel;
         Export = export;
         InitializeComponent();
-        _fitAlone = new TabFit(PatientBox, 0.6);
-        _fitShared = new TabFit(PatientBox, 0.42);
+        _fitAlone = new TabFit(PatientHost, 0.6);
+        _fitShared = new TabFit(PatientHost, 0.42);
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(NoteViewModel.PatientEditing))
@@ -34,7 +34,8 @@ public sealed partial class PatientEditorView : UserControl
                 }
             }
         };
-        PatientBox.SizeChanged += (_, _) => FitTranslation();
+        PatientHost.SizeChanged += (_, _) => FitTranslation();
+        TranslationHeader.SizeChanged += (_, _) => FitTranslation();
     }
 
     public NoteViewModel ViewModel { get; }
@@ -59,11 +60,11 @@ public sealed partial class PatientEditorView : UserControl
             return;
         }
 
-        var sheet = PatientBox.ActualHeight > 0
-            ? Math.Min(PatientBox.ActualHeight, PatientBox.MaxHeight)
-            : PatientBox.MaxHeight;
-        var chrome = HeaderRow.ActualHeight + ActionRow.ActualHeight + TranslationCaption.ActualHeight
+        var sheet = PatientHost.ActualHeight > 0
+            ? Math.Min(PatientHost.ActualHeight, PatientHost.MaxHeight)
+            : PatientHost.MaxHeight;
+        var chrome = HeaderRow.ActualHeight + ActionRow.ActualHeight + TranslationHeader.ActualHeight
             + 3 * Editor.RowSpacing + 4 + Editor.Padding.Top + Editor.Padding.Bottom;
-        TranslationBox.MaxHeight = Math.Max(TranslationBox.MinHeight, _area.ActualHeight - sheet - chrome);
+        TranslationView.MaxHeight = Math.Max(TranslationView.MinHeight, _area.ActualHeight - sheet - chrome);
     }
 }

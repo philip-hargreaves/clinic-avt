@@ -66,18 +66,21 @@
             </StackPanel>
         </Grid>
 
-        <!-- The minimum height keeps a short note looking like a document, even in an
-             unbounded column -->
-        <TextBox
-            x:Name="NoteBox"
-            Grid.Row="1"
-            MinHeight="140"
-            IsHitTestVisible="{x:Bind ViewModel.NoteEditing, Mode=OneWay}"
-            IsReadOnly="{x:Bind ViewModel.NoteViewing, Mode=OneWay}"
-            IsTabStop="{x:Bind ViewModel.NoteEditing, Mode=OneWay}"
-            SelectionHighlightColorWhenNotFocused="{ThemeResource AccentFillColorTertiaryBrush}"
-            Style="{StaticResource DocumentTextBox}"
-            Text="{x:Bind ViewModel.ClinicalNoteText, Mode=TwoWay}" />
+        <!-- The host carries the cap for both views. The minimum height keeps a short note
+             looking like a document, even in an unbounded column -->
+        <Grid x:Name="NoteHost" Grid.Row="1" MinHeight="140">
+            <controls:DocumentView
+                x:Name="NoteView"
+                Label="Clinical note"
+                Text="{x:Bind ViewModel.ClinicalNoteText, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.NoteViewing, Mode=OneWay}" />
+            <TextBox
+                x:Name="NoteBox"
+                AutomationProperties.Name="Clinical note"
+                Style="{StaticResource DocumentTextBox}"
+                Text="{x:Bind ViewModel.ClinicalNoteText, Mode=TwoWay}"
+                Visibility="{x:Bind ViewModel.NoteEditing, Mode=OneWay}" />
+        </Grid>
 
         <Grid Grid.Row="2" Margin="0,2,0,0">
             <StackPanel Orientation="Horizontal" Spacing="8">

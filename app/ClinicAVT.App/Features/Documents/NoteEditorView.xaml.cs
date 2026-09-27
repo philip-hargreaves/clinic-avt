@@ -17,7 +17,7 @@ public sealed partial class NoteEditorView : UserControl
         ViewModel = viewModel;
         Export = export;
         InitializeComponent();
-        _fit = new TabFit(NoteBox, 0.5);
+        _fit = new TabFit(NoteHost, 0.5);
         guidance.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(GuidanceViewModel.Hovered))
@@ -83,18 +83,12 @@ public sealed partial class NoteEditorView : UserControl
         }
     }
 
-    // Selects the hovered card's sentence in the read-only note. An open editor keeps its
-    // own selection
+    // Marks the hovered card's sentence in the note being read
     private void LightSentence(string sentence)
     {
-        if (ViewModel.NoteEditing)
+        if (!ViewModel.NoteEditing)
         {
-            return;
+            NoteView.Mark(sentence);
         }
-
-        var at = sentence.Length > 0
-            ? NoteBox.Text.IndexOf(sentence, StringComparison.Ordinal)
-            : -1;
-        NoteBox.Select(Math.Max(at, 0), at < 0 ? 0 : sentence.Length);
     }
 }

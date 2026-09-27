@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="ClinicAVT.App.Controls.DocumentView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="False">
+
+    <!-- The margin stands in for DocumentTextBox's padding and keeps the scroll bar at the edge -->
+    <Border Padding="0" Style="{StaticResource InnerCardSurface}">
+        <ScrollViewer
+            AutomationProperties.Name="{x:Bind Label, Mode=OneWay}"
+            HorizontalScrollBarVisibility="Disabled"
+            IsTabStop="True"
+            VerticalScrollBarVisibility="Auto">
+            <TextBlock
+                x:Name="Body"
+                Margin="16,14"
+                IsTextSelectionEnabled="True"
+                Style="{StaticResource BodyText}"
+                Text="{x:Bind Text, Mode=OneWay}" />
+        </ScrollViewer>
+    </Border>
+</UserControl>
