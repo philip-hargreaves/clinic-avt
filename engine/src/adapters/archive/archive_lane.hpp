@@ -9,7 +9,6 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <thread>
-#include <utility>
 
 #include "adapters/archive/archive_file.hpp"
 #include "core/archive/backup.hpp"
@@ -30,7 +29,7 @@ class ArchiveLane {
    public:
     using Emit = std::function<void(const std::string& method, nlohmann::json params)>;
 
-    // The iteration count is only lowered by tests
+    // Only tests lower the iteration count
     ArchiveLane(store::ISessionStore& store, Emit emit,
                 std::uint32_t iterations = kBackupIterations);
     ~ArchiveLane();

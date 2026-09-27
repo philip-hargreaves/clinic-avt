@@ -29,8 +29,7 @@ class ChunkCipher {
     static ChunkCipher Generate();
     static ChunkCipher FromWrapped(std::span<const std::uint8_t> wrapped);
 
-    // PBKDF2-HMAC-SHA256 of the password bytes, derived straight into the key. The caller
-    // normalises the password; the key never leaves the cipher
+    // PBKDF2-HMAC-SHA256 of the password bytes, which the caller normalises
     static ChunkCipher FromPassword(std::string_view password, std::span<const std::uint8_t> salt,
                                     std::uint32_t iterations);
 

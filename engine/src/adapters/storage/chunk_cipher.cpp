@@ -109,7 +109,7 @@ ChunkCipher ChunkCipher::FromWrapped(std::span<const std::uint8_t> wrapped) {
 
 ChunkCipher ChunkCipher::FromPassword(std::string_view password, std::span<const std::uint8_t> salt,
                                       std::uint32_t iterations) {
-    // Derived into the heap Impl, never a stack copy, and zeroed by its destructor on any throw
+    // Derived straight into the heap Impl, whose destructor zeroes it on any throw
     auto impl = std::make_unique<Impl>();
     BCRYPT_ALG_HANDLE hmac = nullptr;
     Check(BCryptOpenAlgorithmProvider(&hmac, BCRYPT_SHA256_ALGORITHM, nullptr,

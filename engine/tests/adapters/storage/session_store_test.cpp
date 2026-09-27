@@ -408,7 +408,7 @@ TEST(SessionStore, EachDocumentKindKeepsItsOwnSlotThroughSaveEditAndDelete) {
     EXPECT_NO_THROW(store.DeleteDocument(id, DocumentKind::kReflection)) << "gone already";
 }
 
-TEST(SessionStore, RewritingOrRecreatingADocumentNeverReusesANonce) {
+TEST(SessionStore, RewritingOrRecreatingADocumentNeverReusesAnIv) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
     const SessionId id = store.Begin({16000, "", ""});
@@ -637,7 +637,7 @@ TEST(SessionStore, ARecordMovesWholeIntoAnotherStoreUnderAFreshKeyAndOnlyOnce) {
     source.EditDocument(id, DocumentKind::kNote, "the clinician's wording");
     source.SaveDocument(id, DocumentKind::kPatient, {.text = "Your elbow is swollen."});
     source.SaveDocument(id, DocumentKind::kTranslation, {.text = "Twój łokieć", .language = "pl"});
-    source.EditDocument(id, DocumentKind::kLabel, "");  // a cleared label is a row, not an absence
+    source.EditDocument(id, DocumentKind::kLabel, "");  // a cleared label is still a row
     source.SaveDocument(id, DocumentKind::kSummary, {.text = "A patient in their forties."});
     source.SaveDocument(id, DocumentKind::kReflection, {.text = R"({"happened":"x"})"});
     source.SaveDocument(id, DocumentKind::kGuidance, {.text = R"({"version":1})"});

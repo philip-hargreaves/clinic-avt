@@ -68,8 +68,7 @@ std::uint32_t Iterations(const Header& header) {
     throw ArchiveError(code);
 }
 
-// The derivation input, wiped as soon as the key exists; the caller's copy goes with it.
-// Only a writer refuses a short password: a reader just fails to open with it
+// Wipes the password once the key exists. Only a writer refuses a short one
 ChunkCipher Derive(std::string& password, const Header& header, bool refuse_weak) {
     WipeOnExit wipe_password{password};
     std::string input = KdfInput(password);
@@ -85,9 +84,6 @@ std::filesystem::path PartialOf(const std::filesystem::path& target) {
 }
 
 }  // namespace
-
-// ---------------------------------------------------------------------------------------------
-// Reading
 
 struct ArchiveFileSource::Impl {
     std::ifstream in;
@@ -194,9 +190,6 @@ void ArchiveFileSource::Rewind() {
     impl_->Rewind();
 }
 
-// ---------------------------------------------------------------------------------------------
-// Writing
-
 struct ArchiveFileSink::Impl {
     std::filesystem::path target;
     std::filesystem::path partial;
@@ -261,8 +254,8 @@ struct ArchiveFileSink::Impl {
         ++next;
     }
 
-    // Reads back every record under the key it was written with, before the target is touched.
-    // This proves format and authentication, not the medium: the OS cache may serve the read
+    // Reads every record back before the target is touched. The OS cache may serve the read, so
+    // this checks the format and authentication only
     void Verify() {
         try {
             ArchiveFileSource check(partial, std::move(*cipher));
@@ -291,7 +284,7 @@ ArchiveFileSink::ArchiveFileSink(std::filesystem::path target, std::string passw
     std::memcpy(s.header.data(), kMagic, sizeof kMagic);
     PutLe(s.header.data() + 8, kVersion, 2);
     PutLe(s.header.data() + 10, iterations, 4);
-    // Fresh per sink: a new salt is a new key, which keeps the record-index nonces unique
+    // Fresh per sink: a new salt is a new key, which keeps the record-index IVs unique
     if (BCryptGenRandom(nullptr, s.header.data() + kSaltAt, static_cast<ULONG>(kSaltBytes),
                         BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0) {
         Fail(ArchiveCode::kWriteFailed);

@@ -205,7 +205,7 @@ std::optional<ArchiveCode> CodeOf(const std::function<void()>& run) {
     return std::nullopt;
 }
 
-// Opening one both ways proves the key comes from the NFC form, not the typed bytes
+// Written decomposed and opened composed, so the key comes from the NFC form
 TEST(ArchiveFile, EveryFieldRoundTripsAndAnAccentTypedEitherWayOpensIt) {
     TempDir dir;
     const auto path = dir.path / "backup.clinicavt";
@@ -354,6 +354,11 @@ TEST(ArchiveFile, AFailedBackUpLeavesNoPartialAndKeepsTheExistingFile) {
     const auto target = dir.path / "backup.clinicavt";
     const std::vector<std::uint8_t> previous = {'p', 'r', 'e', 'v', 'i', 'o', 'u', 's'};
     const auto records = SampleRecords();
+    const auto abandon = [&] {
+        ArchiveFileSink sink(target, kPassword, kLowIterations);
+        sink.Begin(SampleManifest(records.size()));
+        sink.Add(records[0]);
+    };
 
     struct Case {
         const char* what;
@@ -361,18 +366,8 @@ TEST(ArchiveFile, AFailedBackUpLeavesNoPartialAndKeepsTheExistingFile) {
         std::function<void()> run;
     };
     const std::vector<Case> cases = {
-        {"abandoned before commit", false,
-         [&] {
-             ArchiveFileSink sink(target, kPassword, kLowIterations);
-             sink.Begin(SampleManifest(records.size()));
-             sink.Add(records[0]);
-         }},
-        {"abandoned over an existing file", true,
-         [&] {
-             ArchiveFileSink sink(target, kPassword, kLowIterations);
-             sink.Begin(SampleManifest(records.size()));
-             sink.Add(records[0]);
-         }},
+        {"abandoned before commit", false, abandon},
+        {"abandoned over an existing file", true, abandon},
         {"fewer consultations than the manifest", true,
          [&] {
              ArchiveFileSink sink(target, kPassword, kLowIterations);
@@ -404,8 +399,8 @@ TEST(ArchiveFile, AFailedBackUpLeavesNoPartialAndKeepsTheExistingFile) {
     }
 }
 
-// A cipher holding exactly these key bytes, through the store's own unwrap, so the test checks
-// the derived key without the cipher ever exposing one
+// A cipher holding exactly these key bytes, through the store's own unwrap, as a cipher never
+// exposes its key
 store::ChunkCipher WithKey(const std::array<std::uint8_t, 32>& key) {
     DATA_BLOB in{static_cast<DWORD>(key.size()), const_cast<BYTE*>(key.data())};
     DATA_BLOB out{};
@@ -471,8 +466,8 @@ TEST(ArchiveFile, WriteGoldenV1) {
     WriteBackup(GoldenPath(), kGoldenPassword, SampleRecords());
 }
 
-// Every later build must open every v1 file. The key comes only from the password, so this
-// file, written on another computer under another Windows user, also proves a backup moves
+// Every later build must open every v1 file. This one was written on another computer under
+// another Windows user, so it also proves a backup moves between machines
 TEST(ArchiveFile, TheV1GoldenBackupStillOpensWithEveryField) {
     ArchiveFileSource source(GoldenPath(), kGoldenPassword);
     const auto records = SampleRecords();

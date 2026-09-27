@@ -14,19 +14,16 @@ class ChunkCipher;
 
 namespace clinicavt::archive {
 
-// PBKDF2 rounds for every backup written; the count travels in the header so a later writer can
-// raise it
+// The count travels in the header, so a later writer can raise it
 inline constexpr std::uint32_t kBackupIterations = 600000;
 
 // A .clinicavt v1 file: a 30-byte plain header (magic, version, iterations, salt), then
-// length-prefixed AES-GCM records under a key derived from the password and the header's salt.
-// Record 0 is the manifest, then one record per consultation, then the end of the file.
-// Every record authenticates the header and its own index, so nothing can be reordered,
-// dropped, appended or spliced from another backup
+// length-prefixed AES-GCM records, the manifest first and one per consultation after it.
+// Each record authenticates the header and its own index against reordering and splicing
 class ArchiveFileSink final : public IArchiveSink {
    public:
-    // Refuses a password under 12 code points before anything is written. The iteration count
-    // is only lowered by tests
+    // Refuses a password under 12 code points before anything is written. Only tests lower the
+    // iteration count
     ArchiveFileSink(std::filesystem::path target, std::string password,
                     std::uint32_t iterations = kBackupIterations);
     ~ArchiveFileSink() override;
@@ -62,7 +59,7 @@ class ArchiveFileSource final : public IArchiveSource {
    private:
     friend class ArchiveFileSink;
 
-    // The sink's check: the key it wrote with, so the password is not kept for it
+    // For the sink's read-back, under the key it wrote with
     ArchiveFileSource(const std::filesystem::path& path, store::ChunkCipher&& cipher);
 
     struct Impl;

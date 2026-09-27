@@ -3,6 +3,7 @@
 #include <chrono>
 #include <exception>
 #include <optional>
+#include <utility>
 
 #include "adapters/archive/archive_password.hpp"
 
@@ -124,7 +125,6 @@ bool ArchiveLane::BackUp(Period period, std::filesystem::path path, const std::s
             return {"archive/done",
                     BackupDoneJson(archive::BackUp(store_, period, *sink, Reporter("backup")))};
         } catch (...) {
-            Wipe(password);
             return {"archive/failed",
                     ArchiveFailedJson("backup", CodeOf(std::current_exception()))};
         }
@@ -144,7 +144,6 @@ bool ArchiveLane::Restore(std::filesystem::path path, const std::string& passwor
                     RestoreDoneJson(archive::Restore(store_, *source, dry_run, Reporter("restore")),
                                     dry_run)};
         } catch (...) {
-            Wipe(password);
             return {"archive/failed",
                     ArchiveFailedJson("restore", CodeOf(std::current_exception()))};
         }

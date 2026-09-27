@@ -20,8 +20,9 @@ void Wipe(std::string& secret);
 void Wipe(std::wstring& secret);
 
 // Wipes a secret when the scope ends, however it ends
+template <typename Secret>
 struct WipeOnExit {
-    std::string& secret;
+    Secret& secret;
     ~WipeOnExit() {
         Wipe(secret);
     }

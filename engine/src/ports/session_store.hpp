@@ -18,7 +18,8 @@ struct SessionMeta {
     int sample_rate = 0;
     std::string device_id;
     std::string device_name;
-    bool retain = true;  // false: erased once the consultation is left
+    bool retain = true;      // false: erased once the consultation is left
+    std::string started_at;  // ISO 8601 UTC, empty: now
 };
 
 struct SessionSummary {
@@ -32,10 +33,8 @@ struct SessionSummary {
     double audio_seconds = 0;     // The consultation's audio length, from the sealed turns
     bool has_reflection = false;  // An appraisal entry exists: a summary or a reflection
     bool demo = false;            // A seeded sample rather than a real record
-    // Cleared: the consultation was removed and only its appraisal entry and label were kept.
-    // History does not list it; the appraisal journal does
-    bool cleared = false;
-    std::string written_at;  // Latest write of any document, ISO 8601 UTC, empty when none
+    bool cleared = false;         // Only the appraisal entry and label were kept
+    std::string written_at;       // Latest write of any document, ISO 8601 UTC, empty when none
 };
 
 // A seeded session: finalised, with given times, flagged for clearing
@@ -86,7 +85,6 @@ struct SessionRecord {
     std::vector<RecordDocument> documents;  // one per kind present
 };
 
-// What adding a record did
 enum class AddOutcome {
     kAdded,      // a new session
     kCompleted,  // a cleared session given back what it had lost

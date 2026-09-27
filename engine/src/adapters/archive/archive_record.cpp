@@ -108,19 +108,15 @@ json ToJson(const Manifest& m) {
 }
 
 Manifest ManifestFromJson(const json& j) {
-    try {
-        Manifest m;
-        m.version = Int(j, "version");
-        m.created_at = Str(j, "createdAt");
-        m.from = Str(j, "from");
-        m.to = Str(j, "to");
-        m.consultations = static_cast<std::size_t>(Unsigned(j, "consultations"));
-        m.transcripts = Bool(j, "transcripts");
-        m.app_version = Str(j, "appVersion");
-        return m;
-    } catch (const json::exception&) {
-        Damaged();
-    }
+    Manifest m;
+    m.version = Int(j, "version");
+    m.created_at = Str(j, "createdAt");
+    m.from = Str(j, "from");
+    m.to = Str(j, "to");
+    m.consultations = static_cast<std::size_t>(Unsigned(j, "consultations"));
+    m.transcripts = Bool(j, "transcripts");
+    m.app_version = Str(j, "appVersion");
+    return m;
 }
 
 json ToJson(const store::SessionRecord& r) {
@@ -155,43 +151,39 @@ json ToJson(const store::SessionRecord& r) {
 }
 
 store::SessionRecord RecordFromJson(const json& j) {
-    try {
-        store::SessionRecord r;
-        r.id = Str(j, "id");
-        r.started_at = Str(j, "startedAt");
-        r.ended_at = Str(j, "endedAt");
-        r.sample_rate = Int(j, "sampleRate");
-        r.device_id = Str(j, "deviceId");
-        r.device_name = Str(j, "deviceName");
-        r.lost_frames = Unsigned(j, "lostFrames");
-        for (const json& t : Array(j, "turns")) {
-            asr::Turn turn;
-            turn.first_frame = Unsigned(t, "firstFrame");
-            turn.frame_count = Unsigned(t, "frameCount");
-            turn.speaker = Str(t, "speaker");
-            turn.text = Str(t, "text");
-            r.turns.push_back(std::move(turn));
-        }
-        for (const json& d : Array(j, "documents")) {
-            store::RecordDocument document;
-            document.kind = KindOf(Str(d, "kind"));
-            for (const auto& seen : r.documents) {
-                if (seen.kind == document.kind) Damaged();  // one of each kind
-            }
-            store::Document& doc = document.document;
-            doc.text = Str(d, "text");
-            doc.language = Str(d, "language");
-            doc.style = Str(d, "style");
-            doc.detail = Str(d, "detail");
-            doc.generated_at = Str(d, "generatedAt");
-            doc.edited_at = Str(d, "editedAt");
-            doc.revision = Signed(d, "revision", 0, std::numeric_limits<std::int64_t>::max());
-            r.documents.push_back(std::move(document));
-        }
-        return r;
-    } catch (const json::exception&) {
-        Damaged();
+    store::SessionRecord r;
+    r.id = Str(j, "id");
+    r.started_at = Str(j, "startedAt");
+    r.ended_at = Str(j, "endedAt");
+    r.sample_rate = Int(j, "sampleRate");
+    r.device_id = Str(j, "deviceId");
+    r.device_name = Str(j, "deviceName");
+    r.lost_frames = Unsigned(j, "lostFrames");
+    for (const json& t : Array(j, "turns")) {
+        asr::Turn turn;
+        turn.first_frame = Unsigned(t, "firstFrame");
+        turn.frame_count = Unsigned(t, "frameCount");
+        turn.speaker = Str(t, "speaker");
+        turn.text = Str(t, "text");
+        r.turns.push_back(std::move(turn));
     }
+    for (const json& d : Array(j, "documents")) {
+        store::RecordDocument document;
+        document.kind = KindOf(Str(d, "kind"));
+        for (const auto& seen : r.documents) {
+            if (seen.kind == document.kind) Damaged();  // one of each kind
+        }
+        store::Document& doc = document.document;
+        doc.text = Str(d, "text");
+        doc.language = Str(d, "language");
+        doc.style = Str(d, "style");
+        doc.detail = Str(d, "detail");
+        doc.generated_at = Str(d, "generatedAt");
+        doc.edited_at = Str(d, "editedAt");
+        doc.revision = Signed(d, "revision", 0, std::numeric_limits<std::int64_t>::max());
+        r.documents.push_back(std::move(document));
+    }
+    return r;
 }
 
 }  // namespace clinicavt::archive

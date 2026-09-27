@@ -102,7 +102,6 @@ RestoreResult Restore(store::ISessionStore& store, IArchiveSource& source, bool 
     expected.manifest = source.GetManifest();
     const std::size_t total = expected.manifest.consultations;
 
-    // Pass one: every record authenticated, parsed and checked, and what it would do counted
     std::map<store::SessionId, bool> stored;  // id to cleared
     for (const store::SessionSummary& session : store.ListSessions()) {
         stored.emplace(session.id, session.cleared);
@@ -127,7 +126,7 @@ RestoreResult Restore(store::ISessionStore& store, IArchiveSource& source, bool 
     }
     if (dry_run) return expected;
 
-    // Pass two: the store decides each record inside its own transaction
+    // The store decides each record again, inside its own transaction
     RestoreResult result;
     result.manifest = expected.manifest;
     source.Rewind();

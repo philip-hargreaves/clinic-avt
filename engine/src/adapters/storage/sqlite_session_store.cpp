@@ -116,7 +116,7 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
         "INSERT INTO sessions(id, started_at, state, sample_rate, device_id, device_name, retain)"
         " VALUES(?, ?, 'recording', ?, ?, ?, ?)");
     insert.BindText(1, session.id);
-    insert.BindText(2, Iso8601Now());
+    insert.BindText(2, meta.started_at.empty() ? Iso8601Now() : meta.started_at);
     insert.BindInt64(3, meta.sample_rate);
     insert.BindTextOrNull(4, meta.device_id);
     insert.BindTextOrNull(5, meta.device_name);

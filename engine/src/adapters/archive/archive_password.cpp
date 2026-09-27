@@ -59,20 +59,11 @@ std::string Utf8(const std::wstring& wide) {
 
 std::string KdfInput(std::string_view password) {
     if (password.empty()) return {};
-    std::wstring wide;
-    std::wstring normal;
-    try {
-        wide = Wide(password);
-        normal = Nfc(wide);
-        std::string input = Utf8(normal);
-        Wipe(wide);
-        Wipe(normal);
-        return input;
-    } catch (...) {
-        Wipe(wide);
-        Wipe(normal);
-        throw;
-    }
+    std::wstring wide = Wide(password);
+    WipeOnExit wipe_wide{wide};
+    std::wstring normal = Nfc(wide);
+    WipeOnExit wipe_normal{normal};
+    return Utf8(normal);
 }
 
 std::size_t CodePoints(std::string_view utf8) {
