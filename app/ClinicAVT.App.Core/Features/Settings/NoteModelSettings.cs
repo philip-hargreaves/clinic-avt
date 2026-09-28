@@ -161,6 +161,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         NoteModelEnabled = false;
         NoteModelStatus = "";
         _status?.ApplyNoteModel("loading", firstUse: false);
+        _status?.BeginSwitch($"Switching to {NoteModelOptions[value]} · {{time}}");
         _ = SendTierAsync(tier);
     }
 
@@ -204,6 +205,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         var back = _revertTier;
         _revertTier = null;
         _status?.ApplyNoteModel("failed", firstUse: null);
+        _status?.EndSwitch();
         NoteModelStatus = $"Could not switch: {reason}";
         _status?.Append($"Could not switch note model: {reason}");
         if (back is not null)
@@ -222,6 +224,7 @@ public sealed partial class NoteModelSettings : ObservableObject
     {
         var back = _revertTier;
         _revertTier = null;
+        _status?.EndSwitch();
         // Without a switch in hand this is the model failing where it is
         NoteModelStatus = back is null ? reason : $"Could not switch: {reason}";
         _status?.Append(back is null ? $"Note model: {reason}" : $"Could not switch note model: {reason}");
@@ -247,6 +250,7 @@ public sealed partial class NoteModelSettings : ObservableObject
                 NoteModelStatus = "";
                 break;
             case "ready":
+                _status?.EndSwitch();
                 // A switch in flight puts a busy line on the status bar. The ready state ends it.
                 // A revert lands on the model still resident, whose ready must not wipe the
                 // reason the switch failed

@@ -31,7 +31,7 @@ internal static class ViewModelServices
         services.AddSingleton(sp => new StatusBarViewModel(
             sp.GetRequiredService<IEngineApi>(), sp.GetRequiredService<IUiDispatcher>(),
             memoryGb: () => sp.GetRequiredService<IProcessMetrics>()
-                .WorkingSetGb(EngineLayout.EngineProcess, EngineLayout.NoteHostProcess),
+                .CommittedGb(EngineLayout.EngineProcess, EngineLayout.NoteHostProcess),
             logger: sp.GetRequiredService<ILogger<StatusBarViewModel>>()));
         services.AddSingleton<CreditsViewModel>();
         services.AddCoreViewModels();

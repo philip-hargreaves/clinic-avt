@@ -52,13 +52,15 @@ public class StatusBarMetricsTest
         status.SetEngineState(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
         status.SetEngineReady(true);
 
-        status.BeginDeviceMove("Switching to the NPU · {time} · first time may take longer");
+        status.BeginSwitch("Switching to the NPU · {time} · first time may take longer");
         Assert.Equal("Switching to the NPU · 0:00 · first time may take longer", status.DisplayLabel);
+        Assert.False(status.ConsentVisible, "no consent reminder over a wait");
         clock.Advance(TimeSpan.FromSeconds(72));
         Assert.Equal("Switching to the NPU · 1:12 · first time may take longer", status.DisplayLabel);
         Assert.True(status.Busy);
 
-        status.EndDeviceMove();
+        status.EndSwitch();
+        Assert.True(status.ConsentVisible);
         status.Append("Ready");
         clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal("Ready", status.DisplayLabel);
@@ -109,15 +111,17 @@ public class StatusBarMetricsTest
         Assert.False(status.NoteActive);
         Assert.Contains("Averaged 14.2 tok/s", status.NoteChip);
 
-        // A failure ends the stream too, and a translation meters the same way
+        // The translator is another model: its rate never reaches the note chip
+        engine.RaiseNotification("translate/partial", Params(new { text = "Twoja", tokensPerSecond = 95.2 }));
+        engine.RaiseNotification("translate/ready", Params(new { text = "Twoja notatka.", language = "Polish", tokensPerSecond = 98.1 }));
+        Assert.Equal(14.2, status.TokensPerSecond);
+        Assert.False(status.TokensStreaming);
+        Assert.Contains("Averaged 14.2 tok/s", status.NoteChip);
+
+        // A failure ends the stream too
         engine.RaiseNotification("note/partial", Params(new { text = "The" }));
         Assert.True(status.TokensStreaming);
         engine.RaiseNotification("note/failed");
-        Assert.False(status.TokensStreaming);
-
-        engine.RaiseNotification("translate/partial", Params(new { text = "Twoja" }));
-        Assert.True(status.TokensStreaming);
-        engine.RaiseNotification("translate/failed");
         Assert.False(status.TokensStreaming);
 
         // A new consultation clears the frozen value

@@ -324,7 +324,9 @@ public class SettingsViewModelTest
         Assert.Equal(
             "Loading the note model · 0:00 · this can take a few minutes",
             settings.NoteModel.NoteModelCaption);
-        Assert.False(status.Busy, "the load's bar stands in for the ring");
+        // A switch the user asked for says so on the status bar, with the time it has taken
+        Assert.Equal("Switching to Qwen3.5 4B · 0:00", status.LatestActivity);
+        Assert.True(status.Busy);
 
         engine.RaiseNotification("note/model", NoteModel("loading", "constrained", "Qwen3.5 4B"));
         Assert.False(settings.NoteModel.NoteModelEnabled);

@@ -11,5 +11,5 @@ public sealed class NoProcessMetrics : IProcessMetrics
 
     public long? PeakWorkingSetMbOf(string processName) => null;
 
-    public double WorkingSetGb(params string[] processNames) => 0;
+    public double CommittedGb(params string[] processNames) => 0;
 }

@@ -80,16 +80,17 @@ public sealed partial class StatusBarViewModel : ObservableObject
         {
             switch (notification)
             {
-                case NotePartial or PatientPartial or TranslationPartial:
+                // The translator is not the note model, so its rate never reaches this chip
+                case NotePartial or PatientPartial:
                     _meter.Token(Now());
                     PublishThroughput(SourceRate(notification));
                     break;
-                case NoteReady or PatientReady or TranslationReady:
+                case NoteReady or PatientReady:
                     _meter.End(Now());
                     // The ready event carries the whole-generation average
                     PublishThroughput(SourceRate(notification));
                     break;
-                case NoteFailed or PatientFailed or TranslationFailed:
+                case NoteFailed or PatientFailed:
                     _meter.End(Now());
                     PublishThroughput(null);
                     break;
@@ -170,7 +171,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NoteChipVisible))]
     public partial string NoteChip { get; private set; } = "";
 
-    /// <summary>"Memory · 5.1 GB", the product's whole working set.</summary>
+    /// <summary>"Memory · 5.1 GB", the memory the product holds, resident model included.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MemoryChipVisible))]
     public partial string MemoryChip { get; private set; } = "";
@@ -198,7 +199,8 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public partial string SetupElapsed { get; private set; } = "";
 
     /// <summary>The consent reminder, shown only while a recording could start.</summary>
-    public bool ConsentVisible => _status == EngineStatus.Running && _ready && _sessionIdle && !_settingUp;
+    public bool ConsentVisible =>
+        _status == EngineStatus.Running && _ready && _sessionIdle && !_settingUp && _moveLine is null;
 
     public string SetupLine =>
         $"First-time setup · {SetupElapsed} · optimising for your PC";
@@ -255,21 +257,28 @@ public sealed partial class StatusBarViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Speech recognition is moving device. A first move compiles for minutes, so the line counts
-    /// the time until the engine reports the outcome.
+    /// A switch the user started, of note model or transcription device. A first switch compiles
+    /// for minutes, so the line counts the time until the engine reports the outcome.
     /// </summary>
-    public void BeginDeviceMove(string line)
+    public void BeginSwitch(string line)
     {
         _moveLine = line;
         _moveSince = _time.GetUtcNow();
         Append(MoveLine(0), busy: true);
         Tick();
+        OnPropertyChanged(nameof(ConsentVisible));
     }
 
-    public void EndDeviceMove()
+    public void EndSwitch()
     {
+        if (_moveLine is null)
+        {
+            return;
+        }
+
         _moveLine = null;
         Tick();
+        OnPropertyChanged(nameof(ConsentVisible));
     }
 
     private string MoveLine(double seconds) => _moveLine!.Replace("{time}", Words.Clock(seconds), StringComparison.Ordinal);
@@ -373,7 +382,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
         _ready = ready;
         if (!ready)
         {
-            EndDeviceMove();
+            EndSwitch();
         }
 
         Recompute();

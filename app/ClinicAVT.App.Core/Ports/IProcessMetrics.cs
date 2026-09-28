@@ -12,6 +12,9 @@ public interface IProcessMetrics
     /// <summary>The largest peak among the processes of that name, null when none runs.</summary>
     long? PeakWorkingSetMbOf(string processName);
 
-    /// <summary>This process plus every process of the named images, in GB.</summary>
-    double WorkingSetGb(params string[] processNames);
+    /// <summary>
+    /// Memory held by this process plus every process of the named images, in GB: committed
+    /// private bytes, which an idle process keeps when Windows trims its working set.
+    /// </summary>
+    double CommittedGb(params string[] processNames);
 }
