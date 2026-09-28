@@ -31,6 +31,20 @@ TEST(TidyTranscript, DropsContentlessSliversButKeepsShortAnswers) {
     EXPECT_FALSE(NoContent("Right."));
     EXPECT_TRUE(NoContent("So I"));
     EXPECT_FALSE(NoContent("so I want to")) << "three function words: a real fragment";
+    EXPECT_TRUE(NoContent("."));
+    EXPECT_TRUE(NoContent("?"));
+}
+
+// A clipped decode can leave a turn of punctuation alone. It goes, and never joins a
+// neighbour's sentence
+TEST(TidyTranscript, DropsPunctuationOnlyTurns) {
+    const auto out = TidyTranscript({T(0, 10, "patient", "I don't know."),
+                                     T(11, 12, "patient", "."), T(13, 15, "doctor", "No."),
+                                     T(16, 17, "doctor", " ? "), T(18, 20, "patient", "Yes.")});
+    ASSERT_EQ(out.size(), 3u);
+    EXPECT_EQ(out[0].text, "I don't know.");
+    EXPECT_EQ(out[1].text, "No.");
+    EXPECT_EQ(out[2].text, "Yes.");
 }
 
 TEST(TidyTranscript, MergesOneSpeakersNearbyFragmentsIntoSentences) {

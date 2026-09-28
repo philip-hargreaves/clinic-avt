@@ -1,5 +1,6 @@
 #include "core/diarisation/tidy_transcript.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <string>
@@ -63,6 +64,14 @@ std::string Capitalised(std::string text) {
     return text;
 }
 
+// Letters or digits, counting any non-ASCII byte as a letter
+bool HasWordCharacter(const std::string& text) {
+    return std::any_of(text.begin(), text.end(), [](char c) {
+        const auto u = static_cast<unsigned char>(c);
+        return u > 127 || std::isalnum(u) != 0;
+    });
+}
+
 std::string Terminated(std::string text) {
     while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())) != 0) {
         text.pop_back();
@@ -91,13 +100,14 @@ bool NoContent(const std::string& text) {
         }
         return false;
     }
-    return words > 0 && function_words <= 2;
+    // No words at all is punctuation left from a clipped decode
+    return words == 0 || function_words <= 2;
 }
 
 std::vector<asr::Turn> TidyTranscript(std::vector<asr::Turn> turns) {
     std::vector<asr::Turn> merged;
     for (auto& turn : turns) {
-        if (turn.text.empty()) continue;
+        if (!HasWordCharacter(turn.text)) continue;
         if (!merged.empty() && merged.back().speaker == turn.speaker) {
             auto& prev = merged.back();
             const std::uint64_t prev_end = prev.first_frame + prev.frame_count;
