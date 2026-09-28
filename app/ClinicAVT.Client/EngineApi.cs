@@ -58,15 +58,8 @@ public sealed class EngineApi : IEngineApi
     public Task<string> StartSessionAsync(bool retain, string micId) =>
         StartAsync(new { retain, micId }, StartTimeout);
 
-    public Task<string> StartReplayAsync(bool retain, ReplayRequest replay) =>
-        StartAsync(new { retain, replay }, StartTimeout);
-
-    public Task<string> ResumeSessionAsync(string sessionId, bool retain, ReplayRequest? replay) =>
-        StartAsync(
-            replay is null
-                ? new { resume = sessionId, retain }
-                : new { resume = sessionId, retain, replay },
-            ResumeTimeout);
+    public Task<string> ResumeSessionAsync(string sessionId, bool retain) =>
+        StartAsync(new { resume = sessionId, retain }, ResumeTimeout);
 
     public async Task<string> StopSessionAsync() =>
         Text(await CallAsync("session/stop", null, StopTimeout).ConfigureAwait(false), "sessionId");
@@ -95,10 +88,6 @@ public sealed class EngineApi : IEngineApi
     }
 
     public Task CancelSessionAsync() => CallAsync("session/cancel");
-
-    public Task PauseSessionAsync(bool paused) => CallAsync("session/pause", new { paused });
-
-    public Task MonitorSessionAsync(bool monitor) => CallAsync("session/monitor", new { on = monitor });
 
     public Task OpenSessionAsync(string id) => CallAsync("session/open", new { id });
 

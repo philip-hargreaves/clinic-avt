@@ -27,9 +27,7 @@ public interface IEngineApi
     // Every start returns the session id, empty when the engine sent none
     Task<string> StartSessionAsync(bool retain, string micId);
 
-    Task<string> StartReplayAsync(bool retain, ReplayRequest replay);
-
-    Task<string> ResumeSessionAsync(string sessionId, bool retain, ReplayRequest? replay);
+    Task<string> ResumeSessionAsync(string sessionId, bool retain);
 
     Task<string> StopSessionAsync();
 
@@ -43,10 +41,6 @@ public interface IEngineApi
     Task<string> ImportRecordingAsync(string path, string startedAt, bool retain);
 
     Task CancelSessionAsync();
-
-    Task PauseSessionAsync(bool paused);
-
-    Task MonitorSessionAsync(bool monitor);
 
     Task OpenSessionAsync(string id);
 

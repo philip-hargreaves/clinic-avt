@@ -80,7 +80,7 @@ python folder_study.py check                             refuses gold that gives
 python folder_study.py run                               every ranking variant over every query
 python folder_study.py pool                              cards not yet judged, blinded, for the judge
 python folder_study.py score                             the variants against the judgments
-python folder_eval.py --mode note --tag before           the St George's cases through the engine
+python folder_eval.py --tag before                       the St George's cases through the engine
 python folder_eval.py --tag frozen study                 every study query through the engine
 python folder_study.py score runs-engine-frozen.jsonl    that engine run, judged the same way
 ```
@@ -88,8 +88,8 @@ python folder_study.py score runs-engine-frozen.jsonl    that engine run, judged
 `FOLDER_STUDY=<name>` moves the working directory, for the same study over a changed folder or
 chunker. The splitter, the exclusion filter, the vote and the floor in `folder_study.py` are ports
 of the engine's `guidance_query.hpp` and `guidance_rank.hpp`, and `folder_study.py parity <file>`
-proves the port against a `folder_eval.py` note-mode run. Close the app before any `folder_eval.py`
-run. Each script's docstring has the rest.
+proves the port against an earlier note-mode `folder_eval.py` run; the script now sends typed
+searches only. Close the app before any `folder_eval.py` run. Each script's docstring has the rest.
 
 ## Native proof
 

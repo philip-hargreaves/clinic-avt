@@ -24,7 +24,7 @@ public static class SessionText
 
     /// <summary>
     /// "12 min". The audio length is the consultation's length. The wall clock is only the
-    /// fallback, because a fast replay records minutes of audio in seconds.
+    /// fallback, because an import stores minutes of audio in seconds.
     /// </summary>
     public static string Duration(double audioSeconds, string startedAt = "", string endedAt = "")
     {

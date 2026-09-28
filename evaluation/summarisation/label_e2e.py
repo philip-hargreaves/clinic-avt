@@ -17,8 +17,7 @@ def main():
     try:
         engine.wait_up()
         result, rtt = pl.timed(engine, "session/start", {
-            "replay": {"path": os.path.join(pl.HERE, "audio", "c02m_elbow.wav"),
-                       "speed": 16.0, "monitor": False}}, 30)
+            "replay": {"path": os.path.join(pl.HERE, "audio", "c02m_elbow.wav"), "speed": 16.0}}, 30)
         print("started:", result, round(rtt, 2))
         # Drain the replay (120 s at 16x), then stop like the shell would
         end = time.time() + 120 / 16.0 + 2

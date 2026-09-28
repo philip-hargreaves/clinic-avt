@@ -136,15 +136,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public FinalisePhase Phase => Recorder.Phase;
 
-    public bool Paused => Recorder.Paused;
-
     public double AudioSeconds => Recorder.AudioSeconds;
 
     public bool Importing => Recorder.Importing;
 
     public string? ImportLine => Recorder.ImportLine;
-
-    public ReplayRequest? ActiveReplay => Recorder.ActiveReplay;
 
     public bool ModelsReady => Readiness.ModelsReady;
 
@@ -162,7 +158,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     public string SessionPhase =>
         State == SessionState.Finalising ? $"{State}:{Phase}" : State.ToString();
 
-    public Task StartRecordingAsync(ReplayRequest? replay = null) => Recorder.StartRecordingAsync(replay);
+    public Task StartRecordingAsync() => Recorder.StartRecordingAsync();
 
     public Task StopRecordingAsync() => Recorder.StopRecordingAsync();
 
@@ -184,10 +180,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     }
 
     public Task CancelImportAsync() => Recorder.CancelImportAsync();
-
-    public Task SetPausedAsync(bool paused) => Recorder.SetPausedAsync(paused);
-
-    public Task SetMonitorAsync(bool on) => Recorder.SetMonitorAsync(on);
 
     public Task<bool> OpenStoredSessionAsync(string id, string startedLabel = "",
         string startedAt = "", bool hasReflection = false, bool demo = false) =>

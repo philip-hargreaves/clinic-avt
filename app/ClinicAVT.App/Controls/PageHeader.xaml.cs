@@ -8,9 +8,6 @@ public sealed partial class PageHeader : UserControl
     public static readonly DependencyProperty TitleProperty = DependencyProperty.Register(
         nameof(Title), typeof(string), typeof(PageHeader), new PropertyMetadata(""));
 
-    public static readonly DependencyProperty CentreProperty = DependencyProperty.Register(
-        nameof(Centre), typeof(UIElement), typeof(PageHeader), new PropertyMetadata(null));
-
     public static readonly DependencyProperty CommandsProperty = DependencyProperty.Register(
         nameof(Commands), typeof(UIElement), typeof(PageHeader), new PropertyMetadata(null));
 
@@ -20,12 +17,6 @@ public sealed partial class PageHeader : UserControl
     {
         get => (string)GetValue(TitleProperty);
         set => SetValue(TitleProperty, value);
-    }
-
-    public UIElement? Centre
-    {
-        get => (UIElement?)GetValue(CentreProperty);
-        set => SetValue(CentreProperty, value);
     }
 
     public UIElement? Commands

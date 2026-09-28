@@ -413,7 +413,6 @@ std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingRea
 
 std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
                                               clinicavt::session::SessionController& controller,
-                                              bool playback_active,
                                               clinicavt::translate::ITranslator* translator,
                                               const Notify& push, const json& params) {
     const auto path = RecordingPath(params);
@@ -430,7 +429,6 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     if (started_at > clinicavt::Iso8601Now()) {
         return SessionError("the recording's date and time are in the future");
     }
-    if (playback_active) return SessionError("a playback is running");
     if (controller.Running()) return SessionError("a session is running");
     // A file that cannot be opened is refused here. Its decode runs on the import's thread
     const auto readable = ReadRecording([&] { return reader.Inspect(*path); });
@@ -481,7 +479,6 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     auto* const translator = services.translator;
     auto* const translate_lane = services.translate_lane;
     const auto demo_dir = services.demo_dir;
-    auto* const playback = services.playback;
     auto* const archive_lane = services.archive_lane;
     const auto archive_busy = [archive_lane] {
         return archive_lane != nullptr && archive_lane->Busy();
@@ -591,22 +588,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         });
     server.RegisterMethod(
         "session/start",
-        [&controller, playback, translator](const json& params) -> std::variant<json, Error> {
-            // A playback block replays a stored consultation as a demo.
-            // Nothing is captured or generated
-            if (params.contains("playback")) {
-                const auto& p = params["playback"];
-                if (playback == nullptr || !p.contains("id") || !p["id"].is_string()) {
-                    return Error{kInvalidParams, "playback.id is required", {}};
-                }
-                if (controller.Running() || !playback->Start(p["id"].get<std::string>())) {
-                    return SessionError("a session is running, or nothing to play back");
-                }
-                return json{{"sessionId", playback->Current()}};
-            }
-            if (playback != nullptr && playback->Active()) {
-                return SessionError("a playback is running");
-            }
+        [&controller, translator](const json& params) -> std::variant<json, Error> {
             // An optional replay block plays a file through the same
             // pipeline. Absent means microphone
             std::optional<clinicavt::session::ReplaySpec> replay;
@@ -615,8 +597,8 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                 if (!r.contains("path") || !r["path"].is_string()) {
                     return Error{kInvalidParams, "replay.path is required", {}};
                 }
-                replay = clinicavt::session::ReplaySpec{
-                    r["path"].get<std::string>(), r.value("speed", 1.0), r.value("monitor", false)};
+                replay = clinicavt::session::ReplaySpec{r["path"].get<std::string>(),
+                                                        r.value("speed", 1.0)};
             }
             // micId pins the picker's choice. One that has gone falls back
             // to the default, logged, and the snapshot records the fallback
@@ -673,24 +655,8 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                           EditDocument(sessions, clinicavt::store::DocumentKind::kNote));
     server.RegisterMethod("patient/update",
                           EditDocument(sessions, clinicavt::store::DocumentKind::kPatient));
-    server.RegisterMethod("session/pause", [&controller, playback](const json& params) {
-        if (playback != nullptr && playback->Listening()) {
-            playback->SetPaused(params.value("paused", true));
-        } else {
-            controller.SetPaused(params.value("paused", true));
-        }
-        return json::object();
-    });
-    server.RegisterMethod("session/monitor", [&controller](const json& params) {
-        controller.SetMonitor(params.value("on", true));
-        return json::object();
-    });
-    server.RegisterMethod("session/cancel", [&controller, playback](const json&) {
-        if (playback != nullptr && playback->Listening()) {
-            playback->Cancel();
-        } else {
-            controller.Cancel();
-        }
+    server.RegisterMethod("session/cancel", [&controller](const json&) {
+        controller.Cancel();
         return json::object();
     });
     // Regenerate and translate act on a past session under review as on a
@@ -718,29 +684,24 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         controller.Close();
         return json::object();
     });
-    server.RegisterMethod(
-        "session/stop", [&server, &controller, playback](const json&) -> std::variant<json, Error> {
-            if (playback != nullptr && playback->Active()) {
-                playback->Stop();
-                return json{{"sessionId", playback->Current()}};
-            }
-            // Stop would wait out the import, holding every request behind it
-            if (controller.Importing()) return SessionError("an import is running");
-            controller.Stop();
-            if (!controller.HasNoteWriter()) StubDocuments(QueueTo(server));
-            return json{{"sessionId", controller.LastFinalised()}};
-        });
+    server.RegisterMethod("session/stop",
+                          [&server, &controller](const json&) -> std::variant<json, Error> {
+                              // Stop would wait out the import, holding every request behind it
+                              if (controller.Importing())
+                                  return SessionError("an import is running");
+                              controller.Stop();
+                              if (!controller.HasNoteWriter()) StubDocuments(QueueTo(server));
+                              return json{{"sessionId", controller.LastFinalised()}};
+                          });
     if (services.recordings != nullptr) {
         auto& reader = *services.recordings;
         server.RegisterMethod("recording/inspect", [&reader](const json& params) {
             return HandleRecordingInspect(reader, params);
         });
-        server.RegisterMethod("session/import", [&server, &controller, &reader, playback,
-                                                 translator](const json& params) {
-            return HandleSessionImport(reader, controller,
-                                       playback != nullptr && playback->Active(), translator,
-                                       PushTo(server), params);
-        });
+        server.RegisterMethod(
+            "session/import", [&server, &controller, &reader, translator](const json& params) {
+                return HandleSessionImport(reader, controller, translator, PushTo(server), params);
+            });
     }
 }
 

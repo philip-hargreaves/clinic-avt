@@ -29,7 +29,7 @@ ClinicAVT.App/                      ClinicAVT.App.Core/
     Appraisal/     reflections         Appraisal/
     Settings/                          Settings/
     Help/          guide and About
-    Demo/          replay tray         Demo/
+                                       Demo/
   Controls/    reusable, no VM       Ports/       interfaces only, implemented outside Core
                such as page header,  Common/      helpers every feature shares, such as
                tabs, icon label,                  engine call, words, session text and
@@ -43,10 +43,9 @@ ClinicAVT.App/                      ClinicAVT.App.Core/
 `ClinicAVT.App.Tests` mirrors `ClinicAVT.App.Core`. Its fakes are in `TestDoubles/` and shared
 helpers in `Support/`. Helpers both test projects need (wire fixtures, the silence wav, the engine
 locator) live once in `TestSupport/` and are linked into each. Tests that need the built engine carry `Requires=Engine`. They are the whole
-of `ClinicAVT.Client.Tests/Contract/` plus the replay and transport-recovery tests in `App.Tests`.
-`Requires=EngineSlow` marks the ten-minute 1x replay, `Requires=CrashBattery` the crash set and
-`Requires=Processes` the tests that start real processes. The fast filter is
-`Requires!=Engine&Requires!=EngineSlow&Requires!=CrashBattery`.
+of `ClinicAVT.Client.Tests/Contract/` plus the real-engine session and transport-recovery tests in
+`App.Tests`. `Requires=CrashBattery` marks the crash set and `Requires=Processes` the tests that
+start real processes. The fast filter is `Requires!=Engine&Requires!=CrashBattery`.
 
 The settings page is built on the Community Toolkit's settings controls,
 `CommunityToolkit.WinUI.Controls.SettingsControls`. They are the one third-party UI dependency,

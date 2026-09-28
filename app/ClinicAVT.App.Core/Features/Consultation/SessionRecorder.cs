@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Core.Ports;
@@ -25,9 +24,6 @@ public sealed partial class SessionRecorder : ObservableObject
     private readonly TranscriptViewModel _transcript;
     private readonly Metrics.PerformanceCollector? _metrics;
     private readonly AppPreferences? _preferences;
-
-    // A replay stops itself at the end of its file. Zero when the length is unknown
-    private double _replayEndSeconds;
 
     public SessionRecorder(
         IEngineApi engine, StatusBarViewModel status, NoteViewModel note, GuidanceViewModel guidance,
@@ -55,11 +51,7 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial FinalisePhase Phase { get; private set; } = FinalisePhase.None;
 
-    [ObservableProperty]
-    public partial bool Paused { get; private set; }
-
-    // Position in the delivered audio. One level event arrives per 100 ms of audio at any
-    // replay speed
+    // Position in the delivered audio. One level event arrives per 100 ms of audio
     [ObservableProperty]
     public partial double AudioSeconds { get; private set; }
 
@@ -70,10 +62,6 @@ public sealed partial class SessionRecorder : ObservableObject
     /// <summary>How far the import has got, in words and one percentage, null until the engine says.</summary>
     [ObservableProperty]
     public partial string? ImportLine { get; private set; }
-
-    /// <summary>The active session's replay request, null for a microphone.</summary>
-    [ObservableProperty]
-    public partial ReplayRequest? ActiveReplay { get; private set; }
 
     /// <summary>True while a seeded sample is under review. The Demo badge shows for it.</summary>
     public bool DemoRecord { get; private set; }
@@ -182,8 +170,6 @@ public sealed partial class SessionRecorder : ObservableObject
     private void DropSession()
     {
         State = SessionState.Idle;
-        Paused = false;
-        ActiveReplay = null;
         _status.SetMicVisible(false);
     }
 
@@ -195,15 +181,10 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        AudioSeconds = level.Seconds ?? AudioSeconds + 0.1;
-        // A replay stops itself at the end of its audio
-        if (_replayEndSeconds > 0 && AudioSeconds >= _replayEndSeconds - 0.05)
-        {
-            _ = StopRecordingAsync();
-        }
+        AudioSeconds += 0.1;
     }
 
-    public async Task StartRecordingAsync(ReplayRequest? replay = null)
+    public async Task StartRecordingAsync()
     {
         if (State != SessionState.Idle)
         {
@@ -211,28 +192,21 @@ public sealed partial class SessionRecorder : ObservableObject
         }
 
         // An empty mic id means the default, and a missing device falls back to it with a log line
-        var start = replay is null
-            ? () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")
-            : (Func<Task<string>>)(() => _engine.StartReplayAsync(Retain, replay));
-        var started = await EngineCall.TryAsync(_status, "session/start", start).ConfigureAwait(true);
+        var started = await EngineCall.TryAsync(_status, "session/start",
+            () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")).ConfigureAwait(true);
         if (started is null)
         {
             return;
         }
 
         RecordingSessionId = started.Length > 0 ? started : null;
-        Paused = false;
         AudioSeconds = 0;
         Phase = FinalisePhase.None;
-        ActiveReplay = replay;
-        _replayEndSeconds = replay is null ? 0 : DemoTracks.DurationSeconds(replay.Path);
         State = SessionState.Recording;
         ResetForNewConsultation();
         _status.SetMicVisible(true);
-        _status.Append(replay is null ? "Recording" : "Replaying");
-        _metrics?.SessionStarted(
-            replay is null ? "mic" : "replay", replay?.Speed ?? 0,
-            replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
+        _status.Append("Recording");
+        _metrics?.SessionStarted();
     }
 
     private void ResetForNewConsultation()
@@ -241,8 +215,8 @@ public sealed partial class SessionRecorder : ObservableObject
         _status.ResetThroughput();
     }
 
-    // A restarted engine has lost the live session, but its audio is stored. Resume replays it
-    // into a fresh session and recording carries on
+    // A restarted engine has lost the live session, but its audio is stored. The engine feeds it
+    // into a fresh session ahead of the microphone and recording carries on
     public async Task ResumeAfterRestartAsync()
     {
         var resume = RecordingSessionId;
@@ -254,8 +228,7 @@ public sealed partial class SessionRecorder : ObservableObject
         try
         {
             // The raw call tells a lost engine from one that answered
-            var started = await _engine.ResumeSessionAsync(resume, Retain, ActiveReplay)
-                .ConfigureAwait(true);
+            var started = await _engine.ResumeSessionAsync(resume, Retain).ConfigureAwait(true);
             RecordingSessionId = started.Length > 0 ? started : null;
             _status.Append("Recording");
         }
@@ -274,29 +247,6 @@ public sealed partial class SessionRecorder : ObservableObject
         }
     }
 
-    public async Task SetPausedAsync(bool paused)
-    {
-        if (State != SessionState.Recording || paused == Paused)
-        {
-            return;
-        }
-
-        if (await EngineCall.TryAsync(_status, "session/pause", () => _engine.PauseSessionAsync(paused))
-            .ConfigureAwait(true))
-        {
-            Paused = paused;
-        }
-    }
-
-    public async Task SetMonitorAsync(bool on)
-    {
-        if (State == SessionState.Recording)
-        {
-            await EngineCall.TryAsync(_status, "session/monitor", () => _engine.MonitorSessionAsync(on))
-                .ConfigureAwait(true);
-        }
-    }
-
     public async Task StopRecordingAsync()
     {
         if (State != SessionState.Recording)
@@ -304,8 +254,6 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        Paused = false;
-        ActiveReplay = null;
         _metrics?.StopRequested();
         _status.SetMicVisible(false);
         // The recording is safe in the store even when the stop fails

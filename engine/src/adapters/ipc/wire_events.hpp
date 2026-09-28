@@ -26,7 +26,6 @@ class WireEvents : public session::ISessionEvents {
     void SetGuidance(guidance::IGuidanceLane* lane);
 
     void OnLevel(const audio::LevelReading& reading) override;
-    void OnPlaybackLevel(const audio::LevelReading& reading, double seconds) override;
     void OnInterrupted(audio::SourceEndReason reason, const std::string& detail) override;
     void OnProgress(const std::string& stage) override;
     void OnEnrolProgress(const audio::EnrolProgress& progress) override;

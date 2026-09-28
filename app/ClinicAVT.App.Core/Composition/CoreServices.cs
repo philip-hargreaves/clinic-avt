@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Features.Appraisal;
 using ClinicAVT.App.Core.Features.Consultation;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Core.Features.Help;
@@ -36,7 +35,6 @@ public static class CoreServices
         services.AddSingleton<VoiceViewModel>();
         services.AddSingleton<SessionsViewModel>();
         services.AddSingleton<AppraisalsViewModel>();
-        services.AddSingleton<DemoTrayViewModel>();
         services.AddSingleton<HelpViewModel>();
         return services;
     }

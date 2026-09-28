@@ -232,7 +232,7 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
     try:
         t_start = now()
         result, rtt = timed(
-            engine, "session/start", {"replay": {"path": path, "speed": SPEED, "monitor": False}}, 30)
+            engine, "session/start", {"replay": {"path": path, "speed": SPEED}}, 30)
         session_id = result.get("sessionId")
         rec["session_id"] = session_id
         rec["start_rtt_s"] = round(rtt, 3)

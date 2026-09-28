@@ -18,8 +18,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     {
         public int SchemaVersion { get; init; } = CurrentSchema;
 
-        public bool DemoTrayEnabled { get; init; }
-
         public bool SeedDataEnabled { get; init; }
 
         public bool NpuTranscription { get; init; }
@@ -65,8 +63,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// Raised after every save, so a page can follow a preference it does not own.
     /// </summary>
     public event Action? Saved;
-
-    public bool DemoTrayEnabled { get; set; }
 
     public bool SeedDataEnabled { get; set; }
 
@@ -138,7 +134,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         }
 
         // A newer document is read for what this build knows. A save rewrites it at this schema
-        preferences.DemoTrayEnabled = stored.DemoTrayEnabled;
         preferences.SeedDataEnabled = stored.SeedDataEnabled;
         preferences.NpuTranscription = stored.NpuTranscription;
         preferences.CollectPerformanceData = stored.CollectPerformanceData;
@@ -163,7 +158,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         {
             store.Write(JsonSerializer.Serialize(new PreferencesFile
             {
-                DemoTrayEnabled = DemoTrayEnabled,
                 SeedDataEnabled = SeedDataEnabled,
                 NpuTranscription = NpuTranscription,
                 CollectPerformanceData = CollectPerformanceData,

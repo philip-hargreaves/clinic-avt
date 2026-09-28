@@ -3,7 +3,7 @@ using ClinicAVT.App.Core.Common;
 
 namespace ClinicAVT.App.Core.Features.Demo;
 
-/// <summary>A bundled replay recording. Display reads "name (m:ss)".</summary>
+/// <summary>A bundled example recording. Display reads "name (m:ss)".</summary>
 public sealed record DemoTrack(string Name, string Path)
 {
     public string Display { get; } = Label(Name, Path);

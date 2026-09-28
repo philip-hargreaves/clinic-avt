@@ -125,7 +125,7 @@ store::SessionId SessionController::Import(ImportRead read, const std::string& s
         std::lock_guard<std::mutex> lock(mutex_);
         id = session_id_;
         importing_ = true;
-        source_.reset();  // the last recording's, which pause and monitor would reach
+        source_.reset();  // the last recording's, so nothing reaches it during the import
     }
     import_cancel_ = false;
     import_thread_ = std::thread(
@@ -258,16 +258,6 @@ void SessionController::Cancel() {
     }
     EndCapture();
     FinishSession(Outcome::kCancel);
-}
-
-void SessionController::SetPaused(bool paused) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (source_ && running_) source_->SetPaused(paused);
-}
-
-void SessionController::SetMonitor(bool monitor) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (source_ && running_) source_->SetMonitor(monitor);
 }
 
 bool SessionController::Running() const {

@@ -8,7 +8,6 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <TextBlock
             HorizontalAlignment="Left"
@@ -17,10 +16,6 @@
             Text="{x:Bind Title, Mode=OneWay}" />
         <ContentPresenter
             Grid.Column="1"
-            VerticalAlignment="Center"
-            Content="{x:Bind Centre, Mode=OneWay}" />
-        <ContentPresenter
-            Grid.Column="2"
             HorizontalAlignment="Right"
             VerticalAlignment="Center"
             Content="{x:Bind Commands, Mode=OneWay}" />

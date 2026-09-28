@@ -11,7 +11,7 @@ public interface IMetered
     double? TokensPerSecond { get; }
 }
 
-public sealed record AudioLevel(double Level = 0, bool Clipped = false, double? Seconds = null)
+public sealed record AudioLevel(double Level = 0, bool Clipped = false)
     : EngineNotification;
 
 public sealed record SessionInterrupted(string? Reason = null, string? Detail = null)

@@ -54,7 +54,6 @@
 #include "adapters/vad/silero_vad.hpp"
 #include "core/common/cli_args.hpp"
 #include "core/metrics/metrics.hpp"
-#include "core/session/playback.hpp"
 #include "core/session/session_controller.hpp"
 
 namespace {
@@ -104,8 +103,8 @@ clinicavt::session::SourceFactory MakeSourceFactory(std::string forced) {
                const std::string& mic_id) -> std::unique_ptr<clinicavt::audio::IAudioSource> {
         if (replay.has_value()) {
             return std::make_unique<clinicavt::audio::WavSource>(
-                replay->path, clinicavt::audio::WavSource::Config{replay->speed, replay->monitor,
-                                                                  replay->start_frame});
+                replay->path,
+                clinicavt::audio::WavSource::Config{replay->speed, replay->start_frame});
         }
         if (!forced.empty()) return std::make_unique<clinicavt::audio::WavSource>(forced);
         return std::make_unique<clinicavt::audio::WasapiCapture>(clinicavt::audio::WideId(mic_id));
@@ -387,16 +386,6 @@ int main(int argc, char* argv[]) {
                     server.PushNotification("guidance/documentsChanged", nlohmann::json::object());
                 }
             });
-        // Demo playback ends in a review of the copy, its note searched like any other
-        clinicavt::session::Playback playback(
-            events, session_store,
-            {.finalised = [&controller](const std::string& id) { controller.Open(id); },
-             .guidance =
-                 [&events, &session_store](const std::string& id) {
-                     const auto note =
-                         session_store.ReadDocument(id, clinicavt::store::DocumentKind::kNote);
-                     if (!note.text.empty()) events.OnNoteSaved(id, note);
-                 }});
         clinicavt::audio::MediaFoundationReader recordings;
         auto* const whisper = dynamic_cast<clinicavt::asr::WhisperTranscriber*>(transcriber.get());
         const clinicavt::ipc::AsrSwitch switch_asr =
@@ -417,7 +406,6 @@ int main(int argc, char* argv[]) {
                      .auto_note_tier = auto_tier,
                      .stray_note_host = stray_note_host,
                      .demo_dir = models_root.parent_path() / "demo" / "reflections",
-                     .playback = &playback,
                      .switch_asr = switch_asr,
                      .archive_lane = &archive_lane,
                      .recordings = &recordings});

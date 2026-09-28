@@ -3,16 +3,13 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace clinicavt::audio {
@@ -218,90 +215,33 @@ TEST(WavSource, RealTimeReplayIsPacedFlatOutIsNot) {
     EXPECT_LT(paced, std::chrono::milliseconds(1500));
 }
 
-// Stops or pauses the source from inside the first packet, on the source's own thread, so
-// the next turn of its loop is certain to see it. The test thread waits for that packet
-struct SteeringSink : IAudioSink {
-    enum class Act { kStop, kPause };
+// Stops the source from inside the first packet, on the source's own thread, so the next
+// turn of its loop is certain to see it
+struct StoppingSink : IAudioSink {
     WavSource& source;
-    Act act;
-    std::mutex mutex;
-    std::condition_variable changed;
-    bool acted = false;
-    bool resumed = false;
     std::size_t frames = 0;
-    std::size_t frames_while_paused = 0;
     std::vector<SourceEnd> ends;
 
-    SteeringSink(WavSource& source, Act act) : source(source), act(act) {}
+    explicit StoppingSink(WavSource& source) : source(source) {}
 
     void OnAudio(std::span<const float> packet, std::uint64_t) override {
-        const std::lock_guard lock(mutex);
         frames += packet.size();
-        if (acted && !resumed) frames_while_paused += packet.size();
-        if (!acted) {
-            acted = true;
-            if (act == Act::kStop) {
-                source.RequestStop();
-            } else {
-                source.SetPaused(true);
-            }
-            changed.notify_all();
-        }
+        source.RequestStop();
     }
 
     void OnEnd(const SourceEnd& end) override {
-        const std::lock_guard lock(mutex);
         ends.push_back(end);
-        changed.notify_all();
-    }
-
-    bool WaitForTheFirstPacket() {
-        std::unique_lock lock(mutex);
-        return changed.wait_for(lock, std::chrono::seconds(5),
-                                [this] { return acted || !ends.empty(); });
     }
 };
 
-TEST(WavSource, PauseHoldsEveryFrameAndStopAlwaysWins) {
+TEST(WavSource, StopEndsTheStreamAtTheNextPacket) {
     const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(4800, 0))}));
-    {
-        WavSource source(file.path.string());
-        SteeringSink sink(source, SteeringSink::Act::kStop);
-        source.Run(sink);
-        ASSERT_EQ(sink.ends.size(), 1u);
-        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped) << "stopped, not completed";
-        EXPECT_EQ(sink.frames, 480u) << "one packet, then the stop honoured";
-    }
-    {
-        WavSource source(file.path.string());
-        SteeringSink sink(source, SteeringSink::Act::kPause);
-        std::thread runner([&] { source.Run(sink); });
-        EXPECT_TRUE(sink.WaitForTheFirstPacket());
-        {
-            const std::lock_guard lock(sink.mutex);
-            sink.resumed = true;
-        }
-        source.SetPaused(false);
-        runner.join();
-
-        EXPECT_EQ(sink.frames_while_paused, 0u) << "nothing is delivered while paused";
-        EXPECT_EQ(sink.frames, 4800u) << "paused audio is held, never dropped";
-        ASSERT_EQ(sink.ends.size(), 1u);
-        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kCompleted);
-    }
-    {
-        WavSource source(file.path.string());
-        SteeringSink sink(source, SteeringSink::Act::kPause);
-        std::thread runner([&] { source.Run(sink); });
-        EXPECT_TRUE(sink.WaitForTheFirstPacket());
-        source.RequestStop();
-        runner.join();
-
-        ASSERT_EQ(sink.ends.size(), 1u);
-        EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped)
-            << "a paused session can always be finalised";
-        EXPECT_EQ(sink.frames, 480u);
-    }
+    WavSource source(file.path.string());
+    StoppingSink sink(source);
+    source.Run(sink);
+    ASSERT_EQ(sink.ends.size(), 1u);
+    EXPECT_EQ(sink.ends[0].reason, SourceEndReason::kStopped) << "stopped, not completed";
+    EXPECT_EQ(sink.frames, 480u) << "one packet, then the stop honoured";
 }
 
 }  // namespace

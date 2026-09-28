@@ -141,13 +141,12 @@ build.
 
 ```powershell
 cmake --workflow --preset dev
-dotnet test clinicavt.slnx --filter "Requires!=Engine&Requires!=EngineSlow&Requires!=CrashBattery"
+dotnet test clinicavt.slnx --filter "Requires!=Engine&Requires!=CrashBattery"
 ```
 
 The first command builds the engine and runs its tests. The second runs the C# tests that need no
 engine, with view models tested against fakes at the ports. Tests marked `Requires=Engine` start the
-built engine; the real-time replay (`EngineSlow`) and crash tests (`CrashBattery`) run through
-`tools\run-gates.ps1`.
+built engine; the crash tests (`CrashBattery`) run through `tools\run-gates.ps1`.
 
 </details>
 

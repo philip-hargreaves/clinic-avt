@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
@@ -11,8 +10,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
-/// The theme, the transcription device and the developer tools. The tools are the replay
-/// tray, the metrics chips, the performance log and its report.
+/// The theme, the transcription device and the developer tools. The tools are the metrics
+/// chips, the performance log and its report.
 /// </summary>
 public sealed partial class AppearanceAndDiagnostics : ObservableObject
 {
@@ -42,7 +41,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         _theme = theme;
         // Restoring saved values is not the clinician changing them
         _initialising = true;
-        DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
         NpuTranscription = preferences?.NpuTranscription ?? false;
         CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
         ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? true;
@@ -149,21 +147,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     /// <summary>The Developer tools group, closed on every launch.</summary>
     [ObservableProperty]
     public partial bool DeveloperToolsExpanded { get; set; }
-
-    /// <summary>Only a debug build offers the replay tray.</summary>
-    public bool DemoTrayAvailable { get; } = BuildFlags.Debug;
-
-    /// <summary>Shows the replay tray. A developer control.</summary>
-    [ObservableProperty]
-    public partial bool DemoTrayEnabled { get; set; }
-
-    partial void OnDemoTrayEnabledChanged(bool value)
-    {
-        if (!_initialising)
-        {
-            _preferences.Update(p => p.DemoTrayEnabled = value);
-        }
-    }
 
     /// <summary>Shows the status-bar model and memory chips. For testing.</summary>
     [ObservableProperty]

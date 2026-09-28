@@ -1,10 +1,8 @@
 #pragma once
 
 #include <atomic>
-#include <chrono>
 #include <memory>
 #include <span>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -27,10 +25,6 @@ class ResumeSource : public IAudioSource {
                 sink.OnEnd({SourceEndReason::kStopped, ""});
                 return;
             }
-            while (paused_.load(std::memory_order_relaxed) &&
-                   !stop_requested_.load(std::memory_order_relaxed)) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            }
             const std::size_t count = std::min(kPacketFrames, stored_.size() - at);
             sink.OnAudio(std::span<const float>(stored_.data() + at, count), 0);
             at += count;
@@ -47,20 +41,10 @@ class ResumeSource : public IAudioSource {
         live_->RequestStop();
     }
 
-    void SetPaused(bool paused) override {
-        paused_.store(paused, std::memory_order_relaxed);
-        live_->SetPaused(paused);
-    }
-
-    void SetMonitor(bool monitor) override {
-        live_->SetMonitor(monitor);
-    }
-
    private:
     std::vector<float> stored_;
     std::unique_ptr<IAudioSource> live_;
     std::atomic<bool> stop_requested_{false};
-    std::atomic<bool> paused_{false};
 };
 
 }  // namespace clinicavt::audio

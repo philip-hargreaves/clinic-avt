@@ -34,12 +34,6 @@ void WireEvents::OnLevel(const audio::LevelReading& reading) {
                              {{"level", reading.level}, {"clipped", reading.clipped}});
 }
 
-void WireEvents::OnPlaybackLevel(const audio::LevelReading& reading, double seconds) {
-    server_.PushNotification(
-        "audio.level",
-        {{"level", reading.level}, {"clipped", reading.clipped}, {"seconds", seconds}});
-}
-
 void WireEvents::OnInterrupted(audio::SourceEndReason reason, const std::string& detail) {
     server_.PushNotification("session/interrupted",
                              {{"reason", ReasonName(reason)}, {"detail", detail}});

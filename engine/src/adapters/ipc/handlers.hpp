@@ -10,7 +10,6 @@
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
-#include "core/session/playback.hpp"
 #include "core/session/session_controller.hpp"
 #include "ports/document_ingest.hpp"
 #include "ports/guidance_lane.hpp"
@@ -117,11 +116,9 @@ std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingRea
                                                  const json& params);
 // session/import: answers the new session's id at once, then finalises it on the import's
 // thread, pushing session/importProgress and session/imported or session/importFailed from there.
-// Refused as session/start is, during playback, and for a file the reader cannot open. No error
-// carries the path
+// Refused as session/start is, and for a file the reader cannot open. No error carries the path
 std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
                                               clinicavt::session::SessionController& controller,
-                                              bool playback_active,
                                               clinicavt::translate::ITranslator* translator,
                                               const Notify& push, const json& params);
 // session/importProgress: the import's stage and its one percentage across all stages
@@ -208,7 +205,6 @@ struct EngineServices {
     std::string auto_note_tier;    // the note tier "auto" stands for on this machine
     bool stray_note_host = false;  // one from an earlier engine is wedged in the GPU driver
     std::filesystem::path demo_dir;
-    clinicavt::session::Playback* playback = nullptr;
     AsrSwitch switch_asr;
     clinicavt::archive::ArchiveLane* archive_lane = nullptr;   // deletes are refused while it runs
     clinicavt::audio::IRecordingReader* recordings = nullptr;  // import is absent without it

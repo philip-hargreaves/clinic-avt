@@ -19,11 +19,9 @@ public static class ReportBuilder
     private sealed record Consultation(
         JsonElement Source,
         string Started,
-        string Recording,
         string Length,
         string Device,
         string Model,
-        double? Speed,
         double? Transcript,
         double? Waiting,
         double? Clinical,
@@ -34,7 +32,6 @@ public static class ReportBuilder
         double? ModelLoad,
         double? PeakGb)
     {
-        public bool RealTime => Speed is null || Speed <= 1.0;
         public bool Short => Source.Number("engine", "audioSeconds") is { } s && s < MinAudioSeconds;
     }
 
@@ -54,8 +51,7 @@ public static class ReportBuilder
         }
 
         var rows = sessions.Select(ToRow).ToList();
-        var consultations = rows.Where(r => r.RealTime && !r.Short).ToList();
-        var replays = rows.Where(r => !r.RealTime && !r.Short).ToList();
+        var consultations = rows.Where(r => !r.Short).ToList();
         var shorts = rows.Where(r => r.Short).ToList();
 
         var html = new StringBuilder();
@@ -81,16 +77,13 @@ public static class ReportBuilder
         html.Append("<h1>ClinicAVT Performance Report</h1>");
         html.Append(CultureInfo.InvariantCulture,
             $"<p class=\"sub\">Exported {exported:yyyy-MM-dd HH:mm} UTC · "
-            + $"{Words.Count(consultations.Count, "consultation")}, {Words.Count(replays.Count, "test replay")}, "
+            + $"{Words.Count(consultations.Count, "consultation")}, "
             + $"{Words.Count(shorts.Count, "short recording")}</p>");
 
         AppendMachine(html, machine, sessions);
         AppendSummary(html, consultations);
         AppendConsultations(html, consultations);
-        AppendCollapsed(html, replays, "Test replays faster than real time",
-            "Recordings played back faster than they were spoken. Transcription cannot keep up, "
-            + "so these times are not comparable with the consultations above.", speed: true);
-        AppendCollapsed(html, shorts, "Recordings under 30 seconds", "Too short to measure.", speed: false);
+        AppendShorts(html, shorts);
 
         html.Append("<h2>Raw data</h2><details><summary>Session records (JSON)</summary><pre>");
         foreach (var session in sessions)
@@ -117,11 +110,9 @@ public static class ReportBuilder
         return new Consultation(
             s,
             start[..Math.Min(16, start.Length)].Replace('T', ' '),
-            s.Text("track") ?? "Microphone",
             Clock(s.Number("engine", "audioSeconds")),
             dot > 0 ? device[..dot] : device,
             s.Text("note", "model") ?? "Note model not recorded",
-            s.Number("replaySpeed"),
             transcript,
             Delta(transcript, first),
             Delta(first, ready),
@@ -138,11 +129,11 @@ public static class ReportBuilder
         html.Append("<h2>Summary</h2>");
         if (rows.Count == 0)
         {
-            html.Append("<p class=\"hint\">No consultations recorded at normal speed yet.</p>");
+            html.Append("<p class=\"hint\">No consultations recorded yet.</p>");
             return;
         }
 
-        html.Append("<p class=\"hint\">Consultations recorded at normal speed and longer than 30 seconds. "
+        html.Append("<p class=\"hint\">Consultations longer than 30 seconds. "
                     + "How long each step took after Stop was pressed.</p>");
         var groups = rows.GroupBy(r => (r.Model, r.Device))
             .OrderBy(g => g.Key.Device).ThenBy(g => g.Max(r => r.PeakGb ?? 0)).ToList();
@@ -200,7 +191,7 @@ public static class ReportBuilder
                     + "The bar is the total, drawn to the same scale on every row.</p>");
         html.Append("<p class=\"legend\"><i class=\"c1\"></i>Transcript <i class=\"c2\"></i>Waiting for the clinical note "
                     + "<i class=\"c3\"></i>Clinical note <i class=\"c4\"></i>Patient information</p>");
-        html.Append("<table><tr><th>Started</th><th>Recording</th><th class=\"n\">Length</th><th>Note model</th><th></th>");
+        html.Append("<table><tr><th>Started</th><th class=\"n\">Length</th><th>Note model</th><th></th>");
         StepHeaders(html);
         html.Append("</tr>");
         var longest = rows.Max(r => r.BothOnScreen ?? r.ClinicalOnScreen ?? 0);
@@ -208,7 +199,6 @@ public static class ReportBuilder
         {
             html.Append("<tr>");
             Cell(html, r.Started);
-            Cell(html, r.Recording);
             Cell(html, r.Length, "n");
             Cell(html, r.Model);
             html.Append("<td>").Append(Bar(r, longest)).Append("</td>");
@@ -219,21 +209,16 @@ public static class ReportBuilder
         html.Append("</table>");
     }
 
-    private static void AppendCollapsed(StringBuilder html, List<Consultation> rows, string title, string hint, bool speed)
+    private static void AppendShorts(StringBuilder html, List<Consultation> rows)
     {
         if (rows.Count == 0)
         {
             return;
         }
 
-        html.Append(CultureInfo.InvariantCulture, $"<details><summary>{title} ({rows.Count})</summary>");
-        html.Append(CultureInfo.InvariantCulture, $"<p class=\"hint\">{hint}</p>");
-        html.Append("<table><tr><th>Started</th><th>Recording</th><th class=\"n\">Length</th>");
-        if (speed)
-        {
-            html.Append("<th>Speed</th>");
-        }
-
+        html.Append(CultureInfo.InvariantCulture, $"<details><summary>Recordings under 30 seconds ({rows.Count})</summary>");
+        html.Append("<p class=\"hint\">Too short to measure.</p>");
+        html.Append("<table><tr><th>Started</th><th class=\"n\">Length</th>");
         html.Append("<th>Device</th><th>Note model</th>");
         StepHeaders(html);
         html.Append("</tr>");
@@ -241,13 +226,7 @@ public static class ReportBuilder
         {
             html.Append("<tr>");
             Cell(html, r.Started);
-            Cell(html, r.Recording);
             Cell(html, r.Length, "n");
-            if (speed)
-            {
-                Cell(html, r.Speed?.ToString("0.#", CultureInfo.InvariantCulture) + "×");
-            }
-
             Cell(html, r.Device);
             Cell(html, r.Model);
             StepCells(html, r);

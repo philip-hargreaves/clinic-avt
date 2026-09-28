@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Features.Documents;
+using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
@@ -9,30 +11,29 @@ using static ClinicAVT.App.Tests.Support.Waits;
 namespace ClinicAVT.App.Tests.Features.Consultation;
 
 /// <summary>
-/// Replays through the whole shell stack against the real engine and real
-/// models.
+/// Consultations through the whole shell stack against the real engine and real models.
 /// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
-public class ReplaySessionTest
+public class RealEngineSessionTest
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
 
     [Fact]
-    public async Task PlayAfterIdleReplaysAndFinalises()
+    public async Task AnImportAfterIdleFinalises()
     {
-        var wav = SilenceWav.Write(seconds: 5);
+        var wav = SilenceWav.Write(seconds: 35);  // the dialog refuses under 30 s
         try
         {
-            await using var engine = await RealEngine.StartAsync("replay");
+            await using var engine = await RealEngine.StartAsync("import");
             var (host, connection) = (engine.Host, engine.Connection);
             var pidAtStart = host.EnginePid;
 
-            // The connection must survive the idle window between launch and play
+            // The connection must survive the idle window between launch and import
             await Task.Delay(TimeSpan.FromSeconds(20));
             Assert.Equal(pidAtStart, host.EnginePid);
 
-            // A silent wav has no transcript, so the real note lane refuses
+            // A silent recording has no transcript, so the real note lane refuses
             // or fails. Any of the three proves the pipeline answered
             var noteDone = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously);
@@ -44,13 +45,12 @@ public class ReplaySessionTest
                 }
             };
 
-            await connection.RequestAsync(
-                "session/start",
-                new { replay = new { path = wav, speed = 1.0, monitor = false } }, Timeout);
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            await connection.RequestAsync("session/pause", new { paused = true }, Timeout);
-            await connection.RequestAsync("session/pause", new { paused = false }, Timeout);
-            await connection.RequestAsync("session/stop", null, TimeSpan.FromSeconds(60));
+            var dialog = new ImportRecordingViewModel(new EngineApi(connection), new FakeFilePicker(), examples: []);
+            await dialog.UseFileAsync(wav);
+            var (session, _, _) = Session(connection, dialog);
+
+            await session.ImportRecordingAsync();
+            Assert.NotEqual(SessionState.Idle, session.State);
             await noteDone.Task.WaitAsync(TimeSpan.FromSeconds(120));
         }
         finally
@@ -66,8 +66,9 @@ public class ReplaySessionTest
         }
     }
 
+    // The import dialog's example list is the one demo path, so an example goes end to end
     [Fact]
-    public async Task ARealTrackFinalisesToALabelledTranscript()
+    public async Task AnExampleImportsToALabelledTranscriptANoteAndASheet()
     {
         var track = Track();
         if (!File.Exists(track))
@@ -110,32 +111,31 @@ public class ReplaySessionTest
             }
         };
 
-        await connection.RequestAsync(
-            "session/start",
-            new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
-        await Task.Delay(TimeSpan.FromSeconds(20));  // ~5 min of audio at 16x
-        var stop = await connection.RequestAsync(
-            "session/stop", null, TimeSpan.FromSeconds(240));
+        var dialog = new ImportRecordingViewModel(new EngineApi(connection), new FakeFilePicker(),
+            examples: [new DemoTrack("Elbow swelling", track)]);
+        dialog.ExampleIndex = 0;
+        await WaitUntilAsync(() => dialog.Inspected, Timeout);
+        var (session, transcript, _) = Session(connection, dialog);
 
-        var id = stop.GetProperty("sessionId").GetString();
-        var transcript = await connection.RequestAsync(
-            "session/transcript", new { id }, Timeout);
-        var labelled = transcript.GetProperty("turns").EnumerateArray()
-            .Count(t => t.GetProperty("speaker").GetString() is "doctor" or "patient");
+        string? sealedId = null;
+        session.Recorder.Sealed += id => sealedId = id;
+        await session.ImportRecordingAsync();
+        Assert.NotNull(sealedId);
+        var labelled = transcript.Turns.Count(t => t.Speaker is "doctor" or "patient");
         Assert.True(labelled > 5, $"expected a labelled transcript, got {labelled} labelled turns");
 
         // The real note follows, streamed then stored
         var note = await noteReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
         Assert.False(string.IsNullOrWhiteSpace(note));
         Assert.True(partials > 3, $"the note must stream, saw {partials} partials");
-        var stored = await connection.RequestAsync("session/note", new { id }, Timeout);
+        var stored = await connection.RequestAsync("session/note", new { id = sealedId }, Timeout);
         Assert.Equal(note, stored.GetProperty("text").GetString());
 
         // The patient information follows the note
         var patient = await patientReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
         Assert.Contains("Your appointment today", patient);
         var storedPatient =
-            await connection.RequestAsync("session/patient", new { id }, Timeout);
+            await connection.RequestAsync("session/patient", new { id = sealedId }, Timeout);
         Assert.Equal(patient, storedPatient.GetProperty("text").GetString());
     }
 
@@ -169,9 +169,9 @@ public class ReplaySessionTest
             }
         };
 
+        // A replayed file stands in for the microphone, which a resume carries on from
         var started = await connection.RequestAsync(
-            "session/start",
-            new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
+            "session/start", new { replay = new { path = track, speed = 16.0 } }, Timeout);
         var firstId = started.GetProperty("sessionId").GetString();
 
         // Mid-consult, the engine dies the way the driver fault kills it
@@ -179,13 +179,13 @@ public class ReplaySessionTest
         Process.GetProcessById(host.EnginePid!.Value).Kill();
         await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "back" }, Timeout));
 
-        // Resume as the shell does. Stored audio replays ahead of the rest of the file
+        // Stored audio replays ahead of the rest of the file
         var resumed = await connection.RequestAsync(
             "session/start",
             new
             {
                 resume = firstId,
-                replay = new { path = track, speed = 16.0, monitor = false },
+                replay = new { path = track, speed = 16.0 },
             }, TimeSpan.FromSeconds(60));
         var secondId = resumed.GetProperty("sessionId").GetString();
         Assert.NotEqual(firstId, secondId);
@@ -203,44 +203,6 @@ public class ReplaySessionTest
 
         var note = await noteReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
         Assert.False(string.IsNullOrWhiteSpace(note));
-    }
-
-    [Fact]
-    public async Task LiveCountersSurviveAKilledEngineAndResume()
-    {
-        var track = Track();
-        if (!File.Exists(track))
-        {
-            return;
-        }
-
-        await using var engine = await RealEngine.StartAsync("counters", stderr: "clinicavt-counters-test.log");
-        var (host, connection) = (engine.Host, engine.Connection);
-        var session = new ConsultationViewModel(new EngineApi(connection), new InlineDispatcher(), new TranscriptViewModel(), new NoteViewModel(), TestSession.Status(), new FakeDialogService(), TestSession.Page(connection, TestSession.Status()), TestSession.Guidance(TestSession.Status()));
-
-        await session.StartRecordingAsync(new ReplayRequest(track, 16.0, false));
-        Assert.Equal(SessionState.Recording, session.State);
-        await WaitUntilAsync(() => session.AudioSeconds > 3, TimeSpan.FromSeconds(20));
-
-        // Two kills in quick succession with the second mid-resume, matching
-        // a real double crash
-        var atKill = session.AudioSeconds;
-        var firstPid = host.EnginePid!.Value;
-        Process.GetProcessById(firstPid).Kill();
-        await WaitUntilAsync(
-            () => host.EnginePid is int pid && pid != firstPid, TimeSpan.FromSeconds(30));
-        Process.GetProcessById(host.EnginePid!.Value).Kill();
-
-        // The supervisor restarts again, the resume retries, and the
-        // counters must keep counting from where they were
-        await WaitUntilAsync(
-            () => session.AudioSeconds > atKill + 30, TimeSpan.FromSeconds(90));
-        Assert.Equal(SessionState.Recording, session.State);
-
-        await session.StopRecordingAsync();
-        Assert.True(
-            session.State is SessionState.Finalising or SessionState.Review,
-            $"stop left the session in {session.State}");
     }
 
     [Fact]
@@ -273,8 +235,7 @@ public class ReplaySessionTest
             await using var engine = await RealEngine.StartAsync("battery", stderr: "clinicavt-battery-test.log");
             var connection = engine.Connection;
             await connection.RequestAsync(
-                "session/start",
-                new { replay = new { path = track, speed = 16.0, monitor = false } }, Timeout);
+                "session/start", new { replay = new { path = track, speed = 16.0 } }, Timeout);
             await Task.Delay(TimeSpan.FromSeconds(12));
             if (File.Exists(engine.CrashLog) && File.ReadAllLines(engine.CrashLog).Length > 0)
             {
@@ -287,6 +248,20 @@ public class ReplaySessionTest
         }
 
         Assert.True(crashes == 0, $"{crashes}/6 accelerated session starts crashed the engine");
+    }
+
+    // The consultation page over the real engine, with the import dialog answering as the given one
+    private static (ConsultationViewModel Session, TranscriptViewModel Transcript, NoteViewModel Note) Session(
+        EngineConnection connection, ImportRecordingViewModel dialog)
+    {
+        Assert.NotNull(dialog.Result);
+        var transcript = new TranscriptViewModel();
+        var note = new NoteViewModel();
+        var status = TestSession.Status();
+        var session = new ConsultationViewModel(new EngineApi(connection), new InlineDispatcher(), transcript, note,
+            status, new FakeDialogService { Import = dialog.Result }, TestSession.Page(connection, status),
+            TestSession.Guidance(status));
+        return (session, transcript, note);
     }
 
     private static string Track() => Path.Combine(

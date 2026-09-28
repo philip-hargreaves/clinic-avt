@@ -6,13 +6,10 @@
 #include <cstring>
 #include <fstream>
 #include <ios>
-#include <memory>
 #include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
-
-#include "adapters/audio/wasapi_player.hpp"
 
 namespace clinicavt::audio {
 
@@ -111,20 +108,10 @@ std::string Refusal(const WavFormat& format) {
 
 }  // namespace
 
-WavSource::WavSource(std::string path, Config config) : path_(std::move(path)), config_(config) {
-    monitor_.store(config.monitor, std::memory_order_relaxed);
-}
+WavSource::WavSource(std::string path, Config config) : path_(std::move(path)), config_(config) {}
 
 void WavSource::RequestStop() {
     stop_requested_.store(true, std::memory_order_relaxed);
-}
-
-void WavSource::SetPaused(bool paused) {
-    paused_.store(paused, std::memory_order_relaxed);
-}
-
-void WavSource::SetMonitor(bool monitor) {
-    monitor_.store(monitor, std::memory_order_relaxed);
 }
 
 // Every outcome, success or failure, ends with OnEnd
@@ -160,37 +147,14 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
     }
     std::vector<std::int16_t> pcm(kPacketFrames);
     std::vector<float> frames(kPacketFrames);
-    std::vector<float> decimated;
-    std::unique_ptr<WasapiPlayer> player;
-    bool player_failed = false;
-    // Decimate by speed (tape-speed effect)
-    const std::size_t step =
-        config_.speed > 1.0 ? static_cast<std::size_t>(config_.speed + 0.5) : 1;
 
     using Clock = std::chrono::steady_clock;
-    auto origin = Clock::now();
+    const auto origin = Clock::now();
     std::uint64_t frames_sent = 0;
     while (remaining > 0) {
         if (stop_requested_.load(std::memory_order_relaxed)) {
             return {SourceEndReason::kStopped, ""};
         }
-        // Held while paused rather than dropped, since the downstream
-        // clock is delivered audio. Stop still wins
-        const bool was_paused = paused_.load(std::memory_order_relaxed);
-        while (paused_.load(std::memory_order_relaxed) &&
-               !stop_requested_.load(std::memory_order_relaxed)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-        if (stop_requested_.load(std::memory_order_relaxed)) {
-            return {SourceEndReason::kStopped, ""};
-        }
-        // Re-base after a pause: catching up would deliver a burst no
-        // microphone produces
-        if (was_paused) {
-            origin = Clock::now();
-            frames_sent = 0;
-        }
-
         const std::size_t count = std::min(kPacketFrames, remaining);
         if (header.format.format == kFormatPcm) {
             if (!ReadExact(in, pcm.data(), count * sizeof(std::int16_t))) {
@@ -205,20 +169,6 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
             }
         }
         sink.OnAudio(std::span<const float>(frames.data(), count), 0);
-        // After the sink and best-effort, so playback never throttles the
-        // feed. The toggle opens and closes the device mid-stream
-        const bool monitor = monitor_.load(std::memory_order_relaxed);
-        if (monitor && !player && !player_failed) {
-            player = WasapiPlayer::Open();
-            player_failed = player == nullptr;
-        } else if (!monitor && player) {
-            player.reset();
-        }
-        if (player && monitor) {
-            decimated.clear();
-            for (std::size_t i = 0; i < count; i += step) decimated.push_back(frames[i]);
-            player->Write(decimated);
-        }
         remaining -= count;
         // Sleeps to a deadline from a fixed origin. Per-packet sleeps
         // drift, and the drift compounds

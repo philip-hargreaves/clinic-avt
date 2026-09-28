@@ -23,9 +23,6 @@ class ISessionEvents {
 
     virtual void OnLevel(const audio::LevelReading& reading) = 0;
 
-    // Demo playback: the reading plus the position its clock has reached
-    virtual void OnPlaybackLevel(const audio::LevelReading&, double /*seconds*/) {}
-
     virtual void OnInterrupted(audio::SourceEndReason reason, const std::string& detail) = 0;
 
     // Finalise stages as they start ("transcript", "speakers"), on the
@@ -63,7 +60,6 @@ class ISessionEvents {
 struct ReplaySpec {
     std::string path;
     double speed = 1.0;
-    bool monitor = false;
     std::uint64_t start_frame = 0;  // resume: skip audio already captured
 };
 

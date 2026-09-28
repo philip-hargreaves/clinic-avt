@@ -13,10 +13,6 @@
         </Grid.RowDefinitions>
 
         <controls:PageHeader Title="Consultation">
-            <controls:PageHeader.Centre>
-                <!-- Developer replay controls -->
-                <ContentControl x:Name="DemoTrayHost" Visibility="{x:Bind DemoTray.Visible, Mode=OneWay}" />
-            </controls:PageHeader.Centre>
             <controls:PageHeader.Commands>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <!-- The microphone is set once, so it sits with the page commands -->

@@ -38,7 +38,6 @@ add_executable(engine_tests
     core/diarisation/role_naming_test.cpp
     adapters/diarisation/seg_decode_test.cpp
     core/metrics/throughput_test.cpp
-    core/session/playback_test.cpp
     core/session/session_controller_test.cpp
     core/diarisation/slice_refinement_test.cpp
     core/note/summary_scrub_test.cpp

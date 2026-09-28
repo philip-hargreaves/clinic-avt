@@ -1,9 +1,0 @@
-{
-    "jsonrpc": "2.0",
-    "method": "audio.level",
-    "params": {
-        "level": 0.5,
-        "clipped": false,
-        "seconds": 271.4
-    }
-}

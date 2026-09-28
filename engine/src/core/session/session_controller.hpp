@@ -87,9 +87,6 @@ class SessionController {
     // Idempotent. The recording is erased. An import stops at its next span and is erased
     // on its own thread
     void Cancel();
-    // Holds the source's delivery. Stop and cancel always win
-    void SetPaused(bool paused);
-    void SetMonitor(bool monitor);
     bool Running() const;
     // Capturing, or still writing the consultation's note, sheet or case summary
     bool Busy() const;

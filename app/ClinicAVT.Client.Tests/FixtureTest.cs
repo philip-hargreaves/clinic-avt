@@ -51,15 +51,6 @@ public class FixtureTest
         Assert.Equal(0.5, level.GetProperty("params").GetProperty("level").GetDouble());
         Assert.False(level.GetProperty("params").GetProperty("clipped").GetBoolean());
 
-        var start = Fixtures.Load("session-start-playback.json");
-        Assert.Equal("session/start", start.GetProperty("method").GetString());
-        Assert.False(string.IsNullOrEmpty(
-            start.GetProperty("params").GetProperty("playback").GetProperty("id").GetString()));
-
-        var playback = Fixtures.Load("audio-level-playback.json");
-        Assert.Equal("audio.level", playback.GetProperty("method").GetString());
-        Assert.Equal(271.4, playback.GetProperty("params").GetProperty("seconds").GetDouble());
-
         var interrupted = Fixtures.Load("session-interrupted.json");
         Assert.Equal("session/interrupted", interrupted.GetProperty("method").GetString());
         Assert.Equal("deviceLost", interrupted.GetProperty("params").GetProperty("reason").GetString());

@@ -26,9 +26,6 @@ public sealed class PerformanceCollector(
     };
 
     private DateTimeOffset _start;
-    private string _source = "";
-    private double _replaySpeed;
-    private string? _track;
     private long? _availableAtStartMb;
     private Stopwatch? _stopClock;
     private double? _noteFirstPartial;
@@ -50,7 +47,7 @@ public sealed class PerformanceCollector(
         _modelLoadSeconds = loadSeconds;
     }
 
-    public void SessionStarted(string source, double replaySpeed, string? track)
+    public void SessionStarted()
     {
         if (!enabled())
         {
@@ -59,9 +56,6 @@ public sealed class PerformanceCollector(
         }
 
         _start = DateTimeOffset.UtcNow;
-        _source = source;
-        _replaySpeed = replaySpeed;
-        _track = track;
         _availableAtStartMb = AvailableMemoryMb();
         _stopClock = null;
         _noteFirstPartial = _noteReady = _noteRate = null;
@@ -134,9 +128,6 @@ public sealed class PerformanceCollector(
         {
             schema = 2,
             start = _start,
-            source = _source,
-            replaySpeed = _replaySpeed > 0 ? (double?)_replaySpeed : null,
-            track = _track,
             outcome,
             engine = engineMetrics,
             note = new

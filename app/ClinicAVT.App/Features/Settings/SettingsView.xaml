@@ -213,19 +213,10 @@
 
                 <toolkit:SettingsExpander
                     Margin="0,16,0,0"
-                    Description="Replay, seed data and performance figures, for testing and demos"
+                    Description="Seed data and performance figures, for testing and demos"
                     Header="Developer tools"
                     IsExpanded="{x:Bind ViewModel.Appearance.DeveloperToolsExpanded, Mode=TwoWay}">
                     <toolkit:SettingsExpander.Items>
-                        <toolkit:SettingsCard
-                            Description="Replay recordings through the pipeline"
-                            Header="Demo tray"
-                            Visibility="{x:Bind ViewModel.Appearance.DemoTrayAvailable}">
-                            <ToggleSwitch
-                                MinWidth="0"
-                                AutomationProperties.Name="Demo tray"
-                                IsOn="{x:Bind ViewModel.Appearance.DemoTrayEnabled, Mode=TwoWay}" />
-                        </toolkit:SettingsCard>
                         <toolkit:SettingsCard Description="A year of consultations and reflections from PriMock57 recordings" Header="Seed data">
                             <ToggleSwitch
                                 MinWidth="0"

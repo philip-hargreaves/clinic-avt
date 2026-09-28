@@ -12,7 +12,7 @@ other transcription path. Without models the engine runs on scripted stand-ins (
 core/            a static library, one folder per stage; namespace = folder
   audio/         capture ring, level meter, resume source, the enrolment sink
   session/       the session controller and its events, transcription, note lane,
-                 enrolment, demo playback
+                 enrolment
   diarisation/   speaker regions, per-turn decode, re-split, role naming, transcript tidy
   note/          the note gate, label, summary scrub and load-failure reading
   guidance/      query, ranking and scan; added-document units and page text
