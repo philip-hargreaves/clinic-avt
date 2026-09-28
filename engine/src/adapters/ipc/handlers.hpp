@@ -3,7 +3,9 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <string>
 #include <variant>
+#include <vector>
 
 #include "adapters/audio/capture_devices.hpp"
 #include "adapters/diarisation/anchor_store.hpp"
@@ -114,13 +116,29 @@ inline Notify PushTo(PipeServer& server) {
 // recording/inspect: a recording's length and date for the import dialog. Nothing is kept
 std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
                                                  const json& params);
+// The roles a consultation needs that are not installed, in plain words, as session/start,
+// session/import and anchor/enrol refuse with it. Empty when none is missing
+std::string MissingModelsReason(const std::vector<std::string>& missing);
+// engine/readiness: ready once every staged model's compile cache exists. firstUse: the one-off
+// compiles are running. strayNoteHost: a note host from an earlier engine is wedged in the GPU
+// driver. missing: the roles a consultation needs that are not installed
+json ReadinessJson(bool first_use, bool ready, bool stray_note_host,
+                   const std::vector<std::string>& missing);
+// session/start: a microphone session, or with replay a wav played through the same pipeline,
+// refused unless replay is allowed. Refused while a role is missing
+std::variant<json, Error> HandleSessionStart(clinicavt::session::SessionController& controller,
+                                             clinicavt::translate::ITranslator* translator,
+                                             const json& params,
+                                             const std::vector<std::string>& missing,
+                                             bool allow_replay);
 // session/import: answers the new session's id at once, then finalises it on the import's
 // thread, pushing session/importProgress and session/imported or session/importFailed from there.
 // Refused as session/start is, and for a file the reader cannot open. No error carries the path
 std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
                                               clinicavt::session::SessionController& controller,
                                               clinicavt::translate::ITranslator* translator,
-                                              const Notify& push, const json& params);
+                                              const Notify& push, const json& params,
+                                              const std::vector<std::string>& missing = {});
 // session/importProgress: the import's stage and its one percentage across all stages
 json ImportProgressJson(const std::string& id, clinicavt::session::ImportStage stage, int percent);
 
@@ -208,6 +226,8 @@ struct EngineServices {
     AsrSwitch switch_asr;
     clinicavt::archive::ArchiveLane* archive_lane = nullptr;   // deletes are refused while it runs
     clinicavt::audio::IRecordingReader* recordings = nullptr;  // import is absent without it
+    std::vector<std::string> missing_models;  // roles not installed, empty with stand-ins
+    bool allow_replay = false;                // session/start may play a file, for tests only
 };
 
 // engine/*, note/tier, anchor/* and audio/inputs

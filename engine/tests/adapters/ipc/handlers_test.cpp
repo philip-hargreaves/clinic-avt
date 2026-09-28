@@ -1242,14 +1242,15 @@ struct ImportRig {
         vad,
         diariser};
 
-    std::variant<json, Error> Import(const json& params) {
+    std::variant<json, Error> Import(const json& params,
+                                     const std::vector<std::string>& missing = {}) {
         return HandleSessionImport(
             reader, controller, nullptr,
             [this](const std::string& method, json body) {
                 const std::lock_guard<std::mutex> lock(mutex);
                 pushed.emplace_back(method, std::move(body));
             },
-            params);
+            params, missing);
     }
 
     // Every push but progress
@@ -1460,6 +1461,71 @@ TEST(Handlers, AReaderFailureAnswersInPlainWordsAndNeverWithTheFile) {
     }
     EXPECT_TRUE(HandleSessionList(*rig.fixture.store)["sessions"].empty())
         << "the session each began is erased";
+}
+
+TEST(Handlers, ReadinessNamesTheMissingRolesAsTheFixture) {
+    const json fixture = LoadFixture("engine-readiness.json");
+    EXPECT_EQ(MakeResult(std::int64_t{5},
+                         ReadinessJson(false, true, false, {"asr", "diarisation", "segmentation"})),
+              fixture["response"]);
+    EXPECT_EQ(ReadinessJson(true, false, true, {})["missing"], json::array())
+        << "every role installed, or a stand-in in its place with --scripted";
+}
+
+TEST(Handlers, MissingModelsAreNamedInPlainWords) {
+    EXPECT_EQ(MissingModelsReason({}), "");
+    EXPECT_EQ(MissingModelsReason({"asr"}), "the speech recognition model is not installed");
+    EXPECT_EQ(MissingModelsReason({"diarisation", "segmentation"}),
+              "the speaker recognition model is not installed")
+        << "two models, one thing to a clinician";
+    EXPECT_EQ(MissingModelsReason({"asr", "vad", "diarisation"}),
+              "the speech recognition, speech detection and speaker recognition models are not "
+              "installed");
+}
+
+// Without --scripted, a role that is not installed refuses every way a consultation begins,
+// before anything is stored or read
+TEST(Handlers, AMissingModelRefusesStartImportAndSaysWhich) {
+    ImportRig rig;
+    const std::vector<std::string> missing{"asr", "diarisation", "segmentation"};
+    const json fixture = LoadFixture("session-start-refused.json");
+    const auto started =
+        HandleSessionStart(rig.controller, nullptr, fixture["request"]["params"], missing, false);
+    ASSERT_TRUE(std::holds_alternative<Error>(started));
+    EXPECT_EQ(MakeError(std::int64_t{11}, std::get<Error>(started)), fixture["response"]);
+    EXPECT_FALSE(rig.controller.Running());
+
+    rig.reader.audio.assign(2 * 16000, 0.1F);
+    const auto imported =
+        rig.Import(json{{"path", "C:\\visit.m4a"}, {"startedAt", "2026-09-26T13:05:00Z"}}, missing);
+    ASSERT_TRUE(std::holds_alternative<Error>(imported));
+    EXPECT_EQ(std::get<Error>(imported).code, kSessionError);
+    EXPECT_EQ(std::get<Error>(imported).data.value_or(json()), json(MissingModelsReason(missing)));
+    EXPECT_EQ(rig.reader.decodes.load(), 0);
+    EXPECT_TRUE(HandleSessionList(*rig.fixture.store)["sessions"].empty());
+    EXPECT_TRUE(rig.Methods().empty());
+}
+
+// A replay reads whatever file the client names, so only an engine started for tests or
+// evaluation takes one
+TEST(Handlers, ReplayIsRefusedUnlessTheEngineAllowsIt) {
+    ImportRig rig;
+    const json replay{{"replay", {{"path", "C:\\any.wav"}, {"speed", 16.0}}}};
+    const auto refused = HandleSessionStart(rig.controller, nullptr, replay, {}, false);
+    ASSERT_TRUE(std::holds_alternative<Error>(refused));
+    EXPECT_EQ(std::get<Error>(refused).code, kInvalidParams);
+    EXPECT_FALSE(rig.controller.Running());
+
+    const auto no_path =
+        HandleSessionStart(rig.controller, nullptr, json{{"replay", json::object()}}, {}, true);
+    ASSERT_TRUE(std::holds_alternative<Error>(no_path));
+    EXPECT_EQ(std::get<Error>(no_path).code, kInvalidParams);
+
+    const auto started = HandleSessionStart(rig.controller, nullptr, replay, {}, true);
+    ASSERT_TRUE(std::holds_alternative<json>(started));
+    EXPECT_TRUE(ResultOf(started)["sessionId"].is_string());
+    EXPECT_TRUE(rig.controller.Running()) << "the stand-ins record, as with --scripted";
+    rig.controller.Cancel();
 }
 
 }  // namespace

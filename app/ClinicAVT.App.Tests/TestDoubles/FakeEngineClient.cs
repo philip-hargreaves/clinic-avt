@@ -126,7 +126,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         if (method == "engine/readiness")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(
-                new { firstUse = FirstUse, ready = ModelsCompiled, strayNoteHost = StrayNoteHost }));
+                new { firstUse = FirstUse, ready = ModelsCompiled, strayNoteHost = StrayNoteHost, missing = MissingModels }));
         }
 
         if (method == "translate/languages")
@@ -514,6 +514,9 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 
     /// <summary>Served by engine/readiness, no wedged note process by default.</summary>
     public bool StrayNoteHost { get; set; }
+
+    /// <summary>Served by engine/readiness: the roles not installed, none by default.</summary>
+    public List<string> MissingModels { get; } = [];
 
     public void RaiseNotification(string method, JsonElement parameters = default) =>
         NotificationReceived?.Invoke(method, parameters);

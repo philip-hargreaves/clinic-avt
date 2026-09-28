@@ -22,4 +22,25 @@ public static class ModelNames
                 : char.ToUpperInvariant(t[0]) + t[1..]);
         return string.Join(' ', words);
     }
+
+    /// <summary>
+    /// The roles a consultation needs that are not installed, as "the speech recognition model is
+    /// not installed". The engine words its refusals the same way.
+    /// </summary>
+    public static string Missing(IReadOnlyList<string> roles)
+    {
+        var names = roles
+            .Select(role => role switch
+            {
+                "asr" => "speech recognition",
+                "vad" => "speech detection",
+                "diarisation" or "segmentation" => "speaker recognition",
+                _ => role,
+            })
+            .Distinct()
+            .ToList();
+        return names.Count == 1
+            ? $"the {names[0]} model is not installed"
+            : $"the {string.Join(", ", names[..^1])} and {names[^1]} models are not installed";
+    }
 }

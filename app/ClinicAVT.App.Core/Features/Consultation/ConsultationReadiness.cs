@@ -173,6 +173,12 @@ public sealed partial class ConsultationReadiness : ObservableObject
                         _status.Log("stray note host detected at engine start");
                     }
 
+                    // Recording is refused until it is installed, so the reason shows before a try
+                    if (readiness.Missing.Count > 0)
+                    {
+                        _status.Append($"Recording unavailable: {ModelNames.Missing(readiness.Missing)}");
+                    }
+
                     if (!readiness.FirstUse)
                     {
                         ModelsReady = true;

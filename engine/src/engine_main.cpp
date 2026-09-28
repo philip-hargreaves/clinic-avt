@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -35,6 +36,7 @@
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/ipc/wire_events.hpp"
+#include "adapters/models/missing_models.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/note_tier.hpp"
 #include "adapters/models/ov_runtime.hpp"
@@ -53,6 +55,7 @@
 #include "adapters/vad/passthrough_vad.hpp"
 #include "adapters/vad/silero_vad.hpp"
 #include "core/common/cli_args.hpp"
+#include "core/common/utf8.hpp"
 #include "core/metrics/metrics.hpp"
 #include "core/session/session_controller.hpp"
 
@@ -66,7 +69,7 @@ constexpr int kExitAlreadyServing = 3;
 constexpr auto kIdleExit = std::chrono::seconds(30);
 
 std::filesystem::path StoreRoot(const std::vector<std::string>& args) {
-    if (args.size() > 1) return args[1];
+    if (args.size() > 1) return clinicavt::utf8::ToPath(args[1]);
     char* local_app_data = nullptr;
     if (_dupenv_s(&local_app_data, nullptr, "LOCALAPPDATA") != 0 || local_app_data == nullptr) {
         throw std::runtime_error("LOCALAPPDATA is not set and no store root was given");
@@ -78,7 +81,7 @@ std::filesystem::path StoreRoot(const std::vector<std::string>& args) {
 
 // Added documents live in the user's Documents folder unless a run says otherwise
 std::filesystem::path GuidelinesFolder(const std::string& override) {
-    if (!override.empty()) return override;
+    if (!override.empty()) return clinicavt::utf8::ToPath(override);
     PWSTR documents = nullptr;
     std::filesystem::path folder;
     if (SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &documents) == S_OK) {
@@ -111,53 +114,81 @@ clinicavt::session::SourceFactory MakeSourceFactory(std::string forced) {
     };
 }
 
-// Real transcription when the ASR role is staged, scripted otherwise as in CI
+// The roles the store cannot resolve
+std::vector<std::string> Unstaged(const clinicavt::models::ModelStore& store,
+                                  std::initializer_list<const char*> roles) {
+    std::vector<std::string> unstaged;
+    for (const char* role : roles) {
+        try {
+            store.Resolve(role, "default");
+        } catch (const std::exception&) {
+            unstaged.emplace_back(role);
+        }
+    }
+    return unstaged;
+}
+
+// A role that cannot load gets a stand-in with --scripted, as in CI. Otherwise it is added to
+// missing, and consultations are refused until it is installed
 std::unique_ptr<clinicavt::asr::ITranscriber> BuildTranscriber(
     const clinicavt::models::ModelStore& store, clinicavt::models::OvRuntime& runtime,
-    const std::string& device, clinicavt::metrics::Registry& metrics, bool& first_use) {
+    const std::string& device, clinicavt::metrics::Registry& metrics, bool& first_use,
+    bool scripted, std::vector<std::string>& missing) {
     try {
         first_use |= Uncompiled(store, "asr");
         return std::make_unique<clinicavt::asr::WhisperTranscriber>(store, runtime, device,
                                                                     &metrics);
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: scripted transcripts (%s)\n", e.what());
-        return std::make_unique<clinicavt::asr::ScriptedTranscriber>();
+        if (scripted) {
+            std::fprintf(stderr, "clinicavt-engine: scripted transcripts (%s)\n", e.what());
+            return std::make_unique<clinicavt::asr::ScriptedTranscriber>();
+        }
+        std::fprintf(stderr, "clinicavt-engine: no speech recognition (%s)\n", e.what());
+        missing.emplace_back("asr");
+        return std::make_unique<clinicavt::models::MissingTranscriber>();
     }
 }
 
 // Compiles behind the serve loop. session/start waits on it, hello does not
 std::unique_ptr<clinicavt::audio::IStreamingVad> BuildVad(
     const clinicavt::models::ModelStore& store, clinicavt::models::OvRuntime& runtime,
-    clinicavt::metrics::Registry& metrics) {
-    try {
-        store.Resolve("vad", "default");
+    clinicavt::metrics::Registry& metrics, bool scripted, std::vector<std::string>& missing) {
+    if (Unstaged(store, {"vad"}).empty()) {
         return std::make_unique<clinicavt::audio::DeferredVad>(
             [&store, &runtime] {
                 return std::make_unique<clinicavt::audio::SileroVad>(store, runtime);
             },
             &metrics);
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: capped windows (%s)\n", e.what());
+    }
+    if (scripted) {
+        std::fputs("clinicavt-engine: capped windows, no speech detection model\n", stderr);
         return std::make_unique<clinicavt::audio::PassthroughVad>();
     }
+    std::fputs("clinicavt-engine: no speech detection model\n", stderr);
+    missing.emplace_back("vad");
+    return std::make_unique<clinicavt::models::MissingVad>();
 }
 
-// Diarisation needs both its models and is scripted otherwise, as in CI
+// Diarisation needs both its models
 std::unique_ptr<clinicavt::diar::IDiariser> BuildDiariser(
     const clinicavt::models::ModelStore& store, clinicavt::models::OvRuntime& runtime,
-    clinicavt::diar::AnchorStore& anchors, clinicavt::metrics::Registry& metrics) {
-    try {
-        store.Resolve("diarisation", "default");
-        store.Resolve("segmentation", "default");
+    clinicavt::diar::AnchorStore& anchors, clinicavt::metrics::Registry& metrics, bool scripted,
+    std::vector<std::string>& missing) {
+    const auto unstaged = Unstaged(store, {"diarisation", "segmentation"});
+    if (unstaged.empty()) {
         return std::make_unique<clinicavt::diar::DeferredDiariser>(
             [&store, &runtime, &anchors] {
                 return std::make_unique<clinicavt::diar::SpeakerDiariser>(store, runtime, anchors);
             },
             &metrics);
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: scripted speakers (%s)\n", e.what());
+    }
+    if (scripted) {
+        std::fputs("clinicavt-engine: scripted speakers, no speaker models\n", stderr);
         return std::make_unique<clinicavt::diar::ScriptedDiariser>();
     }
+    std::fputs("clinicavt-engine: no speaker models\n", stderr);
+    missing.insert(missing.end(), unstaged.begin(), unstaged.end());
+    return std::make_unique<clinicavt::models::MissingDiariser>();
 }
 
 // Generation runs in its own supervised process, so a GPU driver fault there
@@ -233,7 +264,8 @@ std::unique_ptr<clinicavt::translate::NllbTranslator> BuildTranslator(
 
 }  // namespace
 
-int main(int argc, char* argv[]) {
+// Wide, so a name or path outside the ANSI code page arrives intact. Arguments are UTF-8 from here
+int wmain(int argc, wchar_t* argv[]) {
 #ifdef _DEBUG
     // Assertions and CRT errors go to stderr as text rather than parking a
     // headless engine behind a modal dialog
@@ -244,13 +276,22 @@ int main(int argc, char* argv[]) {
 #endif
     try {
         // Flags come first, then the positional pipe name, store root, models root and replay wav
-        std::vector<std::string> args(argv + 1, argv + argc);
+        std::vector<std::string> args;
+        for (int i = 1; i < argc; ++i) args.push_back(clinicavt::utf8::FromPath(argv[i]));
         const std::string asr_device = clinicavt::TakeFlag(args, "--asr-device");
         const std::string note_tier = clinicavt::TakeFlag(args, "--note-tier");
         const std::string corpora_override = clinicavt::TakeFlag(args, "--corpora");
         const std::string guidelines_override = clinicavt::TakeFlag(args, "--guidelines");
         // For dev builds, a demo corpus marked research is searched when set
         const bool include_research = clinicavt::TakeSwitch(args, "--include-research");
+        // CI and tests run without models. A role that is not installed then gets a stand-in
+        // rather than refusing consultations
+        const bool scripted = clinicavt::TakeSwitch(args, "--scripted");
+        // Tests and evaluation play wav files as the microphone. The shipped app never does
+        const bool allow_replay = clinicavt::TakeSwitch(args, "--allow-replay");
+        if (args.size() > 3 && !allow_replay) {
+            throw std::runtime_error("a replay wav needs --allow-replay");
+        }
         // Every engine and note host takes turns on the GPU under one name,
         // which the hosts inherit
         _putenv_s("CLINICAVT_GPU_LEASE", clinicavt::system::kGpuLeaseName);
@@ -260,16 +301,16 @@ int main(int argc, char* argv[]) {
 
         std::wstring pipe_name = L"\\\\.\\pipe\\LOCAL\\clinicavt-engine";
         if (args.size() > 0) {
-            pipe_name = L"\\\\.\\pipe\\" + std::wstring(args[0].begin(), args[0].end());
+            pipe_name = L"\\\\.\\pipe\\" + clinicavt::utf8::ToPath(args[0]).wstring();
         }
         const std::filesystem::path store_root = StoreRoot(args);
         const std::filesystem::path models_root = args.size() > 2
-                                                      ? std::filesystem::path(args[2])
+                                                      ? clinicavt::utf8::ToPath(args[2])
                                                       : clinicavt::system::DefaultModelsRoot();
         // Guidance corpora sit beside the models, each replaced as a directory
         const std::filesystem::path corpora_root = corpora_override.empty()
                                                        ? models_root.parent_path() / "corpora"
-                                                       : std::filesystem::path(corpora_override);
+                                                       : clinicavt::utf8::ToPath(corpora_override);
 
         clinicavt::ipc::PipeServer server(pipe_name);
         clinicavt::store::SqliteSessionStore session_store(store_root);
@@ -295,10 +336,11 @@ int main(int argc, char* argv[]) {
                          "the GPU is not ours until the computer restarts\n");
         }
         bool first_use = false;
-        auto transcriber =
-            BuildTranscriber(model_store, ov_runtime, asr_device, metrics, first_use);
-        auto vad = BuildVad(model_store, ov_runtime, metrics);
-        auto diariser = BuildDiariser(model_store, ov_runtime, anchors, metrics);
+        std::vector<std::string> missing;
+        auto transcriber = BuildTranscriber(model_store, ov_runtime, asr_device, metrics, first_use,
+                                            scripted, missing);
+        auto vad = BuildVad(model_store, ov_runtime, metrics, scripted, missing);
+        auto diariser = BuildDiariser(model_store, ov_runtime, anchors, metrics, scripted, missing);
         const clinicavt::models::MachineMemory memory{clinicavt::system::InstalledMemoryBytes(),
                                                       clinicavt::system::IntelGpuMemoryBytes()};
         const std::string auto_tier = clinicavt::models::AutoNoteTier(
@@ -408,7 +450,9 @@ int main(int argc, char* argv[]) {
                      .demo_dir = models_root.parent_path() / "demo" / "reflections",
                      .switch_asr = switch_asr,
                      .archive_lane = &archive_lane,
-                     .recordings = &recordings});
+                     .recordings = &recordings,
+                     .missing_models = missing,
+                     .allow_replay = allow_replay});
         clinicavt::ipc::RegisterGuidanceMethods(server, session_store, guidance_retriever,
                                                 guidance_lane, ingest);
         // A shell that closes ends its capture, and a reopened one picks this

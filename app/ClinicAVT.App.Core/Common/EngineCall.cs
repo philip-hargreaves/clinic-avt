@@ -1,4 +1,5 @@
 using ClinicAVT.App.Core.Shell;
+using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Common;
 
@@ -7,7 +8,7 @@ public static class EngineCall
 {
     /// <summary>
     /// A failure goes on the status line as "{problem}: {reason}", the engine's reason in plain
-    /// words. Cancellation still throws.
+    /// words, and its detail to the log. Cancellation still throws.
     /// </summary>
     public static async Task<bool> ReportAsync(StatusBarViewModel? status, string problem, Func<Task> call) =>
         await ReportAsync(status, problem, async () =>
@@ -25,6 +26,7 @@ public static class EngineCall
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
+            status?.Log($"{problem}: {e.Message}");
             status?.Append($"{problem}: {EngineWords.Reason(e)}");
             return default;
         }
@@ -65,8 +67,12 @@ public static class EngineCall
             return true;
         }).ConfigureAwait(true);
 
-    /// <summary>The call's value, or null when it failed.</summary>
-    public static async Task<T?> TryAsync<T>(StatusBarViewModel status, string step, Func<Task<T>> call)
+    /// <summary>
+    /// The call's value, or null when it failed. With refused, the engine's reason for a refusal
+    /// goes on the status line as "{refused}: {reason}".
+    /// </summary>
+    public static async Task<T?> TryAsync<T>(
+        StatusBarViewModel status, string step, Func<Task<T>> call, string? refused = null)
     {
         try
         {
@@ -79,8 +85,10 @@ public static class EngineCall
         }
         catch (Exception e)
         {
-            status.Append("A step failed - trying to continue");
             status.Log($"{step} failed: {e.Message}");
+            status.Append(refused is not null && e is EngineErrorException { Code: Protocol.SessionErrorCode }
+                ? $"{refused}: {EngineWords.Reason(e)}"
+                : "A step failed - trying to continue");
             return default;
         }
     }

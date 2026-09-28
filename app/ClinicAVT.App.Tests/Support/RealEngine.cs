@@ -36,7 +36,8 @@ internal sealed class RealEngine : IAsyncDisposable
 
     /// <summary>
     /// With models, the staged ones when present, so startup cost and code paths match the
-    /// shipped app. A stderr name keeps the engine's log in the temp folder.
+    /// shipped app. Without any, as in CI, stand-ins take their place. Tests replay wav files
+    /// as the microphone. A stderr name keeps the engine's log in the temp folder.
     /// </summary>
     public static async Task<RealEngine> StartAsync(string tag, bool models = true, string? stderr = null)
     {
@@ -46,7 +47,8 @@ internal sealed class RealEngine : IAsyncDisposable
         var modelsRoot = models ? EnginePath.FindModels() : null;
         var launcher = new ProcessEngineLauncher(
             EnginePath.Find(),
-            $"{pipeName} \"{Path.Combine(directory, "store")}\""
+            (modelsRoot is null ? "--scripted " : "") + "--allow-replay "
+                + $"{pipeName} \"{Path.Combine(directory, "store")}\""
                 + (modelsRoot is null ? "" : $" \"{modelsRoot}\""),
             stderrPath: stderr is null ? null : Path.Combine(Path.GetTempPath(), stderr));
         var engine = new RealEngine(launcher, pipeName, directory);

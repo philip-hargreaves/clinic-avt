@@ -1,7 +1,11 @@
+#include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <openvino/core/version.hpp>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/models/note_tier.hpp"
@@ -70,6 +74,34 @@ json HandleModels(const clinicavt::models::ModelStore& models, const std::string
                         {"active", active}});
     }
     return json{{"models", std::move(list)}};
+}
+
+std::string MissingModelsReason(const std::vector<std::string>& missing) {
+    if (missing.empty()) return {};
+    std::vector<std::string> names;
+    for (const auto& role : missing) {
+        // Diarisation takes two models, one thing to a clinician
+        const std::string name = role == "asr"   ? "speech recognition"
+                                 : role == "vad" ? "speech detection"
+                                 : role == "diarisation" || role == "segmentation"
+                                     ? "speaker recognition"
+                                     : role;
+        if (std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+    }
+    std::string text = "the ";
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        if (i > 0) text += i + 1 == names.size() ? " and " : ", ";
+        text += names[i];
+    }
+    return text + (names.size() == 1 ? " model is not installed" : " models are not installed");
+}
+
+json ReadinessJson(bool first_use, bool ready, bool stray_note_host,
+                   const std::vector<std::string>& missing) {
+    return json{{"firstUse", first_use},
+                {"ready", ready},
+                {"strayNoteHost", stray_note_host},
+                {"missing", missing}};
 }
 
 namespace {
@@ -167,25 +199,24 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
     const auto note_tier = [note_lane] {
         return note_lane != nullptr ? note_lane->State().tier : std::string("default");
     };
-    // Ready when every staged model's compile cache exists. OpenVINO writes
-    // the blob exactly when a compile completes, so no event plumbing is needed.
-    // strayNoteHost: a note host from an earlier engine is still alive, wedged
-    // in the GPU driver. Only a reboot ends it
-    server.RegisterMethod(
-        "engine/readiness", [&models, first_use, note_tier, stray_note_host](const json&) {
-            const auto ready = [&models](const char* role, const std::string& tier) {
-                try {
-                    const auto cache = clinicavt::models::CacheDir(models.Resolve(role, tier));
-                    return std::filesystem::exists(cache) && !std::filesystem::is_empty(cache);
-                } catch (...) {
-                    return true;  // role not staged: nothing to wait for
-                }
-            };
-            return json{{"firstUse", first_use},
-                        {"ready", ready("asr", "default") && ready("note", note_tier()) &&
-                                      ready("translation", "default")},
-                        {"strayNoteHost", stray_note_host}};
-        });
+    // OpenVINO writes the compile cache exactly when a compile completes, so no
+    // event plumbing is needed. A role not staged has nothing to compile, and
+    // missing says whether a consultation needs it
+    server.RegisterMethod("engine/readiness", [&models, first_use, note_tier, stray_note_host,
+                                               missing = services.missing_models](const json&) {
+        const auto ready = [&models](const char* role, const std::string& tier) {
+            try {
+                const auto cache = clinicavt::models::CacheDir(models.Resolve(role, tier));
+                return std::filesystem::exists(cache) && !std::filesystem::is_empty(cache);
+            } catch (...) {
+                return true;
+            }
+        };
+        return ReadinessJson(first_use,
+                             ready("asr", "default") && ready("note", note_tier()) &&
+                                 ready("translation", "default"),
+                             stray_note_host, missing);
+    });
     server.RegisterMethod("note/tier", [note_lane, &controller,
                                         auto_tier = services.auto_note_tier](const json& params) {
         return HandleNoteTier(note_lane, controller.Busy(), params, auto_tier);
@@ -234,7 +265,9 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
         // Enrolment runs on the controller's microphone path. Progress and the
         // outcome are notifications
         server.RegisterMethod(
-            "anchor/enrol", [&controller](const json& params) -> std::variant<json, Error> {
+            "anchor/enrol",
+            [&controller, missing = MissingModelsReason(services.missing_models)](
+                const json& params) -> std::variant<json, Error> {
                 const double seconds = params.value("seconds", 45.0);
                 clinicavt::session::MicSelection mic;
                 if (params.contains("mic") && params["mic"].is_object()) {
@@ -243,6 +276,7 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
                 if (seconds <= 0 || seconds > 300) {
                     return InvalidParams("seconds must be 1-300");
                 }
+                if (!missing.empty()) return SessionError(missing);
                 if (!controller.StartEnrolment(seconds, mic)) {
                     return SessionError("a consultation or an enrolment is already running");
                 }

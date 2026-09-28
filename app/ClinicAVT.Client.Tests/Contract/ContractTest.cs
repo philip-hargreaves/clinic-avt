@@ -92,6 +92,69 @@ public class ContractTest
         }
     }
 
+    // The app starts the engine without --scripted. A model that is not installed is then named
+    // and refuses a consultation, where CI's scripted engine gives it a stand-in
+    [Fact]
+    public async Task WithoutScriptedAMissingModelIsNamedAndRefusesAConsultation()
+    {
+        await using var engine = EngineProcess.Start(
+            $"LOCAL\\clinicavt-unscripted-{Guid.NewGuid():N}", scripted: false, allowReplay: false);
+        await using var client = await engine.ConnectAsync();
+        var api = new EngineApi(client);
+
+        var readiness = await api.ReadinessAsync();
+        Assert.Equal(["asr", "vad", "diarisation", "segmentation"], readiness.Missing);
+
+        const string reason =
+            "the speech recognition, speech detection and speaker recognition models are not installed";
+        var start = await Assert.ThrowsAsync<EngineErrorException>(() => api.StartSessionAsync(true, ""));
+        Assert.Equal(reason, start.Message);
+        var enrol = await Assert.ThrowsAsync<EngineErrorException>(
+            () => client.RequestAsync("anchor/enrol", new { seconds = 1.0 }, Timeout));
+        Assert.Equal(reason, enrol.Message);
+        Assert.Empty(await api.ListSessionsAsync());
+        Assert.True(engine.IsRunning, "it keeps serving, so the app can say why");
+    }
+
+    // A replay reads whatever file it names, so only an engine started to allow it takes one
+    [Fact]
+    public async Task ReplayNeedsAnEngineStartedToAllowIt()
+    {
+        var wav = SilenceWav.Write();
+        try
+        {
+            await using (var launchWav = EngineProcess.Start(
+                             $"LOCAL\\clinicavt-noreplay-{Guid.NewGuid():N}", wav, allowReplay: false))
+            {
+                Assert.Equal(1, await launchWav.WaitForExitAsync(Timeout));
+                Assert.Contains("--allow-replay", launchWav.StandardError, StringComparison.Ordinal);
+            }
+
+            await using var engine = EngineProcess.Start(
+                $"LOCAL\\clinicavt-noreplay-{Guid.NewGuid():N}", allowReplay: false);
+            await using var client = await engine.ConnectAsync();
+            var error = await Assert.ThrowsAsync<EngineErrorException>(() => client.RequestAsync(
+                "session/start", new { replay = new { path = wav, speed = 16.0 } }, Timeout));
+            Assert.Equal(-32602, error.Code);
+            Assert.Empty(await new EngineApi(client).ListSessionsAsync());
+        }
+        finally
+        {
+            File.Delete(wav);
+        }
+    }
+
+    // The name reaches the engine as UTF-16 and must be served unchanged
+    [Fact]
+    public async Task APipeNameOutsideAsciiIsServedUnderThatName()
+    {
+        await using var engine = EngineProcess.Start($"LOCAL\\clinicavt-café-東京-{Guid.NewGuid():N}");
+        await using var client = await engine.ConnectAsync();
+
+        var echo = await client.RequestAsync("engine/echo", new { payload = "up" }, Timeout);
+        Assert.Equal("up", echo.GetProperty("payload").GetString());
+    }
+
     [Fact]
     public async Task SecondEngineInstanceIsRefusedForClaimingThePipe()
     {
