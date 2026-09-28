@@ -9,7 +9,7 @@ gold/                  labelled evaluation sets
 candidates/            embedder and reranker exports under trial
 results/               selection evaluation outputs
 corpora/<id>/          built corpora: manifest.json, corpus.db; junctioned beside the exe as corpora
-venv/                  harness environment, see eval/retrieval
+venv/                  harness environment, see evaluation/retrieval
 ```
 
 Rules
@@ -18,4 +18,4 @@ Rules
 - corpus ids carry the fetch date
 - built corpora are not committed, and none ships through `weights/` yet
 - committed here: this file, and folders named in `.gitignore`; third-party material carries `LICENCE` and `ATTRIBUTION`
-- staged models live in `models/`, the harness in `eval/retrieval`, PR bodies in `internal/`
+- staged models live in `models/`, the harness in `evaluation/retrieval`, PR bodies in `internal/`
