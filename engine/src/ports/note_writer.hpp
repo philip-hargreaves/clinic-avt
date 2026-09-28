@@ -43,9 +43,7 @@ class INoteWriter {
     }
 
     // Anonymised case summary from the note. Throws on failure
-    virtual std::string WriteSummary(const std::string&) {
-        return {};
-    }
+    virtual std::string WriteSummary(const std::string& note) = 0;
 
     // Starts the background model load. Idempotent
     virtual void Prepare() {}
