@@ -1,10 +1,10 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
-#include <atomic>
 #include <functional>
 #include <future>
 #include <mutex>
@@ -53,8 +53,10 @@ class WhisperTranscriber : public ITranscriber {
     // error or an empty string. False when this transcriber cannot switch
     bool SwitchDevice(std::string device, std::function<void(const std::string&)> done);
 
-    // True from a switch request until its load settles. A load cannot be cancelled
-    bool Moving() const { return moving_.load(); }
+    // True from a switch request until its load settles
+    bool Moving() const {
+        return moving_.load();
+    }
 
     // Blocks until the worker has decoded the clip
     std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
@@ -70,7 +72,7 @@ class WhisperTranscriber : public ITranscriber {
     };
 
     void WorkerLoop();
-    std::string LoadIfPending();
+    std::string Load(DecodeLoader loader);
     void RecordDecode(std::size_t frames, std::chrono::steady_clock::time_point t0);
 
     DecodeLoader loader_;
