@@ -11,6 +11,8 @@
 #include <variant>
 #include <vector>
 
+#include "core/common/utf8.hpp"
+
 namespace clinicavt::audio {
 
 namespace {
@@ -120,7 +122,7 @@ void WavSource::Run(IAudioSink& sink) {
 }
 
 SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
-    std::ifstream in(path_, std::ios::binary);
+    std::ifstream in(utf8::ToPath(path_), std::ios::binary);
     if (!in) {
         return {SourceEndReason::kFailed, "cannot open " + path_};
     }

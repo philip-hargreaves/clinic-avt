@@ -17,6 +17,7 @@ class WavSource : public IAudioSource {
         std::uint64_t start_frame = 0;  // resume: skip audio already captured
     };
 
+    // path is UTF-8, as the wire carries it
     explicit WavSource(std::string path, Config config = {});
 
     void Run(IAudioSink& sink) override;
