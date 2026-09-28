@@ -37,51 +37,46 @@ struct WorkerNoteWriter::Impl {
 
     std::mutex state_mutex;     // guards spawn and the handles
     std::mutex write_mutex;     // frames are written whole
-    std::mutex read_mutex;      // one reader of the pipe at a time: the attempt or the watcher
-    system::ChildProcess host;  // kill-on-close: the engine's death is the worker's
+    std::mutex read_mutex;      // one pipe reader at a time, the attempt or the watcher
+    system::ChildProcess host;  // in a kill-on-close job, so it dies with the engine
     std::vector<system::ChildProcess> stuck;  // hosts that would not exit, held so none is killed
     ipc::PipeClient pipe;
     std::int64_t next_id = 1;
-    // Process-wide: a host winding down keeps its pipe name briefly, so a
-    // second writer must not reuse it
+    // Process-wide counter: an exiting host keeps its pipe name briefly, so names
+    // are never reused
     static inline std::atomic<int> spawn_count{0};
     bool closing = false;
     bool respawning = false;                  // under state_mutex: Run is between attempts
-    std::atomic<bool> attempt_active{false};  // the note thread owns the pipe's read side
-    // The prefill not yet answered, 0 for none. One at a time, so a host that
-    // stops reading can never fill the pipe and block the capture thread
+    std::atomic<bool> attempt_active{false};  // set while the note thread reads the pipe
+    // Id of the unanswered prefill, 0 if none. Limited to one so a host that stops
+    // reading cannot fill the pipe and block capture
     std::atomic<std::int64_t> prefill_pending{0};
 
-    // The lane: which tier, whether resident. lane_mutex is never held
-    // across a call into the host or the listener
+    // Guards tier and residency. Never held across calls into the host or listener
     mutable std::mutex lane_mutex;
     NoteModelState state;
     Listener listener;
-    // Under lane_mutex: why the last load failed, and the tiers whose cache
-    // has already been rebuilt once
+    // Under lane_mutex: last load failure reason and tiers whose cache was already rebuilt once
     LoadFailure last_failure = LoadFailure::kOther;
     bool crashed_loading = false;
     std::vector<std::string> cache_rebuilt;
-    std::thread watcher;  // reads the host's load outcome while nothing else reads
+    std::thread watcher;  // reads load outcomes while no attempt is reading
     std::atomic<bool> watch_stop{false};
 
-    // A generation streams partials constantly, so this much silence means the
-    // worker is wedged inside a driver call and only a respawn recovers it.
-    // A request queued behind a load is silent for as long as the load
-    // takes (hash + compile of a 19 GB model: minutes), so that wait has
-    // its own, longer bound
+    // Generation streams partials constantly, so this much silence means the worker
+    // is stuck in a driver call and needs a respawn. A request queued behind a load
+    // (hash + compile of a 19 GB model: minutes) has its own longer bound
     static constexpr DWORD kInactivityTimeoutMs = 120'000;
     static constexpr DWORD kLoadTimeoutMs = 20 * 60'000;
-    // A host that has lost its pipe cancels any generation and exits. The
-    // slowest measured exit is 3.4 s after an unfinished prefill
+    // A host that loses its pipe cancels and exits; slowest measured exit 3.4 s
+    // after an unfinished prefill
     static constexpr DWORD kExitGraceMs = 15'000;
 
     bool WorkerAlive() const {
         return host.Alive() && pipe.IsOpen();
     }
 
-    // False when the host would not exit. It is then stuck in a driver call,
-    // and is held rather than killed
+    // False if the host would not exit (stuck in a driver call). It is then held in stuck
     bool CloseWorker() {
         pipe.Close();
         prefill_pending = 0;
@@ -94,8 +89,8 @@ struct WorkerNoteWriter::Impl {
         return false;
     }
 
-    // A load cannot be cancelled, so a host is only closed once its load has
-    // settled. Bounded by the load's own timeout
+    // Loads cannot be cancelled, so wait for the load to settle before closing.
+    // Bounded by the load timeout
     void AwaitLoad() {
         const auto deadline =
             std::chrono::steady_clock::now() + std::chrono::milliseconds(kLoadTimeoutMs);
@@ -110,8 +105,8 @@ struct WorkerNoteWriter::Impl {
         return state.tier;
     }
 
-    // Spawns the host and connects its private pipe. Throws when the host
-    // cannot start, which surfaces as a failed note
+    // Spawns the host and connects its pipe. Throws if the host cannot start,
+    // which shows as a failed note
     void EnsureWorker() {
         std::lock_guard<std::mutex> lock(state_mutex);
         if (WorkerAlive()) {
@@ -131,7 +126,7 @@ struct WorkerNoteWriter::Impl {
         } catch (const std::exception&) {
             throw std::runtime_error("note worker failed to start");
         }
-        // The host claims the pipe before any model work, so the connect is quick
+        // The host creates the pipe before loading models, so connecting is fast
         for (int attempt = 0; attempt < 150; ++attempt) {
             if (pipe.Open(pipe_path)) break;
             if (host.WaitFor(100)) break;  // died before serving
@@ -146,7 +141,7 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // `pending` names the request before it goes, so its reply can never come first
+    // Set `pending` before writing so the reply cannot arrive first
     std::int64_t Send(const std::string& method, json params,
                       std::atomic<std::int64_t>* pending = nullptr) {
         const std::int64_t id = next_id++;
@@ -160,7 +155,7 @@ struct WorkerNoteWriter::Impl {
         return id;
     }
 
-    // A reply with no method answers a request. The prefill's frees the next
+    // Replies have no method. A prefill reply clears prefill_pending
     void OnReply(const json& message) {
         if (message.contains("id") && message["id"].is_number_integer()) {
             std::int64_t expected = message["id"].get<std::int64_t>();
@@ -190,8 +185,8 @@ struct WorkerNoteWriter::Impl {
         return state;
     }
 
-    // Names the model a tier resolves to, and whether its compile cache
-    // exists. Throws the store's own message when nothing claims the tier
+    // Fills in the tier's model and whether its compile cache exists. Throws the
+    // store error if no model claims the tier
     void Describe(const std::string& tier, NoteModelState& into) const {
         if (store == nullptr) {
             into.id.clear();
@@ -205,7 +200,7 @@ struct WorkerNoteWriter::Impl {
         into.first_use = !models::Compiled(info);
     }
 
-    // The host's two load outcomes, from whichever reader saw them
+    // Handles the host's two load events, from either reader
     void OnHostEvent(const std::string& event, const json& params) {
         if (event == "loaded") {
             Transition([&params](NoteModelState& s) {
@@ -230,7 +225,7 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // What the machine had left when a load was refused memory
+    // Free commit, RAM and C: space, logged when a load fails for lack of memory
     static std::string Headroom() {
         MEMORYSTATUSEX memory{};
         memory.dwLength = sizeof(memory);
@@ -244,8 +239,7 @@ struct WorkerNoteWriter::Impl {
         return text;
     }
 
-    // A memory failure is not retried behind the user's back: only a switch
-    // or a restart tries again
+    // Memory failures are not retried automatically; only a tier switch or restart retries
     bool Blocked() const {
         std::lock_guard<std::mutex> lock(lane_mutex);
         return state.phase == NoteModelState::Phase::kFailed &&
@@ -257,8 +251,8 @@ struct WorkerNoteWriter::Impl {
         return state.phase == NoteModelState::Phase::kFailed;
     }
 
-    // A damaged compile cache fails the same way every time, and a crash
-    // during a load is most often one. Rebuilt once per tier per engine
+    // A damaged compile cache fails every time and is the usual cause of a crash
+    // during load. Rebuilt at most once per tier per engine run
     bool TakeCacheRebuild() {
         std::lock_guard<std::mutex> lock(lane_mutex);
         if (state.phase != NoteModelState::Phase::kFailed) return false;
@@ -271,7 +265,6 @@ struct WorkerNoteWriter::Impl {
         return true;
     }
 
-    // Closes the host, deletes the tier's compile cache and loads again
     bool RebuildCache() {
         {
             std::lock_guard<std::mutex> lock(state_mutex);
@@ -290,9 +283,8 @@ struct WorkerNoteWriter::Impl {
         return true;
     }
 
-    // Reads whatever frames are waiting and dispatches load events. The
-    // caller holds read_mutex. Stops the moment an attempt starts, leaving
-    // its replies for it. False when the pipe is gone
+    // Reads waiting frames and handles load events. Caller holds read_mutex. Stops
+    // as soon as an attempt starts, leaving replies for it. False if the pipe is gone
     bool PumpFrames() {
         for (;;) {
             while (!attempt_active.load()) {
@@ -318,7 +310,6 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // Reads the host's load outcome while no attempt owns the pipe
     void StartWatcher() {
         StopWatcher();
         watch_stop = false;
@@ -335,8 +326,8 @@ struct WorkerNoteWriter::Impl {
                     alive = WorkerAlive();
                 }
                 if (!alive || !PumpFrames()) {
-                    // Only a host that died on its own is a failure. A
-                    // deliberate close stopped this thread first
+                    // Only an unexpected host death is a failure; a deliberate close stops this
+                    // thread first
                     std::lock_guard<std::mutex> lock(state_mutex);
                     if (closing || respawning) return;
                     const unsigned long code = host.ExitCode();
@@ -367,8 +358,7 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // Bounded: a worker wedged inside a driver call must not wedge the
-    // note thread with it
+    // Bounded so a worker stuck in a driver call cannot block the note thread
     json ReadMessage() {
         const DWORD bound =
             Phase() == NoteModelState::Phase::kLoading ? kLoadTimeoutMs : kInactivityTimeoutMs;
@@ -395,14 +385,14 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // Prefill acks pile up unread between attempts. Draining them keeps the
-    // host's pipe writes from blocking. Only when no attempt owns the reads
+    // Prefill acks pile up between attempts; drain them so the host's pipe writes
+    // do not block. Only when no attempt is reading
     void DrainAcks() {
         std::lock_guard<std::mutex> reading(read_mutex);
         PumpFrames();
     }
 
-    // One streamed attempt: request, then read until the worker settles it
+    // One streamed attempt. Sends, then reads until the worker finishes it
     std::string Attempt(const std::string& method, const json& params, const Progress& progress) {
         struct ActiveFlag {
             std::atomic<bool>& flag;
@@ -425,7 +415,7 @@ struct WorkerNoteWriter::Impl {
                     message["error"].value("data", message["error"].value("message", "failed")));
             }
             if (!message.contains("method")) {
-                OnReply(message);  // an ack, ours or an earlier prepare's or prefill's
+                OnReply(message);  // ack for this or an earlier prepare or prefill
                 continue;
             }
             const auto& event = message["method"].get_ref<const std::string&>();
@@ -437,7 +427,7 @@ struct WorkerNoteWriter::Impl {
             } else if (event == "failed") {
                 throw std::runtime_error(p.value("detail", "note generation failed"));
             } else {
-                OnHostEvent(event, p);  // a load settling under the request
+                OnHostEvent(event, p);  // a load finished during the request
             }
         }
     }
@@ -464,10 +454,10 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // For a GPU wait that has run on too long. A load holds the GPU for minutes
-    // and cannot be interrupted, and a request in flight has its own bound, so
-    // neither is probed. Otherwise the host is asked to exit: a healthy one does
-    // within seconds and starts again when next needed. One that cannot is stuck
+    // Called when a GPU wait runs too long. Loads (minutes, uncancellable) and
+    // in-flight requests (own timeout) are not probed. Otherwise ask the host to
+    // exit. A healthy host exits within seconds and restarts on demand. One that
+    // does not is stuck
     bool ProbeStuck() {
         if (Phase() == NoteModelState::Phase::kLoading || attempt_active.load()) return false;
         {
@@ -485,7 +475,7 @@ struct WorkerNoteWriter::Impl {
         return true;
     }
 
-    // True, and the lane marked failed, once a stuck host has been found
+    // True once a stuck host was found; marks the lane failed
     bool Wedged() {
         if (!system::GpuLease::Global().Wedged()) return false;
         Transition([](NoteModelState& s) {
@@ -496,16 +486,14 @@ struct WorkerNoteWriter::Impl {
         return true;
     }
 
-    // One fresh process before failing: the fresh-context retry is the
-    // configuration measured to work
-    std::string Run(const std::string& method, json params, const Progress& progress) {
+    // Retries once in a fresh process; that is the configuration measured to work
+    std::string Run(const std::string& method, const json& params, const Progress& progress) {
         if (Wedged()) throw std::runtime_error(kStuckInDriver);
         if (Blocked()) throw std::runtime_error(State().detail);
         try {
             return Attempt(method, params, progress);
         } catch (const std::exception& e) {
-            // The request waited on a load that failed: a fresh process would
-            // fail the same way, unless the cause was a damaged cache
+            // The awaited load failed; a fresh process would fail too unless the cache was damaged
             if (LoadFailed()) {
                 if (!TakeCacheRebuild() || !RebuildCache())
                     throw std::runtime_error(State().detail);
@@ -551,8 +539,8 @@ WorkerNoteWriter::WorkerNoteWriter(std::filesystem::path host_exe,
     impl_->state.tier = std::move(tier);
     try {
         impl_->Describe(impl_->state.tier, impl_->state);
-    } catch (const std::exception&) {
-        // Nothing staged for the tier: the state says so with empty names
+    } catch (const std::exception&) {  // NOLINT(bugprone-empty-catch) empty names
+        // Nothing staged for the tier; state keeps empty names
     }
 }
 
@@ -564,13 +552,13 @@ WorkerNoteWriter::~WorkerNoteWriter() {
     impl_->CloseWorker();
 }
 
-// Spawn and load hide inside capture. Failure surfaces on Write
+// Spawn and load during capture; failures surface on Write
 void WorkerNoteWriter::Prepare() {
     impl_->Prepare();
 }
 
-// A different tier is a new host. The same tier is a no-op unless its last
-// load failed. Loads immediately so a failure surfaces at the setting
+// A different tier spawns a new host. Same tier is a no-op unless its last load
+// failed. Loads now so a failure shows in settings
 NoteModelState WorkerNoteWriter::Configure(const std::string& tier) {
     NoteModelState described;
     described.tier = tier;
@@ -623,7 +611,7 @@ void WorkerNoteWriter::Prefill(const std::vector<asr::Turn>& transcript,
     try {
         impl_->EnsureWorker();
         impl_->DrainAcks();
-        if (impl_->prefill_pending.load() != 0) return;  // the last guess is still running
+        if (impl_->prefill_pending.load() != 0) return;  // the previous prefill is still running
         impl_->Send("prefill", {{"turns", ipc::TurnsJson(transcript)}, {"style", options.style}},
                     &impl_->prefill_pending);
     } catch (const std::exception& e) {
@@ -658,7 +646,7 @@ std::string WorkerNoteWriter::WriteSummary(const std::string& note) {
     return impl_->Run("summary", {{"note", note}}, nullptr);
 }
 
-// A failed title leaves the note without a title: no respawn, no throw
+// On failure returns no title, without respawning or throwing
 std::string WorkerNoteWriter::WriteLabel(const std::string& note) {
     if (note.empty()) {
         return {};
@@ -681,7 +669,7 @@ void WorkerNoteWriter::Cancel() {
         if (impl_->WorkerAlive()) {
             impl_->Send("cancel", json::object());
         }
-    } catch (...) {  // NOLINT(bugprone-empty-catch)
+    } catch (...) {  // NOLINT(bugprone-empty-catch) cancel is best effort
     }
 }
 

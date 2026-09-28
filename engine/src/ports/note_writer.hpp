@@ -8,12 +8,12 @@
 
 namespace clinicavt::note {
 
-// How the note is written: structure and length, each a prompt file so a
-// change needs no rebuild. Values are validated at the RPC boundary.
+// Note structure and length; each maps to a prompt file so changes need no
+// rebuild. Validated at the RPC boundary
 struct NoteOptions {
     std::string style = "prose";     // prose | soap
     std::string detail = "concise";  // concise | detailed
-    bool confirmed = false;          // the clinician says it is a consultation: no refusal
+    bool confirmed = false;          // clinician confirmed it is a consultation, so no refusal
 };
 
 // Streams partials, returns the note, throws on failure. Cancel
@@ -27,8 +27,8 @@ class INoteWriter {
     virtual std::string Write(const std::vector<asr::Turn>& transcript, const NoteOptions& options,
                               const Progress& progress) = 0;
 
-    // Patient information from the finished note, on the same model. A
-    // writer that only writes notes returns false and is still valid
+    // Patient information from the finished note, same model. Writers that only
+    // write notes return false
     virtual bool WritesPatient() const {
         return false;
     }
@@ -37,7 +37,7 @@ class INoteWriter {
         return {};
     }
 
-    // Empty means no title and the shell shows the date, so failure is never an error
+    // Empty means no title (shell shows the date), so failure is not an error
     virtual std::string WriteLabel(const std::string&) {
         return {};
     }
@@ -48,8 +48,8 @@ class INoteWriter {
     // Starts the background model load. Idempotent
     virtual void Prepare() {}
 
-    // Capture-phase guess at how the sealed transcript begins, so the stop
-    // path prefills only the tail. Never blocks capture
+    // Capture-phase guess at the start of the sealed transcript, so stop only
+    // prefills the tail. Must not block capture
     virtual void Prefill(const std::vector<asr::Turn>&, const NoteOptions&) {}
 
     virtual void Cancel() {}

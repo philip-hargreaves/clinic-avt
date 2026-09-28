@@ -33,10 +33,9 @@ TEST(LlmNoteWriter, CancelInterruptsAGeneration) {
     LlmNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
 
     int seen = 0;
-    const std::string text =
-        writer.Write(ElbowTranscript(), {}, [&writer, &seen](const std::string&) {
-            if (++seen == 3) writer.Cancel();
-        });
+    writer.Write(ElbowTranscript(), {}, [&writer, &seen](const std::string&) {
+        if (++seen == 3) writer.Cancel();
+    });
 
     EXPECT_GE(seen, 3);
     EXPECT_LT(seen, 40) << "cancel must stop generation promptly";

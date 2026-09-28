@@ -83,7 +83,7 @@ internal sealed class AudioDrop
         e.AcceptedOperation = Over ? DataPackageOperation.Copy : DataPackageOperation.None;
         if (Over)
         {
-            // The target says what a drop does, so the cursor needs no caption
+            // The drop target is already labelled, so hide the drag caption
             e.DragUIOverride.IsCaptionVisible = false;
         }
     }

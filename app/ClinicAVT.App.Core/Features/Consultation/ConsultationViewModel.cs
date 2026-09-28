@@ -11,9 +11,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Consultation;
 
 /// <summary>
-/// The consultation as the views see it. One object over the recorder, the review, the
-/// engine's readiness and the notification router, forwarding the state and commands of
-/// each under their own names.
+/// Facade for the views over the recorder, review, readiness and notification router. Forwards
+/// their state and commands under the same names.
 /// </summary>
 public sealed partial class ConsultationViewModel : ObservableObject, ISessionState
 {
@@ -154,8 +153,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     public Task EndReviewAsync() => CloseReviewAsync();
 
     /// <summary>
-    /// Finalising is the state worth splitting. Its stages differ by an order of magnitude,
-    /// so a crash log needs to know which one.
+    /// State for the crash log. Finalising includes its phase, as its stages differ in length by an
+    /// order of magnitude.
     /// </summary>
     public string SessionPhase =>
         State == SessionState.Finalising ? $"{State}:{Phase}" : State.ToString();

@@ -4,7 +4,14 @@ during every finalise.
 
     python evaluation/performance/ab_test.py        AB_REPS=3 by default
 """
-import ctypes, ctypes.wintypes, json, os, re, statistics, sys, time
+import ctypes
+import ctypes.wintypes
+import json
+import os
+import re
+import statistics
+import sys
+import time
 # perf_loop reads PERF_TAG at import
 os.environ.setdefault("PERF_TAG", "-ab")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -121,7 +128,6 @@ def run_one(index, condition, track, duration, rep):
             "engine_throttle_read": read_throttling(engine.proc.pid),
             "live_mhz_mean_at_start": round(statistics.mean(live_clock[0])) if live_clock else None}
     outcome = pl.run_session(engine, track, duration, rep, index, tags=tags, on_stop=sampler)
-    # Post-hoc facts for the record: host throttle read-back and the 9B load time
     post = {"host": host, "host_throttle_read": read_throttling(host["pid"]) if host["pid"] else None}
     log = open(engine.log_path, encoding="utf-8", errors="replace").read()
     m = re.search(r"note on GPU.*loaded in ([\d.]+) s", log)

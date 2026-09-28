@@ -3,8 +3,8 @@ using System.Text.Json.Serialization;
 
 namespace ClinicAVT.Client;
 
-// Replies as the engine sends them. Every field has a default so a sparse or
-// empty reply still parses. A null string is one the engine left out
+// Engine reply records. Defaults let sparse replies parse; a null string means the field
+// was absent
 
 public sealed record EngineReadiness(bool FirstUse = false, bool Ready = true, bool StrayNoteHost = false)
 {
@@ -124,7 +124,7 @@ public sealed record AnchorStatus(string Origin = "none", int Sessions = 0, long
 public sealed record ReflectionSummary(
     string? Text = null, string? GeneratedAt = null, string? EditedAt = null);
 
-/// <summary>A guideline or document the clinician ticked, with its own copy of the words.</summary>
+/// <summary>A ticked guideline or document, stored with a copy of its text.</summary>
 public sealed record ReflectionReference(
     string Key = "", string Reference = "", string Title = "", string Link = "",
     string Source = "");

@@ -18,8 +18,8 @@ void DecodeSegWindow(std::span<const std::int8_t> classes, std::uint64_t window_
     int prev = -1;
     std::size_t prev_i = 0;
     for (std::size_t i = 0; i < classes.size(); ++i) {
-        const int cls = classes[i];
-        if (cls >= 4) {  // pairwise-overlap classes
+        const int cls = classes[i];  // NOLINT(bugprone-signed-char-misuse) a class id
+        if (cls >= 4) {              // pairwise-overlap classes
             const auto a0 = window_first_frame + static_cast<std::uint64_t>(i * step);
             const auto a1 = window_first_frame + static_cast<std::uint64_t>((i + 1) * step);
             if (!result.overlap_spans.empty() && result.overlap_spans.back().end_frame == a0) {
@@ -58,7 +58,7 @@ SegResult Segmenter::Run(std::span<const float> audio) {
         request_.set_input_tensor(input);
         request_.infer();
         const ov::Tensor output = request_.get_output_tensor();  // (1, frames, 7)
-        const auto shape = output.get_shape();
+        const auto& shape = output.get_shape();
         const std::size_t frames = shape[1];
         const std::size_t classes = shape[2];
         const float* logits = output.data<float>();

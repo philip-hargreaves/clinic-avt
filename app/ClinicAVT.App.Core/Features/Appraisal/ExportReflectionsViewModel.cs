@@ -11,8 +11,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
 /// <summary>
-/// The Export reflections dialog. It saves a period's reflections as one plain text file for an
-/// appraisal portfolio, each in the Copy format. Samples are left out, as a backup leaves them.
+/// Export reflections dialog. Writes a period's reflections to one plain text file in the Copy
+/// format, without samples.
 /// </summary>
 public sealed partial class ExportReflectionsViewModel : ObservableObject
 {
@@ -48,7 +48,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         "Includes each case study, your answers and the guidance you referred to. Transcripts, notes "
         + "and patient information are not included.";
 
-    /// <summary>Said again once saved, as the file's first line says it.</summary>
+    /// <summary>Shown again after saving; also the file's first line.</summary>
     public string CheckLine { get; } = Warning;
 
     [ObservableProperty]
@@ -243,7 +243,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         Step = BackupStep.Done;
     }
 
-    // The listing has the words. The ticked guidance comes with the stored reflection
+    // Text comes from the listing; ticked guidance needs the stored reflection
     private async Task<ReflectionEntry> EntryAsync(ReflectionListing listing)
     {
         var stored = await _engine.GetReflectionAsync(listing.Id).ConfigureAwait(true);

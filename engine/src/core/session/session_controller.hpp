@@ -29,15 +29,14 @@
 
 namespace clinicavt::session {
 
-// An import's stages, each a band of the one figure it reports: reading the file 0-5 %,
-// finding the speech 5-15 %, transcribing 15-95 % and finalising 95-100 %
+// Import stages and their share of the overall percentage: reading 0-5 %, speech 5-15 %,
+// transcribing 15-95 %, finalising 95-100 %
 enum class ImportStage { kReading, kSpeech, kTranscribing, kFinalising };
 
-// The whole import's percentage at a fraction of one stage
+// Overall percentage for a fraction through `stage`
 int ImportPercent(ImportStage stage, double fraction);
 
-// An import's reports, from its own thread: its stage and percentage as it goes, then the
-// outcome, an empty error once sealed and stored, otherwise the reason it was erased
+// Called on the import thread. done: empty error on success, else why the session was erased
 struct ImportReport {
     std::function<void(const store::SessionId&, ImportStage stage, int percent)> progress;
     std::function<void(const store::SessionId&, const std::string& error)> done;
@@ -46,43 +45,42 @@ struct ImportReport {
 // Reads a recording, reporting the fraction read
 using ImportRead = std::function<std::vector<float>(const std::function<void(double)>& progress)>;
 
-// The error an import cancelled by Cancel ends with
+// done() error for an import stopped by Cancel
 inline constexpr const char* kImportCancelled = "cancelled";
 
-// One session at a time. Every ending has a storage outcome: Stop
-// finalises, Cancel erases, an interruption abandons recoverable
+// One session at a time. Stop finalises, Cancel erases, an interruption leaves it recoverable
 class SessionController {
    public:
-    // Audio the capture thread can run ahead of the pipeline before frames are
-    // lost. A first-launch model compile stalls for a few seconds
-    static constexpr std::size_t kCaptureBufferFrames = 30 * audio::kSampleRate;
+    // Capture ring size. Covers a first-launch model compile, which stalls the pipeline for a few
+    // seconds
+    static constexpr std::size_t kCaptureBufferFrames = std::size_t{30} * audio::kSampleRate;
 
     SessionController(SourceFactory factory, ISessionEvents& events, store::ISessionStore& store,
                       asr::ITranscriber& transcriber, audio::IStreamingVad& vad,
                       diar::IDiariser& diariser,
                       std::chrono::milliseconds settle_timeout = std::chrono::seconds(3),
-                      std::uint64_t diar_advance_frames = 5 * audio::kSampleRate,
+                      std::uint64_t diar_advance_frames = std::uint64_t{5} * audio::kSampleRate,
                       note::INoteWriter* note_writer = nullptr,
                       metrics::Registry* metrics = nullptr,
                       std::size_t min_note_words = NoteLane::kMinNoteWords);
-    // Every lane is joined before the members they read are destroyed
+    // Joins all threads before members are destroyed
     ~SessionController();
     SessionController(const SessionController&) = delete;
     SessionController& operator=(const SessionController&) = delete;
 
-    // True once audio flows. resume replays stored audio ahead of the live
-    // source, and retain false erases once the consultation is left
+    // True once audio flows. resume_from replays stored audio before live input; retain=false
+    // erases it once the consultation is left
     bool Start(std::optional<ReplaySpec> replay = std::nullopt,
                const store::SessionId& resume_from = {}, bool retain = true,
                const MicSelection& mic = {});
-    // A recording made elsewhere, dated started_at (empty: now). Returns the begun session's id,
-    // then decodes and finalises it as Stop does on the import's thread, without teaching the
-    // print. Empty while a session or an enrolment runs, or when the store refuses
+    // Imports an external recording dated started_at (empty: now). Returns the new session id and
+    // finalises on the import thread like Stop, without updating the voice print. Empty if a
+    // session or enrolment is running or the store refuses
     store::SessionId Import(ImportRead read, const std::string& started_at, bool retain,
                             ImportReport report);
     bool Importing() const;
-    // Idempotent. A stop is the user's, so it never counts as an interruption.
-    // The recording is kept, and an import runs to its end first
+    // Idempotent. Keeps the recording and never counts as an interruption. A running import
+    // completes first
     void Stop();
     // Idempotent. The recording is erased. An import stops at its next span and is erased
     // on its own thread
@@ -90,7 +88,7 @@ class SessionController {
     bool Running() const;
     // Capturing, or still writing the consultation's note, sheet or case summary
     bool Busy() const;
-    // Evaluation only: the print never learns, so a held-out run is reproducible
+    // Evaluation only: stops voice-print updates so held-out runs are reproducible
     void FreezeAnchor();
 
     // Enrolment is refused while a consultation runs, and recording while an
@@ -107,9 +105,8 @@ class SessionController {
     // Reopens a stored session as the regenerate target, refused while
     // recording or writing
     bool Open(const store::SessionId& id);
-    // Leaving the consultation: ends a review (regenerate refuses until the
-    // next finalise or open), deletes a just-recorded session that ended in a
-    // refusal (never a reviewed one), and erases what was recorded with retain off
+    // Ends a review (regenerate refused until the next finalise or Open), deletes a just-recorded
+    // session whose note was refused (never a reviewed one), and erases it if retain was off
     void Close();
     // The recording session's id, so the shell can resume it after a crash
     store::SessionId CurrentSession() const;
@@ -123,13 +120,13 @@ class SessionController {
     // Case summary from the stored note, edits included, for any stored
     // session. False when busy or without a note
     bool WriteSummary(store::SessionId id);
-    // The sheet rewritten from the stored note, clinician edits included
+    // Rewrites the patient sheet from the stored note, edits included
     bool RegeneratePatient();
 
    private:
     enum class Outcome { kFinalise, kCancel, kAbandon };
 
-    // The pipeline thread: the store, the diariser's audio, the meter
+    // Pipeline thread: feeds the store, the diariser's audio buffer and the level meter
     struct PipelineSink : audio::IAudioSink {
         SessionController& controller;
 
@@ -139,11 +136,10 @@ class SessionController {
         void OnEnd(const audio::SourceEnd& end) override;
     };
 
-    // Takes the one session slot with every per-session reset. False while a session or an
-    // enrolment runs
+    // Claims the session slot and resets per-session state. False if a session or enrolment runs
     bool Claim();
-    // Leaves the previous consultation and begins the stored session, answering with
-    // resumed_from's stored audio. Nullopt, the claim released, when the store refuses
+    // Leaves the previous consultation and begins the stored session. Returns resumed_from's
+    // stored audio, or nullopt (claim released) if the store refuses
     std::optional<std::vector<float>> BeginStored(const store::SessionMeta& meta,
                                                   const store::SessionId& resumed_from);
     void GuardedRun();
@@ -151,8 +147,8 @@ class SessionController {
     void JoinDiarThread();
     void EndCapture();
     void RunImport(const ImportRead& read, const ImportReport& report);
-    // learn false keeps the print from accruing this session. Answers the outcome reached,
-    // which a cancelled import turns from kFinalise to kCancel
+    // learn=false skips the voice-print update. Returns the actual outcome, which is kCancel
+    // for a cancelled import
     Outcome FinishSession(Outcome outcome, bool learn = true);
     std::string StoredNote(const store::SessionId& id) const;
 

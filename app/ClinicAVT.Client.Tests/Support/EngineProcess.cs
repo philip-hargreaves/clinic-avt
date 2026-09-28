@@ -38,8 +38,8 @@ internal sealed class EngineProcess : IAsyncDisposable
     }
 
     // Private pipe and roots per run so tests leave the app's alone. A replay
-    // wav stands in for the microphone. Scripted, a model that is not installed
-    // gets a stand-in; without it the engine refuses consultations as the app's does
+    // wav replaces the microphone. With scripted, a missing model gets a stand-in.
+    // Without it the engine refuses consultations, as in the app
     public static EngineProcess Start(
         string? pipeName = null, string? replayWavPath = null, string? modelsRoot = null,
         bool scripted = true, bool allowReplay = true)
@@ -137,8 +137,8 @@ internal sealed class EngineProcess : IAsyncDisposable
         }
     }
 
-    // The engine leaves once asked and alone, so the request goes on a connection of its own
-    // that closes straight after. The outcome goes into the failure message if it stays
+    // engine/exit only takes effect once no client is connected, so send it on a throwaway
+    // connection. The result goes into the failure message
     private async Task<string> AskToExitAsync()
     {
         try
@@ -149,7 +149,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         }
         catch (Exception e)
         {
-            // It may have left on its own. The wait decides
+            // May have exited already; the wait checks
             return $"engine/exit not delivered: {e.Message}";
         }
     }

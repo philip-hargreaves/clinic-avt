@@ -1,0 +1,13 @@
+# The root checks, less those that only make noise in tests
+InheritParentConfig: true
+Checks: >
+  -performance-*,
+  -bugprone-unchecked-optional-access,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-exception-escape
+# Why each is off:
+#   performance-*                     test speed is not a product property
+#   unchecked-optional-access         the dataflow cannot see an ASSERT_TRUE(x.has_value()) guard
+#   implicit-widening-of-multiplication-result  test data are constant products such as
+#                                     16000 * 30, which the compiler rejects on overflow
+#   exception-escape                  a throw from a fixture ends the run loudly and reports the failure

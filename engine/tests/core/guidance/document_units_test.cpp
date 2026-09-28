@@ -81,13 +81,13 @@ TEST(DocumentUnits, ShortParagraphsMergeAndLongOnesSplitKeepingEveryLinesBox) {
     EXPECT_FLOAT_EQ(merged[0].boxes[2].second.bottom, 0.18F);
     EXPECT_EQ(merged[1].text, "Review the plan at every appointment with the patient.");
 
-    const auto twoPages = UnitsFromParagraphs(
+    const auto two_pages = UnitsFromParagraphs(
         {Para("Check urate six weeks after any dose change.", 0, 0.9F, 0.95F),
          Para("Titrate the dose in 100 mg steps until urate falls to target.", 1, 0.05F, 0.1F)});
-    ASSERT_EQ(twoPages.size(), 1u);
-    EXPECT_EQ(twoPages[0].page, 0);
-    ASSERT_EQ(twoPages[0].boxes.size(), 2u);
-    EXPECT_EQ(twoPages[0].boxes[1].first, 1) << "each line keeps its own page";
+    ASSERT_EQ(two_pages.size(), 1u);
+    EXPECT_EQ(two_pages[0].page, 0);
+    ASSERT_EQ(two_pages[0].boxes.size(), 2u);
+    EXPECT_EQ(two_pages[0].boxes[1].first, 1) << "each line keeps its own page";
 
     // A long paragraph splits at sentence ends along its lines
     Paragraph paragraph{0, "", {}, {}};
@@ -211,7 +211,7 @@ TEST(DocumentUnits, FragmentsAreDroppedAndRecommendationsKept) {
         {"Monitoring: FBC 2 weekly for 6 weeks, then 3 monthly; if WCC < 3.5 you should withhold "
          "and discuss with the rheumatology team on the same day without delay.",
          true},
-        // A proof's line numbers leave the text
+        // Proof line numbers are stripped
         {"Assess the extent of organ involvement at each visit and target therapy to it, within "
          "the multidisciplinary team, for every person. 8 9 10 11 12 13 14 15 16 17 18",
          true,

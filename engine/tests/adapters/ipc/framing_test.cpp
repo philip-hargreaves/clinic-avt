@@ -32,7 +32,7 @@ TEST(Framing, FramesReassembleFromAnySplit) {
     const std::string frame = EncodeFrame("truncated");
     partial.Push(std::string_view(frame).substr(0, frame.size() - 3));
     EXPECT_EQ(partial.Next(), std::nullopt);
-    EXPECT_FALSE(partial.failed()) << "an incomplete frame is waiting, not broken";
+    EXPECT_FALSE(partial.Failed()) << "an incomplete frame is waiting, not broken";
 }
 
 // The cap bounds what a peer can make the engine allocate
@@ -51,7 +51,7 @@ TEST(Framing, TheFrameCapIsInclusiveAndPoisonsTheStream) {
     for (int shift : {0, 8, 16, 24}) header.push_back(static_cast<char>((len >> shift) & 0xFF));
     over.Push(header);
     EXPECT_EQ(over.Next(), std::nullopt);
-    EXPECT_TRUE(over.failed());
+    EXPECT_TRUE(over.Failed());
     over.Push(EncodeFrame("after failure"));
     EXPECT_EQ(over.Next(), std::nullopt) << "a poisoned stream stays poisoned";
 }

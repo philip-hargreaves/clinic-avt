@@ -28,6 +28,67 @@ jobs:
           & $cf --style=file --dry-run --Werror @($files.FullName)
           exit $LASTEXITCODE
 
+      # Core and ports include only the standard library and each other
+      - name: Check engine layering
+        shell: pwsh
+        run: tools/check-layering.ps1
+
+  # All engine files, since a header change affects files a changed-files run would skip
+  clang-tidy:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: external/openvino
+          key: openvino-${{ hashFiles('tools/get-openvino.ps1') }}
+      - name: Get OpenVINO
+        shell: pwsh
+        run: tools/get-openvino.ps1
+      - uses: actions/cache@v4
+        with:
+          path: external/pdfium
+          key: pdfium-${{ hashFiles('tools/get-pdfium.ps1') }}
+      - name: Get PDFium
+        shell: pwsh
+        run: tools/get-pdfium.ps1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Pinned, so a runner image update cannot change the findings
+      - name: Install clang-tidy
+        shell: pwsh
+        run: |
+          python -m pip install clang-tidy==22.1.8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $scripts = python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+          "CLANG_TIDY=$(Join-Path $scripts 'clang-tidy.exe')" >> $env:GITHUB_ENV
+      - name: Configure and analyse
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+                  -latest -property installationPath
+          Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation `
+            -DevCmdArguments '-arch=x64 -host_arch=x64'
+          cmake --preset dev
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tools/run-clang-tidy.ps1 -Tidy $env:CLANG_TIDY
+
+  evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ruff
+        run: python -m pip install ruff==0.16.9
+      - name: Lint
+        run: ruff check evaluation
+      - name: Compile
+        run: python -m compileall -q evaluation tools
+
   dotnet:
     runs-on: windows-latest
     steps:
@@ -36,54 +97,21 @@ jobs:
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-
       - name: Check formatting
         run: dotnet format clinicavt.slnx --verify-no-changes
       - name: Build
         run: dotnet build clinicavt.slnx
-      # This job has no engine binary; the contract job runs what needs one.
+      # No engine binary in this job. The contract job runs the tests that need one.
       - name: Test client
         run: dotnet test app/ClinicAVT.Client.Tests --no-build --filter "Requires!=Engine&Requires!=MediaFoundation" --blame-hang-timeout 120s
       - name: Test app view models
         run: dotnet test app/ClinicAVT.App.Tests --no-build --filter "Requires!=Engine&Requires!=CrashBattery&Requires!=Processes" --blame-hang-timeout 120s
-      # Spawns stand-in processes (ping.exe): real supervision, no engine
+      # Supervises stand-in processes (ping.exe) in place of the engine
       - name: Test process supervision
         run: dotnet test app/ClinicAVT.App.Tests --no-build --filter "Requires=Processes" --blame-hang-timeout 120s
       - name: Test model fetch tool
         run: dotnet test tools/ClinicAVT.FetchModels.Tests --no-build --blame-hang-timeout 120s
-
-  contract:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
-      - uses: actions/cache@v4
-        with:
-          path: external/openvino
-          key: openvino-${{ hashFiles('tools/get-openvino.ps1') }}
-      - name: Get OpenVINO
-        shell: pwsh
-        run: tools/get-openvino.ps1
-      - uses: actions/cache@v4
-        with:
-          path: external/pdfium
-          key: pdfium-${{ hashFiles('tools/get-pdfium.ps1') }}
-      - name: Get PDFium
-        shell: pwsh
-        run: tools/get-pdfium.ps1
-      - name: Build engine and run the contract suite
-        shell: pwsh
-        run: |
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-                  -latest -property installationPath
-          Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
-          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation `
-            -DevCmdArguments '-arch=x64 -host_arch=x64'
-          cmake --workflow --preset ci-dev
-          dotnet test app/ClinicAVT.Client.Tests --filter "Requires=Engine" --blame-hang-timeout 120s
-          dotnet test app/ClinicAVT.App.Tests --filter "Requires=Engine" --blame-hang-timeout 120s
 
   build:
     runs-on: windows-latest
@@ -92,6 +120,12 @@ jobs:
       # CI presets skip microphone and Media Foundation tests
       matrix:
         preset: [ci-dev, ci-release]
+    # CMake reads the launcher from the environment and then embeds debug info so sccache can
+    # cache objects
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -108,6 +142,7 @@ jobs:
       - name: Get PDFium
         shell: pwsh
         run: tools/get-pdfium.ps1
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Build and test
         shell: pwsh
         run: |
@@ -117,3 +152,41 @@ jobs:
           Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation `
             -DevCmdArguments '-arch=x64 -host_arch=x64'
           cmake --workflow --preset ${{ matrix.preset }}
+      - name: Compiler cache statistics
+        if: always()
+        run: sccache --show-stats
+      # The contract job tests this build of the engine
+      - name: Upload the engine
+        if: matrix.preset == 'ci-dev'
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-dev
+          path: |
+            build/dev/engine/*.exe
+            build/dev/engine/*.dll
+            build/dev/engine/cache.json
+          if-no-files-found: error
+          retention-days: 1
+
+  contract:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine-dev
+          path: build/dev/engine
+      - name: Run the contract suite
+        shell: pwsh
+        env:
+          CLINICAVT_ENGINE_PATH: ${{ github.workspace }}\build\dev\engine\clinicavt_engine.exe
+        run: |
+          dotnet test app/ClinicAVT.Client.Tests --filter "Requires=Engine" --blame-hang-timeout 120s
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test app/ClinicAVT.App.Tests --filter "Requires=Engine" --blame-hang-timeout 120s

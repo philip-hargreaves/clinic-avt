@@ -49,7 +49,7 @@ bool SessionController::Start(std::optional<ReplaySpec> replay, const store::Ses
     }
     store::SessionMeta meta{audio::kSampleRate, "", ""};
     if (!replay.has_value()) {
-        // What was actually opened, so a default fallback is on record
+        // Record the device actually opened, which may be a default fallback
         meta.device_id = mic.id;
         meta.device_name = mic.name;
     }
@@ -83,7 +83,7 @@ bool SessionController::Start(std::optional<ReplaySpec> replay, const store::Ses
         return true;
     }
     lock.unlock();
-    Cancel();  // a session that never produced audio leaves no trace
+    Cancel();  // no audio arrived, so erase the session
 
     std::lock_guard<std::mutex> relock(mutex_);
     if (end_.reason == audio::SourceEndReason::kStopped) {
@@ -109,7 +109,7 @@ store::SessionId SessionController::Import(ImportRead read, const std::string& s
         return {};
     }
     if (import_thread_.joinable()) {
-        import_thread_.join();  // the last import's, already done
+        import_thread_.join();  // the previous import, already finished
     }
     if (!Claim()) {
         return {};
@@ -125,7 +125,7 @@ store::SessionId SessionController::Import(ImportRead read, const std::string& s
         std::lock_guard<std::mutex> lock(mutex_);
         id = session_id_;
         importing_ = true;
-        source_.reset();  // the last recording's, so nothing reaches it during the import
+        source_.reset();  // stop the last recording's source feeding the import
     }
     import_cancel_ = false;
     import_thread_ = std::thread(
@@ -138,8 +138,8 @@ bool SessionController::Importing() const {
     return importing_;
 }
 
-// Nothing escapes the thread. The slot is freed before done, so a request answering it is
-// never refused as busy
+// Catches everything. Frees the session slot before done, so a request made from done isn't
+// refused as busy
 void SessionController::RunImport(const ImportRead& read, const ImportReport& report) {
     const store::SessionId id = CurrentSession();
     const auto progress = [&report, &id](ImportStage stage, double fraction) {
@@ -160,7 +160,7 @@ void SessionController::RunImport(const ImportRead& read, const ImportReport& re
             note_writer_->Prepare();
         }
         import_progress_ = progress;
-        // Another channel, maybe another clinician: the print must not drift toward it
+        // Imported audio may be another clinician, so don't update the voice print
         if (import_cancel_ || FinishSession(Outcome::kFinalise, false) == Outcome::kCancel) {
             error = kImportCancelled;
         }
@@ -171,10 +171,10 @@ void SessionController::RunImport(const ImportRead& read, const ImportReport& re
     }
     import_progress_ = nullptr;
     if (!error.empty()) {
-        // A read that failed leaves its session begun
+        // Erase the session begun before the failed read
         try {
             FinishSession(Outcome::kCancel);
-        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        } catch (...) {  // NOLINT(bugprone-empty-catch) the import error is reported
         }
     }
     {
@@ -186,7 +186,7 @@ void SessionController::RunImport(const ImportRead& read, const ImportReport& re
     if (report.done) {
         try {
             report.done(id, error);
-        } catch (...) {  // NOLINT(bugprone-empty-catch) a shell that has gone reads it as over
+        } catch (...) {  // NOLINT(bugprone-empty-catch) the shell may already be gone
         }
     }
 }
@@ -197,7 +197,7 @@ bool SessionController::Claim() {
         return false;
     }
     running_ = true;
-    reviewing_ = false;  // Record wins over a review
+    reviewing_ = false;  // a new session ends any review
     got_audio_ = false;
     ended_ = false;
     stop_requested_ = false;
@@ -219,7 +219,7 @@ std::optional<std::vector<float>> SessionController::BeginStored(
                          resumed_from.c_str(),
                          static_cast<double>(resumed_audio.size()) / audio::kSampleRate);
         }
-        store_.EraseUnretained();  // the previous consultation is left
+        store_.EraseUnretained();  // erase the previous consultation unless it was retained
         const store::SessionId id = store_.Begin(meta);
         std::lock_guard<std::mutex> lock(mutex_);
         session_id_ = id;
@@ -240,7 +240,7 @@ void SessionController::Stop() {
     if (import_thread_.joinable()) {
         import_thread_.join();
     }
-    // Re-warm in parallel with finalise, since a long session may have evicted
+    // Re-warm the note model during finalise; a long session may have evicted it
     if (note_writer_ != nullptr && Running()) {
         note_writer_->Prepare();
     }
@@ -319,7 +319,7 @@ void SessionController::Close() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (note_lane_.Refused()) {
-            // Only a fresh capture too short for a note goes. A reviewed session is a kept record
+            // Delete only a fresh capture whose note was refused. A reviewed session is kept
             if (!reviewing_) refused = std::exchange(last_finalised_, {});
             note_lane_.ClearRefusal();
         }
@@ -331,13 +331,13 @@ void SessionController::Close() {
     if (!refused.empty()) {
         try {
             store_.Delete(refused);
-        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        } catch (...) {  // NOLINT(bugprone-empty-catch) the session stays, as if kept
         }
     }
     if (!Running()) {
         try {
             store_.EraseUnretained();
-        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        } catch (...) {  // NOLINT(bugprone-empty-catch) retried at the next start
         }
     }
 }
@@ -440,16 +440,14 @@ void SessionController::PipelineSink::OnEnd(const audio::SourceEnd& end) {
                        end.reason == audio::SourceEndReason::kFailed);
     }
     controller.cv_.notify_all();
-    // Only an interruption decides its own outcome. A stopped source leaves
-    // keep-or-discard to Stop or Cancel
+    // Only interruptions finish here; otherwise Stop or Cancel decides
     if (interrupted) {
         controller.FinishSession(Outcome::kAbandon);
         controller.events_.OnInterrupted(end.reason, end.detail);
     }
 }
 
-// The source's thread only fills the ring and the pipeline runs behind it. An
-// escape from a thread function is std::terminate, so nothing escapes
+// Catches everything, since an exception leaving a thread function calls std::terminate
 void SessionController::GuardedRun() {
     PipelineSink sink(*this);
     audio::BufferedSink buffered(sink, kCaptureBufferFrames);
@@ -463,11 +461,10 @@ void SessionController::GuardedRun() {
     }
 }
 
-// Diarisation's causal work, spread over the recording. The heavy Advance
-// runs outside the lock, off the pipeline thread
+// Incremental diarisation during capture. Advance runs outside the lock, off the pipeline
+// thread
 void SessionController::DiarLoop() {
-    // Accelerated replay delivers audio faster than real time. A wall floor
-    // keeps the tick rate sane at any speed
+    // Minimum wall-clock gap between ticks, for faster-than-real-time replay
     constexpr auto kMinTickGap = std::chrono::seconds(1);
     std::vector<float> audio;
     std::unique_lock<std::mutex> lock(mutex_);
@@ -481,8 +478,7 @@ void SessionController::DiarLoop() {
         audio = session_audio_;
         ++diar_ticks_;
         lock.unlock();
-        // Deferred until whisper is decoding so the GPU never compiles two
-        // models at once, still minutes ahead of any real stop
+        // Deferred until whisper is decoding, so the GPU never compiles two models at once
         if (!note_prepared_ && note_writer_ != nullptr) {
             note_prepared_ = true;
             note_writer_->Prepare();
@@ -492,22 +488,20 @@ void SessionController::DiarLoop() {
                                        std::uint64_t first) -> std::vector<asr::Turn> {
                 {
                     std::lock_guard<std::mutex> guard(mutex_);
-                    // A stop must not wait behind a speculation pass
+                    // Skip speculative decodes once stopping
                     if (diar_stop_) return {};
                 }
                 return transcriber_.DecodeClipChunks(clip, first);
             };
             diariser_.Advance(audio, decode);
-            // This tick's chunk edges re-slice the audio. The pieces decode in
-            // the same tick, so a stop never waits for them
+            // Apply this tick's chunk-edge cuts and decode the pieces now, so Stop doesn't have to
             const auto cuts = transcriber_.TakeClipCuts();
             if (!cuts.empty()) {
                 diariser_.AddCutPoints(cuts);
                 diariser_.Advance(audio, decode);
             }
-            // The note host extends its KV over the settled opening between
-            // whisper decodes. The finalise tidies its turns, so the prefix
-            // must read the same
+            // Prefill the note model's KV cache with the settled transcript, tidied as finalise
+            // does so the prefix matches
             if (note_writer_ != nullptr) {
                 auto guess = diar::TidyTranscript(diariser_.SpeculativeTranscript());
                 if (!guess.empty()) note_writer_->Prefill(guess, note_lane_.Options());
@@ -553,8 +547,8 @@ void SessionController::EndCapture() {
     running_ = false;
 }
 
-// Stop, import, cancel and abandon all end here. The store outcome always holds
-// even if the bookkeeping around it fails
+// Common end for Stop, import, Cancel and abandon. The store outcome is applied even if the
+// steps before it fail
 SessionController::Outcome SessionController::FinishSession(Outcome outcome, bool learn) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -562,8 +556,7 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
             return outcome;
         }
     }
-    // No capture work may run once finalise starts. Stage timings let a slow
-    // finalise name its stage
+    // Join capture first; no capture work may run during finalise. Stage timings locate slow stages
     const auto finalise_start = std::chrono::steady_clock::now();
     const auto stage = [this, &finalise_start](const char* name) {
         const double seconds =
@@ -582,14 +575,12 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
         metrics_->RecordSession(static_cast<double>(session_audio_.size()) / audio::kSampleRate,
                                 lost_frames_, diar_ticks_);
     }
-    // Capture decodes a few spans per tick and can lag. The rest decodes now,
-    // so the cuts reach the diariser at every replay speed
+    // Capture can lag; decode the remaining spans now so every cut reaches the diariser
     if (outcome == Outcome::kFinalise) {
         events_.OnProgress("transcript");
         try {
             const auto stop = [this] { return import_cancel_.load(); };
-            // An import finds the speech in its own pass so it can report it. A live stop's
-            // capture has already done so
+            // Imports run VAD as a separate pass to report progress; live capture already has it
             if (import_progress_) {
                 diariser_.FindSpeech(
                     session_audio_,
@@ -636,9 +627,7 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
     if (id.empty()) {
         return outcome;
     }
-    // The note lane's input is the attributed transcript. A diarisation
-    // failure leaves it empty, so the note is refused as too thin and the
-    // session is never lost
+    // Empty if diarisation fails; the note is then refused as too short but the session is kept
     std::vector<asr::Turn> note_input;
     std::vector<float> doctor_voiceprint;
     if (outcome == Outcome::kFinalise && !session_audio_.empty()) {
@@ -651,8 +640,8 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
             }
             stage("transcript sealed");
             if (import_progress_) import_progress_(ImportStage::kFinalising, 1.0);
-            // The print learns only from named sessions, and only once the
-            // note lane agrees this was a consultation
+            // Update the voice print only when a doctor was named and, with a note writer, only
+            // after the note is accepted
             if (transcript.doctor_cluster >= 0 && learn && learn_anchor_) {
                 doctor_voiceprint = diariser_.DoctorVoiceprint(
                     session_audio_, transcript.diarised.slices, transcript.doctor_cluster);
@@ -668,13 +657,12 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
             std::fprintf(stderr, "clinicavt-engine: transcription failed\n");
         }
     }
-    // Capture state a finalise did not consume must not leak into the next
-    // session (cancel, abandon, a diarisation failure), nor the cuts of its own decodes
+    // Clear leftover capture state and cuts so nothing leaks into the next session
     diariser_.DiscardCapture();
     (void)transcriber_.TakeClipCuts();
     session_audio_.clear();
     session_audio_.shrink_to_fit();
-    // A cancel that arrived while the transcript was sealed still wins
+    // Honour a cancel that arrived during transcription
     if (outcome == Outcome::kFinalise && import_cancel_) {
         outcome = Outcome::kCancel;
         std::lock_guard<std::mutex> lock(mutex_);
@@ -696,8 +684,7 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
         ReportStoreFailure(events_, "outcome", e);
     }
     stage("stored");
-    // The resumed-from session is superseded: everything it held flowed into
-    // this one before any outcome could be reached
+    // Delete the resumed-from session; its audio was replayed into this one
     std::string resumed;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -706,7 +693,7 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
     if (!resumed.empty()) {
         try {
             store_.Delete(resumed);
-        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        } catch (...) {  // NOLINT(bugprone-empty-catch) the session stays, as if kept
         }
     }
     if (outcome == Outcome::kFinalise && note_writer_ != nullptr) {

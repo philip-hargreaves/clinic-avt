@@ -9,7 +9,7 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>What the store keeps. The history switch, the erase and the sample data.</summary>
+/// <summary>Privacy settings: history switch, erase all and sample data.</summary>
 public sealed partial class PrivacySettings : ObservableObject
 {
     private readonly AppPreferences? _preferences;
@@ -44,7 +44,7 @@ public sealed partial class PrivacySettings : ObservableObject
         }
     }
 
-    /// <summary>On connect the seed follows the switch.</summary>
+    /// <summary>Reseeds sample data on connect if on.</summary>
     public void Connected()
     {
         if (SeedDataEnabled)

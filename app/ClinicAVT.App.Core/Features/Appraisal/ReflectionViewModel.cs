@@ -70,8 +70,8 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(SummaryPlaceholder))]
     public partial bool SummaryPending { get; private set; }
 
-    /// <summary>Said only while a summary is on its way, never over a failed one. A summary
-    /// asked for during a load waits for it, and says so.</summary>
+    /// <summary>Shown only while a summary is pending, with the load time if the note model
+    /// is still loading.</summary>
     public string SummaryPlaceholder =>
         !SummaryPending ? ""
         : _status.ModelLoading ? $"Waiting for the note model to load · {_status.ModelLoadElapsed}"
@@ -116,8 +116,8 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
     public bool HasWarning => Warning.Length > 0;
 
     /// <summary>
-    /// The guidelines and documents the consultation's guidance drew on, plus any ticked one it
-    /// does not show. A tick saves.
+    /// Guidance used in the consultation, plus any ticked items the review does not show.
+    /// Ticking saves.
     /// </summary>
     public ObservableCollection<ReflectionReferenceRow> References { get; } = [];
 
@@ -212,7 +212,7 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Saves everything changed as the sheet closes, then lets the engine go.</summary>
+    /// <summary>Saves any changes, then unsubscribes from engine events.</summary>
     public async Task CloseAsync()
     {
         try
@@ -241,8 +241,8 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         }
     }
 
-    // One row per review card, in card order. A ticked guideline the review does not show keeps
-    // its row from the stored words. No guidance at all leaves no section
+    // One row per review card, in card order. A ticked guideline missing from the review
+    // gets a row from the stored reference
     private async Task LoadReferencesAsync(IReadOnlyList<ReflectionReference> ticked)
     {
         var guidance = await EngineCall.ReportAsync(_status, "could not read the consultation's guidance",
@@ -288,7 +288,7 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasReferences));
     }
 
-    // A tick saves at once, so no view has to
+    // Saves on tick so the views don't have to
     private void OnReferenceChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ReflectionReferenceRow.Ticked))
@@ -361,7 +361,7 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         }
     }
 
-    // A summary on its way is lost with the engine that was writing it
+    // An engine restart loses any summary in progress
     private void HandleConnected(bool connected)
     {
         if (!connected && SummaryPending)

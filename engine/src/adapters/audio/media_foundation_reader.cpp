@@ -34,7 +34,7 @@ using Microsoft::WRL::ComPtr;
 constexpr DWORD kAudio = static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM);
 constexpr DWORD kSource = static_cast<DWORD>(MF_SOURCE_READER_MEDIASOURCE);
 
-// A damaged header can claim any length; reserve no more than a long clinic
+// A damaged header can claim any length, so cap the reserve at 4 hours
 constexpr double kMostSecondsReserved = 4 * 3600;
 
 [[noreturn]] void Refuse(HRESULT hr, const char* otherwise) {
@@ -161,7 +161,7 @@ ComPtr<IMFSourceReader> OpenAudio(const std::filesystem::path& path) {
     return reader;
 }
 
-// The container's own figure, an estimate: a VBR MP3 without a header can be a fifth short
+// Container duration estimate; a VBR MP3 without a header can be ~20% short
 double Seconds(IMFSourceReader& reader) {
     PROPVARIANT value;
     PropVariantInit(&value);
@@ -209,7 +209,7 @@ RecordingInfo MediaFoundationReader::Inspect(const std::filesystem::path& path) 
         info.recorded_at = *encoded;
         return info;
     }
-    // A recorder writes the file as it stops, so its time marks the end
+    // File write time is when recording ended
     std::error_code ec;
     const auto written = std::filesystem::last_write_time(path, ec);
     if (ec) throw RecordingError("the file could not be opened");
@@ -249,9 +249,10 @@ std::vector<float> MediaFoundationReader::Decode(const std::filesystem::path& pa
         DWORD length = 0;
         Check(buffer->Lock(&bytes, nullptr, &length), "the file is damaged");
         const auto* first = reinterpret_cast<const float*>(bytes);
-        audio.insert(audio.end(), first, first + length / sizeof(float));
+        const std::size_t count = length / sizeof(float);
+        audio.insert(audio.end(), first, first + count);
         buffer->Unlock();
-        // Samples are a few milliseconds each, so report in steps of a hundredth
+        // Samples are a few ms each; report progress in 1% steps
         const double done = static_cast<double>(audio.size()) / kSampleRate / seconds;
         if (progress && seconds > 0 && done - reported >= 0.01) {
             reported = done;

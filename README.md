@@ -7,6 +7,7 @@
 Records the consultation, identifies who spoke, drafts the clinical note and patient
 information, then retrieves the relevant clinical guidance.
 
+[![CI](https://img.shields.io/github/actions/workflow/status/philip-hargreaves/clinic-avt/ci.yml?branch=main&label=CI)](https://github.com/philip-hargreaves/clinic-avt/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-0078D4)
 ![Engine](https://img.shields.io/badge/engine-C%2B%2B20-00599C)
 ![Shell](https://img.shields.io/badge/shell-WinUI%203%20%7C%20.NET%2010-512BD4)
@@ -142,11 +143,18 @@ build.
 ```powershell
 cmake --workflow --preset dev
 dotnet test clinicavt.slnx --filter "Requires!=Engine&Requires!=CrashBattery"
+
+# The static checks CI runs
+.\tools\check-layering.ps1
+.\tools\run-clang-tidy.ps1
+ruff check evaluation
 ```
 
 The first command builds the engine and runs its tests. The second runs the C# tests that need no
 engine, with view models tested against fakes at the ports. Tests marked `Requires=Engine` start the
-built engine; the crash tests (`CrashBattery`) run through `tools\run-gates.ps1`.
+built engine; the crash tests (`CrashBattery`) run through `tools\run-gates.ps1`. The layering check
+fails if the engine core or ports include an adapter, OpenVINO, SQLite, Win32 or JSON header;
+clang-tidy reads the dev preset's `compile_commands.json`.
 
 </details>
 

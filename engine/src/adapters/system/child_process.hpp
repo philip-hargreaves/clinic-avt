@@ -14,7 +14,6 @@
 
 namespace clinicavt::system {
 
-// A Win32 handle closed with its scope
 class UniqueHandle {
    public:
     UniqueHandle() = default;
@@ -30,7 +29,7 @@ class UniqueHandle {
     UniqueHandle(const UniqueHandle&) = delete;
     UniqueHandle& operator=(const UniqueHandle&) = delete;
 
-    HANDLE get() const {
+    HANDLE Get() const {
         return value_;
     }
     explicit operator bool() const {
@@ -53,11 +52,11 @@ struct ChildOptions {
     HANDLE stdout_write = nullptr;        // likewise for stdout
     std::size_t memory_cap = 0;           // job memory limit in bytes, 0 for none
     bool single_process = false;          // the job admits one process
-    bool exempt_from_throttling = false;  // EcoQoS off, as the engine itself runs
+    bool exempt_from_throttling = false;  // EcoQoS off, like the engine
 };
 
-// A child process in a kill-on-close job, so it can never outlive the engine.
-// Stderr is the parent's: the child's diagnostics land in the same log
+// Child in a kill-on-close job so it never outlives the engine. Shares the
+// parent's stderr so its logs go to the same place
 class ChildProcess {
    public:
     ChildProcess() = default;
@@ -97,46 +96,45 @@ class ChildProcess {
                 limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
                 limits.BasicLimitInformation.ActiveProcessLimit = 1;
             }
-            SetInformationJobObject(child.job_.get(), JobObjectExtendedLimitInformation, &limits,
+            SetInformationJobObject(child.job_.Get(), JobObjectExtendedLimitInformation, &limits,
                                     sizeof(limits));
-            AssignProcessToJobObject(child.job_.get(), child.process_.get());
+            AssignProcessToJobObject(child.job_.Get(), child.process_.Get());
         }
-        if (options.exempt_from_throttling) DisableThrottling(child.process_.get());
-        ResumeThread(thread.get());
+        if (options.exempt_from_throttling) DisableThrottling(child.process_.Get());
+        ResumeThread(thread.Get());
         return child;
     }
 
     bool Alive() const {
-        return process_ && WaitForSingleObject(process_.get(), 0) == WAIT_TIMEOUT;
+        return process_ && WaitForSingleObject(process_.Get(), 0) == WAIT_TIMEOUT;
     }
 
     DWORD Pid() const {
-        return process_ ? GetProcessId(process_.get()) : 0;
+        return process_ ? GetProcessId(process_.Get()) : 0;
     }
 
     // True once the process has ended, waiting up to `ms` for it
     bool WaitFor(DWORD ms) const {
-        return process_ && WaitForSingleObject(process_.get(), ms) != WAIT_TIMEOUT;
+        return process_ && WaitForSingleObject(process_.Get(), ms) != WAIT_TIMEOUT;
     }
 
-    // The whole job when there is one, else the process alone
+    // Kills the whole job if any, else just the process
     void Kill() {
         if (job_) {
-            TerminateJobObject(job_.get(), 1);
+            TerminateJobObject(job_.Get(), 1);
         } else if (process_) {
-            TerminateProcess(process_.get(), 1);
+            TerminateProcess(process_.Get(), 1);
         }
     }
 
     DWORD ExitCode() const {
         DWORD code = 0;
-        if (process_) GetExitCodeProcess(process_.get(), &code);
+        if (process_) GetExitCodeProcess(process_.Get(), &code);
         return code;
     }
 
-    // Waits up to `grace_ms` for the child to exit on its own, then lets the
-    // handles go. False keeps a child that is still running held, because
-    // closing the job would kill it
+    // Waits up to grace_ms for exit, then releases the handles. Returns false and
+    // keeps the handles if still running, since closing the job would kill it
     bool End(DWORD grace_ms) {
         if (process_ && !WaitFor(grace_ms)) return false;
         process_.Reset();

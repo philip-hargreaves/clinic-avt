@@ -374,7 +374,7 @@ public class FixtureTest
         Assert.Equal(new ImportFailed("a1b2c3d4e5f60718293a4b5c6d7e8f90", "cancelled"),
             Parse("session-importFailed.json"));
 
-        // The engine answers at once. Its end, here sent before the answer, completes the call
+        // session/imported completes the call, even when sent before the reply
         var import = Fixtures.Load("session-import.json");
         var importParams = import.GetProperty("request").GetProperty("params");
         var path = importParams.GetProperty("path").GetString()!;
@@ -412,7 +412,7 @@ public class FixtureTest
         Assert.Equal(["asr", "diarisation", "segmentation"], readiness.Missing);
         Assert.True(readiness.Ready);
 
-        // An engine from before the field names nothing missing
+        // An older engine without the field reports nothing missing
         transport.Reply = JsonSerializer.SerializeToElement(new { firstUse = false, ready = true, strayNoteHost = false });
         Assert.Empty((await api.ReadinessAsync()).Missing);
 

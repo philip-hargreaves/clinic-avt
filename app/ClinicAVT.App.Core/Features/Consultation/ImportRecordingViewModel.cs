@@ -64,7 +64,9 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
         }
     }
 
-    /// <summary>An example is named in its own list and dated when added, so it shows neither.</summary>
+    /// <summary>
+    /// Hides file and date, since an example is named in its list and dated on Add.
+    /// </summary>
     public bool UsingExample => ExampleIndex >= 0;
 
     public bool ShowFile => HasFile && !UsingExample;
@@ -141,7 +143,7 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
 
     public bool CanImport => HasFile && Inspected && !TooShort && Chosen is not null && !InFuture;
 
-    /// <summary>What Add hands over, null until it can.</summary>
+    /// <summary>The import for Add, null until CanImport.</summary>
     public RecordingImport? Result => CanImport ? new RecordingImport(Path, StartedAt(), Seconds) : null;
 
     // The engine refuses a consultation that starts later than now

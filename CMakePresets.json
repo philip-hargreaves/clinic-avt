@@ -15,7 +15,10 @@
             "name": "dev",
             "inherits": "base",
             "displayName": "Dev (Debug)",
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
         },
         {
             "name": "release",

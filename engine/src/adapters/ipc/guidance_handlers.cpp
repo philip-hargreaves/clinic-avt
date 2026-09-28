@@ -51,7 +51,7 @@ json GuidanceCorporaJson(const clinicavt::guidance::Readiness& readiness,
 clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISessionStore& sessions,
                                                          const std::string& session,
                                                          clinicavt::store::Document note, int limit,
-                                                         Notify notify) {
+                                                         const Notify& notify) {
     clinicavt::guidance::SearchRequest request;
     request.session = session;
     request.note = std::move(note.text);
@@ -77,13 +77,13 @@ clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISess
             } catch (const std::exception& e) {
                 body["storeError"] = e.what();
             }
-            // Stale stays unknown when the note cannot be read back
+            // Leave stale unset if the note cannot be read
             try {
                 body["stale"] =
                     sessions.ReadDocument(session, DocumentKind::kNote).revision != revision;
             } catch (const clinicavt::store::StoreError& e) {
                 if (e.Code() == clinicavt::store::StoreCode::kNotFound) return;
-            } catch (const std::exception&) {  // NOLINT(bugprone-empty-catch)
+            } catch (const std::exception&) {  // NOLINT(bugprone-empty-catch) stale stays unknown
             }
         }
         notify("guidance/ready", std::move(body));
@@ -113,8 +113,7 @@ std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::ISessionStore& 
             return InvalidParams("text must be a string");
         }
         note.text = params["text"].get<std::string>();
-        // Typed text is embedded whole. Mode "note" splits it into sub-queries
-        // the way a stored note is split
+        // Typed text is embedded whole. mode "note" splits it into sub-queries like a stored note
         if (params.contains("mode")) {
             if (params["mode"] != "query" && params["mode"] != "note") {
                 return InvalidParams("mode must be query or note");
@@ -140,8 +139,7 @@ std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::ISessionStore& 
 
 namespace {
 
-// The searched list mixes corpora with added documents. Only the added ones,
-// which carry an "upload:" id, are compared
+// Compares only added documents ("upload:" ids); corpora are ignored
 bool DocumentsChangedSince(const clinicavt::guidance::Record& record,
                            clinicavt::guidance::IDocumentIngest& ingest) {
     std::set<std::string> searched;
@@ -169,7 +167,7 @@ std::variant<json, Error> HandleSessionGuidance(clinicavt::store::ISessionStore&
         if (clinicavt::guidance::CanRead(parsed)) {
             try {
                 record = clinicavt::guidance::RecordFromJson(parsed);
-            } catch (const json::exception&) {  // NOLINT(bugprone-empty-catch)
+            } catch (const json::exception&) {  // NOLINT(bugprone-empty-catch) read as none
             }
         }
         if (!record) {
@@ -214,7 +212,7 @@ Error DocumentsError(const std::exception& e) {
     return Error{kSessionError, "Document store error", json(e.what())};
 }
 
-// An unknown document is the caller's mistake, anything else the store's
+// kNotFound -> invalid params; any other store error -> documents error
 std::variant<json, Error> DocumentsRefused(const std::exception& e) {
     if (const auto* store = dynamic_cast<const clinicavt::store::StoreError*>(&e);
         store != nullptr && store->Code() == clinicavt::store::StoreCode::kNotFound) {
@@ -232,7 +230,7 @@ json Param(const json& params, const char* key) {
 std::variant<json, Error> HandleDocumentsAdd(clinicavt::guidance::IDocumentIngest& ingest,
                                              const json& params) {
     const json paths = Param(params, "paths");
-    const auto invalid = InvalidParams("paths must be a list of strings");
+    auto invalid = InvalidParams("paths must be a list of strings");
     if (!paths.is_array() || paths.empty()) return invalid;
     std::vector<std::filesystem::path> files;
     for (const auto& path : paths) {
@@ -332,7 +330,7 @@ void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::ISessionStore
     server.RegisterMethod("guidance/corpora", [&retriever](const json&) {
         return GuidanceCorporaJson(retriever.Status(), retriever.Corpora());
     });
-    // Dev only: the shell's research switch reloads the corpora without a restart
+    // Dev only: reloads corpora with or without research ones, no restart
     server.RegisterMethod("guidance/research",
                           [&server, &retriever](const json& params) -> std::variant<json, Error> {
                               const json include = Param(params, "include");

@@ -40,7 +40,6 @@ json LoadFixture(const std::string& name) {
     return json::parse(in);
 }
 
-// A fresh directory under temp, gone again when the test ends
 struct TempDir {
     std::filesystem::path path;
 
@@ -98,7 +97,7 @@ TEST(Handlers, HelloAndEchoRefuseWhatTheyCannotParse) {
         EXPECT_EQ(std::get<Error>(outcome).code, kInvalidParams) << params.dump();
     }
 
-    // Whatever the peer claims about itself, the engine answers as itself
+    // The reply describes the engine regardless of what the peer sends
     const auto outcome = HandleHello(
         json{{"name", "impostor"}, {"version", "9.9.9"}, {"protocolVersion", kProtocolVersion}});
     ASSERT_TRUE(std::holds_alternative<json>(outcome));
@@ -126,7 +125,7 @@ TEST(Handlers, ModelsListMatchesTheFixtureAndMarksTheConfiguredTier) {
     }
 }
 
-// A lane that records what it was asked and answers with a state
+// Records Configure calls and returns its state member
 struct FakeLane : clinicavt::note::INoteLane {
     std::vector<std::string> configured;
     clinicavt::note::NoteModelState state;
@@ -171,12 +170,12 @@ TEST(Handlers, NoteTierLoadsATierAndRefusesWhatItCannotServe) {
     EXPECT_EQ(std::get<Error>(outcome).code, kInvalidParams);
     EXPECT_NE(std::get<Error>(outcome).data->dump().find("qwen3.5-9b-int4"), std::string::npos);
 
-    // No note lane at all, when nothing is staged or no host sits beside the engine
+    // No note lane: nothing staged, or no note host next to the engine
     outcome = HandleNoteTier(nullptr, false, json{{"tier", "default"}});
     ASSERT_TRUE(std::holds_alternative<Error>(outcome));
     EXPECT_EQ(std::get<Error>(outcome).code, kSessionError);
 
-    // Automatic is this machine's pick
+    // "auto" is this machine's tier
     lane.refuse.clear();
     lane.configured.clear();
     outcome = HandleNoteTier(&lane, false, json{{"tier", "auto"}}, "constrained");
@@ -219,7 +218,7 @@ TEST(Handlers, AsrDeviceMovesSpeechRecognitionAndSaysWhenItIsReady) {
     EXPECT_EQ(notices[1]["state"], "failed");
     EXPECT_EQ(notices[1]["detail"], "no NPU");
 
-    // Never an unknown device, never without a model to move
+    // Refused for an unknown device or when no model is loaded to move
     moved_to.clear();
     EXPECT_EQ(
         std::get<Error>(HandleAsrDevice(switcher, false, json{{"device", "CPU"}}, notify)).code,
@@ -247,7 +246,7 @@ struct SessionStoreFixture {
         std::filesystem::remove_all(root, ignored);
     }
 
-    // With a turn, as a finished consultation has, so it is not taken for a cleared one
+    // Adds a turn so it isn't treated as a cleared consultation
     std::string AddFinalisedSession() const {
         const auto id = store->Begin({16000, "", ""});
         store->ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "", "how is the elbow"}});
@@ -545,7 +544,7 @@ TEST(Handlers, ReflectionGetUpdateListAndDelete) {
     EXPECT_TRUE(std::holds_alternative<Error>(HandleReflectionUpdate(
         *fixture.store, json{{"id", id}, {"references", json::array({"NG100"})}})));
 
-    // The summary rides on the same update when the clinician corrects it
+    // The same update can correct the summary
     ASSERT_TRUE(std::holds_alternative<json>(HandleReflectionUpdate(
         *fixture.store, json{{"id", id}, {"summary", "A patient in their forties."}})));
     got = ResultOf(HandleReflectionGet(*fixture.store, json{{"id", id}}));
@@ -651,7 +650,7 @@ struct EchoRetriever : clinicavt::guidance::IGuidanceRetriever {
     }
 };
 
-// Notifications the lane sent, waitable
+// Lane notifications, for waiting on
 struct Sent {
     std::mutex mutex;
     std::condition_variable changed;
@@ -744,13 +743,13 @@ TEST(Handlers, GuidanceReadyMatchesTheFixture) {
     request.on_ready(results);
     json expected = LoadFixture("guidance-ready.json");
     expected["params"]["id"] = id;
-    // A revision is opaque: the stored note's own, not the fixture's example
+    // Revision is opaque, so take it from the stored note instead of the fixture
     expected["params"]["noteRevision"] = note.revision;
     ASSERT_EQ(sent.all.size(), 1u);
     EXPECT_EQ(expected["method"], sent.all[0].first);
     EXPECT_EQ(sent.all[0].second, expected["params"]);
 
-    // Stored before it was sent, as the same record
+    // Stored before sending, as the same record
     json record = sent.all[0].second;
     record.erase("id");
     record.erase("storeError");
@@ -1142,7 +1141,6 @@ TEST(Handlers, SessionGuidanceReadsTheStoredRecordAndItsStaleness) {
     EXPECT_EQ(std::get<Error>(unknown).code, kSessionError);
 }
 
-// A full or failing disk reaches the shell in the shape both sides check
 TEST(Handlers, AStorageFaultGoesOutAsTheFixture) {
     SessionStoreFixture fixture;
     const std::wstring name =
@@ -1165,7 +1163,7 @@ TEST(Handlers, AStorageFaultGoesOutAsTheFixture) {
     EXPECT_EQ(json::parse(*frame), LoadFixture("storage-fault.json"));
 }
 
-// Polled, for what an import's thread sets
+// Polls for state set on the import thread
 template <typename Pred>
 bool WaitUntil(Pred done) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -1201,7 +1199,7 @@ struct FakeReader : clinicavt::audio::IRecordingReader {
     }
 };
 
-// A microphone hearing silence until stopped
+// Audio source giving silence until stopped
 struct SilentSource : clinicavt::audio::IAudioSource {
     std::atomic<bool> stop{false};
 
@@ -1276,7 +1274,7 @@ struct ImportRig {
         return progress;
     }
 
-    // The import's last word, session/imported or session/importFailed
+    // Waits for session/imported or session/importFailed
     std::optional<std::pair<std::string, json>> WaitForEnd() {
         std::optional<std::pair<std::string, json>> end;
         (void)WaitUntil([&] {
@@ -1483,8 +1481,8 @@ TEST(Handlers, MissingModelsAreNamedInPlainWords) {
               "installed");
 }
 
-// Without --scripted, a role that is not installed refuses every way a consultation begins,
-// before anything is stored or read
+// Without --scripted, every way of starting a consultation is refused while a role is
+// missing, before anything is stored or read
 TEST(Handlers, AMissingModelRefusesStartImportAndSaysWhich) {
     ImportRig rig;
     const std::vector<std::string> missing{"asr", "diarisation", "segmentation"};
@@ -1506,8 +1504,8 @@ TEST(Handlers, AMissingModelRefusesStartImportAndSaysWhich) {
     EXPECT_TRUE(rig.Methods().empty());
 }
 
-// A replay reads whatever file the client names, so only an engine started for tests or
-// evaluation takes one
+// Replay reads any file the client names, so only an engine started with --allow-replay
+// accepts it
 TEST(Handlers, ReplayIsRefusedUnlessTheEngineAllowsIt) {
     ImportRig rig;
     const json replay{{"replay", {{"path", "C:\\any.wav"}, {"speed", 16.0}}}};

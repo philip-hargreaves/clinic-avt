@@ -11,7 +11,8 @@
 
 namespace clinicavt::diar {
 
-inline constexpr std::uint64_t kVoiceprintCapFrames = 90 * audio::kSampleRate;  // long-exposure cap
+inline constexpr std::uint64_t kVoiceprintCapFrames =
+    std::uint64_t{90} * audio::kSampleRate;  // long-exposure cap
 inline constexpr std::uint64_t kVoiceprintMinFrames =
     audio::kSampleRate;  // under 1 s carries no identity
 

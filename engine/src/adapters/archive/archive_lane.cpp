@@ -13,7 +13,7 @@ namespace {
 
 using nlohmann::json;
 
-// Progress is for a bar, so a large backup does not send a notification per consultation
+// Throttles progress events; a large backup has many consultations
 constexpr auto kProgressEvery = std::chrono::milliseconds(100);
 
 const char* PhaseName(Phase phase) {
@@ -42,9 +42,8 @@ json DoneJson(const char* job, bool dry_run, std::size_t consultations, std::siz
                 {"ids", std::move(ids)}};
 }
 
-// Only fixed codes leave: an ArchiveError's own, and a failure to write for anything else, such
-// as the store refusing a write
-std::string CodeOf(std::exception_ptr failure) {
+// ArchiveError keeps its code; any other exception maps to kWriteFailed
+std::string CodeOf(const std::exception_ptr& failure) {
     try {
         std::rethrow_exception(failure);
     } catch (const ArchiveError& e) {
@@ -96,7 +95,7 @@ bool ArchiveLane::Launch(std::function<Outcome()> job) {
         running_ = false;
         try {
             emit_(outcome.method, std::move(outcome.params));
-        } catch (...) {  // NOLINT(bugprone-empty-catch) a shell that has gone reads it as over
+        } catch (...) {  // NOLINT(bugprone-empty-catch) the shell may already be gone
         }
     });
     return true;

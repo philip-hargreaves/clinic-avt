@@ -99,3 +99,12 @@ comet = [
 
 [tool.setuptools]
 packages = []
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["transcription/normalizers"]  # vendored from Whisper, kept as upstream
+
+[tool.ruff.lint]
+# Syntax errors, import statements and pyflakes. Import sorting (I) is off because the
+# scripts import their sibling modules after a sys.path insert, which isort would regroup
+select = ["E4", "E9", "F"]

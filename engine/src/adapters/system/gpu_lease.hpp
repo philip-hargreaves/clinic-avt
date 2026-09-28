@@ -24,14 +24,12 @@
 
 namespace clinicavt::system {
 
-// One name for the whole logon session, so every engine and note host on the
-// machine takes turns, whichever engine started it
+// One name per logon session so all engines and note hosts share the lease
 inline constexpr const char* kGpuLeaseName = "Local\\clinicavt-gpu";
 
-// One named mutex serialises every GPU call of the engines and note hosts, so
-// two models never run concurrently (the driver fault configuration). Named
-// by CLINICAVT_GPU_LEASE, which the engine sets and its hosts inherit. Inert
-// when unset
+// Named mutex serialising all GPU work of engines and note hosts, so two models
+// never run at once (the driver-fault configuration). Name comes from
+// CLINICAVT_GPU_LEASE, set by the engine and inherited by hosts. Inert when unset
 class GpuLease {
    public:
     class Guard {
@@ -58,8 +56,8 @@ class GpuLease {
             return mutex_ != nullptr;
         }
 
-        // Seconds spent waiting for another holder to finish
-        double waited() const {
+        // Seconds spent waiting for another holder
+        double Waited() const {
             return waited_;
         }
 
@@ -74,8 +72,7 @@ class GpuLease {
         double waited_ = 0.0;
     };
 
-    // Runs each time a slice of waiting passes, with the seconds waited so
-    // far. False gives the wait up
+    // Called periodically while waiting, with seconds waited. Return false to give up
     using OnWait = std::function<bool(double)>;
 
     explicit GpuLease(const std::string& name, std::chrono::milliseconds slice = kSlice)
@@ -86,7 +83,7 @@ class GpuLease {
             std::fprintf(stderr, "clinicavt: GPU lease %s unavailable (error %lu)\n", name.c_str(),
                          GetLastError());
         }
-        // Every process holds it, a stuck one included, so once set it lasts until a restart
+        // Held by every process, stuck ones too, so once set it lasts until a restart
         wedged_event_ = CreateEventExA(nullptr, (name + "-wedged").c_str(),
                                        CREATE_EVENT_MANUAL_RESET, SYNCHRONIZE | EVENT_MODIFY_STATE);
     }
@@ -110,8 +107,8 @@ class GpuLease {
         return mutex_ != nullptr;
     }
 
-    // Blocks until the GPU is ours, or `on_wait` gives up, or the lease is
-    // found wedged. An abandoned mutex counts as acquired
+    // Blocks until acquired, `on_wait` gives up, or the lease is wedged. An
+    // abandoned mutex counts as acquired
     Guard Acquire(const OnWait& on_wait = {}) {
         if (mutex_ == nullptr || Wedged()) return {};
         const auto t0 = std::chrono::steady_clock::now();
@@ -133,7 +130,7 @@ class GpuLease {
         }
     }
 
-    // The GPU if it is free now. For work that is only worth doing at once
+    // Non-blocking acquire, for work only worth doing immediately
     Guard TryAcquire() {
         if (mutex_ == nullptr || Wedged()) return {};
         const DWORD result = WaitForSingleObject(mutex_, 0);
@@ -141,9 +138,8 @@ class GpuLease {
         return {};
     }
 
-    // Set once a process holding the GPU is known to be stuck in the driver, by
-    // any engine or host sharing the name. Every later acquire returns at once,
-    // since the wait could never end
+    // Set once any process sharing the name finds a GPU holder stuck in the driver.
+    // Later acquires return immediately since the wait would never end
     bool Wedged() const {
         return wedged_.load() ||
                (wedged_event_ != nullptr && WaitForSingleObject(wedged_event_, 0) == WAIT_OBJECT_0);
@@ -154,8 +150,7 @@ class GpuLease {
         if (wedged_event_ != nullptr) SetEvent(wedged_event_);
     }
 
-    // Asks whether this process's own note host is the stuck holder. True
-    // when it is. Set by the engine, which owns the host
+    // Returns true if this process's own note host is the stuck holder. Set by the engine
     using StuckProbe = std::function<bool()>;
     void SetStuckProbe(StuckProbe probe) {
         std::lock_guard<std::mutex> lock(probe_mutex_);
@@ -182,16 +177,16 @@ class GpuLease {
 
 inline constexpr double kProbeAfterSeconds = 180.0;
 
-// The note hosts whose engine has gone
+// pids of note hosts with no engine
 using OrphanScan = std::function<std::vector<DWORD>()>;
 
 inline std::vector<DWORD> OrphanedNoteHosts() {
     return OrphanedProcesses(kNoteHostExe);
 }
 
-// The usual wait: logged every half minute, and given up for good when a
-// note host whose engine has gone is still there a slice later, since only a
-// stuck host lingers. Tests pass their own lease and scan
+// Default wait: logs every 30 s and gives up for good if an orphaned note host
+// is still there one slice later, since only a stuck host lingers. Tests
+// inject the lease and scan
 inline GpuLease::OnWait WatchForStuckHosts(const char* who, GpuLease& lease = GpuLease::Global(),
                                            OrphanScan scan = OrphanedNoteHosts) {
     return [who, &lease, scan = std::move(scan), logged = 0.0, probed = false,
@@ -205,8 +200,8 @@ inline GpuLease::OnWait WatchForStuckHosts(const char* who, GpuLease& lease = Gp
             return false;
         }
         seen = orphans;
-        // Nothing legitimate but a load holds the GPU this long, and a load is
-        // never probed. The own host is asked to exit: a healthy one does
+        // Only a load holds the GPU this long legitimately, and loads are not probed.
+        // Ask our own host to exit; a healthy one will
         if (!probed && waited >= kProbeAfterSeconds) {
             probed = true;
             if (lease.ProbeOwnHost()) {

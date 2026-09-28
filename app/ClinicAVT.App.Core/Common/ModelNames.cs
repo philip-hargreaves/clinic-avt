@@ -24,8 +24,8 @@ public static class ModelNames
     }
 
     /// <summary>
-    /// The roles a consultation needs that are not installed, as "the speech recognition model is
-    /// not installed". The engine words its refusals the same way.
+    /// Names the missing roles a consultation needs, such as "the speech recognition model is not
+    /// installed". Matches the wording of the engine's refusals.
     /// </summary>
     public static string Missing(IReadOnlyList<string> roles)
     {

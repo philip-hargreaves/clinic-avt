@@ -46,11 +46,11 @@ std::map<std::string, std::string> OvRuntime::DescribeDevices() {
             if (device.rfind("NPU", 0) == 0) {
                 try {
                     name += " (arch " + core_.get_property(device, ov::device::architecture) + ")";
-                } catch (...) {  // NOLINT(bugprone-empty-catch)
+                } catch (...) {  // NOLINT(bugprone-empty-catch) named without the architecture
                 }
             }
             devices[device] = name;
-        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        } catch (...) {  // NOLINT(bugprone-empty-catch) device left out of the list
         }
     }
     return devices;
@@ -71,8 +71,7 @@ LoadedModel OvRuntime::Load(const ModelInfo& info, const std::string& xml_name) 
 
     LoadedModel loaded;
     loaded.device = ResolveDevice(info.device);
-    // Same convention as the whisper pipeline: first launch compiles and
-    // exports, every later launch imports the cached blob
+    // As with Whisper: first launch compiles and exports, later launches import the cached blob
     loaded.model = core_.compile_model(xml.string(), loaded.device, CompileProperties(info));
     return loaded;
 }

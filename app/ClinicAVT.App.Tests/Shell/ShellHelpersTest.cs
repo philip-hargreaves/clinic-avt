@@ -12,7 +12,7 @@ namespace ClinicAVT.App.Tests.Shell;
 /// <summary>The pure helpers the views lean on.</summary>
 public class ShellHelpersTest
 {
-    // No engine, session or RPC vocabulary reaches the status line. The detail goes to the log
+    // Engine, session and RPC terms stay off the status line. The detail goes to the log
     [Fact]
     public void AFailureTheEngineDidNotExplainReadsAsPlainWordsAndIsLogged()
     {

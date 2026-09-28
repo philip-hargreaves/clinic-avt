@@ -9,6 +9,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# A compiler cache (CI sets the launcher) cannot cache objects that share one PDB
+if(CMAKE_CXX_COMPILER_LAUNCHER)
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
+endif()
+
 enable_testing()
 
 # Applies to every target below; the tests exempt googletest around its fetch

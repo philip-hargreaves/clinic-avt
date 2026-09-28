@@ -35,9 +35,9 @@ internal sealed class RealEngine : IAsyncDisposable
     public string CrashLog => Path.Combine(Directory, "crashes.jsonl");
 
     /// <summary>
-    /// With models, the staged ones when present, so startup cost and code paths match the
-    /// shipped app. Without any, as in CI, stand-ins take their place. Tests replay wav files
-    /// as the microphone. A stderr name keeps the engine's log in the temp folder.
+    /// With models, uses the staged models when present so startup and code paths match the
+    /// shipped app. Otherwise scripted stand-ins run, as in CI. Tests replay wav files as the
+    /// microphone. stderr names a log file in the temp folder.
     /// </summary>
     public static async Task<RealEngine> StartAsync(string tag, bool models = true, string? stderr = null)
     {
@@ -85,7 +85,7 @@ internal sealed class RealEngine : IAsyncDisposable
         }
         catch (IOException)
         {
-            // The engine may still hold the store for a moment, and temp cleans itself
+            // Engine may still hold the store; left for temp cleanup
         }
     }
 }

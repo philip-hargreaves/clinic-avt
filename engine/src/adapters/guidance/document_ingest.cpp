@@ -39,7 +39,7 @@ constexpr const char* kReadMeText =
     "sync like the rest of your Documents.\n\n"
     "Only add documents you are entitled to use.\n";
 
-// The unit's line boxes as fractions of the page, each with its page
+// Line boxes as page fractions, each with its page number
 std::string BoxesJson(const Unit& unit) {
     nlohmann::json boxes = nlohmann::json::array();
     for (const auto& [page, box] : unit.boxes) {
@@ -96,8 +96,8 @@ std::size_t SeedGuidelines(const std::filesystem::path& folder,
 }
 
 DocumentIngest::DocumentIngest(Retriever& retriever, std::filesystem::path folder,
-                               std::filesystem::path root, std::function<bool()> busy,
-                               std::filesystem::path host_exe, HostLimits host_limits,
+                               const std::filesystem::path& root, std::function<bool()> busy,
+                               const std::filesystem::path& host_exe, HostLimits host_limits,
                                Discard discard, std::chrono::milliseconds scan_every)
     : retriever_(retriever),
       folder_(std::move(folder)),
@@ -180,7 +180,7 @@ Accepted DocumentIngest::Add(const std::vector<std::filesystem::path>& paths) {
     return out;
 }
 
-// Listing never waits on the folder: the worker scans on the poke
+// Does not touch the folder; the worker scans when poked
 Listing DocumentIngest::List() {
     wake_.notify_all();
     std::lock_guard<std::mutex> lock(store_mutex_);
@@ -266,7 +266,7 @@ std::filesystem::path DocumentIngest::Path(std::int64_t id) {
     return path;
 }
 
-// The last few pages drawn stay on disk, older ones go
+// Keeps the last few rendered pages on disk
 void DocumentIngest::Keep(const std::filesystem::path& path) {
     std::lock_guard<std::mutex> lock(scratch_mutex_);
     std::erase(drawn_, path);
@@ -285,9 +285,9 @@ void DocumentIngest::SetListener(std::function<void(const IngestProgress&)> prog
     on_document_ = std::move(document);
 }
 
-// The folder is the truth: a file that went takes its document, a file that
-// is new or changed by content starts one. A file still being written waits
-// for the next scan, as does one that appeared moments ago unless Add put it there
+// Syncs the index to the folder. Removed files drop their document and new or
+// changed files start one. Files still being written, or seen only moments
+// ago and not in `fresh`, wait for the next scan
 void DocumentIngest::Scan(const std::set<std::string>& fresh) {
     std::vector<Queued> queued;
     std::vector<DocumentInfo> changed;
@@ -316,8 +316,8 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
         std::map<std::string, IndexedFile> known;
         for (auto& file : index_.Files()) known.emplace(file.path, std::move(file));
 
-        // New and changed files first, so a rename moves the document to its new
-        // path before the old path is released and never re-indexes
+        // New and changed files first, so a rename moves the document before the old
+        // path is released and it is not re-indexed
         const auto now = std::filesystem::file_time_type::clock::now();
         for (const auto& [path, seen] : present) {
             const auto same = [size = seen.size, modified = seen.modified](const auto& other) {
@@ -350,7 +350,7 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
             if (was != known.end()) {
                 try {
                     previous = index_.Get(was->second.document);
-                } catch (const store::StoreError&) {  // NOLINT(bugprone-empty-catch)
+                } catch (const store::StoreError&) {  // NOLINT(bugprone-empty-catch) none on record
                 }
             }
             const auto held_now = index_.Hold({path, 0, seen.size, seen.modified},
@@ -364,7 +364,7 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
             }
         }
 
-        // Then files that went: a document no path holds any more is dropped
+        // Then removed files; drop documents no path holds
         for (const auto& [path, file] : known) {
             if (present.contains(path)) continue;
             DocumentInfo info;
@@ -394,8 +394,8 @@ bool DocumentIngest::Cancelled() {
     return cancel_ || stop_;
 }
 
-// Idle time scans the folder. A queued document waits for the embedder. The
-// index adopts it once, which publishes what an earlier run left ready
+// Scans when idle. Queued documents wait for the embedder. When the embedder is
+// first adopted, documents left ready by an earlier run are published
 void DocumentIngest::Work() {
     for (;;) {
         Queued item;
@@ -434,8 +434,8 @@ void DocumentIngest::Work() {
     }
 }
 
-// The file is read in place, so one that changed or went since the scan is
-// left to the next scan
+// Reads the file in place; a file changed or removed since the scan is left
+// for the next one
 void DocumentIngest::Index(const Queued& item) {
     const auto id = item.id;
     const auto path = Absolute(item.path);
@@ -444,7 +444,7 @@ void DocumentIngest::Index(const Queued& item) {
         try {
             index_.Fail(id, error, pages, pages_without_text);
             Notify(index_.Get(id));
-        } catch (const store::StoreError&) {  // NOLINT(bugprone-empty-catch)
+        } catch (const store::StoreError&) {  // NOLINT(bugprone-empty-catch) nowhere to record it
         }
     };
     try {
@@ -524,7 +524,7 @@ void DocumentIngest::Index(const Queued& item) {
     }
 }
 
-// A crash gets one more try. Any other refusal stands
+// Retries once after a crash. Other errors are returned
 std::vector<Page> DocumentIngest::Extract(const std::vector<std::uint8_t>& bytes) {
     try {
         return host_.Extract(bytes);
@@ -534,7 +534,7 @@ std::vector<Page> DocumentIngest::Extract(const std::vector<std::uint8_t>& bytes
     }
 }
 
-// Every ready document as one snapshot, swapped in under the retriever's lock
+// Swaps all ready documents into the retriever as one snapshot under its lock
 void DocumentIngest::Publish() {
     auto snapshot = std::make_shared<UploadSnapshot>();
     snapshot->dim = index_.Embedder().dim;

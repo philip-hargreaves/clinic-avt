@@ -14,8 +14,7 @@
 
 namespace clinicavt::ipc {
 
-// The client end of a private named pipe: whole frames out, frames in
-// through a decoder. Synchronous handle. The caller serialises its readers
+// Client end of a private named pipe. Synchronous; callers serialise reads
 class PipeClient {
    public:
     PipeClient() = default;
@@ -25,7 +24,7 @@ class PipeClient {
     PipeClient(const PipeClient&) = delete;
     PipeClient& operator=(const PipeClient&) = delete;
 
-    // False while nobody serves `path` yet
+    // False if nothing serves `path` yet
     bool Open(const std::wstring& path) {
         Close();
         pipe_ = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
@@ -43,7 +42,7 @@ class PipeClient {
         decoder_ = FrameDecoder{};
     }
 
-    // The process serving the pipe, or 0 when it cannot be told
+    // Server process id, or 0 if unknown
     DWORD ServerPid() const {
         ULONG pid = 0;
         if (!IsOpen() || !GetNamedPipeServerProcessId(pipe_, &pid)) return 0;
@@ -61,8 +60,8 @@ class PipeClient {
 
     enum class Poll { kNothing, kRead, kGone };
 
-    // Reads what is waiting, at most `max` bytes, into the decoder. Never blocks
-    Poll Read(std::size_t max = 64 * 1024) {
+    // Non-blocking read of up to `max` bytes into the decoder
+    Poll Read(std::size_t max = std::size_t{64} * 1024) {
         DWORD available = 0;
         if (!IsOpen() || !PeekNamedPipe(pipe_, nullptr, 0, nullptr, &available, nullptr)) {
             return Poll::kGone;
@@ -78,7 +77,6 @@ class PipeClient {
         return Poll::kRead;
     }
 
-    // The next whole frame already read, if any
     std::optional<std::string> NextFrame() {
         return decoder_.Next();
     }

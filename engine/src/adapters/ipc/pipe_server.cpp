@@ -87,7 +87,7 @@ PipeServer::Accept PipeServer::AwaitClient(std::chrono::milliseconds idle,
             if (error == ERROR_PIPE_CONNECTED) {
                 connected = true;
             } else if (error == ERROR_NO_DATA) {
-                DisconnectNamedPipe(pipe);  // came and went before the accept
+                DisconnectNamedPipe(pipe);  // client left before the accept
                 continue;
             } else if (error != ERROR_IO_PENDING) {
                 return Accept::kIdle;
@@ -101,7 +101,7 @@ PipeServer::Accept PipeServer::AwaitClient(std::chrono::milliseconds idle,
                 continue;
             }
             if (forever) continue;
-            // Busy never counts as idle, even when the idle limit is zero
+            // Never idle while busy, even with a zero idle limit
             if (busy && busy()) {
                 quiet_since = std::chrono::steady_clock::now();
                 continue;
@@ -148,7 +148,7 @@ bool PipeServer::Serve() {
             spoke = true;
             HandleFrame(*payload);
         }
-        if (decoder.failed()) break;
+        if (decoder.Failed()) break;
     }
     DisconnectNamedPipe(pipe);
     return spoke;
@@ -159,7 +159,7 @@ void PipeServer::HandleFrame(const std::string& payload) {
     try {
         message = json::parse(payload);
     } catch (const json::parse_error&) {
-        // No trustworthy id to answer with, so log and drop
+        // No id to reply to, so log and drop
         std::fputs("clinicavt-engine: dropped unparseable frame\n", stderr);
         return;
     }
@@ -171,7 +171,7 @@ void PipeServer::HandleFrame(const std::string& payload) {
     }
     const auto& request = std::get<Request>(parsed);
 
-    // A handler, or an oversized reply, must never escape into the serve loop
+    // Handler exceptions and oversized replies must not escape the serve loop
     try {
         const auto it = handlers_.find(request.method);
         if (it == handlers_.end()) {
@@ -229,8 +229,8 @@ bool PipeServer::WriteFrame(const std::string& payload, unsigned timeout_ms) {
         if (!WriteFile(pipe, frame.data() + written_total,
                        static_cast<DWORD>(frame.size() - written_total), nullptr, &write.ov)) {
             if (GetLastError() != ERROR_IO_PENDING) return false;
-            // A client that stops draining must not stall the writer. A
-            // cancel tears the frame, so the stream is declared dead
+            // Timeout so a stalled client can't block the writer. Cancelling tears the
+            // frame, so the stream is marked dead
             if (timeout_ms != 0 &&
                 WaitForSingleObject(write.ov.hEvent, timeout_ms) != WAIT_OBJECT_0) {
                 CancelIoEx(pipe, &write.ov);

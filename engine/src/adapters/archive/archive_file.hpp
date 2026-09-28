@@ -14,7 +14,7 @@ class ChunkCipher;
 
 namespace clinicavt::archive {
 
-// The count travels in the header, so a later writer can raise it
+// Stored in the header, so a later writer can raise it
 inline constexpr std::uint32_t kBackupIterations = 600000;
 
 // A .clinicavt v1 file: a 30-byte plain header (magic, version, iterations, salt), then
@@ -46,7 +46,7 @@ class ArchiveFileSink final : public IArchiveSink {
 class ArchiveFileSource final : public IArchiveSource {
    public:
     // Checks the header, derives the key and authenticates the manifest. Throws ArchiveError
-    ArchiveFileSource(std::filesystem::path path, std::string password);
+    ArchiveFileSource(const std::filesystem::path& path, std::string password);
     ~ArchiveFileSource() override;
 
     ArchiveFileSource(const ArchiveFileSource&) = delete;
@@ -59,7 +59,7 @@ class ArchiveFileSource final : public IArchiveSource {
    private:
     friend class ArchiveFileSink;
 
-    // For the sink's read-back, under the key it wrote with
+    // Sink read-back, under the key it wrote with
     ArchiveFileSource(const std::filesystem::path& path, store::ChunkCipher&& cipher);
 
     struct Impl;

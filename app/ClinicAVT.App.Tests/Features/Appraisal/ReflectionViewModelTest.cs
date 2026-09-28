@@ -230,8 +230,8 @@ public class ReflectionViewModelTest
         Assert.Equal(mine, reflection.Summary);
     }
 
-    // A summary asked for while the model loads waits for it and says so. One on its way is lost
-    // with the engine writing it, and the sheet stops waiting
+    // Summary requested during model load shows a wait placeholder.
+    // An engine restart drops the pending summary and clears the wait
     [Fact]
     public async Task ASummaryInFlightSaysWhatItWaitsForAndEndsWhenTheEngineGoes()
     {

@@ -124,6 +124,7 @@ std::vector<Candidate> RankVote(const std::vector<SubQueryHits>& lists, int limi
         }
     }
     std::vector<Candidate> out;
+    out.reserve(tally.size());
     for (auto& [id, t] : tally) out.push_back({id, t.score, t.cosine, t.trigger});
     std::stable_sort(out.begin(), out.end(), [](const Candidate& a, const Candidate& b) {
         if (a.score != b.score) return a.score > b.score;

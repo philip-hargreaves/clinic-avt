@@ -61,11 +61,11 @@
 
 namespace {
 
-// Another engine already serves the pipe. The shell takes it over rather
-// than counting a crash
+// Another engine already owns the pipe; the shell reconnects to it instead of
+// counting a crash
 constexpr int kExitAlreadyServing = 3;
 
-// How long an engine waits for a shell to come back before it leaves
+// Exit after this long with no shell connected
 constexpr auto kIdleExit = std::chrono::seconds(30);
 
 std::filesystem::path StoreRoot(const std::vector<std::string>& args) {
@@ -79,7 +79,7 @@ std::filesystem::path StoreRoot(const std::vector<std::string>& args) {
     return root;
 }
 
-// Added documents live in the user's Documents folder unless a run says otherwise
+// Default: the user's Documents folder, unless overridden
 std::filesystem::path GuidelinesFolder(const std::string& override) {
     if (!override.empty()) return clinicavt::utf8::ToPath(override);
     PWSTR documents = nullptr;
@@ -92,14 +92,13 @@ std::filesystem::path GuidelinesFolder(const std::string& override) {
     return folder;
 }
 
-// True when a staged model has never been compiled on this machine
 bool Uncompiled(const clinicavt::models::ModelStore& store, const std::string& role,
                 const std::string& tier = "default") {
     return !clinicavt::models::Compiled(store.Resolve(role, tier));
 }
 
-// A replay request plays a wav through the same port. A launch-time wav path,
-// used by CI and scripts, forces every session to replay that file
+// Replay requests play a wav through the same port. A wav path given at launch
+// (CI, scripts) forces every session to replay it
 clinicavt::session::SourceFactory MakeSourceFactory(std::string forced) {
     return [forced = std::move(forced)](
                const std::optional<clinicavt::session::ReplaySpec>& replay,
@@ -128,8 +127,8 @@ std::vector<std::string> Unstaged(const clinicavt::models::ModelStore& store,
     return unstaged;
 }
 
-// A role that cannot load gets a stand-in with --scripted, as in CI. Otherwise it is added to
-// missing, and consultations are refused until it is installed
+// A role that cannot load uses a scripted stand-in under --scripted, as in CI. Otherwise it is
+// added to missing and consultations are refused until it is installed
 std::unique_ptr<clinicavt::asr::ITranscriber> BuildTranscriber(
     const clinicavt::models::ModelStore& store, clinicavt::models::OvRuntime& runtime,
     const std::string& device, clinicavt::metrics::Registry& metrics, bool& first_use,
@@ -149,7 +148,7 @@ std::unique_ptr<clinicavt::asr::ITranscriber> BuildTranscriber(
     }
 }
 
-// Compiles behind the serve loop. session/start waits on it, hello does not
+// Compiles in the background; session/start waits for it, hello does not
 std::unique_ptr<clinicavt::audio::IStreamingVad> BuildVad(
     const clinicavt::models::ModelStore& store, clinicavt::models::OvRuntime& runtime,
     clinicavt::metrics::Registry& metrics, bool scripted, std::vector<std::string>& missing) {
@@ -169,7 +168,7 @@ std::unique_ptr<clinicavt::audio::IStreamingVad> BuildVad(
     return std::make_unique<clinicavt::models::MissingVad>();
 }
 
-// Diarisation needs both its models
+// Needs both the diarisation and segmentation models
 std::unique_ptr<clinicavt::diar::IDiariser> BuildDiariser(
     const clinicavt::models::ModelStore& store, clinicavt::models::OvRuntime& runtime,
     clinicavt::diar::AnchorStore& anchors, clinicavt::metrics::Registry& metrics, bool scripted,
@@ -191,8 +190,8 @@ std::unique_ptr<clinicavt::diar::IDiariser> BuildDiariser(
     return std::make_unique<clinicavt::models::MissingDiariser>();
 }
 
-// Generation runs in its own supervised process, so a GPU driver fault there
-// costs a respawn and leaves the engine standing. Null when nothing can write
+// Note generation in a supervised child, so a GPU driver fault only costs a respawn.
+// Null if nothing can write
 std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
     clinicavt::models::ModelStore& store, const std::filesystem::path& models_root,
     clinicavt::ipc::PipeServer& server, const std::string& requested_tier,
@@ -202,8 +201,7 @@ std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
             std::fputs("clinicavt-engine: no note model staged\n", stderr);
             return nullptr;
         }
-        // Start on the tier the shell will ask for; auto or an unstaged one gets this machine's
-        // pick
+        // Start on the tier the shell will request; auto or unstaged uses the machine default
         std::string tier = auto_tier;
         if (!requested_tier.empty() && requested_tier != clinicavt::models::kAutoNoteTier) {
             try {
@@ -216,18 +214,18 @@ std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
         }
         const auto host = clinicavt::system::ExeDir() / clinicavt::system::kNoteHostExe;
         if (!std::filesystem::exists(host)) {
-            // Never write in-process, because that is the configuration the driver fault corrupts
+            // Never generate in-process; that is the configuration the driver fault corrupts
             std::fprintf(stderr, "clinicavt-engine: note DISABLED, %s is missing\n",
                          host.string().c_str());
             return nullptr;
         }
         auto worker = std::make_unique<clinicavt::note::WorkerNoteWriter>(
             host, models_root, models_root.parent_path() / "prompts", &store, tier);
-        // The shell sends its tier again on connect, a no-op by then
+        // The shell re-sends its tier on connect; a no-op by then
         worker->SetListener([&server](const clinicavt::note::NoteModelState& state) {
             server.PushNotification("note/model", clinicavt::ipc::NoteModelJson(state));
         });
-        // On first use the one-off compile runs on an idle GPU, ahead of any recording
+        // First use: compile on an idle GPU before any recording
         if (Uncompiled(store, "note", tier)) {
             first_use = true;
             std::fprintf(stderr, "clinicavt-engine: first use, compiling the note model\n");
@@ -240,16 +238,14 @@ std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
     }
 }
 
-// Translation runs on the CPU, so it never contends with the GPU. Null when
-// the model is not staged
+// CPU only, so no GPU contention. Null if the model is not staged
 std::unique_ptr<clinicavt::translate::NllbTranslator> BuildTranslator(
     const clinicavt::models::ModelStore& store, clinicavt::models::OvRuntime& runtime,
     bool& first_use) {
     try {
         store.Resolve("translation", "default");
         auto translator = std::make_unique<clinicavt::translate::NllbTranslator>(store, runtime);
-        // The CPU compile joins the one-off warm-up, so the first translation
-        // is as fast as every other
+        // Compile during the startup warm-up so the first translation is not slower
         if (Uncompiled(store, "translation")) {
             first_use = true;
             std::fprintf(stderr, "clinicavt-engine: first use, compiling the translator\n");
@@ -267,8 +263,7 @@ std::unique_ptr<clinicavt::translate::NllbTranslator> BuildTranslator(
 // Wide, so a name or path outside the ANSI code page arrives intact. Arguments are UTF-8 from here
 int wmain(int argc, wchar_t* argv[]) {
 #ifdef _DEBUG
-    // Assertions and CRT errors go to stderr as text rather than parking a
-    // headless engine behind a modal dialog
+    // Send asserts and CRT errors to stderr instead of a modal dialog (headless process)
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
@@ -282,18 +277,17 @@ int wmain(int argc, wchar_t* argv[]) {
         const std::string note_tier = clinicavt::TakeFlag(args, "--note-tier");
         const std::string corpora_override = clinicavt::TakeFlag(args, "--corpora");
         const std::string guidelines_override = clinicavt::TakeFlag(args, "--guidelines");
-        // For dev builds, a demo corpus marked research is searched when set
+        // Dev builds: also search demo corpora marked research
         const bool include_research = clinicavt::TakeSwitch(args, "--include-research");
-        // CI and tests run without models. A role that is not installed then gets a stand-in
-        // rather than refusing consultations
+        // CI and tests run without models, so a role that is not installed gets a stand-in
+        // and consultations still run
         const bool scripted = clinicavt::TakeSwitch(args, "--scripted");
         // Tests and evaluation play wav files as the microphone. The shipped app never does
         const bool allow_replay = clinicavt::TakeSwitch(args, "--allow-replay");
         if (args.size() > 3 && !allow_replay) {
             throw std::runtime_error("a replay wav needs --allow-replay");
         }
-        // Every engine and note host takes turns on the GPU under one name,
-        // which the hosts inherit
+        // All engines and note hosts share one GPU lease name, passed to hosts in the environment
         _putenv_s("CLINICAVT_GPU_LEASE", clinicavt::system::kGpuLeaseName);
         std::fprintf(
             stderr, "clinicavt-engine: power throttling %s\n",
@@ -307,7 +301,7 @@ int wmain(int argc, wchar_t* argv[]) {
         const std::filesystem::path models_root = args.size() > 2
                                                       ? clinicavt::utf8::ToPath(args[2])
                                                       : clinicavt::system::DefaultModelsRoot();
-        // Guidance corpora sit beside the models, each replaced as a directory
+        // Corpora live next to the models; each is replaced as a whole directory
         const std::filesystem::path corpora_root = corpora_override.empty()
                                                        ? models_root.parent_path() / "corpora"
                                                        : clinicavt::utf8::ToPath(corpora_override);
@@ -316,16 +310,15 @@ int wmain(int argc, wchar_t* argv[]) {
         clinicavt::store::SqliteSessionStore session_store(store_root);
         clinicavt::ipc::WireEvents events(server, session_store);
         clinicavt::archive::ArchiveLane archive_lane(session_store, clinicavt::ipc::PushTo(server));
-        // A consultation left by closing the app is left all the same
+        // Retain-off sessions are erased even if the app was closed mid-consultation
         session_store.EraseUnretained();
         clinicavt::models::ModelStore model_store(models_root);
         clinicavt::models::OvRuntime ov_runtime;
         clinicavt::metrics::Registry metrics;
         clinicavt::diar::AnchorStore anchors(store_root);
 
-        // A host whose engine has gone takes a few seconds to leave. One still
-        // here after that is stuck in the driver, and only a restart ends it.
-        // Checked before any model touches the GPU
+        // An orphaned note host exits within seconds; one still present after that is
+        // stuck in the driver until reboot. Checked before any model uses the GPU
         const bool stray_note_host = !clinicavt::system::LingeringOrphans(
                                           clinicavt::system::kNoteHostExe, std::chrono::seconds(8))
                                           .empty();
@@ -354,10 +347,10 @@ int wmain(int argc, wchar_t* argv[]) {
             static_cast<double>(memory.gpu.value_or(0)) / kGib);
         auto note_writer =
             BuildNoteWriter(model_store, models_root, server, note_tier, auto_tier, first_use);
-        // The lane says so at once rather than when a note is asked for
+        // Report a stuck host at startup instead of on the first note request
         if (stray_note_host && note_writer != nullptr) note_writer->Prepare();
-        // A GPU wait that runs on asks whether the holder is this engine's own
-        // host. Cleared before the lane goes, since Whisper outlives it
+        // Lets a long GPU wait check whether the holder is our own host. Cleared before
+        // the lane is destroyed, since Whisper outlives it
         struct ProbeScope {
             explicit ProbeScope(clinicavt::note::WorkerNoteWriter* lane) {
                 if (lane == nullptr) return;
@@ -377,8 +370,8 @@ int wmain(int argc, wchar_t* argv[]) {
                 });
             events.SetTranslator(translator.get());
         }
-        // Guidance retrieval runs on the CPU in its own lane. The embedder loads
-        // in the background so the first note's search is warm
+        // Guidance runs on the CPU in its own lane; the embedder loads in the
+        // background so the first note search is warm
         clinicavt::guidance::Retriever guidance_retriever(
             [&model_store]() -> std::unique_ptr<clinicavt::guidance::IEmbedder> {
                 return clinicavt::guidance::Embedder::Load(model_store);
@@ -398,9 +391,9 @@ int wmain(int argc, wchar_t* argv[]) {
         clinicavt::session::SessionController controller(
             MakeSourceFactory(args.size() > 3 ? args[3] : std::string()), events, session_store,
             *transcriber, *vad, *diariser, std::chrono::seconds(10),
-            5 * clinicavt::audio::kSampleRate, note_writer.get(), &metrics);
+            std::uint64_t{5} * clinicavt::audio::kSampleRate, note_writer.get(), &metrics);
 
-        // Added documents embed between note searches and wait while a consultation runs
+        // Added documents embed between note searches and pause during a consultation
         const auto guidelines = GuidelinesFolder(guidelines_override);
         if (guidelines_override.empty()) {
             const auto seeded = clinicavt::guidance::SeedGuidelines(
@@ -455,10 +448,9 @@ int wmain(int argc, wchar_t* argv[]) {
                      .allow_replay = allow_replay});
         clinicavt::ipc::RegisterGuidanceMethods(server, session_store, guidance_retriever,
                                                 guidance_lane, ingest);
-        // A shell that closes ends its capture, and a reopened one picks this
-        // engine up again. A note model still loading or speech recognition
-        // moving device keeps it here, since neither load can be cancelled.
-        // Idle and alone, it leaves, at once when the shell asked it to
+        // Closing the shell ends capture; a reopened shell reconnects. Stay while a
+        // note model is loading or ASR is switching device (neither can be cancelled).
+        // Otherwise exit when idle with no client, immediately if the shell asked
         bool exit_asked = false;
         std::atomic<bool> asked_now{false};
         server.RegisterMethod("engine/exit", [&asked_now](const nlohmann::json&) {
@@ -474,8 +466,8 @@ int wmain(int argc, wchar_t* argv[]) {
         while (server.AwaitClient(exit_asked ? std::chrono::seconds(0) : kIdleExit, busy) ==
                clinicavt::ipc::PipeServer::Accept::kClient) {
             asked_now = false;
-            // Only a client that speaks decides. A stale dial that touches the
-            // pipe and leaves never cancels an exit already asked for
+            // Only a client that sent a frame changes exit_asked; a stale connect that
+            // leaves cannot cancel a requested exit
             if (server.Serve()) exit_asked = asked_now;
             controller.Stop();
         }

@@ -26,14 +26,14 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
                            const std::string& device_override, metrics::Registry* metrics) {
     const models::ModelInfo& info = store.Resolve("asr", "default");
     const std::string requested = device_override.empty() ? info.device : device_override;
-    // Only GPU work takes turns. On the NPU Whisper runs beside the note model
+    // Only GPU work takes the lease; NPU Whisper runs alongside the note model
     const bool on_gpu = requested.rfind("GPU", 0) == 0;
     const auto take_gpu = [on_gpu](const char* who) {
         return on_gpu ? system::GpuLease::Global().Acquire(system::WatchForStuckHosts(who))
                       : system::GpuLease::Guard{};
     };
-    // Taken before the seconds of device discovery, so Whisper is ready ahead
-    // of a note model the shell asks for on connect
+    // Taken before device discovery (seconds) so Whisper is ready before the note
+    // model the shell requests on connect
     std::shared_ptr<ov::genai::WhisperPipeline> pipeline;
     std::string device;
     {
@@ -50,15 +50,15 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     config.task = "transcribe";
     config.return_timestamps = true;
 
-    // Transcript-tail conditioning (initial_prompt) was measured here and
-    // rejected: it worsened WER even with register effects folded out
+    // initial_prompt (transcript-tail conditioning) was tested and rejected because it
+    // worsened WER even with register effects folded out
     return [pipeline, config, take_gpu](std::span<const float> frames, std::uint64_t first_frame) {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
-        // A stuck holder leaves the lease wedged, and the decode runs beside it
+        // If a stuck holder wedged the lease, decode anyway alongside it
         const auto lease = take_gpu("asr");
-        if (lease.waited() > 0.25) {
+        if (lease.Waited() > 0.25) {
             std::fprintf(stderr, "clinicavt-engine: asr waited %.2f s for the GPU lease\n",
-                         lease.waited());
+                         lease.Waited());
         }
         auto result = pipeline->generate(audio, config);
 
@@ -101,7 +101,7 @@ WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::
 
 WhisperTranscriber::WhisperTranscriber(DeviceLoader loader, std::string device,
                                        metrics::Registry* metrics)
-    : loader_([loader, device] { return loader(device); }),
+    : loader_([loader, device = std::move(device)] { return loader(device); }),
       by_device_(std::move(loader)),
       metrics_(metrics) {
     worker_ = std::thread([this] { WorkerLoop(); });
@@ -162,13 +162,14 @@ void WhisperTranscriber::RecordDecode(std::size_t frames,
     }
 }
 
-// Load off the hot path. A failed load drains clips without turns, so
-// nothing hangs. Returns the error, empty on success
+// Loads off the hot path. On failure clips drain with no turns, so nothing hangs.
+// Returns the error, empty on success
+// NOLINTNEXTLINE(performance-unnecessary-value-param) owned, so freed once loaded
 std::string WhisperTranscriber::Load(DecodeLoader loader) {
     if (!loader) {
         return {};
     }
-    // The old device's model goes first, so two are never resident at once
+    // Release the old device's model first so two are never resident
     decode_ = {};
     const auto t0 = std::chrono::steady_clock::now();
     try {
@@ -187,7 +188,7 @@ std::string WhisperTranscriber::Load(DecodeLoader loader) {
 
 void WhisperTranscriber::WorkerLoop() {
     std::unique_lock<std::mutex> lock(mutex_);
-    // A switch asked for before the first load replaces it
+    // A switch requested before the first load replaces it
     if (!switching_) {
         auto first = std::exchange(loader_, {});
         lock.unlock();
@@ -197,7 +198,7 @@ void WhisperTranscriber::WorkerLoop() {
     while (!stopping_) {
         cv_.wait(lock, [this] { return !clips_.empty() || stopping_ || switching_; });
         if (stopping_) break;
-        // A switch's load and reply are taken together, so a later switch can't split them
+        // Take a switch's load and reply together so a later switch cannot split them
         if (switching_) {
             auto loader = std::exchange(loader_, {});
             auto done = std::exchange(switched_, {});
@@ -205,7 +206,7 @@ void WhisperTranscriber::WorkerLoop() {
             lock.unlock();
             const std::string error = Load(std::move(loader));
             lock.lock();
-            moving_ = switching_;  // one asked for during this load is still to come
+            moving_ = switching_;  // a switch requested during this load is still pending
             lock.unlock();
             if (done) done(error);
             lock.lock();
@@ -217,8 +218,7 @@ void WhisperTranscriber::WorkerLoop() {
         lock.unlock();
         std::vector<Turn> chunks;
         std::vector<std::uint64_t> cuts;
-        // A failed decode loses only this clip's text. The audio is
-        // already stored
+        // A failed decode loses only this clip's text; the audio is already stored
         try {
             if (decode_) {
                 const auto t0 = std::chrono::steady_clock::now();
@@ -226,8 +226,7 @@ void WhisperTranscriber::WorkerLoop() {
                 for (const Turn& turn : decode_(clip.frames, clip.first_frame)) {
                     if (turn.text.empty()) continue;
                     chunks.push_back(turn);
-                    // Chunk edges: where a short answer inside a long clip
-                    // begins and ends
+                    // Chunk edges mark a short answer's start and end inside a long clip
                     for (const std::uint64_t edge :
                          {turn.first_frame, turn.first_frame + turn.frame_count}) {
                         if (edge > clip.first_frame && edge < clip_end) cuts.push_back(edge);
@@ -235,10 +234,9 @@ void WhisperTranscriber::WorkerLoop() {
                 }
                 RecordDecode(clip.frames.size(), t0);
             }
-        } catch (...) {  // NOLINT(bugprone-empty-catch)
+        } catch (...) {  // NOLINT(bugprone-empty-catch) this clip loses its text
         }
-        // The cuts land before the caller is released, so a TakeClipCuts
-        // right after the decode sees them
+        // Record cuts before releasing the caller so TakeClipCuts right after sees them
         lock.lock();
         clip_cuts_.insert(clip_cuts_.end(), cuts.begin(), cuts.end());
         lock.unlock();

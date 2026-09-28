@@ -24,15 +24,14 @@ std::string WithoutStop(std::string_view s) {
     return std::string(s);
 }
 
-// A bullet or a lower-case start carries a recommendation's own list on
+// A bullet or lower-case start continues the previous recommendation's list
 bool Continues(std::string_view text) {
     return text.starts_with("\xE2\x80\xA2") || text.starts_with("\xE2\x80\x93") ||
            text.starts_with('-') || text.starts_with('*') ||
            (!text.empty() && std::islower(static_cast<unsigned char>(text.front())));
 }
 
-// Short, without a mark, a sentence end or a bullet: a title, a caption or a label.
-// A short question is a heading too
+// Short, unmarked, no sentence end or bullet (titles, captions, labels). Short questions count
 bool IsHeading(const Paragraph& paragraph, Scheme scheme) {
     const std::string_view text = paragraph.text;
     return strings::WordCount(text) < kHeadingWords &&
@@ -51,7 +50,7 @@ long Integer(std::string_view token) {
     return value;
 }
 
-// Without its runs of consecutive integers, the line numbers of a proof copy
+// Drops runs of consecutive integers (proof-copy line numbers)
 std::string WithoutCounts(std::string_view text) {
     const auto tokens = strings::Words(text);
     std::string out;
@@ -84,7 +83,6 @@ bool Numeric(std::string_view token) {
     return digit;
 }
 
-// How many of the text's words are among these
 int CountWords(std::string_view lower, std::initializer_list<std::string_view> among,
                int* total = nullptr) {
     int found = 0;
@@ -96,13 +94,13 @@ int CountWords(std::string_view lower, std::initializer_list<std::string_view> a
     return found;
 }
 
-// Says what to do, so it stays whatever it looks like
+// Directive wording; such units are kept even if they look like tables or addresses
 bool Guides(std::string_view lower) {
     return CountWords(lower, {"should", "recommend", "recommended", "offer", "consider", "refer"}) >
            0;
 }
 
-// A table's cells read across, or the abbreviations printed under it
+// Unnumbered and 40%+ numeric, or an abbreviation legend
 bool IsTable(const Unit& unit) {
     const auto tokens = strings::Words(unit.text);
     if (tokens.empty()) return false;
@@ -117,7 +115,7 @@ bool IsTable(const Unit& unit) {
     return pairs >= kLegendPairs && tokens[0].ends_with(':');
 }
 
-// The author list: name after name ending in the number of its address
+// Names with affiliation numbers, e.g. "Skeoch32,"
 bool IsAuthors(std::string_view text) {
     int names = 0;
     for (const auto token : strings::Words(text)) {
@@ -132,7 +130,7 @@ bool IsAuthors(std::string_view text) {
     return names >= kAuthors;
 }
 
-// Authors' addresses: institution after institution
+// Affiliation block, dense in institution words
 bool IsAffiliations(std::string_view lower) {
     int words = 0;
     const int institutions = CountWords(
@@ -143,8 +141,7 @@ bool IsAffiliations(std::string_view lower) {
     return institutions >= kAffiliations && institutions * 14 >= words;
 }
 
-// A long paragraph in pieces of whole lines, each closed at a sentence end
-// once it holds kSplitWords, or at kMaxUnitWords regardless
+// Splits on line boundaries: at a sentence end after kSplitWords, or at kMaxUnitWords
 std::vector<Paragraph> Split(const Paragraph& paragraph) {
     std::vector<Paragraph> out;
     Paragraph piece{paragraph.page, "", {}, {}};
@@ -269,6 +266,7 @@ std::vector<Unit> UnitsFromParagraphs(const std::vector<Paragraph>& paragraphs) 
             number = WithoutStop(mark);
             continue;
         }
+        // NOLINTNEXTLINE(bugprone-branch-clone) order matters, so the matching branches stay apart
         if (!mark.empty()) {
             close();
         } else if (marked && !tokens) {
@@ -295,10 +293,9 @@ std::vector<Unit> UnitsFromParagraphs(const std::vector<Paragraph>& paragraphs) 
 
 namespace {
 
-// Not guidance. A short unmarked run that never ends a sentence is figure
-// labels or a table fragment, a shorter one a sentence's tail. Front matter
-// and captions are known by their opening, tables and addresses by what they
-// hold, unless they say what to do
+// Not guidance: short unmarked text (labels, table fragments, sentence tails), numbered
+// headings, contents pages, front matter, captions, and tables or addresses without
+// directive wording
 bool IsFragment(const Unit& unit) {
     const int words = strings::WordCount(unit.text);
     if (unit.number.empty() &&

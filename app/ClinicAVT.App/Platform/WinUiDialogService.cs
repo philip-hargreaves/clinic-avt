@@ -100,7 +100,7 @@ public sealed class WinUiDialogService(
         return await dialog.ShowAsync() == ContentDialogResult.Primary ? import.Result : null;
     }
 
-    // A fresh reading per dialog. The outcome says whether it produced a voiceprint
+    // New view model per dialog. True when a voiceprint was saved
     public async Task<bool> RunEnrolmentAsync()
     {
         using var enrolment = new EnrolmentViewModel(engine, mic.MicId, dispatcher: dispatcher, logger: logger);

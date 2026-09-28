@@ -10,9 +10,9 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Consultation;
 
 /// <summary>
-/// The live session. It holds the state machine from Idle through Recording and Finalising,
-/// the starts and stops, and the resume after an engine restart. Review and the notification
-/// router move the state through the transitions declared here.
+/// Live session state machine from Idle through Recording and Finalising, with start, stop
+/// and resume after an engine restart. Review and NotificationRouter drive the transitions
+/// declared here.
 /// </summary>
 public sealed partial class SessionRecorder : ObservableObject
 {
@@ -43,11 +43,7 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Idle;
 
-    /// <summary>
-    /// Where a stop has got to. The centre stage holds until the note streams,
-    /// so the note prefill pause shows a spinner that says so.
-    /// Advances only forwards within one stop.
-    /// </summary>
+    /// <summary>Progress of a stop. Only moves forward within one stop.</summary>
     [ObservableProperty]
     public partial FinalisePhase Phase { get; private set; } = FinalisePhase.None;
 
@@ -69,7 +65,7 @@ public sealed partial class SessionRecorder : ObservableObject
     /// <summary>The session the engine is recording into, for a resume after a restart.</summary>
     public string? RecordingSessionId { get; private set; }
 
-    /// <summary>A stop or an import sealed this session. The review takes it over.</summary>
+    /// <summary>Raised when a stop or import seals a session.</summary>
     public event Action<string>? Sealed;
 
     /// <summary>An import began, with when the consultation took place.</summary>
@@ -98,9 +94,7 @@ public sealed partial class SessionRecorder : ObservableObject
         }
     }
 
-    /// <summary>
-    /// The note arrived or a stored session opened, so the panes show and review begins.
-    /// </summary>
+    /// <summary>Enters review when the note arrives or a stored session opens.</summary>
     public void EnterReview(bool panesOpen = false)
     {
         if (panesOpen)
@@ -192,7 +186,7 @@ public sealed partial class SessionRecorder : ObservableObject
         }
 
         // An empty mic id means the default, and a missing device falls back to it with a log line.
-        // A refusal says why, such as a model that is not installed
+        // A refusal gives the reason, such as a model that is not installed
         var started = await EngineCall.TryAsync(_status, "session/start",
             () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? ""),
             refused: "Recording could not start").ConfigureAwait(true);
@@ -229,7 +223,7 @@ public sealed partial class SessionRecorder : ObservableObject
 
         try
         {
-            // The raw call tells a lost engine from one that answered
+            // Raw call so the catch can tell a refusal from a lost engine
             var started = await _engine.ResumeSessionAsync(resume, Retain).ConfigureAwait(true);
             RecordingSessionId = started.Length > 0 ? started : null;
             _status.Append("Recording");
