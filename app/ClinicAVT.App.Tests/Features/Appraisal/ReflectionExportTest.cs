@@ -7,7 +7,7 @@ namespace ClinicAVT.App.Tests.Features.Appraisal;
 public class ReflectionExportTest
 {
     [Fact]
-    public void FormatCarriesTitleMonthCaseStudyAnsweredQuestionsAndTheDeclarationOnlyWithACaseStudy()
+    public void FormatCarriesTitleMonthCaseStudyTickedGuidanceAnsweredQuestionsAndTheDeclarationOnlyWithACaseStudy()
     {
         var text = ReflectionExport.Format(new ReflectionEntry(
             "Elbow swelling", "September 2026", "A patient in their forties.",
@@ -24,12 +24,9 @@ public class ReflectionExportTest
         Assert.StartsWith("Consultation\nMay 2026\n\nWhat stood out?\nx\n", bare);
         Assert.DoesNotContain("Case study", bare);
         Assert.DoesNotContain(ReflectionExport.Declaration, bare);
-    }
 
-    [Fact]
-    public void TickedGuidanceFollowsTheCaseStudyWithItsLinkOnItsOwnLine()
-    {
-        var text = ReflectionExport.Format(new ReflectionEntry(
+        // Ticked guidance follows the case study with its link on its own line
+        text = ReflectionExport.Format(new ReflectionEntry(
             "Elbow swelling", "September 2026", "A patient in their forties.", "", "Read it.", "")
         {
             References =

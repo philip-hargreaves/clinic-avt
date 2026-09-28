@@ -35,7 +35,7 @@ public class SessionsViewModelTest
                     sampleRate = 16000,
                     label = "Elbow swelling",
                     editedAt = "2026-08-17T10:31:00Z",
-                    audioSeconds = 542.0,  // a 16x replay, so the wall clock says 8:41 and the audio 9 min
+                    audioSeconds = 542.0,  // the audio says 9 min, so the wall clock's 8:41 is not used
                 },
             },
         };
@@ -173,24 +173,9 @@ public class SessionsViewModelTest
     }
 
     [Fact]
-    public async Task AnOpenTheEngineRefusesLeavesTheDetailClosed()
+    public async Task EngineErrorsLandInTheStatusLogARefusedOpenStaysClosedAndAnEmptyStoreIsNotAnError()
     {
-        var (vm, consultation, engine, _) = Create();
-        ScriptOneSession(engine);
-        engine.Failing.Add("session/open");
-        await vm.RefreshAsync();
-
-        vm.Selected = vm.Sessions[0];
-        await WaitUntilAsync(() => engine.Requests.Any(r => r.Method == "session/open"));
-
-        Assert.False(vm.DetailOpen);
-        Assert.Equal(SessionState.Idle, consultation.State);
-    }
-
-    [Fact]
-    public async Task EngineErrorsLandInTheStatusLogAndAnEmptyStoreIsAnEmptyListNotAnError()
-    {
-        var (vm, _, engine, status) = Create();
+        var (vm, consultation, engine, status) = Create();
         engine.Failing.Add("session/list");
 
         await vm.RefreshAsync();
@@ -199,6 +184,14 @@ public class SessionsViewModelTest
         Assert.Contains("could not list consultations", status.LatestActivity);
 
         engine.Failing.Remove("session/list");
+        ScriptOneSession(engine);
+        engine.Failing.Add("session/open");
+        await vm.RefreshAsync();
+        vm.Selected = vm.Sessions[0];
+        await WaitUntilAsync(() => engine.Requests.Any(r => r.Method == "session/open"));
+        Assert.False(vm.DetailOpen);
+        Assert.Equal(SessionState.Idle, consultation.State);
+
         engine.Responses["session/list"] = new { sessions = Array.Empty<object>() };
         await vm.RefreshAsync();
 

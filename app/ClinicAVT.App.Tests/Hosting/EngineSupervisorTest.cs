@@ -136,10 +136,12 @@ public class EngineSupervisorTest
         Assert.Equal("session/stop", report.MethodInFlight);
         Assert.Equal("Finalising:Note", report.SessionPhase);
 
-        // A second crash in the window waits before relaunching
-        h.Current.Crash(-1);
+        // A second crash in the window waits before relaunching. The engine only leaves on its
+        // own once no shell is connected, so a clean exit under a running app is a crash too
+        h.Current.Crash(0);
         Assert.Equal(EngineStatus.Restarting, h.Host.Status);
         Assert.Equal(2, h.Launcher.Launched.Count);
+        Assert.Equal(0, h.Log.Reports[^1].ExitCode);
         h.Clock.Advance(RestartPolicy.Backoff(2));
         Assert.Equal(EngineStatus.Running, h.Host.Status);
         Assert.Equal(3, h.Launcher.Launched.Count);
@@ -154,7 +156,7 @@ public class EngineSupervisorTest
     }
 
     [Fact]
-    public void ACrashStormGivesUpAndStartRecovers()
+    public void ACrashStormGivesUpAndStartRecoversButSpacedCrashesNeverTripIt()
     {
         var h = new Harness();
         h.Host.Start();
@@ -174,21 +176,16 @@ public class EngineSupervisorTest
         Assert.Equal(EngineStatus.Running, h.Host.Status);
         h.Current.Crash(-1);
         Assert.Equal(EngineStatus.Running, h.Host.Status);
-    }
 
-    [Fact]
-    public void SpacedCrashesNeverTripTheStorm()
-    {
-        var h = new Harness();
-        h.Host.Start();
-
+        var spaced = new Harness();
+        spaced.Host.Start();
         for (var i = 0; i < RestartPolicy.StormLimit + 3; i++)
         {
-            h.Current.Crash(-1);
-            h.Clock.Now += RestartPolicy.StormWindow + TimeSpan.FromSeconds(1);
+            spaced.Current.Crash(-1);
+            spaced.Clock.Now += RestartPolicy.StormWindow + TimeSpan.FromSeconds(1);
         }
 
-        Assert.Equal(EngineStatus.Running, h.Host.Status);
+        Assert.Equal(EngineStatus.Running, spaced.Host.Status);
     }
 
     [Fact]
@@ -202,21 +199,6 @@ public class EngineSupervisorTest
         Assert.Equal(1, h.ExitRequests);
         Assert.True(h.Launcher.Released);
         Assert.Equal(EngineStatus.Stopped, h.Host.Status);
-    }
-
-    // The engine only leaves on its own once no shell is connected. Doing so under a
-    // running app is a failure, and it comes back
-    [Fact]
-    public void AnExitNobodyAskedForIsACrash()
-    {
-        var h = new Harness();
-        h.Host.Start();
-
-        h.Current.Crash(0);
-
-        Assert.Equal(EngineStatus.Running, h.Host.Status);
-        Assert.Equal(2, h.Launcher.Launched.Count);
-        Assert.Equal(0, Assert.Single(h.Log.Reports).ExitCode);
     }
 
     // A closed app leaves its engine to finish a load. The next one takes it over
@@ -279,27 +261,21 @@ public class EngineSupervisorTest
         Assert.True(h.Clock.Now >= DateTimeOffset.UnixEpoch + EngineSupervisor.ServerWaitLimit);
     }
 
+    // A launch that throws is a fault, and an engine that dies before the handler attaches is
+    // still seen and relaunched
     [Fact]
-    public void LaunchFailureIsAFault()
+    public void StartFaultsOnALaunchFailureAndStillCatchesAnEarlyDeath()
     {
-        var h = new Harness();
-        h.Launcher.FailNext = true;
+        var failed = new Harness();
+        failed.Launcher.FailNext = true;
+        failed.Host.Start();
+        Assert.Equal(EngineStatus.Faulted, failed.Host.Status);
+        Assert.Empty(failed.Log.Reports);
 
-        h.Host.Start();
-
-        Assert.Equal(EngineStatus.Faulted, h.Host.Status);
-        Assert.Empty(h.Log.Reports);
-    }
-
-    [Fact]
-    public void DeathBeforeTheHandlerAttachesIsStillHandled()
-    {
-        var h = new Harness();
-        h.Launcher.NextDiesWith = 1;
-
-        h.Host.Start();
-
-        Assert.Equal(EngineStatus.Running, h.Host.Status);
-        Assert.Equal(2, h.Launcher.Launched.Count);
+        var early = new Harness();
+        early.Launcher.NextDiesWith = 1;
+        early.Host.Start();
+        Assert.Equal(EngineStatus.Running, early.Host.Status);
+        Assert.Equal(2, early.Launcher.Launched.Count);
     }
 }

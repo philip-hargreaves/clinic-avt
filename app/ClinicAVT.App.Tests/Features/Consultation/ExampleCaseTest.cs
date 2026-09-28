@@ -41,7 +41,7 @@ public class ExampleCaseTest
     }
 
     [Fact]
-    public async Task ACaseStandsInIsSearchedTheOriginalComesBackAndLeavingWritesItBack()
+    public async Task ACaseStandsInIsSearchedTheOriginalComesBackLeavingWritesItBackAndARealRecordNeverOffersOne()
     {
         var (session, engine, note) = Create();
         engine.StoredNote = "the stored note";
@@ -75,6 +75,14 @@ public class ExampleCaseTest
         Assert.False(session.Review.ExampleShown);
         var last = engine.Requests.Last(r => r.Method == "note/update");
         Assert.Contains(original, last.Params);
+
+        // A real record never offers a case
+        var updates = engine.Requests.Count(r => r.Method == "note/update");
+        Assert.True(await session.OpenStoredSessionAsync("s-real"));
+        Assert.False(note.ExampleCasesVisible);
+        note.ExampleCaseIndex = 1;
+        Assert.NotEqual(Gout.Text, note.ClinicalNoteText);
+        Assert.Equal(updates, engine.Requests.Count(r => r.Method == "note/update"));
     }
 
     [Fact]
@@ -93,18 +101,5 @@ public class ExampleCaseTest
         note.EditNoteCommand.Execute(null);
         Assert.False(session.Review.ExampleShown);
         Assert.Equal(Gout.Text, note.ClinicalNoteText);
-    }
-
-    [Fact]
-    public async Task ARealRecordNeverOffersACase()
-    {
-        var (session, engine, note) = Create();
-        Assert.True(await session.OpenStoredSessionAsync("s-real"));
-
-        Assert.False(note.ExampleCasesVisible);
-        note.ExampleCaseIndex = 1;
-
-        Assert.NotEqual(Gout.Text, note.ClinicalNoteText);
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "note/update");
     }
 }

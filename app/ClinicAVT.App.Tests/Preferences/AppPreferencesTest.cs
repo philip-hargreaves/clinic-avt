@@ -12,7 +12,6 @@ public class AppPreferencesTest
         var store = new MemoryPreferencesStore();
         var preferences = new AppPreferences(store)
         {
-            DemoTrayEnabled = true,
             SeedDataEnabled = true,
             NpuTranscription = true,
             CollectPerformanceData = true,
@@ -31,7 +30,6 @@ public class AppPreferencesTest
 
         var version = JsonDocument.Parse(store.Json!).RootElement.GetProperty("SchemaVersion").GetInt32();
         Assert.Equal(AppPreferences.CurrentSchema, version);
-        Assert.True(loaded.DemoTrayEnabled);
         Assert.True(loaded.SeedDataEnabled);
         Assert.True(loaded.NpuTranscription);
         Assert.True(loaded.CollectPerformanceData);
@@ -50,7 +48,7 @@ public class AppPreferencesTest
     {
         var empty = new MemoryPreferencesStore();
         var loaded = AppPreferences.Load(empty);
-        Assert.False(loaded.DemoTrayEnabled);
+        Assert.False(loaded.SeedDataEnabled);
         Assert.Null(empty.Json);  // no write on load
 
         var corrupt = new MemoryPreferencesStore { Json = "{ this is not json" };
@@ -61,18 +59,9 @@ public class AppPreferencesTest
         Assert.Contains(log.Lines, line => line.Contains("preferences unreadable"));
     }
 
+    // A note model never chosen is left to the engine, and the old middle length reads as concise
     [Fact]
-    public void ANoteModelNeverChosenIsLeftToTheEngine()
-    {
-        Assert.Equal("auto", AppPreferences.Load(new MemoryPreferencesStore()).NoteTier);
-        var older = new MemoryPreferencesStore { Json = """{"KeepConsultations":true}""" };
-        Assert.Equal("auto", AppPreferences.Load(older).NoteTier);
-        var chosen = new MemoryPreferencesStore { Json = """{"NoteTier":"accuracy"}""" };
-        Assert.Equal("accuracy", AppPreferences.Load(chosen).NoteTier);
-    }
-
-    [Fact]
-    public void ANewerDocumentIsReadForWhatThisBuildKnowsAndUnknownValuesFallBack()
+    public void ANewerDocumentIsReadForWhatThisBuildKnowsAndOldOrUnknownValuesFallBack()
     {
         var newer = new MemoryPreferencesStore
         {
@@ -89,13 +78,13 @@ public class AppPreferencesTest
         Assert.Equal("prose", loaded.NoteStyle);
         Assert.Equal("concise", loaded.NoteDetail);
         Assert.Equal("auto", loaded.NoteTier);
-    }
 
-    [Fact]
-    public void ASavedStandardLengthLoadsAsConcise()
-    {
-        var saved = new MemoryPreferencesStore { Json = """{"NoteDetail":"standard"}""" };
-        Assert.Equal("concise", AppPreferences.Load(saved).NoteDetail);
+        Assert.Equal("auto", AppPreferences.Load(new MemoryPreferencesStore()).NoteTier);
+        var older = new MemoryPreferencesStore { Json = """{"KeepConsultations":true,"NoteDetail":"standard"}""" };
+        Assert.Equal("auto", AppPreferences.Load(older).NoteTier);
+        Assert.Equal("concise", AppPreferences.Load(older).NoteDetail);
         Assert.Equal(["concise", "detailed"], NoteOptions.Details.Select(d => d.Value));
+        var chosen = new MemoryPreferencesStore { Json = """{"NoteTier":"accuracy"}""" };
+        Assert.Equal("accuracy", AppPreferences.Load(chosen).NoteTier);
     }
 }

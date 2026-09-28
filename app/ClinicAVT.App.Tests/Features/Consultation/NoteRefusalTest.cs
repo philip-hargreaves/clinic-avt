@@ -35,31 +35,10 @@ public class NoteRefusalTest
     }
 
     [Fact]
-    public async Task DoneAfterARefusalClosesTheSessionAndReturnsToIdle()
+    public async Task ATooShortRecordingIsRefusedWithoutTheOverrideAndDoneReturnsToIdle()
     {
         var (session, engine, note) = TestSession.Create();
         var controls = new SessionControlsViewModel(session, TestSession.Mic());
-        await session.StartRecordingAsync();
-        await session.StopRecordingAsync();
-        engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
-        engine.RaiseNotification("note/refused", Params(new { reason = "a cooking video" }));
-
-        Assert.True(controls.RefusedVisible);
-        Assert.True(controls.CentreStageVisible);
-        Assert.True(controls.DoneCommand.CanExecute(null));
-
-        await controls.DoneCommand.ExecuteAsync(null);
-
-        Assert.Contains(engine.Requests, r => r.Method == "session/close");
-        Assert.Equal(SessionState.Idle, session.State);
-        Assert.Equal("", note.RefusalReason);
-        Assert.False(controls.RefusedVisible);
-    }
-
-    [Fact]
-    public async Task ATooShortRecordingIsRefusedWithoutTheOverride()
-    {
-        var (session, engine, note) = TestSession.Create();
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
@@ -72,5 +51,15 @@ public class NoteRefusalTest
         Assert.False(note.WriteAnywayCommand.CanExecute(null));
         Assert.Equal(SessionState.Refused, session.State);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "note/regenerate");
+        Assert.True(controls.RefusedVisible);
+        Assert.True(controls.CentreStageVisible);
+        Assert.True(controls.DoneCommand.CanExecute(null));
+
+        await controls.DoneCommand.ExecuteAsync(null);
+
+        Assert.Contains(engine.Requests, r => r.Method == "session/close");
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.Equal("", note.RefusalReason);
+        Assert.False(controls.RefusedVisible);
     }
 }

@@ -16,9 +16,10 @@ public class StatusBarMetricsTest
     }
 
     // A load behind a ready app stays off the status line: nothing waits on it. The time is
-    // counted for the places that do wait, and a switch's idle step cannot end the count
+    // counted for the places that do wait, and a switch's idle step cannot end the count. A first
+    // move to the NPU compiles for minutes, so its line counts the time and never looks hung
     [Fact]
-    public void AModelLoadCountsItsTimeAndClearsWhenReady()
+    public void AModelLoadAndADeviceMoveCountTheirTimeUntilTheyEnd()
     {
         var engine = new FakeEngineClient(autoNotify: false);
         var clock = new FakeTimeProvider();
@@ -40,17 +41,6 @@ public class StatusBarMetricsTest
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "ready" }));
         Assert.False(status.ModelLoading);
         Assert.Equal("Ready", status.DisplayLabel);
-    }
-
-    // A first move to the NPU compiles for minutes. The line counts the time so it never looks hung
-    [Fact]
-    public void ADeviceMoveCountsItsTimeUntilTheOutcome()
-    {
-        var engine = new FakeEngineClient(autoNotify: false);
-        var clock = new FakeTimeProvider();
-        var status = new StatusBarViewModel(new EngineApi(engine), new InlineDispatcher(), clock);
-        status.SetEngineState(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
-        status.SetEngineReady(true);
 
         status.BeginSwitch("Switching to the NPU · {time} · first time may take longer");
         Assert.Equal("Switching to the NPU · 0:00 · first time may take longer", status.DisplayLabel);
@@ -66,26 +56,8 @@ public class StatusBarMetricsTest
         Assert.Equal("Ready", status.DisplayLabel);
     }
 
-    // At start the model list is fetched before the shell sends its saved tier, so it names the
-    // engine's default. The lane's own messages name the model being loaded, from the start
     [Fact]
-    public async Task TheNoteChipNamesTheModelBeingLoadedNotTheEnginesDefault()
-    {
-        var (status, engine) = Create();
-        await WaitUntilAsync(() => status.NoteChip.Length > 0);
-        Assert.StartsWith("Qwen3.5 9B", status.NoteChip);
-
-        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "loading" }));
-        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
-
-        // The list fetched again on ready still has the engine's default first here
-        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "ready" }));
-        await WaitUntilAsync(() => engine.Requests.Count(r => r.Method == "engine/models") >= 2);
-        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
-    }
-
-    [Fact]
-    public async Task TheNoteChipThroughAGeneration()
+    public async Task TheNoteChipThroughAGenerationAndAModelLoad()
     {
         var (status, engine) = Create();
         await WaitUntilAsync(() => status.NoteChip.Length > 0);
@@ -129,6 +101,15 @@ public class StatusBarMetricsTest
         Assert.Equal("Qwen3.5 9B · GPU", status.NoteChip);
         Assert.False(status.TokensStreaming);
         Assert.Equal(0, status.TokensPerSecond);
+
+        // At start the model list is fetched before the shell sends its saved tier, so it names
+        // the engine's default. The lane's own messages name the model being loaded
+        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "loading" }));
+        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
+        var fetched = engine.Requests.Count(r => r.Method == "engine/models");
+        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "ready" }));
+        await WaitUntilAsync(() => engine.Requests.Count(r => r.Method == "engine/models") > fetched);
+        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
 
         // A tier switch renames the chip even when the engine is too busy to
         // answer the store call

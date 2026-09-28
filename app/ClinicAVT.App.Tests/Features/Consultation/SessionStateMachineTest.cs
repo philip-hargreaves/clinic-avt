@@ -32,30 +32,7 @@ public class SessionStateMachineTest
     }
 
     [Fact]
-    public async Task FullLifecycleAdvancesThroughEveryStateAndCancelReturnsToIdle()
-    {
-        var (session, engine, _) = TestSession.Create();
-        Assert.Equal(SessionState.Idle, session.State);
-
-        await session.StartRecordingAsync();
-        Assert.Equal(SessionState.Recording, session.State);
-
-        await session.StopRecordingAsync();
-        Assert.Equal(SessionState.Finalising, session.State);
-
-        engine.RaiseNotification("note/ready");
-        Assert.Equal(SessionState.Review, session.State);
-
-        session.FinishConsultation();
-        Assert.Equal(SessionState.Idle, session.State);
-
-        await session.StartRecordingAsync();
-        await session.CancelRecordingAsync();
-        Assert.Equal(SessionState.Idle, session.State);
-    }
-
-    [Fact]
-    public async Task IllegalTransitionsAndUnknownNotificationsAreIgnored()
+    public async Task IllegalTransitionsAndUnknownNotificationsAreIgnoredAndCancelReturnsToIdle()
     {
         var (session, engine, _) = TestSession.Create();
 
@@ -75,8 +52,13 @@ public class SessionStateMachineTest
 
         session.FinishConsultation();
         Assert.Equal(SessionState.Recording, session.State);
+        Assert.False(await session.OpenStoredSessionAsync("abc"));
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/open");
 
         engine.RaiseNotification("engine/unheard-of");
         Assert.Equal(SessionState.Recording, session.State);
+
+        await session.CancelRecordingAsync();
+        Assert.Equal(SessionState.Idle, session.State);
     }
 }

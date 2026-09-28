@@ -54,15 +54,25 @@ public class VoiceViewModelTest
     }
 
     [Fact]
-    public async Task ForgettingIsConfirmedThenClearsAndReportsBack()
+    public async Task ForgettingWaitsForTheConsultationIsConfirmedThenClearsAndReportsBack()
     {
         var engine = new FakeEngineClient { AnchorOrigin = "accrued", AnchorSessions = 4 };
         var status = TestSession.Status(engine);
-        var dialogs = new FakeDialogService { Answer = false };
-        var voice = new VoiceViewModel(new EngineApi(engine), dialogs, new FakeSession(), status);
+        var dialogs = new FakeDialogService();
+        var session = new FakeSession { ConsultationInProgress = true };
+        var voice = new VoiceViewModel(new EngineApi(engine), dialogs, session, status);
         await voice.RefreshAsync();
         Assert.True(voice.ForgetVoiceCommand.CanExecute(null));
 
+        // Nothing changes during a consultation
+        await voice.ForgetVoiceCommand.ExecuteAsync(null);
+        await voice.SetUpVoiceCommand.ExecuteAsync(null);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/clear");
+        Assert.True(voice.HasVoice);
+        Assert.Contains("finish the consultation", status.LatestActivity);
+
+        session.ConsultationInProgress = false;
+        dialogs.Answer = false;
         await voice.ForgetVoiceCommand.ExecuteAsync(null);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/clear");
         Assert.True(voice.HasVoice);
@@ -73,22 +83,5 @@ public class VoiceViewModelTest
         Assert.False(voice.HasVoice);
         Assert.False(voice.ForgetVoiceCommand.CanExecute(null));
         Assert.Contains("forgotten", status.LatestActivity);
-    }
-
-    [Fact]
-    public async Task NothingChangesDuringAConsultation()
-    {
-        var engine = new FakeEngineClient { AnchorOrigin = "accrued", AnchorSessions = 4 };
-        var status = TestSession.Status(engine);
-        var session = new FakeSession { ConsultationInProgress = true };
-        var voice = new VoiceViewModel(new EngineApi(engine), new FakeDialogService(), session, status);
-        await voice.RefreshAsync();
-
-        await voice.ForgetVoiceCommand.ExecuteAsync(null);
-        await voice.SetUpVoiceCommand.ExecuteAsync(null);
-
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/clear");
-        Assert.True(voice.HasVoice);
-        Assert.Contains("finish the consultation", status.LatestActivity);
     }
 }

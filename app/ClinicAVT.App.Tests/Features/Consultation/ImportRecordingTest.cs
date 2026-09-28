@@ -108,13 +108,16 @@ public class ImportRecordingTest
     }
 
     [Fact]
-    public async Task AnImportEndsTheOpenReviewThenWalksTheFinaliseStagesIntoReview()
+    public async Task AnImportEndsTheOpenReviewThenWalksTheFinaliseStagesIntoReviewHeadedWithItsOwnTime()
     {
         var dialogs = new FakeDialogService();
         var (session, engine, _) = TestSession.Create(dialogs: dialogs);
         var controls = new SessionControlsViewModel(session, TestSession.Mic());
-        var header = new ConsultationHeaderViewModel(session);
+        var recordedAt = new DateTimeOffset(2026, 9, 25, 9, 31, 0, TimeSpan.Zero);
+        var header = new ConsultationHeaderViewModel(session, () => recordedAt);
+        Assert.Equal("", header.Title);
         await session.StartRecordingAsync();
+        Assert.Equal(SessionText.Heading(recordedAt), header.Title);  // a recording is headed with its start
         await session.StopRecordingAsync();
         engine.RaiseNotification("note/ready", Params(new { text = "note" }));
         Assert.Equal(SessionState.Review, session.State);

@@ -73,21 +73,25 @@ public class SessionCommandsTest
         Assert.True(controls.MicPickerVisible, "back for the next consultation");
     }
 
+    // No partial streams for a thin recording, so note/ready must open the panes on its own or
+    // the centre would spin forever, and nothing may claim to be writing
     [Fact]
-    public async Task AThinRecordingOpensThePanesOnTheCannedNote()
+    public async Task AThinRecordingOpensThePanesOnTheCannedNoteAndNeverClaimsToBeWriting()
     {
-        // No partial streams for a thin recording, so note/ready must open
-        // the panes on its own or the centre would spin forever
-        var (session, engine, _) = TestSession.Create();
+        var log = new ListLogger();
+        var (session, engine, _) = TestSession.Create(log: log);
         var controls = new SessionControlsViewModel(session, TestSession.Mic());
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         Assert.True(controls.CentreStageVisible);
 
-        engine.RaiseNotification("note/ready", Params(new { text = "The recording was too short" }));
+        engine.RaiseNotification("note/ready", Params(new { text = "The recording was too short." }));
+        engine.RaiseNotification("patient/ready", Params(new { text = "The recording was too short." }));
 
         Assert.True(controls.PanesVisible);
         Assert.True(controls.ReviewVisible);
+        Assert.DoesNotContain(log.Lines, l => l.Contains("Writing", StringComparison.Ordinal));
+        Assert.Equal("Ready for review", session.Status.LatestActivity);
     }
 
     [Fact]
@@ -220,8 +224,9 @@ public class SessionCommandsTest
         Assert.Equal(FinalisePhase.Note, session.Phase);
     }
 
+    // A resume the engine dies during stays recording, and the next reconnect retries it
     [Fact]
-    public async Task ARestartedEngineResumesTheLiveSessionButNothingWhileIdle()
+    public async Task ARestartedEngineResumesTheLiveSessionUntilItTakesButNothingWhileIdle()
     {
         var (session, engine, _) = TestSession.Create();
 
@@ -231,24 +236,6 @@ public class SessionCommandsTest
         Assert.Equal(SessionState.Idle, session.State);
 
         await session.StartRecordingAsync();
-        engine.SetConnected(false);
-        engine.SetConnected(true);
-
-        var starts = engine.Requests.Where(r => r.Method == "session/start").ToList();
-        Assert.Equal(2, starts.Count);
-        Assert.Contains("resume", starts[1].Params);
-        Assert.Contains("s1", starts[1].Params);
-        Assert.Equal(SessionState.Recording, session.State);
-    }
-
-    [Fact]
-    public async Task AResumeThatLosesTheEngineStaysRecordingForTheNextReconnect()
-    {
-        var (session, engine, _) = TestSession.Create();
-        await session.StartRecordingAsync();
-
-        // The engine dies again while the resume is in flight, and the next
-        // reconnect must retry it
         engine.FailNext = method => method == "session/start"
             ? new IOException("pipe transport is closed") : null;
         engine.SetConnected(false);
@@ -259,7 +246,10 @@ public class SessionCommandsTest
         engine.SetConnected(false);
         engine.SetConnected(true);
 
-        Assert.Equal(3, engine.Requests.Count(r => r.Method == "session/start"));
+        var starts = engine.Requests.Where(r => r.Method == "session/start").ToList();
+        Assert.Equal(3, starts.Count);
+        Assert.Contains("resume", starts[2].Params);
+        Assert.Contains("s1", starts[2].Params);
         Assert.Equal(SessionState.Recording, session.State);
         Assert.Equal("Recording", session.Status.LatestActivity);
     }

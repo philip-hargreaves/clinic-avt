@@ -63,11 +63,20 @@ public class EnrolmentViewModelTest
     }
 
     [Fact]
-    public async Task ARefusalSaysWhyAndOffersAnotherGo()
+    public async Task ADownEngineOrARefusalSaysWhyAndOffersAnotherGoAndDismissalKeepsNothing()
     {
         var engine = new FakeEngineClient();
-        using var enrolment = new EnrolmentViewModel(new EngineApi(engine));
+        engine.SetConnected(false);
+        var enrolment = new EnrolmentViewModel(new EngineApi(engine));
+
         await enrolment.PrimaryCommand.ExecuteAsync(null);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/enrol");
+        Assert.Equal(EnrolmentState.Failed, enrolment.State);
+        Assert.Equal("That did not work: recording is not available yet.", enrolment.StatusLine);
+
+        engine.SetConnected(true);
+        await enrolment.PrimaryCommand.ExecuteAsync(null);
+        Assert.Equal(EnrolmentState.Recording, enrolment.State);
 
         engine.RaiseNotification("anchor/enrolled", Params(new
         {
@@ -83,36 +92,10 @@ public class EnrolmentViewModelTest
         await enrolment.PrimaryCommand.ExecuteAsync(null);
         Assert.Equal(EnrolmentState.Recording, enrolment.State);
         Assert.Equal(2, engine.Requests.Count(r => r.Method == "anchor/enrol"));
-    }
-
-    [Fact]
-    public async Task CancelAndDismissalReportNothingKept()
-    {
-        var engine = new FakeEngineClient();
-        var enrolment = new EnrolmentViewModel(new EngineApi(engine));
-        await enrolment.PrimaryCommand.ExecuteAsync(null);
 
         enrolment.Dismiss();
         Assert.Contains(engine.Requests, r => r.Method == "anchor/enrol/cancel");
         Assert.False(await enrolment.Outcome);
         enrolment.Dispose();
-    }
-
-    [Fact]
-    public async Task NoReadingStartsWhileTheEngineIsDown()
-    {
-        var engine = new FakeEngineClient();
-        engine.SetConnected(false);
-        using var enrolment = new EnrolmentViewModel(new EngineApi(engine));
-
-        await enrolment.PrimaryCommand.ExecuteAsync(null);
-
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/enrol");
-        Assert.Equal(EnrolmentState.Failed, enrolment.State);
-        Assert.Equal("That did not work: recording is not available yet.", enrolment.StatusLine);
-
-        engine.SetConnected(true);
-        await enrolment.PrimaryCommand.ExecuteAsync(null);
-        Assert.Equal(EnrolmentState.Recording, enrolment.State);
     }
 }

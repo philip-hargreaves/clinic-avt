@@ -14,6 +14,8 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 
     private static readonly string[] FakeLanguages = ["French", "Polish", "Urdu"];
 
+    private bool _importRunning;
+
     public event Action<string, JsonElement>? NotificationReceived;
 
     public event Action<bool>? ConnectedChanged;
@@ -96,14 +98,14 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         if (method == "recording/inspect")
         {
             return Task.FromResult(JsonSerializer.SerializeToElement(
-                new { seconds = RecordingSeconds, recordedAt = RecordingRecordedAt }));
+                new { seconds = RecordingSeconds, recordedAt = "2026-09-26T13:05:00Z" }));
         }
 
         // The engine answers at once and finalises on its own thread, reporting its stages as
         // session/stop does. Its end can arrive before the answer. HoldImport keeps it running
         if (method == "session/import")
         {
-            ImportRunning = true;
+            _importRunning = true;
             if (!HoldImport)
             {
                 FinishImport();
@@ -113,9 +115,9 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         }
 
         // A held import stops at its next span and is erased
-        if (method == "session/cancel" && ImportRunning)
+        if (method == "session/cancel" && _importRunning)
         {
-            ImportRunning = false;
+            _importRunning = false;
             RaiseNotification("session/importFailed",
                 JsonSerializer.SerializeToElement(new { sessionId = "s1", error = "cancelled" }));
             return Task.FromResult(Empty);
@@ -256,7 +258,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
                 .GetProperty("tier").GetString() ?? "default";
             if (tier == "auto")
             {
-                tier = AutoNoteTier;
+                tier = "default";  // the engine's own pick for this machine
             }
 
             // The loaded tier answers ready, as a warm engine does. A new one starts loading
@@ -385,20 +387,16 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
     /// <summary>Served by recording/inspect, the shape of the shared fixture.</summary>
     public double RecordingSeconds { get; set; } = 760.4;
 
-    public string? RecordingRecordedAt { get; set; } = "2026-09-26T13:05:00Z";
-
     /// <summary>The session/progress stages an import reports before it answers.</summary>
     public List<string> ImportStages { get; } = ["transcript", "speakers", "turns"];
 
     /// <summary>Leaves an import running until FinishImport or session/cancel.</summary>
     public bool HoldImport { get; set; }
 
-    public bool ImportRunning { get; private set; }
-
     /// <summary>Seals the import: its stages, session/imported, then the note.</summary>
     public void FinishImport()
     {
-        ImportRunning = false;
+        _importRunning = false;
         foreach (var stage in ImportStages)
         {
             RaiseNotification("session/progress", JsonSerializer.SerializeToElement(new { stage }));
@@ -483,9 +481,6 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
     /// <summary>The tier the engine's note lane is on. note/tier moves it.</summary>
     public string NoteTier { get; set; } = "default";
 
-    /// <summary>The engine's own pick for this machine, which note/tier "auto" loads.</summary>
-    public string AutoNoteTier { get; set; } = "default";
-
     /// <summary>Served by engine/readiness, warm and compiled by default.</summary>
     public bool FirstUse { get; set; }
 
@@ -502,9 +497,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 
     public bool SummaryFails { get; set; }
 
-
-    // The request is taken and nothing ever comes back, as when the engine dies writing it
-
+    /// <summary>The request is taken and nothing ever comes back, as when the engine dies writing it.</summary>
     public bool SummarySilent { get; set; }
 
     /// <summary>Served by reflection/list.</summary>

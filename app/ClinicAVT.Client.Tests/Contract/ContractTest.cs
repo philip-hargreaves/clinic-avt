@@ -15,7 +15,7 @@ public class ContractTest
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
     [Fact]
-    public async Task HelloReportsEngineNameAndVersion()
+    public async Task HelloNamesTheEngineEchoKeepsNonAsciiIntactAndAnUnknownMethodFailsQuickly()
     {
         await using var engine = EngineProcess.Start();
         await using var client = await engine.ConnectAsync();
@@ -29,25 +29,10 @@ public class ContractTest
         Assert.Equal(ExpectedEngine.Name, peer!.Name);
         Assert.Equal(ExpectedEngine.Version, peer.Version);
         Assert.Equal(Protocol.ProtocolVersion, peer.ProtocolVersion);
-    }
 
-    [Fact]
-    public async Task EchoReturnsNonAsciiPayloadIntact()
-    {
-        await using var engine = EngineProcess.Start();
-        await using var client = await engine.ConnectAsync();
         const string clinical = "naïve café-au-lait 東京 µg °C phénoxyméthylpénicilline";
-
-        var result = await client.RequestAsync("engine/echo", new { payload = clinical }, Timeout);
-
-        Assert.Equal(clinical, result.GetProperty("payload").GetString());
-    }
-
-    [Fact]
-    public async Task UnknownMethodReturnsMethodNotFoundQuickly()
-    {
-        await using var engine = EngineProcess.Start();
-        await using var client = await engine.ConnectAsync();
+        var echo = await client.RequestAsync("engine/echo", new { payload = clinical }, Timeout);
+        Assert.Equal(clinical, echo.GetProperty("payload").GetString());
 
         var start = System.Diagnostics.Stopwatch.StartNew();
         var error = await Assert.ThrowsAsync<EngineErrorException>(

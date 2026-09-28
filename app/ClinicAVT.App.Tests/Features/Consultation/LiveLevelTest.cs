@@ -8,7 +8,7 @@ namespace ClinicAVT.App.Tests.Features.Consultation;
 public class LiveLevelTest
 {
     [Fact]
-    public async Task LevelsReachTheStatusBarAndAnInterruptionMidRecordingTellsTheClinicianAndResets()
+    public async Task LevelsReachTheStatusBarAndAnInterruptionMidRecordingOrFinaliseTellsTheClinicianAndResets()
     {
         var (session, engine, note) = TestSession.Create();
 
@@ -29,18 +29,11 @@ public class LiveLevelTest
         Assert.Equal(NotePipelineState.Pending, note.PipelineState);
         Assert.Contains("unplugged", session.Status.LatestActivity);
         Assert.Equal(0, session.Status.MicLevel);
-    }
 
-    [Fact]
-    public async Task InterruptionDuringFinalisingAlsoResets()
-    {
-        var (session, engine, note) = TestSession.Create();
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
-
         engine.RaiseNotification(
             "session/interrupted", Params(new { reason = "failed", detail = "driver gone" }));
-
         Assert.Equal(SessionState.Idle, session.State);
         Assert.Equal(NotePipelineState.Pending, note.PipelineState);
     }

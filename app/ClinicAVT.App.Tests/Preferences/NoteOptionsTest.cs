@@ -11,9 +11,10 @@ public class NoteOptionsTest
     // The engine never reads a preference. It loads the tier the shell names on
     // connect, before the options and before readiness is asked
     [Fact]
-    public void StartupPushesTheTierFirstThenThePersistedOptions()
+    public void StartupPushesTheTierFirstThenThePersistedOptionsAndAChangePersistsAndReachesTheEngine()
     {
-        var preferences = new AppPreferences(Path.Combine(Path.GetTempPath(), "none.json"))
+        var path = Path.Combine(Path.GetTempPath(), $"clinicavt-test-{Guid.NewGuid():N}", "preferences.json");
+        var preferences = new AppPreferences(path)
         {
             NoteStyle = "soap",
             NoteDetail = "detailed",
@@ -33,20 +34,12 @@ public class NoteOptionsTest
         Assert.Contains("accuracy", tier.Params);
         Assert.True(methods.IndexOf("note/tier") < methods.IndexOf("note/options"));
         Assert.True(methods.IndexOf("note/tier") < methods.IndexOf("engine/readiness"));
-    }
 
-    [Fact]
-    public void ChangingAnOptionPersistsItAndInformsTheEngine()
-    {
-        var path = Path.Combine(
-            Path.GetTempPath(), $"clinicavt-test-{Guid.NewGuid():N}", "preferences.json");
-        var (_, engine, note) = TestSession.Create(new AppPreferences(path));
+        note.Detail = "concise";
 
-        note.Detail = "detailed";
-
-        Assert.Equal("detailed", AppPreferences.Load(path).NoteDetail);
-        Assert.Contains(engine.Requests,
-            r => r.Method == "note/options" && r.Params.Contains("detailed"));
+        var saved = AppPreferences.Load(path);
+        Assert.Equal(("soap", "concise"), (saved.NoteStyle, saved.NoteDetail));
+        Assert.Contains(engine.Requests, r => r.Method == "note/options" && r.Params.Contains("concise"));
         Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
     }
 

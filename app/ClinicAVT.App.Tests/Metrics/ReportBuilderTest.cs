@@ -10,15 +10,12 @@ public class ReportBuilderTest
         [new GpuInfo("Intel(R) Arc(TM) 140T GPU", "32.0.101.6083")],
         new GpuInfo("Intel(R) AI Boost", "32.0.100.3104"));
 
-    private static string Session(string asr, double? replaySpeed, double audioSeconds = 541.5,
+    private static string Session(string asr, double audioSeconds = 541.5,
         string model = "Qwen3.5 9B", string start = "2026-08-19T21:12:44Z") =>
         JsonSerializer.Serialize(new
         {
             schema = 2,
             start,
-            source = replaySpeed is null ? "mic" : "replay",
-            replaySpeed,
-            track = replaySpeed is null ? null : "Elbow swelling",
             outcome = "completed",
             engine = new
             {
@@ -46,10 +43,9 @@ public class ReportBuilderTest
     public void RendersMachineStepsTotalsAndEmbeddedJsonAndSkipsAGarbledLine()
     {
         var html = ReportBuilder.Build(Machine,
-            ["not json at all", Session("GPU.0", 1.0)], DateTimeOffset.UtcNow);
+            ["not json at all", Session("GPU.0")], DateTimeOffset.UtcNow);
 
         Assert.Contains("Intel(R) Core(TM) Ultra 7 258V", html);
-        Assert.Contains("Elbow swelling", html);
         Assert.Contains("Qwen3.5 9B", html);
         // Transcript 2.0, waiting 1.5, clinical note 5.6, on screen 9.1, patient 12.8, both 21.9
         var consultations = html.Split("<h2>Consultations</h2>")[1];
@@ -66,18 +62,17 @@ public class ReportBuilderTest
     }
 
     [Fact]
-    public void SummaryGroupsByNoteModelAndLeavesOutFastReplaysAndShortRecordings()
+    public void SummaryGroupsByNoteModelAndLeavesOutShortRecordings()
     {
         var html = ReportBuilder.Build(Machine,
         [
-            Session("GPU.0", null, model: "Qwen3.5 9B", start: "2026-08-19T21:12:44Z"),
-            Session("GPU.0", null, model: "Qwen3.5 9B", start: "2026-08-19T22:12:44Z"),
-            Session("GPU.0", null, model: "Qwen3.6 35B", start: "2026-08-19T23:12:44Z"),
-            Session("NPU", 16.0),
-            Session("GPU.0", null, audioSeconds: 4),
+            Session("GPU.0", model: "Qwen3.5 9B", start: "2026-08-19T21:12:44Z"),
+            Session("GPU.0", model: "Qwen3.5 9B", start: "2026-08-19T22:12:44Z"),
+            Session("GPU.0", model: "Qwen3.6 35B", start: "2026-08-19T23:12:44Z"),
+            Session("NPU", audioSeconds: 4),
         ], DateTimeOffset.UtcNow);
 
-        Assert.Contains("3 consultations, 1 test replay, 1 short recording", html);
+        Assert.Contains("3 consultations, 1 short recording", html);
         var summary = html.Split("<h2>Summary</h2>")[1].Split("<h2>Consultations</h2>")[0];
         Assert.Contains("Qwen3.5 9B · GPU", summary);
         Assert.Contains("2 consultations", summary);
@@ -86,8 +81,6 @@ public class ReportBuilderTest
         Assert.Contains("Peak memory of the note model, GB", summary);
         Assert.Contains("7.6", summary);
         Assert.DoesNotContain("NPU", summary);
-        Assert.Contains("Test replays faster than real time (1)", html);
-        Assert.Contains("16&#215;", html);  // × html-encoded
         Assert.Contains("Recordings under 30 seconds (1)", html);
     }
 
@@ -128,9 +121,6 @@ public class ReportBuilderTest
         var session = JsonSerializer.Serialize(new
         {
             start = "2026-08-29T13:40:17Z",
-            source = "replay",
-            replaySpeed = 1.0,
-            track = "Elbow swelling",
             engine = new { devices = new { asr = "GPU.0" }, powerThrottling = "off" },
             power = new { mode = "performance", onMains = true },
             note = new { chars = 500 },

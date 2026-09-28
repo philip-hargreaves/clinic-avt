@@ -84,9 +84,10 @@ public class EngineStatusInShellTest
         Assert.Equal("Recording", bar.DisplayLabel);
     }
 
-    // A cancel puts up its own status line, and a recording can still start
+    // A cancel puts up its own status line, and a recording can still start. A consultation is
+    // in progress from Record until its note is written, then only on screen for review
     [Fact]
-    public async Task TheConsentReminderShowsWhileARecordingCouldStart()
+    public async Task TheConsentReminderShowsWhileARecordingCouldStartAndInProgressLastsUntilTheNote()
     {
         var (session, engine, _) = TestSession.Create();
         var bar = session.Status;
@@ -94,6 +95,7 @@ public class EngineStatusInShellTest
         Assert.False(bar.ConsentVisible);
         bar.SetEngineReady(true);
         Assert.True(bar.ConsentVisible);
+        Assert.False(session.ConsultationInProgress);
 
         bar.SetSettingUp(true);
         Assert.False(bar.ConsentVisible);
@@ -101,6 +103,7 @@ public class EngineStatusInShellTest
 
         await session.StartRecordingAsync();
         Assert.False(bar.ConsentVisible);
+        Assert.True(session.ConsultationInProgress);
         await session.CancelRecordingAsync();
         Assert.Equal("Cancelled", bar.DisplayLabel);
         Assert.True(bar.ConsentVisible);
@@ -108,30 +111,14 @@ public class EngineStatusInShellTest
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         Assert.False(bar.ConsentVisible);
+        Assert.True(session.ConsultationInProgress);
         engine.RaiseNotification("note/ready");
         Assert.False(bar.ConsentVisible);
-        await session.EndReviewAsync();
-        Assert.True(bar.ConsentVisible);
-    }
-
-    [Fact]
-    public async Task InProgressLastsFromRecordUntilTheNoteIsWritten()
-    {
-        var (session, engine, _) = TestSession.Create();
-        Assert.False(session.ConsultationInProgress);
-
-        await session.StartRecordingAsync();
-        Assert.True(session.ConsultationInProgress);
-
-        await session.StopRecordingAsync();
-        Assert.True(session.ConsultationInProgress);
-
-        // Written, it is only on screen for review
-        engine.RaiseNotification("note/ready");
         Assert.False(session.ConsultationInProgress);
         Assert.NotNull(session.ReviewedSessionId);
 
         await session.EndReviewAsync();
+        Assert.True(bar.ConsentVisible);
         Assert.Null(session.ReviewedSessionId);
         Assert.False(session.ConsultationInProgress);
     }

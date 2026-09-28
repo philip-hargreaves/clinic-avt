@@ -72,21 +72,28 @@ public class ExportReflectionsTest
     }
 
     [Fact]
-    public async Task TheFileIsTheWarningThenEachReflectionAsCopyWritesItAndNothingElse()
+    public async Task ACancelledSaveChangesNothingAndTheFileIsTheWarningThenEachReflectionAsCopyWritesIt()
     {
         var path = TempFile();
-        var picker = new FakeFilePicker { SavePath = path };
+        var picker = new FakeFilePicker();
         var launcher = new FakeLauncher();
         var engine = Engine();
         var export = Dialog(engine, picker, launcher);
         await export.LoadAsync();
         export.PeriodIndex = 1;
 
+        await export.PrimaryCommand.ExecuteAsync(null);
+        Assert.Equal(BackupStep.Setup, export.Step);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "reflection/get");
+        Assert.Equal("", export.Error);
+        Assert.True(export.PrimaryEnabled);
+
+        picker.SavePath = path;
         try
         {
             await export.PrimaryCommand.ExecuteAsync(null);
 
-            Assert.Equal(["ClinicAVT reflections 1 Aug to 31 Aug 2026"], picker.SuggestedNames);
+            Assert.Equal(["ClinicAVT reflections 1 Aug to 31 Aug 2026"], picker.SuggestedNames.Distinct());
             // An untitled reflection takes its month as its title, as Copy gives it
             Assert.Equal(
                 "Check each summary for identifying details before sharing.\n"
@@ -140,23 +147,6 @@ public class ExportReflectionsTest
         {
             File.Delete(path);
         }
-    }
-
-    [Fact]
-    public async Task ACancelledSaveWritesNothingAndLeavesTheDialogAsItWas()
-    {
-        var engine = Engine();
-        var picker = new FakeFilePicker { SavePath = null };
-        var export = Dialog(engine, picker);
-        await export.LoadAsync();
-
-        await export.PrimaryCommand.ExecuteAsync(null);
-
-        Assert.Single(picker.SuggestedNames);
-        Assert.Equal(BackupStep.Setup, export.Step);
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "reflection/get");
-        Assert.Equal("", export.Error);
-        Assert.True(export.PrimaryEnabled);
     }
 
     [Fact]
