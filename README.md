@@ -180,8 +180,8 @@ ClinicAVT/
 │   ├── ClinicAVT.Client/        typed JSON-RPC client for the engine
 │   └── *.Tests/                 xUnit suites for each project
 ├── launcher/                    ClinicAVT.exe, which starts the app from a release folder
-├── eval/                        evaluation suites
-│   ├── asr/                     transcription accuracy
+├── evaluation/                  evaluation suites
+│   ├── transcription/           transcription accuracy
 │   ├── diarisation/             speaker attribution
 │   ├── summarisation/           note quality, including the LLM judge
 │   ├── retrieval/               guideline search
