@@ -19,7 +19,13 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <controls:PageHeader Title="Appraisal" />
+        <controls:PageHeader Title="Appraisal">
+            <controls:PageHeader.Commands>
+                <Button AutomationProperties.Name="Export reflections" Command="{x:Bind ViewModel.ExportReflectionsCommand}">
+                    <controls:IconLabel Glyph="&#xEDE1;" Text="Export reflections&#x2026;" />
+                </Button>
+            </controls:PageHeader.Commands>
+        </controls:PageHeader>
 
         <ScrollViewer Grid.Row="1">
             <Grid Margin="24,0,24,24">

@@ -22,6 +22,16 @@ public static class BackupWords
 
     public const string ReflectionsTick = "Delete associated reflections";
 
+    /// <summary>
+    /// "Saved as b in Documents.", naming the drive for a root such as a USB stick.
+    /// </summary>
+    public static string SavedLine(string path)
+    {
+        var folder = Path.GetDirectoryName(path) ?? "";
+        var name = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
+        return $"Saved as {Path.GetFileNameWithoutExtension(path)} in {(name.Length > 0 ? name : folder)}.";
+    }
+
     /// <summary>A failed backup or restore in plain words, from the engine's fixed code.</summary>
     public static string Failure(string job, string code)
     {

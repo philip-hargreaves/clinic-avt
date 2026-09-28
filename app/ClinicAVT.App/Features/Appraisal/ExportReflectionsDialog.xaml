@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="ClinicAVT.App.Features.Appraisal.ExportReflectionsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:ClinicAVT.App.Controls"
+    Title="Export reflections"
+    CloseButtonText="{x:Bind ViewModel.CloseText, Mode=OneWay}"
+    DefaultButton="None"
+    IsPrimaryButtonEnabled="{x:Bind ViewModel.PrimaryEnabled, Mode=OneWay}"
+    PrimaryButtonText="{x:Bind ViewModel.PrimaryText, Mode=OneWay}"
+    PrimaryButtonClick="OnPrimary"
+    Closing="OnClosing">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="ContentDialogMaxWidth">620</x:Double>
+    </ContentDialog.Resources>
+
+    <!-- Scrolls so a large Windows text size never pushes a control out of reach -->
+    <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,12,0" Spacing="16">
+            <StackPanel Spacing="16" Visibility="{x:Bind ViewModel.InSetup, Mode=OneWay}">
+                <TextBlock Text="{x:Bind ViewModel.Caption}" TextWrapping="Wrap" />
+                <StackPanel Spacing="8">
+                    <ComboBox
+                        MinWidth="280"
+                        Header="Which reflections"
+                        ItemsSource="{x:Bind ViewModel.PeriodOptions}"
+                        SelectedIndex="{x:Bind ViewModel.PeriodIndex, Mode=TwoWay}" />
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="12"
+                        Visibility="{x:Bind ViewModel.ChoosingDates, Mode=OneWay}">
+                        <CalendarDatePicker Date="{x:Bind ViewModel.ChosenFrom, Mode=TwoWay}" Header="First day" />
+                        <CalendarDatePicker Date="{x:Bind ViewModel.ChosenTo, Mode=TwoWay}" Header="Last day" />
+                    </StackPanel>
+                    <TextBlock
+                        AutomationProperties.LiveSetting="Polite"
+                        Text="{x:Bind ViewModel.CountLine, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Bind ViewModel.Includes}" TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.Working, Mode=OneWay}">
+                <ProgressBar IsIndeterminate="True" />
+                <TextBlock AutomationProperties.LiveSetting="Polite" Text="Saving reflections&#x2026;" />
+            </StackPanel>
+
+            <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.Finished, Mode=OneWay}">
+                <TextBlock
+                    AutomationProperties.LiveSetting="Polite"
+                    Style="{ThemeResource BodyStrongTextBlockStyle}"
+                    Text="{x:Bind ViewModel.DoneLine, Mode=OneWay}" />
+                <TextBlock Text="{x:Bind ViewModel.SavedLine, Mode=OneWay}" TextWrapping="Wrap" />
+                <TextBlock Text="{x:Bind ViewModel.CheckLine}" TextWrapping="Wrap" />
+                <StackPanel Margin="0,8,0,0" Spacing="8">
+                    <Button Command="{x:Bind ViewModel.ShowInFolderCommand}" Content="Show in folder" />
+                </StackPanel>
+            </StackPanel>
+
+            <controls:WarningLine Text="{x:Bind ViewModel.Error, Mode=OneWay}" />
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

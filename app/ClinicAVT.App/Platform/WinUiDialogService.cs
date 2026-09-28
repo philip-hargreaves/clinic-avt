@@ -77,6 +77,14 @@ public sealed class WinUiDialogService(
         return restore.RestoredAny;
     }
 
+    public async Task RunExportReflectionsAsync()
+    {
+        var export = new ExportReflectionsViewModel(engine, picker, launcher, clock);
+        var dialog = new ExportReflectionsDialog(export) { XamlRoot = window.XamlRoot };
+        _ = export.LoadAsync();
+        await dialog.ShowAsync();
+    }
+
     // Add closes the dialog; the consultation page then shows the finalise
     public async Task<RecordingImport?> RunImportAsync(string? path)
     {

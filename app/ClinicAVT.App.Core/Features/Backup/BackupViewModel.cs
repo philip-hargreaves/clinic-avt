@@ -307,7 +307,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
         _folder = Path.GetDirectoryName(path) ?? "";
         OneDriveLine = BackupWords.OneDriveLine(_folder, _environment);
-        SavedLine = $"Saved as {Path.GetFileNameWithoutExtension(path)} in {FolderName(_folder)}.";
+        SavedLine = BackupWords.SavedLine(path);
         _sentFrom = period.From(Zone);
         _sentTo = period.To(Zone);
         Progress = 0;
@@ -389,10 +389,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         _preferences.Update(p => p.LastBackup = new LastBackup(_sentFrom, _sentTo, createdAt, done.Consultations));
         Step = BackupStep.Done;
     }
-
-    // "Documents" for a library folder, the drive for a root such as a USB stick
-    private static string FolderName(string folder) =>
-        Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)) is { Length: > 0 } name ? name : folder;
 
     public void Dispose() => _engine.NotificationReceived -= OnNotification;
 }

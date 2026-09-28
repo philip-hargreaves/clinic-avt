@@ -174,6 +174,19 @@ public sealed partial class AppraisalsViewModel : ObservableObject
             _status.Append("Reflection removed");
         });
 
+    /// <summary>
+    /// The Export reflections dialog. An open card saves first, so the file has its latest words.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportReflections()
+    {
+        await CollapseAllAsync().ConfigureAwait(true);
+        await _dialogs.RunExportReflectionsAsync().ConfigureAwait(true);
+    }
+
+    // Samples are never exported, as a backup never holds them
+    private bool CanExport() => _all.Any(c => !c.Demo);
+
     /// <summary>Leaving the page saves whatever is open.</summary>
     public Task LeaveAsync() => CollapseAllAsync();
 
@@ -213,6 +226,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject
             .ToList();
         CountLabel = Words.Count(inYear, "reflection");
         Empty = _all.Count == 0;
+        ExportReflectionsCommand.NotifyCanExecuteChanged();
     }
 
     private async Task CollapseAllAsync()
