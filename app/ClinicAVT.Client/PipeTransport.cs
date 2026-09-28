@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.Pipes;
+using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Text.Json;
 
@@ -9,8 +10,10 @@ namespace ClinicAVT.Client;
 /// JSON-RPC client over the engine's named pipe. One connection, concurrent
 /// requests correlated by id, notifications surfaced as an event. Any transport
 /// failure is terminal. Pending and future requests observe it and the
-/// connection does not recover.
+/// connection does not recover. This is the client's only Windows-specific type, because pipe
+/// access rights and the server pid check are Win32.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class PipeTransport : IEngineTransport
 {
     private readonly NamedPipeClientStream _pipe;
@@ -24,8 +27,8 @@ public sealed class PipeTransport : IEngineTransport
 
     public event Action<string, JsonElement>? NotificationReceived;
 
-    // Connected until it faults. EngineConnection raises the transitions, so
-    // the event below is inert here
+    // True until the transport faults. EngineConnection raises ConnectedChanged, so the
+    // event below is empty
     public bool Connected => Volatile.Read(ref _fault) is null && Volatile.Read(ref _disposed) == 0;
 
     public event Action<bool>? ConnectedChanged
@@ -77,8 +80,8 @@ public sealed class PipeTransport : IEngineTransport
         return transport;
     }
 
-    /// <summary>The pid serving the pipe, found by connecting and leaving at once. The engine
-    /// drops a client that leaves before speaking. Null when nobody serves it in time.</summary>
+    /// <summary>Pid serving the pipe, found by connecting and closing at once (the engine drops a
+    /// client that sends nothing). Null on timeout.</summary>
     public static uint? ServingProcessId(string pipeName, TimeSpan timeout)
     {
         using var pipe = new NamedPipeClientStream(
