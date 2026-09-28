@@ -5,7 +5,7 @@ namespace ClinicAVT.FetchModels.Tests;
 /// <summary>Serves a directory over loopback HTTP with range support.</summary>
 public sealed class AssetServer : IDisposable
 {
-    private readonly HttpListener _listener = new();
+    private readonly HttpListener _listener;
     private readonly string _dir;
     private readonly CancellationTokenSource _stop = new();
 
@@ -16,14 +16,31 @@ public sealed class AssetServer : IDisposable
     public AssetServer(string dir)
     {
         _dir = dir;
-        var port = Random.Shared.Next(20000, 60000);
-        BaseUrl = $"http://127.0.0.1:{port}";
-        _listener.Prefixes.Add(BaseUrl + "/");
-        _listener.Start();
+        (_listener, BaseUrl) = Listen();
         _ = Task.Run(ServeAsync);
     }
 
     public string BaseUrl { get; }
+
+    // Below the dynamic port range, and another port if one is taken. A failed start disposes
+    // the listener, so each try needs a new one
+    private static (HttpListener, string) Listen()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var url = $"http://127.0.0.1:{Random.Shared.Next(20000, 49000)}";
+            var listener = new HttpListener();
+            listener.Prefixes.Add(url + "/");
+            try
+            {
+                listener.Start();
+                return (listener, url);
+            }
+            catch (HttpListenerException) when (attempt < 20)
+            {
+            }
+        }
+    }
 
     private async Task ServeAsync()
     {
