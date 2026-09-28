@@ -204,7 +204,7 @@
                     Style="{StaticResource CaptionText}"
                     TextAlignment="Center"
                     TextWrapping="Wrap"
-                    Text="Each consultation is erased when you leave it. Turn on Save consultation data in Settings to keep the transcript, note and patient sheet on this device." />
+                    Text="Consultations aren't saved on this device. Turn on Save consultation data in Settings to keep them." />
                 <Button
                     AutomationProperties.Name="Open Settings"
                     HorizontalAlignment="Center"
