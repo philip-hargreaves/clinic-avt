@@ -35,12 +35,16 @@ public class EnrolmentViewModelTest
         engine.RaiseNotification("anchor/progress",
             Params(new { elapsed = 12.0, speech = 10.0, level = 0.7, clipped = false }));
         Assert.Equal(0.7, enrolment.Level);
-        Assert.Equal(0.5, enrolment.Progress);
+        Assert.Equal(0.4, enrolment.Progress, 10);
         Assert.False(enrolment.EnoughCaptured);
         Assert.StartsWith("Listening. Read to the end", enrolment.StatusLine);
 
         engine.RaiseNotification("anchor/progress",
-            Params(new { elapsed = 30.0, speech = 24.0, level = 0.4, clipped = false }));
+            Params(new { elapsed = 25.0, speech = 22.0, level = 0.5, clipped = false }));
+        Assert.False(enrolment.EnoughCaptured, "past the engine's 20 s, short of the bar's 25");
+
+        engine.RaiseNotification("anchor/progress",
+            Params(new { elapsed = 30.0, speech = 26.0, level = 0.4, clipped = false }));
         Assert.Equal(1.0, enrolment.Progress);
         Assert.True(enrolment.EnoughCaptured);
         Assert.StartsWith("Enough captured", enrolment.StatusLine);

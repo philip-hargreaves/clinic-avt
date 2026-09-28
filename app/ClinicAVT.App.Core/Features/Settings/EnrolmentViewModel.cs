@@ -19,6 +19,10 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
     /// <summary>What the engine needs before it will make a print.</summary>
     public const double NeededSpeechSeconds = 20;
 
+    /// <summary>Where the bar fills: five seconds past what the engine needs, so the reading
+    /// is never rushed.</summary>
+    public const double TargetSpeechSeconds = NeededSpeechSeconds + 5;
+
     /// <summary>
     /// One sentence that says what is happening, then questions and a plan in the clinician's
     /// own register. It takes about thirty seconds at a natural pace, which leaves a margin
@@ -71,10 +75,10 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 
     public bool Recording => State == EnrolmentState.Recording;
 
-    /// <summary>Clear speech captured against what the engine needs, 0 to 1.</summary>
-    public double Progress => Math.Clamp(Speech / NeededSpeechSeconds, 0, 1);
+    /// <summary>Clear speech captured against the target, 0 to 1.</summary>
+    public double Progress => Math.Clamp(Speech / TargetSpeechSeconds, 0, 1);
 
-    public bool EnoughCaptured => Speech >= NeededSpeechSeconds;
+    public bool EnoughCaptured => Speech >= TargetSpeechSeconds;
 
     public string StatusLine => State switch
     {
