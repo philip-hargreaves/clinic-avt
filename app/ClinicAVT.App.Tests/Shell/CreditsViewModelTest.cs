@@ -32,7 +32,7 @@ public class CreditsViewModelTest : IDisposable
         Write("credits.json", """
             { "marks": [
                 { "name": "A", "light": "a.png", "dark": "a-dark.png", "height": 18 },
-                { "name": "B", "light": "b.svg" }
+                { "name": "B", "light": "b.svg", "space": 4 }
             ] }
             """);
 
@@ -44,6 +44,8 @@ public class CreditsViewModelTest : IDisposable
         Assert.Equal(18, credits.Marks[0].Height);
         Assert.Equal(credits.Marks[1].LightPath, credits.Marks[1].DarkPath);
         Assert.Equal(16, credits.Marks[1].Height);
+        Assert.Equal(0, credits.Marks[0].Space);
+        Assert.Equal(4, credits.Marks[1].Space);
 
         // A missing image skips its mark only
         File.Delete(Path.Combine(_directory, "a.png"));

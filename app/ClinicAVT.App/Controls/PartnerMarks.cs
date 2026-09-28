@@ -28,6 +28,7 @@ internal static class PartnerMarks
             row.Children.Add(new Image
             {
                 Height = mark.Height,
+                Margin = new Thickness(mark.Space, 0, 0, 0),
                 Source = path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
                     ? new SvgImageSource(uri)
                     : new BitmapImage(uri),
