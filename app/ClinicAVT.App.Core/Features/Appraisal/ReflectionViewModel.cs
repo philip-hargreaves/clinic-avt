@@ -353,15 +353,11 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         {
             await _engine.SummariseReflectionAsync(SessionId).ConfigureAwait(true);
         }
-        catch (OperationCanceledException)
-        {
-            SummaryPending = false;
-            SummaryProblem = "No summary: the engine did not answer. Rewrite to try again";
-        }
         catch (Exception e)
         {
+            _status.Log($"reflection/summary failed: {e.Message}");
             SummaryPending = false;
-            SummaryProblem = $"No summary: {e.Message}";
+            SummaryProblem = $"No summary: {EngineWords.Reason(e)}. Rewrite to try again";
         }
     }
 
@@ -371,7 +367,7 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
         if (!connected && SummaryPending)
         {
             SummaryPending = false;
-            SummaryProblem = "No summary: the engine restarted. Rewrite to try again";
+            SummaryProblem = "No summary: ClinicAVT restarted. Rewrite to try again";
         }
     }
 

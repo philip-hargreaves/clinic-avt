@@ -12,6 +12,34 @@ namespace ClinicAVT.App.Tests.Shell;
 /// <summary>The pure helpers the views lean on.</summary>
 public class ShellHelpersTest
 {
+    // No engine, session or RPC vocabulary reaches the status line. The detail goes to the log
+    [Fact]
+    public void AFailureTheEngineDidNotExplainReadsAsPlainWordsAndIsLogged()
+    {
+        var log = new ListLogger();
+        Assert.Equal("ClinicAVT didn't respond in time", EngineWords.Reason(new TaskCanceledException(), log));
+        Assert.Equal("something went wrong",
+            EngineWords.Reason(new IOException("pipe transport is closed"), log));
+        Assert.Contains(log.Lines, line => line.Contains("pipe transport is closed"));
+        Assert.Equal(2, log.Lines.Count);
+
+        Assert.Equal("the speech recognition model is not installed", ModelNames.Missing(["asr"]));
+        Assert.Equal("the speech recognition, speech detection and speaker recognition models are not installed",
+            ModelNames.Missing(["asr", "vad", "diarisation", "segmentation"]));
+    }
+
+    // An exception out of an async void handler would end the app
+    [Fact]
+    public async Task AFailingUiHandlerIsLoggedAndGoesNoFurther()
+    {
+        var log = new ListLogger();
+        await UiEvent.RunAsync(() => throw new InvalidOperationException("store gone"), log,
+            "SessionsView.OnTitleCommitted");
+        await UiEvent.RunAsync(() => Task.CompletedTask, log, "SessionsView.OnTitleCommitted");
+
+        Assert.Equal(["Error: SessionsView.OnTitleCommitted failed"], log.Lines);
+    }
+
     [Fact]
     public void TheLevelCurveRestsOnRoomNoiseAndSpreadsSpeechOverTheSwing()
     {

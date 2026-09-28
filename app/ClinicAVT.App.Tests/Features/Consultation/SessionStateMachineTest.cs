@@ -26,7 +26,7 @@ public class SessionStateMachineTest
         engine.FailNext = method => method == "session/stop" ? new TaskCanceledException() : null;
         await session.StopRecordingAsync();
 
-        Assert.Equal("Stop failed, consultation kept: the engine did not answer in time",
+        Assert.Equal("Stop failed, consultation kept: ClinicAVT didn't respond in time",
             session.Status.LatestActivity);
         Assert.Equal(SessionState.Idle, session.State);  // never wedged in Finalising
     }
