@@ -51,6 +51,7 @@ add_executable(engine_tests
     adapters/storage/chunk_cipher_test.cpp
     adapters/models/compile_properties_test.cpp
     adapters/models/deferred_load_test.cpp
+    adapters/models/note_tier_test.cpp
     adapters/models/residency_test.cpp
     adapters/storage/db_test.cpp
     adapters/diarisation/fbank_test.cpp

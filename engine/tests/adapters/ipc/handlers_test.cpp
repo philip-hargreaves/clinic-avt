@@ -176,6 +176,13 @@ TEST(Handlers, NoteTierLoadsATierAndRefusesWhatItCannotServe) {
     ASSERT_TRUE(std::holds_alternative<Error>(outcome));
     EXPECT_EQ(std::get<Error>(outcome).code, kSessionError);
 
+    // Automatic is this machine's pick
+    lane.refuse.clear();
+    lane.configured.clear();
+    outcome = HandleNoteTier(&lane, false, json{{"tier", "auto"}}, "constrained");
+    ASSERT_TRUE(std::holds_alternative<json>(outcome));
+    EXPECT_EQ(lane.configured, std::vector<std::string>{"constrained"});
+
     // The note/model notification the lane's listener sends
     clinicavt::note::NoteModelState ready;
     ready.phase = clinicavt::note::NoteModelState::Phase::kReady;

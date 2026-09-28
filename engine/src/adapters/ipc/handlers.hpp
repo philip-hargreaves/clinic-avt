@@ -43,11 +43,11 @@ json HandleModels(const clinicavt::models::ModelStore& models,
 
 json NoteModelJson(const clinicavt::note::NoteModelState& state);
 
-// note/tier: the shell names a tier, the lane resolves and loads it.
-// Refused during a consultation. An unknown or unstaged tier is a
-// parameter error naming what is staged
+// note/tier: the shell names a tier, the lane resolves and loads it. "auto" is
+// this machine's pick. Refused during a consultation. An unknown or unstaged
+// tier is a parameter error naming what is staged
 std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteLane* lane, bool session_active,
-                                         const json& params);
+                                         const json& params, const std::string& auto_tier = "");
 
 json HandleAudioInputs(const std::vector<clinicavt::audio::CaptureDevice>& devices);
 
@@ -205,6 +205,7 @@ struct EngineServices {
     bool first_use = false;
     clinicavt::diar::AnchorStore* anchors = nullptr;
     clinicavt::note::INoteLane* note_lane = nullptr;
+    std::string auto_note_tier;    // the note tier "auto" stands for on this machine
     bool stray_note_host = false;  // one from an earlier engine is wedged in the GPU driver
     std::filesystem::path demo_dir;
     clinicavt::session::Playback* playback = nullptr;

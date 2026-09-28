@@ -36,11 +36,13 @@
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/ipc/wire_events.hpp"
 #include "adapters/models/model_store.hpp"
+#include "adapters/models/note_tier.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/note/worker_note_writer.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "adapters/system/exe_paths.hpp"
 #include "adapters/system/gpu_lease.hpp"
+#include "adapters/system/machine_memory.hpp"
 #include "adapters/system/power_throttling.hpp"
 #include "adapters/system/process_scan.hpp"
 #include "adapters/transcription/scripted_transcriber.hpp"
@@ -89,8 +91,9 @@ std::filesystem::path GuidelinesFolder(const std::string& override) {
 }
 
 // True when a staged model has never been compiled on this machine
-bool Uncompiled(const clinicavt::models::ModelStore& store, const std::string& role) {
-    return !clinicavt::models::Compiled(store.Resolve(role, "default"));
+bool Uncompiled(const clinicavt::models::ModelStore& store, const std::string& role,
+                const std::string& tier = "default") {
+    return !clinicavt::models::Compiled(store.Resolve(role, tier));
 }
 
 // A replay request plays a wav through the same port. A launch-time wav path,
@@ -162,9 +165,25 @@ std::unique_ptr<clinicavt::diar::IDiariser> BuildDiariser(
 // costs a respawn and leaves the engine standing. Null when nothing can write
 std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
     clinicavt::models::ModelStore& store, const std::filesystem::path& models_root,
-    clinicavt::ipc::PipeServer& server, bool& first_use) {
+    clinicavt::ipc::PipeServer& server, const std::string& requested_tier,
+    const std::string& auto_tier, bool& first_use) {
     try {
-        store.Resolve("note", "default");
+        if (auto_tier.empty()) {
+            std::fputs("clinicavt-engine: no note model staged\n", stderr);
+            return nullptr;
+        }
+        // The shell's tier, so the one-off compile is of the model it will ask for. Automatic,
+        // or a tier not staged here, starts on this machine's pick
+        std::string tier = auto_tier;
+        if (!requested_tier.empty() && requested_tier != clinicavt::models::kAutoNoteTier) {
+            try {
+                store.Resolve("note", requested_tier);
+                tier = requested_tier;
+            } catch (const std::exception& e) {
+                std::fprintf(stderr, "clinicavt-engine: note tier %s not staged (%s)\n",
+                             requested_tier.c_str(), e.what());
+            }
+        }
         const auto host = clinicavt::system::ExeDir() / clinicavt::system::kNoteHostExe;
         if (!std::filesystem::exists(host)) {
             // Never write in-process, because that is the configuration the driver fault corrupts
@@ -173,14 +192,13 @@ std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
             return nullptr;
         }
         auto worker = std::make_unique<clinicavt::note::WorkerNoteWriter>(
-            host, models_root, models_root.parent_path() / "prompts", &store);
-        // The shell configures the tier on connect. A non-default tier's
-        // first compile runs then
+            host, models_root, models_root.parent_path() / "prompts", &store, tier);
+        // The shell configures the tier again on connect, which is then no change
         worker->SetListener([&server](const clinicavt::note::NoteModelState& state) {
             server.PushNotification("note/model", clinicavt::ipc::NoteModelJson(state));
         });
         // On first use the one-off compile runs on an idle GPU, ahead of any recording
-        if (Uncompiled(store, "note")) {
+        if (Uncompiled(store, "note", tier)) {
             first_use = true;
             std::fprintf(stderr, "clinicavt-engine: first use, compiling the note model\n");
             worker->Prepare();
@@ -229,6 +247,7 @@ int main(int argc, char* argv[]) {
         // Flags come first, then the positional pipe name, store root, models root and replay wav
         std::vector<std::string> args(argv + 1, argv + argc);
         const std::string asr_device = clinicavt::TakeFlag(args, "--asr-device");
+        const std::string note_tier = clinicavt::TakeFlag(args, "--note-tier");
         const std::string corpora_override = clinicavt::TakeFlag(args, "--corpora");
         const std::string guidelines_override = clinicavt::TakeFlag(args, "--guidelines");
         // For dev builds, a demo corpus marked research is searched when set
@@ -281,7 +300,19 @@ int main(int argc, char* argv[]) {
             BuildTranscriber(model_store, ov_runtime, asr_device, metrics, first_use);
         auto vad = BuildVad(model_store, ov_runtime, metrics);
         auto diariser = BuildDiariser(model_store, ov_runtime, anchors, metrics);
-        auto note_writer = BuildNoteWriter(model_store, models_root, server, first_use);
+        const clinicavt::models::MachineMemory memory{clinicavt::system::InstalledMemoryBytes(),
+                                                      clinicavt::system::IntelGpuMemoryBytes()};
+        const std::string auto_tier = clinicavt::models::AutoNoteTier(
+            clinicavt::models::StagedNoteTiers(model_store), memory);
+        constexpr double kGib = 1ULL << 30;
+        std::fprintf(
+            stderr,
+            "clinicavt-engine: note model for this machine %s (memory %.1f GB, GPU %.1f GB)\n",
+            auto_tier.empty() ? "none" : auto_tier.c_str(),
+            static_cast<double>(memory.installed.value_or(0)) / kGib,
+            static_cast<double>(memory.gpu.value_or(0)) / kGib);
+        auto note_writer =
+            BuildNoteWriter(model_store, models_root, server, note_tier, auto_tier, first_use);
         // The lane says so at once rather than when a note is asked for
         if (stray_note_host && note_writer != nullptr) note_writer->Prepare();
         // A GPU wait that runs on asks whether the holder is this engine's own
@@ -369,6 +400,7 @@ int main(int argc, char* argv[]) {
              .first_use = first_use,
              .anchors = &anchors,
              .note_lane = note_writer.get(),
+             .auto_note_tier = auto_tier,
              .stray_note_host = stray_note_host,
              .demo_dir = models_root.parent_path() / "demo" / "reflections",
              .playback = &playback,

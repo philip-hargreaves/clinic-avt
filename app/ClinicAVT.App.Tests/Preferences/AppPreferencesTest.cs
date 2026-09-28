@@ -66,6 +66,16 @@ public class AppPreferencesTest
     }
 
     [Fact]
+    public void ANoteModelNeverChosenIsLeftToTheEngine()
+    {
+        Assert.Equal("auto", AppPreferences.Load(new MemoryPreferencesStore()).NoteTier);
+        var older = new MemoryPreferencesStore { Json = """{"KeepConsultations":true}""" };
+        Assert.Equal("auto", AppPreferences.Load(older).NoteTier);
+        var chosen = new MemoryPreferencesStore { Json = """{"NoteTier":"accuracy"}""" };
+        Assert.Equal("accuracy", AppPreferences.Load(chosen).NoteTier);
+    }
+
+    [Fact]
     public void ANewerDocumentIsReadForWhatThisBuildKnowsAndUnknownValuesFallBack()
     {
         var newer = new MemoryPreferencesStore
@@ -82,6 +92,6 @@ public class AppPreferencesTest
         Assert.Equal("system", loaded.Theme);
         Assert.Equal("prose", loaded.NoteStyle);
         Assert.Equal("standard", loaded.NoteDetail);
-        Assert.Equal("default", loaded.NoteTier);
+        Assert.Equal("auto", loaded.NoteTier);
     }
 }

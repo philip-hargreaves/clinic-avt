@@ -36,6 +36,12 @@ public class NoteTierContractTest
         Assert.NotEqual(-32601, error.Code);  // the method exists
         Assert.Contains("no note model", error.ErrorData?.GetString() ?? "",
             StringComparison.OrdinalIgnoreCase);
+
+        // Automatic has nothing to pick either
+        error = await Assert.ThrowsAsync<EngineErrorException>(
+            () => client.RequestAsync("note/tier", new { tier = "auto" }, Timeout));
+        Assert.Contains("no note model", error.ErrorData?.GetString() ?? "",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -167,7 +167,7 @@ public class SettingsViewModelTest
 
         settings.NoteModel.NoteModelIndex = 2;
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
     }
 
@@ -381,7 +381,7 @@ public class SettingsViewModelTest
         preferences.NoteTier = "accuracy";
         var uninstalled = new SettingsViewModel(preferences, client: new EngineApi(new FakeEngineClient()));
 
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.Equal(0, uninstalled.NoteModel.NoteModelIndex);
         Assert.Contains("not installed", uninstalled.NoteModel.NoteModelStatus);
     }
@@ -398,17 +398,17 @@ public class SettingsViewModelTest
         engine.RaiseNotification(
             "note/model", NoteModel("failed", "accuracy", "Qwen3.6 35B", "out of memory"));
 
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
         Assert.Contains("out of memory", settings.NoteModel.NoteModelStatus);
         var back = engine.Requests.Single(r => r.Method == "note/tier");
-        Assert.Contains("default", back.Params);
+        Assert.Contains("auto", back.Params);
         engine.RaiseNotification("note/model", NoteModel("ready", "default", "Qwen3.5 9B"));
 
         engine.FailNext = method => method == "note/tier" ? new IOException("no such device") : null;
         settings.NoteModel.NoteModelIndex = 0;
 
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
         Assert.Contains("no such device", settings.NoteModel.NoteModelStatus);
     }
@@ -430,7 +430,7 @@ public class SettingsViewModelTest
         Assert.False(settings.NoteModel.ModelLoading);
         Assert.True(settings.NoteModel.PickerEnabled);
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.StartsWith("Could not switch", settings.NoteModel.NoteModelStatus);
     }
 
@@ -438,14 +438,36 @@ public class SettingsViewModelTest
     public void TheEngineIsAuthoritativeAboutWhatIsResident()
     {
         var preferences = TempPreferences();
+        preferences.NoteTier = "accuracy";
         var engine = TieredEngine();
         var settings = new SettingsViewModel(preferences, client: new EngineApi(engine), session: new FakeSession());
 
-        // The control follows a tier set by another shell instance or the engine's own default
+        // The control follows a tier set by another shell instance
         engine.RaiseNotification("note/model", NoteModel("ready", "constrained", "Qwen3.5 4B"));
 
         Assert.Equal(0, settings.NoteModel.NoteModelIndex);
         Assert.Equal("constrained", preferences.NoteTier);
+    }
+
+    // Never chosen: the engine picks for the machine, and the control shows its pick without
+    // saving it, so a machine that changes is picked for again
+    [Fact]
+    public void TheEnginesOwnPickIsShownAndNeverSavedAsAChoice()
+    {
+        var preferences = TempPreferences();
+        var engine = TieredEngine();
+        engine.NoteTier = "constrained";
+        var settings = new SettingsViewModel(preferences, client: new EngineApi(engine), session: new FakeSession());
+
+        Assert.Equal(0, settings.NoteModel.NoteModelIndex);
+        engine.RaiseNotification("note/model", NoteModel("ready", "default", "Qwen3.5 9B"));
+        Assert.Equal(1, settings.NoteModel.NoteModelIndex);
+        Assert.Equal("auto", preferences.NoteTier);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
+
+        // Choosing one saves it
+        settings.NoteModel.NoteModelIndex = 2;
+        Assert.Equal("accuracy", preferences.NoteTier);
     }
 
     private sealed class FixedMachine : ClinicAVT.App.Core.Ports.IMachineInfoProvider

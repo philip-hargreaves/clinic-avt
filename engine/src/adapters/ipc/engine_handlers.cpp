@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "adapters/ipc/handlers.hpp"
+#include "adapters/models/note_tier.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/system/power_throttling.hpp"
 #include "core/common/version.hpp"
@@ -106,12 +107,14 @@ json NoteModelJson(const clinicavt::note::NoteModelState& state) {
 }
 
 std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteLane* lane, bool session_active,
-                                         const json& params) {
+                                         const json& params, const std::string& auto_tier) {
     if (!params.contains("tier") || !params["tier"].is_string()) {
         return InvalidParams("tier must be a string");
     }
-    const std::string tier = params["tier"].get<std::string>();
-    if (tier != "default" && tier != "accuracy" && tier != "constrained") {
+    std::string tier = params["tier"].get<std::string>();
+    if (tier == clinicavt::models::kAutoNoteTier && !auto_tier.empty()) tier = auto_tier;
+    if (tier != "default" && tier != "accuracy" && tier != "constrained" &&
+        tier != clinicavt::models::kAutoNoteTier) {
         return InvalidParams("unknown tier: " + tier);
     }
     if (lane == nullptr) {
@@ -183,8 +186,9 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
                                       ready("translation", "default")},
                         {"strayNoteHost", stray_note_host}};
         });
-    server.RegisterMethod("note/tier", [note_lane, &controller](const json& params) {
-        return HandleNoteTier(note_lane, controller.Busy(), params);
+    server.RegisterMethod("note/tier", [note_lane, &controller,
+                                        auto_tier = services.auto_note_tier](const json& params) {
+        return HandleNoteTier(note_lane, controller.Busy(), params, auto_tier);
     });
     server.RegisterMethod(
         "asr/device", [switcher = services.switch_asr, &controller, &server](const json& params) {

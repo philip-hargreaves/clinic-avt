@@ -254,6 +254,11 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         {
             var tier = JsonDocument.Parse(Requests[^1].Params).RootElement
                 .GetProperty("tier").GetString() ?? "default";
+            if (tier == "auto")
+            {
+                tier = AutoNoteTier;
+            }
+
             // The loaded tier answers ready, as a warm engine does. A new one starts loading
             var state = tier == NoteTier ? "ready" : "loading";
             NoteTier = tier;
@@ -477,6 +482,9 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 
     /// <summary>The tier the engine's note lane is on. note/tier moves it.</summary>
     public string NoteTier { get; set; } = "default";
+
+    /// <summary>The engine's own pick for this machine, which note/tier "auto" loads.</summary>
+    public string AutoNoteTier { get; set; } = "default";
 
     /// <summary>Served by engine/readiness, warm and compiled by default.</summary>
     public bool FirstUse { get; set; }

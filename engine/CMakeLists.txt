@@ -254,7 +254,7 @@ target_link_options(clinicavt_audio INTERFACE /DELAYLOAD:mfplat.dll /DELAYLOAD:m
 add_executable(clinicavt_engine src/engine_main.cpp)
 target_link_libraries(clinicavt_engine PRIVATE
     clinicavt_ipc clinicavt_audio clinicavt_diarisation clinicavt_guidance clinicavt_note clinicavt_storage
-    clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings ole32 shell32)
+    clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings dxgi ole32 shell32)
 clinicavt_deploy_openvino(ov_engine_runtime)
 add_dependencies(clinicavt_engine ov_engine_runtime)
 

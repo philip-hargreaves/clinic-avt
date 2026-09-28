@@ -57,6 +57,9 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// <summary>The note model tiers the engine's store can resolve, in ladder order.</summary>
     public static readonly IReadOnlyList<string> NoteTiers = ["constrained", "default", "accuracy"];
 
+    /// <summary>A note model never chosen: the engine picks one for the machine.</summary>
+    public const string AutoNoteTier = "auto";
+
     public AppPreferences(string path, ILogger? logger = null)
         : this(new FilePreferencesStore(path), logger)
     {
@@ -108,9 +111,9 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
     /// <summary>
     /// Which note model the engine loads, as a role such as "default", "accuracy" or
-    /// "constrained". The engine's store resolves it to a model.
+    /// "constrained". The engine's store resolves it to a model. "auto" until one is chosen.
     /// </summary>
-    public string NoteTier { get; set; } = "default";
+    public string NoteTier { get; set; } = AutoNoteTier;
 
     /// <summary>The last checked backup, null before the first.</summary>
     public LastBackup? LastBackup { get; set; }
@@ -158,7 +161,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         preferences.Theme = Known(stored.Theme, Themes, Themes[0]);
         preferences.NoteStyle = NoteOptions.Style(stored.NoteStyle).Value;
         preferences.NoteDetail = NoteOptions.Detail(stored.NoteDetail).Value;
-        preferences.NoteTier = Known(stored.NoteTier, NoteTiers, "default");
+        preferences.NoteTier = Known(stored.NoteTier, [.. NoteTiers, AutoNoteTier], AutoNoteTier);
         preferences.LastBackup = stored.LastBackup is { From: not null, To: not null } last
             && DateTimeOffset.TryParse(last.CreatedAt, CultureInfo.InvariantCulture, out _)
                 ? last
