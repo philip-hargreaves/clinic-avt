@@ -16,7 +16,7 @@ jobs:
   cpp-format:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check formatting
         shell: pwsh
@@ -37,22 +37,22 @@ jobs:
   clang-tidy:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: external/openvino
           key: openvino-${{ hashFiles('tools/get-openvino.ps1') }}
       - name: Get OpenVINO
         shell: pwsh
         run: tools/get-openvino.ps1
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: external/pdfium
           key: pdfium-${{ hashFiles('tools/get-pdfium.ps1') }}
       - name: Get PDFium
         shell: pwsh
         run: tools/get-pdfium.ps1
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       # Pinned, so a runner image update cannot change the findings
@@ -78,8 +78,8 @@ jobs:
   evaluation:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install ruff
@@ -92,8 +92,8 @@ jobs:
   dotnet:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
@@ -127,22 +127,22 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: sccache
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: external/openvino
           key: openvino-${{ hashFiles('tools/get-openvino.ps1') }}
       - name: Get OpenVINO
         shell: pwsh
         run: tools/get-openvino.ps1
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: external/pdfium
           key: pdfium-${{ hashFiles('tools/get-pdfium.ps1') }}
       - name: Get PDFium
         shell: pwsh
         run: tools/get-pdfium.ps1
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: mozilla-actions/sccache-action@v0.0.11
       - name: Build and test
         shell: pwsh
         run: |
@@ -158,7 +158,7 @@ jobs:
       # The contract job tests this build of the engine
       - name: Upload the engine
         if: matrix.preset == 'ci-dev'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: engine-dev
           path: |
@@ -172,13 +172,13 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
           restore-keys: nuget-
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: engine-dev
           path: build/dev/engine
