@@ -170,7 +170,7 @@
                                 </StackPanel>
                             </toolkit:SettingsCard.Description>
                         </toolkit:SettingsCard>
-                        <toolkit:SettingsCard Description="PDFs are read with PDFium (The PDFium Authors, BSD 3-Clause licence) from the pdfium-binaries build (Benoit Blanchon, MIT licence). The licence texts sit in the licences folder beside the app. Passwords made of five words use the EFF Large Wordlist by the Electronic Frontier Foundation, licensed under CC BY 3.0 US (creativecommons.org/licenses/by/3.0/us)." Header="Third-party software" />
+                        <toolkit:SettingsCard Description="PDFs are read with PDFium (The PDFium Authors, BSD 3-Clause licence) from the pdfium-binaries build (Benoit Blanchon, MIT licence). The licence texts sit in the licences folder beside the app. Translation uses NLLB-200 distilled 600M by the NLLB Team at Meta AI, licensed under CC BY-NC 4.0 for non-commercial use (creativecommons.org/licenses/by-nc/4.0), converted to OpenVINO with 8-bit weights and not retrained. Passwords made of five words use the EFF Large Wordlist by the Electronic Frontier Foundation, licensed under CC BY 3.0 US (creativecommons.org/licenses/by/3.0/us)." Header="Third-party software" />
                         <toolkit:SettingsCard Header="Minimum system requirements">
                             <toolkit:SettingsCard.Description>
                                 <StackPanel Spacing="6">
