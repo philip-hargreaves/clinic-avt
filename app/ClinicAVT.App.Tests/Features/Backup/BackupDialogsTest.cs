@@ -22,29 +22,19 @@ public class BackupDialogsTest
         engine.Responses["archive/summary"] = new { consultations = 38, reflections = 12, unfinished = 1, uncovered = 0 };
         engine.Responses["session/remove"] = new { removed = 2 };
         var picker = new FakeFilePicker { SavePath = @"C:\Users\gp\OneDrive - NHS\Documents\b.clinicavt" };
-        var clipboard = new FakeClipboard();
         var launcher = new FakeLauncher();
         var preferences = TempPreferences();
-        using var backup = new BackupViewModel(new EngineApi(engine), picker, clipboard, launcher, preferences,
+        using var backup = new BackupViewModel(new EngineApi(engine), picker, launcher, preferences,
             new InlineDispatcher(), FakeTimeProvider.London(),
             name => name is "OneDriveCommercial" or "OneDrive" ? @"C:\Users\gp\OneDrive - NHS" : null);
         await backup.LoadAsync();
 
         Assert.Equal("38 consultations on this computer.", backup.CountLine);
-        Assert.True(backup.UseGenerated);
-        var words = backup.Generated.Split('-');
-        Assert.Equal(5, words.Length);
-        Assert.All(words, w => Assert.Matches("^[a-z]+$", w));
+        Assert.False(backup.CanStart);  // no password yet
+        const string chosen = "harbour lights";
+        backup.Password = chosen;
+        backup.PasswordAgain = chosen;
         Assert.True(backup.CanStart);
-        var first = backup.Generated;
-        backup.NewPasswordCommand.Execute(null);
-        Assert.NotEqual(first, backup.Generated);
-
-        await backup.CopyCommand.ExecuteAsync(null);
-        Assert.Equal([backup.Generated], clipboard.Secrets);
-        Assert.Empty(clipboard.Copied);  // never through the ordinary copy, which keeps history
-
-        var chosen = backup.Generated;
         await backup.PrimaryCommand.ExecuteAsync(null);
 
         Assert.Equal(["ClinicAVT backup 27 Sep 2026"], picker.SuggestedNames);
@@ -87,37 +77,35 @@ public class BackupDialogsTest
     }
 
     [Fact]
-    public async Task AnOwnPasswordIsCheckedAndALaterBackupOffersItFirst()
+    public async Task APasswordIsCheckedBeforeTheBackupStarts()
     {
         var engine = new FakeEngineClient();
         engine.Responses["archive/summary"] = new { consultations = 4, reflections = 0, unfinished = 0, uncovered = 4 };
         var preferences = TempPreferences();
         preferences.LastBackup = new LastBackup("", "", "2026-08-31T17:00:00Z", 40);
-        using var backup = new BackupViewModel(new EngineApi(engine), new FakeFilePicker(), new FakeClipboard(),
+        using var backup = new BackupViewModel(new EngineApi(engine), new FakeFilePicker(),
             new FakeLauncher(), preferences, new InlineDispatcher(), FakeTimeProvider.London());
         backup.PeriodIndex = 1;
 
         Assert.Equal("Last month (August)", backup.PeriodOptions[1]);
         Assert.Equal("4 consultations, 1 Aug to 31 Aug 2026.", backup.CountLine);
-        Assert.True(backup.UseOwn);
-        Assert.True(backup.SameAsLastVisible);
 
-        backup.OwnPassword = "short";
-        Assert.Equal("Use 12 characters or more.", backup.PasswordProblem);
-        backup.OwnPassword = "Password1234";
+        backup.Password = "short";
+        Assert.Equal("Use 8 characters or more.", backup.PasswordProblem);
+        backup.Password = "Password1";
         Assert.Contains("too easy to guess", backup.PasswordProblem);
-        backup.OwnPassword = "harbour lights at dusk";
-        backup.OwnAgain = "harbour lights at dawn";
+        backup.Password = "harbour lights at dusk";
+        backup.PasswordAgain = "harbour lights at dawn";
         Assert.Equal("The two passwords do not match.", backup.PasswordProblem);
         Assert.False(backup.CanStart);
-        backup.OwnAgain = "harbour lights at dusk";
+        backup.PasswordAgain = "harbour lights at dusk";
         Assert.True(backup.CanStart);
 
         // August in London starts at 23:00 UTC the day before
         var picker = new FakeFilePicker { SavePath = @"E:\b.clinicavt" };
-        using var saving = new BackupViewModel(new EngineApi(engine), picker, new FakeClipboard(),
+        using var saving = new BackupViewModel(new EngineApi(engine), picker,
             new FakeLauncher(), preferences, new InlineDispatcher(), FakeTimeProvider.London())
-        { PeriodIndex = 1, OwnPassword = "harbour lights at dusk", OwnAgain = "harbour lights at dusk" };
+        { PeriodIndex = 1, Password = "harbour lights at dusk", PasswordAgain = "harbour lights at dusk" };
         await saving.PrimaryCommand.ExecuteAsync(null);
         var sent = engine.Sent("archive/backup");
         Assert.Equal("2026-07-31T23:00:00Z", sent.GetProperty("from").GetString());
@@ -132,8 +120,9 @@ public class BackupDialogsTest
         var engine = new FakeEngineClient();
         engine.Responses["archive/summary"] = new { consultations = 3, reflections = 0, unfinished = 0, uncovered = 3 };
         using var backup = new BackupViewModel(new EngineApi(engine),
-            new FakeFilePicker { SavePath = @"E:\b.clinicavt" }, new FakeClipboard(), new FakeLauncher(),
-            dispatcher: new InlineDispatcher(), clock: FakeTimeProvider.London());
+            new FakeFilePicker { SavePath = @"E:\b.clinicavt" }, new FakeLauncher(),
+            dispatcher: new InlineDispatcher(), clock: FakeTimeProvider.London())
+        { Password = "harbour lights", PasswordAgain = "harbour lights" };
         await backup.LoadAsync();
 
         engine.FailNext = method => method == "archive/backup"

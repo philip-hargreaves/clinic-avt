@@ -22,7 +22,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 {
     private readonly IEngineApi _engine;
     private readonly IFilePicker _picker;
-    private readonly IClipboard _clipboard;
     private readonly ILauncher _launcher;
     private readonly AppPreferences? _preferences;
     private readonly IUiDispatcher? _dispatcher;
@@ -35,23 +34,18 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
     private string _sentTo = "";
     private IReadOnlyList<string> _ids = [];
 
-    public BackupViewModel(IEngineApi engine, IFilePicker picker, IClipboard clipboard, ILauncher launcher,
+    public BackupViewModel(IEngineApi engine, IFilePicker picker, ILauncher launcher,
         AppPreferences? preferences = null, IUiDispatcher? dispatcher = null, TimeProvider? clock = null,
         Func<string, string?>? environment = null, ISessionState? session = null)
     {
         _engine = engine;
         _picker = picker;
-        _clipboard = clipboard;
         _launcher = launcher;
         _preferences = preferences;
         _dispatcher = dispatcher;
         _clock = clock ?? TimeProvider.System;
         _environment = environment ?? Environment.GetEnvironmentVariable;
         _session = session;
-        HasLastBackup = preferences?.LastBackup is not null;
-        // One password for every backup, so after the first the clinician's own comes first
-        UseGenerated = !HasLastBackup;
-        Generated = BackupPasswords.Generate();
         PeriodOptions = Enumerable.Range(0, BackupPeriod.Kinds.Count)
             .Select(i => BackupPeriod.Label(i, Today)).ToArray();
         _engine.NotificationReceived += OnNotification;
@@ -62,8 +56,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
     public string PasswordNote { get; } = BackupWords.PasswordNote;
 
     public string Includes { get; } = BackupWords.Includes;
-
-    public string SameAsLastLine { get; } = BackupWords.SameAsLast;
 
     public string ReflectionsTickText { get; } = BackupWords.ReflectionsTick;
 
@@ -140,39 +132,18 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(CanStart), nameof(PrimaryEnabled))]
     public partial int Count { get; private set; }
 
-    public bool HasLastBackup { get; }
-
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UseOwn), nameof(SameAsLastVisible), nameof(CanStart), nameof(PrimaryEnabled))]
-    public partial bool UseGenerated { get; set; }
-
-    /// <summary>The other choice, for the second radio button.</summary>
-    public bool UseOwn
-    {
-        get => !UseGenerated;
-        set => UseGenerated = !value;
-    }
-
-    public bool SameAsLastVisible => UseOwn && HasLastBackup;
-
-    [ObservableProperty]
-    public partial string Generated { get; private set; } = "";
-
-    [ObservableProperty]
-    public partial string CopyLine { get; private set; } = "";
+    [NotifyPropertyChangedFor(nameof(PasswordProblem), nameof(CanStart), nameof(PrimaryEnabled))]
+    public partial string Password { get; set; } = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PasswordProblem), nameof(CanStart), nameof(PrimaryEnabled))]
-    public partial string OwnPassword { get; set; } = "";
+    public partial string PasswordAgain { get; set; } = "";
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PasswordProblem), nameof(CanStart), nameof(PrimaryEnabled))]
-    public partial string OwnAgain { get; set; } = "";
-
-    public string PasswordProblem => BackupPasswords.Problem(OwnPassword, OwnAgain);
+    public string PasswordProblem => BackupPasswords.Problem(Password, PasswordAgain);
 
     public bool CanStart => Step == BackupStep.Setup && Count > 0 && Period.Valid
-        && (UseGenerated || BackupPasswords.Acceptable(OwnPassword, OwnAgain));
+        && BackupPasswords.Acceptable(Password, PasswordAgain);
 
     [ObservableProperty]
     public partial string ProgressText { get; private set; } = "";
@@ -203,19 +174,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     /// <summary>Counts the default period as the dialog opens.</summary>
     public Task LoadAsync() => CountAsync();
-
-    [RelayCommand]
-    private void NewPassword()
-    {
-        Generated = BackupPasswords.Generate();
-        CopyLine = "";
-    }
-
-    [RelayCommand]
-    private async Task Copy() =>
-        CopyLine = await _clipboard.CopySecretAsync(Generated).ConfigureAwait(true)
-            ? "Copied. It is kept out of clipboard history."
-            : "The password could not be copied. Select the words and copy them instead.";
 
     [RelayCommand]
     private Task Primary() => Step switch
@@ -315,7 +273,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         Step = BackupStep.Working;
         try
         {
-            await _engine.BackUpAsync(_sentFrom, _sentTo, path, UseGenerated ? Generated : OwnPassword)
+            await _engine.BackUpAsync(_sentFrom, _sentTo, path, Password)
                 .ConfigureAwait(true);
         }
         catch (Exception e)

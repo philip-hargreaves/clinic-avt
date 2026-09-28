@@ -20,11 +20,6 @@ public sealed class WinUiClipboard : IClipboard
         return true;
     });
 
-    // No Flush, so the secret leaves the clipboard when the app closes
-    public Task<bool> CopySecretAsync(string text) => SetWithRetryAsync(text, data =>
-        Clipboard.SetContentWithOptions(
-            data, new ClipboardContentOptions { IsAllowedInHistory = false, IsRoamable = false }));
-
     // A DataPackage can be handed to the clipboard only once, so a retry needs a fresh one
     private static async Task<bool> SetWithRetryAsync(string text, Func<DataPackage, bool> set)
     {

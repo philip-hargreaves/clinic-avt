@@ -18,8 +18,6 @@ public static class BackupWords
     public const string PasswordNote =
         "Save this password somewhere safe. Without it, this backup can't be opened.";
 
-    public const string SameAsLast = "Use the same password as your last backup.";
-
     public const string ReflectionsTick = "Delete associated reflections";
 
     /// <summary>

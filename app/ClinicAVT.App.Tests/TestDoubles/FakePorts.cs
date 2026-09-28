@@ -118,15 +118,6 @@ public sealed class FakeClipboard : IClipboard
         Copied.Add(text);
         return Task.FromResult(true);
     }
-
-    /// <summary>Secrets copied, kept apart from ordinary copies.</summary>
-    public List<string> Secrets { get; } = [];
-
-    public Task<bool> CopySecretAsync(string text)
-    {
-        Secrets.Add(text);
-        return Task.FromResult(true);
-    }
 }
 
 public sealed class FakeThemeService : IThemeService

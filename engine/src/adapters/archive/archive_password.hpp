@@ -7,7 +7,7 @@
 namespace clinicavt::archive {
 
 // Fewer code points than this and a backup is refused
-inline constexpr std::size_t kMinPasswordLength = 12;
+inline constexpr std::size_t kMinPasswordLength = 8;
 
 // The bytes a backup key is derived from: the UTF-8 of the password's NFC form, nothing trimmed,
 // so an accent typed composed on one keyboard and decomposed on another opens the same file

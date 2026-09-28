@@ -44,67 +44,23 @@
 
                 <StackPanel Spacing="8">
                     <TextBlock Style="{ThemeResource BodyStrongTextBlockStyle}" Text="Password" />
-                    <RadioButton
-                        Content="Use a new password made of five words"
-                        GroupName="BackupPassword"
-                        IsChecked="{x:Bind ViewModel.UseGenerated, Mode=TwoWay}" />
-                    <StackPanel
-                        Margin="28,0,0,0"
-                        Spacing="8"
-                        Visibility="{x:Bind ViewModel.UseGenerated, Mode=OneWay}">
-                        <!-- Hyphens between the words, so Narrator reads them one by one -->
-                        <Border Padding="12,8" Style="{StaticResource InnerCardSurface}">
-                            <TextBlock
-                                AutomationProperties.Name="Password made of five words"
-                                IsTextSelectionEnabled="True"
-                                Style="{ThemeResource BodyLargeTextBlockStyle}"
-                                Text="{x:Bind ViewModel.Generated, Mode=OneWay}" />
-                        </Border>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button
-                                AutomationProperties.Name="Copy password"
-                                Command="{x:Bind ViewModel.CopyCommand}"
-                                Content="Copy"
-                                Style="{ThemeResource AccentButtonStyle}" />
-                            <Button Command="{x:Bind ViewModel.NewPasswordCommand}" Content="New password" />
-                        </StackPanel>
-                        <TextBlock
-                            AutomationProperties.LiveSetting="Polite"
-                            Style="{StaticResource CaptionText}"
-                            Text="{x:Bind ViewModel.CopyLine, Mode=OneWay}"
-                            Visibility="{x:Bind local:BackupDialog.Shown(ViewModel.CopyLine), Mode=OneWay}" />
-                        <TextBlock Text="{x:Bind ViewModel.PasswordNote}" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <RadioButton
-                        Content="Use my own password"
-                        GroupName="BackupPassword"
-                        IsChecked="{x:Bind ViewModel.UseOwn, Mode=TwoWay}" />
-                    <StackPanel
-                        Margin="28,0,0,0"
-                        Spacing="8"
-                        Visibility="{x:Bind ViewModel.UseOwn, Mode=OneWay}">
-                        <TextBlock
-                            Text="{x:Bind ViewModel.SameAsLastLine}"
-                            TextWrapping="Wrap"
-                            Visibility="{x:Bind ViewModel.SameAsLastVisible, Mode=OneWay}" />
-                        <PasswordBox
-                            AutomationProperties.Name="Password"
-                            Header="Password, 12 characters or more"
-                            PasswordChanged="OnOwnChanged"
-                            PasswordRevealMode="Peek" />
-                        <PasswordBox
-                            AutomationProperties.Name="Type the password again"
-                            Header="Type it again"
-                            PasswordChanged="OnAgainChanged"
-                            PasswordRevealMode="Peek" />
-                        <TextBlock
-                            AutomationProperties.LiveSetting="Polite"
-                            Foreground="{ThemeResource CautionBrush}"
-                            Text="{x:Bind ViewModel.PasswordProblem, Mode=OneWay}"
-                            TextWrapping="Wrap"
-                            Visibility="{x:Bind local:BackupDialog.Shown(ViewModel.PasswordProblem), Mode=OneWay}" />
-                        <TextBlock Text="{x:Bind ViewModel.PasswordNote}" TextWrapping="Wrap" />
-                    </StackPanel>
+                    <PasswordBox
+                        AutomationProperties.Name="Password"
+                        Header="Password, 8 characters or more"
+                        PasswordChanged="OnPasswordChanged"
+                        PasswordRevealMode="Peek" />
+                    <PasswordBox
+                        AutomationProperties.Name="Type the password again"
+                        Header="Type it again"
+                        PasswordChanged="OnAgainChanged"
+                        PasswordRevealMode="Peek" />
+                    <TextBlock
+                        AutomationProperties.LiveSetting="Polite"
+                        Foreground="{ThemeResource CautionBrush}"
+                        Text="{x:Bind ViewModel.PasswordProblem, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind local:BackupDialog.Shown(ViewModel.PasswordProblem), Mode=OneWay}" />
+                    <TextBlock Text="{x:Bind ViewModel.PasswordNote}" TextWrapping="Wrap" />
                 </StackPanel>
             </StackPanel>
 

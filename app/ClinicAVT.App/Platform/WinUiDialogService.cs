@@ -61,7 +61,7 @@ public sealed class WinUiDialogService(
 
     public async Task<bool> RunBackupAsync()
     {
-        using var backup = new BackupViewModel(engine, picker, clipboard, launcher, preferences, dispatcher, clock,
+        using var backup = new BackupViewModel(engine, picker, launcher, preferences, dispatcher, clock,
             session: session);
         var dialog = new BackupDialog(backup) { XamlRoot = window.XamlRoot };
         _ = backup.LoadAsync();
