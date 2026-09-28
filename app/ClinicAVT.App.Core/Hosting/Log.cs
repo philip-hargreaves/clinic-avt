@@ -25,4 +25,10 @@ public static partial class Log
 
     [LoggerMessage(Level = LogLevel.Error, Message = "shutdown step failed")]
     public static partial void ShutdownStepFailed(this ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "{Handler} failed")]
+    public static partial void HandlerFailed(this ILogger logger, Exception exception, string handler);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "shown as \"{Shown}\": {Detail}")]
+    public static partial void Reworded(this ILogger logger, string shown, string detail);
 }

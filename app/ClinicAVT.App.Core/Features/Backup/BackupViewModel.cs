@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
@@ -28,6 +29,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
     private readonly TimeProvider _clock;
     private readonly Func<string, string?> _environment;
     private readonly ISessionState? _session;
+    private readonly ILogger? _logger;
     private int _countVersion;
     private string _folder = "";
     private string _sentFrom = "";
@@ -36,8 +38,10 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     public BackupViewModel(IEngineApi engine, IFilePicker picker, ILauncher launcher,
         AppPreferences? preferences = null, IUiDispatcher? dispatcher = null, TimeProvider? clock = null,
-        Func<string, string?>? environment = null, ISessionState? session = null)
+        Func<string, string?>? environment = null, ISessionState? session = null,
+        ILogger? logger = null)
     {
+        _logger = logger;
         _engine = engine;
         _picker = picker;
         _launcher = launcher;
@@ -242,7 +246,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         {
             if (version == _countVersion)
             {
-                CountLine = $"The {Things(ReflectionsOnly)}s could not be counted: {EngineWords.Reason(e)}.";
+                CountLine = $"The {Things(ReflectionsOnly)}s could not be counted: {EngineWords.Reason(e, _logger)}.";
             }
         }
     }
@@ -296,7 +300,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         }
         catch (Exception e)
         {
-            Error = BackupWords.Refused("backup", e);
+            Error = BackupWords.Refused("backup", e, _logger);
             OneDriveLine = "";
             Step = BackupStep.Setup;
         }
@@ -322,7 +326,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         }
         catch (Exception e)
         {
-            Error = $"The consultations could not be removed: {EngineWords.Reason(e)}. The backup is kept.";
+            Error = $"The consultations could not be removed: {EngineWords.Reason(e, _logger)}. The backup is kept.";
             Step = BackupStep.Done;
         }
     }

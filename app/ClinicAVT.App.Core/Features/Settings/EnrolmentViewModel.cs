@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.Client;
 
@@ -37,18 +39,20 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 
     private readonly IEngineApi _engine;
     private readonly IUiDispatcher? _dispatcher;
+    private readonly ILogger? _logger;
     private readonly string _micId;
     private readonly double _seconds;
     private readonly TaskCompletionSource<bool> _outcome =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public EnrolmentViewModel(IEngineApi engine, string micId = "",
-        double seconds = DefaultSeconds, IUiDispatcher? dispatcher = null)
+        double seconds = DefaultSeconds, IUiDispatcher? dispatcher = null, ILogger? logger = null)
     {
         _engine = engine;
         _micId = micId;
         _seconds = seconds;
         _dispatcher = dispatcher;
+        _logger = logger;
         _engine.NotificationReceived += OnNotification;
     }
 
@@ -139,9 +143,10 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         {
             await _engine.CancelEnrolmentAsync().ConfigureAwait(true);
         }
-        catch (Exception)
+        catch (Exception e)
         {
             // The engine will report the outcome, or the dialog is closing anyway
+            _logger?.StepFailed("anchor/enrol/cancel", e.Message);
         }
     }
 

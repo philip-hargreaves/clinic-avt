@@ -2,6 +2,7 @@ using System.Windows.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Appraisal;
 
 namespace ClinicAVT.App.Features.Appraisal;
@@ -31,21 +32,22 @@ public sealed partial class ReflectionEditorView : UserControl
     public bool HasRemove => RemoveCommand is not null;
 
     // The boxes bind on every keystroke, so the view model is current by LostFocus
-    private async void OnAnswerCommitted(object sender, RoutedEventArgs e) => await ViewModel.SaveAsync();
+    private void OnAnswerCommitted(object sender, RoutedEventArgs e) => UiEvent.Run(ViewModel.SaveAsync);
 
-    private async void OnTitleCommitted(object sender, RoutedEventArgs e) => await ViewModel.SaveTitleAsync();
+    private void OnTitleCommitted(object sender, RoutedEventArgs e) => UiEvent.Run(ViewModel.SaveTitleAsync);
 
-    private async void OnSummaryCommitted(object sender, RoutedEventArgs e) => await ViewModel.SaveSummaryAsync();
+    private void OnSummaryCommitted(object sender, RoutedEventArgs e) => UiEvent.Run(ViewModel.SaveSummaryAsync);
 
     // Pressing Enter or leaving the box turns the typed line into an entry
-    private async void OnDraftKeyDown(object sender, KeyRoutedEventArgs e)
+    private void OnDraftKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
             e.Handled = true;
-            await ViewModel.AddDraftCommand.ExecuteAsync(null);
+            UiEvent.Run(() => ViewModel.AddDraftCommand.ExecuteAsync(null));
         }
     }
 
-    private async void OnDraftLeft(object sender, RoutedEventArgs e) => await ViewModel.AddDraftCommand.ExecuteAsync(null);
+    private void OnDraftLeft(object sender, RoutedEventArgs e) =>
+        UiEvent.Run(() => ViewModel.AddDraftCommand.ExecuteAsync(null));
 }

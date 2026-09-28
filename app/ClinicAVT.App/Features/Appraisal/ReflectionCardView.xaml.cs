@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Appraisal;
 
 namespace ClinicAVT.App.Features.Appraisal;
@@ -49,11 +50,11 @@ public sealed partial class ReflectionCardView : UserControl
     }
 
     // The title binds on every keystroke, so the editor holds the final text by LostFocus
-    private async void OnTitleCommitted(object sender, RoutedEventArgs e)
+    private void OnTitleCommitted(object sender, RoutedEventArgs e)
     {
         if (Card?.Editor is { } editor)
         {
-            await editor.SaveTitleAsync();
+            UiEvent.Run(editor.SaveTitleAsync);
         }
     }
 

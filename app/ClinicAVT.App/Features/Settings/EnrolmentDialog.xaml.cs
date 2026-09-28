@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Settings;
 
 namespace ClinicAVT.App.Features.Settings;
@@ -18,10 +19,10 @@ public sealed partial class EnrolmentDialog : ContentDialog
     public EnrolmentViewModel ViewModel { get; }
 
     // Only Done closes. Every other press keeps the dialog open for the next step
-    private async void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    private void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
         args.Cancel = ViewModel.KeepsOpen;
-        await ViewModel.PrimaryCommand.ExecuteAsync(null);
+        UiEvent.Run(() => ViewModel.PrimaryCommand.ExecuteAsync(null));
     }
 
     // Closing covers the close button, Escape and a click outside

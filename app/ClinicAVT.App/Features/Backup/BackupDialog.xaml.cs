@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Backup;
 
 namespace ClinicAVT.App.Features.Backup;
@@ -21,10 +22,10 @@ public sealed partial class BackupDialog : ContentDialog
     public static Visibility Shown(string text) =>
         string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
 
-    private async void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    private void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
         args.Cancel = true;
-        await ViewModel.PrimaryCommand.ExecuteAsync(null);
+        UiEvent.Run(() => ViewModel.PrimaryCommand.ExecuteAsync(null));
     }
 
     // Covers the close button, Escape and a click outside

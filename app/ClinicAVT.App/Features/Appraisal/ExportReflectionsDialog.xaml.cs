@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Appraisal;
 
 namespace ClinicAVT.App.Features.Appraisal;
@@ -17,10 +18,10 @@ public sealed partial class ExportReflectionsDialog : ContentDialog
 
     public ExportReflectionsViewModel ViewModel { get; }
 
-    private async void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    private void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
         args.Cancel = true;
-        await ViewModel.PrimaryCommand.ExecuteAsync(null);
+        UiEvent.Run(() => ViewModel.PrimaryCommand.ExecuteAsync(null));
     }
 
     // Covers the close button, Escape and a click outside

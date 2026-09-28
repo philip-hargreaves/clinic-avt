@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using ClinicAVT.App.Controls;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Features.Documents;
 
@@ -38,11 +39,11 @@ public sealed partial class ConsultationView : UserControl
     public ConsultationHeaderViewModel Header { get; }
 
     // Refreshes on open so a headset plugged in a moment ago appears
-    private async void OnMicFlyoutOpening(object sender, object e)
+    private void OnMicFlyoutOpening(object sender, object e) => UiEvent.Run(async () =>
     {
         await Mic.RefreshCommand.ExecuteAsync(null);
         BuildMicFlyout();
-    }
+    });
 
     private void BuildMicFlyout()
     {

@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.Client;
@@ -18,15 +20,17 @@ public sealed partial class MicViewModel : ObservableObject
 
     private readonly IEngineApi _engine;
     private readonly AppPreferences? _preferences;
+    private readonly ILogger? _logger;
 
     // Empty means "the system default", which the engine pins
     private string _selectedId;
 
     public MicViewModel(IEngineApi engine, AppPreferences? preferences = null,
-        IUiDispatcher? dispatcher = null)
+        IUiDispatcher? dispatcher = null, ILogger<MicViewModel>? logger = null)
     {
         _engine = engine;
         _preferences = preferences;
+        _logger = logger;
         _selectedId = preferences?.MicId ?? "";
         // Refresh at connect so the label is right before the first open
         if (dispatcher is not null)
@@ -101,9 +105,10 @@ public sealed partial class MicViewModel : ObservableObject
                     device.IsDefault, device.Bluetooth));
             }
         }
-        catch (Exception)
+        catch (Exception e)
         {
             // A failed refresh keeps the last list. The engine still resolves the device
+            _logger?.StepFailed("audio/inputs", e.Message);
         }
 
         Changed();
