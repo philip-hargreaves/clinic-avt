@@ -20,7 +20,7 @@
 #include "core/note/summary_scrub.hpp"
 
 namespace clinicavt::ipc {
-// A cleared session is an appraisal entry, listed by reflection/list alone
+// Cleared sessions are appraisal entries; only reflection/list shows them
 json HandleSessionList(clinicavt::store::ISessionStore& sessions) {
     json list = json::array();
     for (const auto& session : sessions.ListSessions()) {
@@ -40,7 +40,6 @@ json HandleSessionList(clinicavt::store::ISessionStore& sessions) {
 std::variant<json, Error> HandleDemoSeed(clinicavt::store::ISessionStore& sessions,
                                          const std::filesystem::path& demo_dir) {
     try {
-        // Already seeded is a no-op
         if (clinicavt::demo::HasSamples(sessions)) {
             return json{{"added", 0}};
         }
@@ -84,7 +83,7 @@ std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& 
         using clinicavt::store::DocumentKind;
         const auto patient = sessions.ReadDocument(id, DocumentKind::kPatient);
         const auto translation = sessions.ReadDocument(id, DocumentKind::kTranslation);
-        // Both times, so the shell can flag a sheet edited after its translation
+        // Both timestamps so the shell can flag a sheet edited after translation
         json result{{"text", patient.text},
                     {"generatedAt", NullWhenEmpty(patient.generated_at)},
                     {"editedAt", NullWhenEmpty(patient.edited_at)},
@@ -110,7 +109,7 @@ namespace {
 
 constexpr const char* kArchiveRunning = "a backup or restore is running";
 
-// deleteReflections: false, or absent, keeps each appraisal entry with its case summary
+// deleteReflections false or absent keeps each appraisal entry and its case summary
 std::optional<bool> DeleteReflections(const json& params) {
     if (!params.is_object() || !params.contains("deleteReflections")) return false;
     if (!params["deleteReflections"].is_boolean()) return std::nullopt;
@@ -165,8 +164,8 @@ namespace {
 constexpr const char* kAnswers[] = {"happened", "learned", "next"};
 constexpr const char* kReferenceFields[] = {"key", "reference", "title", "link", "source"};
 
-// A guideline or document the clinician ticked. It keeps its own copy of the words so it
-// still reads after the document or the search result is gone
+// A guideline or document the clinician ticked. Stores its own copy of the text
+// so it still reads after the source is gone
 json ReferenceFrom(const json& given) {
     json reference = json::object();
     for (const char* field : kReferenceFields) {
@@ -177,7 +176,7 @@ json ReferenceFrom(const json& given) {
     return reference;
 }
 
-// The answers and ticked references are one sealed JSON text. Unparseable text reads as empty
+// Answers and ticked references are one sealed JSON text; unparseable reads as empty
 json AnswersFrom(const std::string& text) {
     json answers = json::object();
     const json parsed = json::parse(text, nullptr, false);
@@ -223,8 +222,8 @@ std::variant<json, Error> HandleReflectionGet(clinicavt::store::ISessionStore& s
     });
 }
 
-// Given answers and references replace stored ones and omitted ones stay. Only
-// reflection/delete removes one
+// Given answers and references replace stored ones; omitted ones stay.
+// Only reflection/delete removes one
 std::variant<json, Error> HandleReflectionUpdate(clinicavt::store::ISessionStore& sessions,
                                                  const json& params) {
     using clinicavt::store::DocumentKind;
@@ -279,7 +278,7 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore
     return WithSession(params, [&](const std::string& id) {
         sessions.DeleteDocument(id, DocumentKind::kReflection);
         sessions.DeleteDocument(id, DocumentKind::kSummary);
-        // A cleared consultation was kept only for its appraisal entry, so it goes with it
+        // A cleared consultation exists only for its appraisal entry, so erase it too
         if (sessions.ReadTurns(id).empty() &&
             sessions.ReadDocument(id, DocumentKind::kNote).revision == 0) {
             sessions.Delete(id);
@@ -288,7 +287,7 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore
     });
 }
 
-// Every session with an appraisal entry, newest first
+// Sessions with an appraisal entry, newest first as ListSessions returns them
 json HandleReflectionList(clinicavt::store::ISessionStore& sessions) {
     using clinicavt::store::DocumentKind;
     json list = json::array();
@@ -310,8 +309,8 @@ json HandleReflectionList(clinicavt::store::ISessionStore& sessions) {
                                                             : reflection.generated_at)},
                             {"editedAt", NullWhenEmpty(reflection.edited_at)},
                             {"demo", session.demo}});
-        } catch (const std::exception&) {
-            // A session mid-recording or missing its key is not listed
+        } catch (const std::exception&) {  // NOLINT(bugprone-empty-catch) not listed
+            // Skip sessions still recording or missing a key
         }
     }
     return json{{"reflections", std::move(list)}};
@@ -319,7 +318,6 @@ json HandleReflectionList(clinicavt::store::ISessionStore& sessions) {
 
 namespace {
 
-// The handler for a text edit of one stored document
 auto EditDocument(clinicavt::store::ISessionStore& sessions, clinicavt::store::DocumentKind kind) {
     return [&sessions, kind](const json& params) {
         return WithSession(params, [&](const std::string& id) -> std::variant<json, Error> {
@@ -333,7 +331,7 @@ auto EditDocument(clinicavt::store::ISessionStore& sessions, clinicavt::store::D
     };
 }
 
-// A stored session whose transcript has no turns, as one restored without it
+// A stored session with no turns, e.g. restored without a transcript
 bool NoTranscript(clinicavt::store::ISessionStore& sessions, const std::string& id) {
     if (id.empty()) return false;
     try {
@@ -343,8 +341,7 @@ bool NoTranscript(clinicavt::store::ISessionStore& sessions, const std::string& 
     }
 }
 
-// confirmed: the clinician insists it was a consultation. "standard", the retired middle
-// length, reads as concise
+// confirmed: clinician says it was a consultation. Legacy detail "standard" maps to concise
 std::variant<clinicavt::note::NoteOptions, Error> NoteOptionsFrom(const json& params) {
     const std::string style = params.value("style", "prose");
     std::string detail = params.value("detail", "concise");
@@ -364,8 +361,8 @@ Notify QueueTo(PipeServer& server) {
     };
 }
 
-// The note and patient lanes announce themselves when a writer is wired. Without one the stubs
-// keep the contract for CI
+// Without a note writer (CI), send empty note/ready and patient/ready so the
+// shell contract holds
 void StubDocuments(const Notify& notify) {
     notify("note/ready", json::object());
     notify("patient/ready", json::object());
@@ -379,7 +376,7 @@ std::optional<std::filesystem::path> RecordingPath(const json& params) {
     return clinicavt::utf8::ToPath(params["path"].get_ref<const std::string&>());
 }
 
-// The reader's reason is plain words. Any other failure may name the file
+// RecordingError text is plain; other errors may name the file
 template <class Read>
 auto ReadRecording(Read read) -> std::variant<decltype(read()), Error> {
     try {
@@ -420,7 +417,7 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
                                               const std::vector<std::string>& missing) {
     const auto path = RecordingPath(params);
     if (!path) return InvalidParams("path must be a file path");
-    // Stores order times as text and restore accepts only this form
+    // Stored times sort as text, and restore accepts only this form
     if (!params.contains("startedAt") || !params["startedAt"].is_string() ||
         !clinicavt::archive::IsIso8601(params["startedAt"].get<std::string>())) {
         return InvalidParams("startedAt must be UTC to the second, as 2026-09-26T13:05:00Z");
@@ -434,7 +431,7 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     }
     if (!missing.empty()) return SessionError(MissingModelsReason(missing));
     if (controller.Running()) return SessionError("a session is running");
-    // A file that cannot be opened is refused here. Its decode runs on the import's thread
+    // Reject unopenable files here; decoding runs on the import thread
     const auto readable = ReadRecording([&] { return reader.Inspect(*path); });
     if (std::holds_alternative<Error>(readable)) return std::get<Error>(readable);
     // The whole recording and its finalise need the memory
@@ -453,7 +450,7 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
         .progress =
             [push, last = std::make_shared<std::pair<int, int>>(-1, -1)](
                 const std::string& id, clinicavt::session::ImportStage stage, int percent) {
-                // At most one push per percent or stage, so a long file never floods the pipe
+                // One push per percent or stage change at most, so the pipe isn't flooded
                 const int now = static_cast<int>(stage);
                 if (now == last->first && percent <= last->second) return;
                 *last = {now, percent};
@@ -482,10 +479,11 @@ std::variant<json, Error> HandleSessionStart(clinicavt::session::SessionControll
                                              const json& params,
                                              const std::vector<std::string>& missing,
                                              bool allow_replay) {
-    // An optional replay block plays a file through the same pipeline. Absent means microphone
+    // replay plays a file through the live pipeline in place of the microphone
     std::optional<clinicavt::session::ReplaySpec> replay;
     if (params.contains("replay")) {
-        // It reads any file the client names, so only a test or evaluation engine takes it
+        // Replay reads any file the client names, so only an engine started with
+        // --allow-replay accepts it
         if (!allow_replay) {
             return InvalidParams("replay needs an engine started with --allow-replay");
         }
@@ -497,8 +495,8 @@ std::variant<json, Error> HandleSessionStart(clinicavt::session::SessionControll
             clinicavt::session::ReplaySpec{r["path"].get<std::string>(), r.value("speed", 1.0)};
     }
     if (!missing.empty()) return SessionError(MissingModelsReason(missing));
-    // micId pins the picker's choice. One that has gone falls back
-    // to the default, logged, and the snapshot records the fallback
+    // micId pins the picker choice. A missing device falls back to the default,
+    // logged and recorded in the snapshot
     clinicavt::session::MicSelection mic;
     if (!replay.has_value()) {
         const std::string requested = params.value("micId", "");
@@ -510,8 +508,8 @@ std::variant<json, Error> HandleSessionStart(clinicavt::session::SessionControll
         }
         mic = {device.id, device.name};
     }
-    // resume replays the crashed session's stored audio ahead of the live
-    // source. retain false erases on leaving the consultation
+    // resume: replay the crashed session's stored audio before the live source.
+    // retain false: erase when the consultation is left
     if (!controller.Start(std::move(replay), params.value("resume", ""),
                           params.value("retain", true), mic)) {
         return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
@@ -542,16 +540,14 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     server.RegisterMethod("session/patient", [&sessions](const json& params) {
         return HandleSessionPatient(sessions, params);
     });
-    // A typed label outlives regenerations. The note's own first sentence
-    // fills in until then
+    // A typed label survives regeneration; until one is set, the note's first sentence is used
     server.RegisterMethod("session/label",
                           EditDocument(sessions, clinicavt::store::DocumentKind::kLabel));
     if (translator != nullptr && translate_lane != nullptr) {
         server.RegisterMethod("translate/languages", [translator](const json&) {
             return json{{"languages", translator->Languages()}};
         });
-        // Translates the session's patient sheet off the RPC thread. Results
-        // arrive as translate/partial then translate/ready
+        // Off the RPC thread; results as translate/partial then translate/ready
         server.RegisterMethod("patient/translate", [&sessions, translate_lane](const json& params) {
             return WithSession(
                 params, [&](const std::string& session_id) -> std::variant<json, Error> {
@@ -564,8 +560,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                     if (text.empty()) {
                         return SessionError("no patient information to translate");
                     }
-                    // Stored before translate/ready goes out, so the sheet
-                    // read back after it already carries the translation
+                    // Store before translate/ready so a read after it sees the translation
                     const auto on_ready = [&sessions, session_id](const std::string& translated,
                                                                   const std::string& language) {
                         try {
@@ -574,7 +569,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                             document.language = language;
                             sessions.SaveDocument(
                                 session_id, clinicavt::store::DocumentKind::kTranslation, document);
-                        } catch (...) {  // NOLINT(bugprone-empty-catch)
+                        } catch (...) {  // NOLINT(bugprone-empty-catch) storing is best effort
                         }
                     };
                     if (!translate_lane->Run(text, params["language"].get<std::string>(),
@@ -624,7 +619,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
             if (controller.Busy()) return SessionError("finish the consultation first");
             return HandleDemoClear(sessions);
         });
-    // Written on the note lane and delivered as reflection/summary
+    // Runs on the note lane; result sent as reflection/summary
     server.RegisterMethod(
         "reflection/summary", [&controller](const json& params) -> std::variant<json, Error> {
             const auto id = IdFrom(params);
@@ -675,9 +670,8 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         controller.Cancel();
         return json::object();
     });
-    // Regenerate and translate act on a past session under review as on a
-    // fresh seal. Record closes the review. A stored sheet preloads the
-    // translator
+    // Regenerate and translate work on a reviewed past session as on a new one.
+    // Recording closes the review. A stored sheet preloads the translator
     server.RegisterMethod(
         "session/open",
         [&controller, &sessions, translator](const json& params) -> std::variant<json, Error> {
@@ -702,7 +696,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     });
     server.RegisterMethod("session/stop",
                           [&server, &controller](const json&) -> std::variant<json, Error> {
-                              // Stop would wait out the import, holding every request behind it
+                              // Stop would block on the import and hold up every other request
                               if (controller.Importing())
                                   return SessionError("an import is running");
                               controller.Stop();

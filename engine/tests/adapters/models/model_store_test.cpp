@@ -114,6 +114,7 @@ TEST(ModelStore, EverySpellingOfTheRootGivesOneModelDirectory) {
     const auto link = root.path.parent_path() / (root.path.filename().string() + "-link");
     const std::string mklink =
         "mklink /J \"" + link.string() + "\" \"" + root.path.string() + "\" >nul 2>&1";
+    // NOLINTNEXTLINE(bugprone-command-processor) mklink is a cmd built-in
     if (std::system(mklink.c_str()) != 0) GTEST_SKIP() << "no junction";
     const auto through_link = ModelStore(link).List().at(0).dir;
     std::filesystem::remove(link);
@@ -171,13 +172,12 @@ TEST(ModelStore, VerifyRefusesAMissingOrChangedFileByName) {
     WriteFile(changed / "weights.bin", "jello");  // same size, different bytes
     EXPECT_EQ(Refusal([&] { store.Verify(changed_model); }), "") << "the load check reads no bytes";
 
-    // A drive that dropped out takes the whole folder, and says so rather than naming a file
+    // A missing drive removes the whole folder, so the refusal names the folder
     std::filesystem::remove_all(changed);
     const auto gone = Refusal([&] { store.Verify(changed_model); });
     EXPECT_TRUE(Says(gone, "models folder cannot be read") && !Says(gone, "missing file")) << gone;
 }
 
-// A manifest this build cannot read is a corrupt one, refused outright at scan
 TEST(ModelStore, AManifestThisBuildCannotReadIsRefusedAtScan) {
     const std::string head = R"({"manifestVersion": 1, "id": "broken")";
     const std::string body = R"(, "task": "note", "tier": "default", "licence": "MIT", "files": )" +
@@ -222,9 +222,8 @@ TEST(ModelStore, ResolvePicksByTaskAndTierAndOtherwiseNamesWhatIsInstalled) {
         << "an absent role names what is installed";
 }
 
-// How a model loads is the manifest's fact: absent means the LLM pipeline
-// with no properties, so a manifest written before the fields existed reads
-// exactly as it did
+// Missing runtime fields default to the LLM pipeline with no properties, so older manifests
+// load unchanged
 TEST(ModelStore, RuntimeFieldsAreReadAndDefaultToTheLlmPipeline) {
     TempRoot root;
     Stage(root.path, {.id = "qwen3.5-9b-int4", .task = "note"});

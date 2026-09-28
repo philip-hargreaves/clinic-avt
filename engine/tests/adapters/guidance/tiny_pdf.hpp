@@ -18,6 +18,7 @@ inline std::vector<std::uint8_t> TinyPdf(const std::vector<std::string>& lines) 
     const std::vector<std::string> objects = {
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        // NOLINTNEXTLINE(bugprone-suspicious-missing-comma) one object over two lines
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R"
         " /Resources << /Font << /F1 5 0 R >> >> >>",
         "<< /Length " + std::to_string(content.size()) + " >>\nstream\n" + content + "\nendstream",

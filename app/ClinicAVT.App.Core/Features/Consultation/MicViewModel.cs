@@ -45,7 +45,6 @@ public sealed partial class MicViewModel : ObservableObject
 
     public bool HasDevices => Devices.Count > 0;
 
-    /// <summary>The picker's caption when the engine hears nothing.</summary>
     public string NoDevicesText { get; } = "No microphone found - connect one to record";
 
     /// <summary>The id session/start pins. Empty means the system default.</summary>
@@ -85,7 +84,7 @@ public sealed partial class MicViewModel : ObservableObject
         ?? Devices.FirstOrDefault(d => d.IsDefault)
         ?? Devices.FirstOrDefault();
 
-    /// <summary>Asks the engine what it can hear. Called when the picker opens.</summary>
+    /// <summary>Reloads the device list. Called when the picker opens.</summary>
     [RelayCommand]
     public async Task RefreshAsync()
     {

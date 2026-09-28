@@ -47,7 +47,7 @@ public partial class App : Application
         _window.Activate();
     }
 
-    // Cancels the first close so the shutdown can ask, then closes the window itself
+    // Cancel the first close to confirm shutdown; CloseAsync closes the window
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs e)
     {
         if (!_closing)

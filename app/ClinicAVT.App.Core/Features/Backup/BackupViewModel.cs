@@ -67,7 +67,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     partial void OnReflectionsOnlyChanged(bool value) => _ = CountAsync();
 
-    /// <summary>The other choice, for the first radio button.</summary>
+    /// <summary>!ReflectionsOnly, for the first radio button.</summary>
     public bool Whole
     {
         get => !ReflectionsOnly;
@@ -313,7 +313,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         ProgressText = "Removing consultations…";
         try
         {
-            // A consultation open for review goes with the rest, so its review ends first
+            // The consultation under review is being removed, so end the review first
             if (_session?.ReviewedSessionId is { } open && _ids.Contains(open))
             {
                 await _session.EndReviewAsync().ConfigureAwait(true);
@@ -364,7 +364,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         Progress = 1;
         DoneLine = $"{Words.Count(done.Consultations, Things(done.ReflectionsOnly))} backed up and checked.";
         Step = BackupStep.Done;
-        // A reflections-only file backs up no consultation, so the reminder still counts them all
+        // Reflections-only backups do not update LastBackup, which tracks consultations
         if (done.ReflectionsOnly)
         {
             return;

@@ -5,8 +5,7 @@ using ClinicAVT.App.Core.Features.Appraisal;
 namespace ClinicAVT.App.Features.Appraisal;
 
 /// <summary>
-/// The primary button steps the view model on and never closes the dialog itself, as in the
-/// Back up dialog.
+/// The primary button advances the view model and never closes the dialog, as in BackupDialog.
 /// </summary>
 public sealed partial class ExportReflectionsDialog : ContentDialog
 {

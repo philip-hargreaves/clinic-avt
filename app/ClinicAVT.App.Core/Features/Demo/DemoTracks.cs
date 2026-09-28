@@ -15,7 +15,7 @@ public static class DemoTracks
 {
     /// <summary>
     /// Loads demo/tracks.json, probing upward so packaged and dev layouts
-    /// both resolve. A missing manifest or wav shrinks the list, and an unreadable one is logged.
+    /// both resolve. A missing manifest or wav is skipped, and an unreadable manifest is logged.
     /// </summary>
     public static IReadOnlyList<DemoTrack> Load(string? baseDirectory = null, ILogger? logger = null)
     {

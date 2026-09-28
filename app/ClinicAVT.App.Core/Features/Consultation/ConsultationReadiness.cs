@@ -9,9 +9,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Consultation;
 
 /// <summary>
-/// What the engine offers once connected. That is the first-use compile gate, the note
-/// options it must be told again after every restart, the translation languages and the
-/// guidance embedder's state.
+/// Sets up the engine on connect. Covers the first-use compile gate, note options (resent after
+/// every restart), translation languages and guidance embedder state.
 /// </summary>
 public sealed partial class ConsultationReadiness : ObservableObject
 {
@@ -38,13 +37,12 @@ public sealed partial class ConsultationReadiness : ObservableObject
     }
 
     /// <summary>
-    /// False only during first-time setup while the one-off model compiles run. Recording is
-    /// blocked so nobody's first impression is the slow path. Warm launches are never gated.
+    /// False only while first-time model compiles run. Blocks recording so the first one avoids
+    /// the slow path. Warm launches are never gated.
     /// </summary>
     [ObservableProperty]
     public partial bool ModelsReady { get; private set; } = true;
 
-    /// <summary>Asks a newly connected engine everything it must be asked.</summary>
     public void Connected()
     {
         _ = LoadLanguagesAsync();
@@ -137,7 +135,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
     {
         if (_engine.Connected)
         {
-            // A shell that reconnects mid-load learns of it from the reply
+            // Use the reply's model state, since the shell may reconnect mid-load
             await EngineCall.TryAsync(_status, "note/tier", async () =>
             {
                 var reply = await _engine.SetNoteTierAsync(_preferences?.NoteTier ?? AppPreferences.AutoNoteTier)
@@ -173,7 +171,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
                         _status.Log("stray note host detected at engine start");
                     }
 
-                    // Recording is refused until it is installed, so the reason shows before a try
+                    // Recording is refused until the model is installed, so show why up front
                     if (readiness.Missing.Count > 0)
                     {
                         _status.Append($"Recording unavailable: {ModelNames.Missing(readiness.Missing)}");

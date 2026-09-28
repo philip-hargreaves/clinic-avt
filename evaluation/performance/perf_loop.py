@@ -401,8 +401,8 @@ def main():
         while now() < deadline and not os.path.exists(STOP_FILE) \
                 and (max_cycles == 0 or cycle < max_cycles):
             cycle += 1
-            # A fresh engine per cycle: cold start is measured every cycle and a
-            # leaking engine cannot poison the whole night
+            # A fresh engine per cycle measures cold start each time and confines any leak to
+            # one cycle
             if engine is not None:
                 engine.close()
             engine_index += 1

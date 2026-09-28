@@ -9,13 +9,12 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
-/// One reading of the passage. The clinician presses Start, reads at their own pace and
-/// presses Finish, then the engine gives its verdict. The dialog binds to this and closes once
-/// the reading succeeded.
+/// One voice-enrolment reading. Start, read the passage, Finish, then the engine accepts or
+/// rejects it. The dialog closes once a reading succeeds.
 /// </summary>
 public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 {
-    /// <summary>A cap the reader never sees. Finish is how a reading ends.</summary>
+    /// <summary>Hidden safety cap. Readings normally end with Finish.</summary>
     public const double DefaultSeconds = 120;
 
     /// <summary>What the engine needs before it will make a print.</summary>
@@ -25,11 +24,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
     /// is never rushed.</summary>
     public const double TargetSpeechSeconds = NeededSpeechSeconds + 5;
 
-    /// <summary>
-    /// One sentence that says what is happening, then questions and a plan in the clinician's
-    /// own register. It takes about thirty seconds at a natural pace, which leaves a margin
-    /// over the 20 s of speech the engine needs.
-    /// </summary>
+    /// <summary>About 30 s at a natural pace, over the 20 s of speech the engine needs.</summary>
     public const string Passage =
         "I am reading this so ClinicAVT learns my voice and can tell me apart from my patients. "
         + "Good morning, thanks for coming in. Have you had any chest pain, shortness of breath "
@@ -150,7 +145,6 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         }
     }
 
-    // The reader reached the end. The engine makes the print from what it heard
     private async Task Finish()
     {
         try

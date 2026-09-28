@@ -101,8 +101,8 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
                 new { seconds = RecordingSeconds, recordedAt = "2026-09-26T13:05:00Z" }));
         }
 
-        // The engine answers at once and finalises on its own thread, reporting its stages as
-        // session/stop does. Its end can arrive before the answer. HoldImport keeps it running
+        // Replies at once and finalises in the background, like the engine. session/imported may
+        // arrive before the reply. HoldImport keeps the import running
         if (method == "session/import")
         {
             _importRunning = true;
@@ -497,7 +497,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
 
     public bool SummaryFails { get; set; }
 
-    /// <summary>The request is taken and nothing ever comes back, as when the engine dies writing it.</summary>
+    /// <summary>Summary requests never answer, as when the engine dies mid-write.</summary>
     public bool SummarySilent { get; set; }
 
     /// <summary>Served by reflection/list.</summary>
@@ -515,7 +515,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
     /// <summary>Served by engine/readiness, no wedged note process by default.</summary>
     public bool StrayNoteHost { get; set; }
 
-    /// <summary>Served by engine/readiness: the roles not installed, none by default.</summary>
+    /// <summary>Roles engine/readiness reports as not installed. Empty by default.</summary>
     public List<string> MissingModels { get; } = [];
 
     public void RaiseNotification(string method, JsonElement parameters = default) =>

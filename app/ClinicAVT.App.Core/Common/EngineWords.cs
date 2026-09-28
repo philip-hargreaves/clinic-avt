@@ -8,8 +8,8 @@ namespace ClinicAVT.App.Core.Common;
 public static partial class EngineWords
 {
     /// <summary>
-    /// The engine's reason for a refusal, its internal nouns swapped for the clinician's. Any other
-    /// failure reads as plain words, and its detail goes to the log instead.
+    /// The engine's refusal message, reworded for clinicians. Any other failure gets a plain
+    /// message and its detail is logged.
     /// </summary>
     public static string Reason(Exception e, ILogger? logger = null)
     {

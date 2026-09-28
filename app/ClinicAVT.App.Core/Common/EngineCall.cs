@@ -7,8 +7,8 @@ namespace ClinicAVT.App.Core.Common;
 public static class EngineCall
 {
     /// <summary>
-    /// A failure goes on the status line as "{problem}: {reason}", the engine's reason in plain
-    /// words, and its detail to the log. Cancellation still throws.
+    /// Shows a failure on the status line as "{problem}: {reason}", with the engine's reason in
+    /// plain words, and logs the detail. Cancellation still throws.
     /// </summary>
     public static async Task<bool> ReportAsync(StatusBarViewModel? status, string problem, Func<Task> call) =>
         await ReportAsync(status, problem, async () =>
@@ -56,10 +56,7 @@ public static class EngineCall
         }
     }
 
-    /// <summary>
-    /// A step inside a flow that carries on when it fails. The failure is reported on the
-    /// status line and logged, and nothing is thrown.
-    /// </summary>
+    /// <summary>For optional steps. Reports and logs a failure without throwing.</summary>
     public static async Task<bool> TryAsync(StatusBarViewModel status, string step, Func<Task> call) =>
         await TryAsync(status, step, async () =>
         {
@@ -68,8 +65,8 @@ public static class EngineCall
         }).ConfigureAwait(true);
 
     /// <summary>
-    /// The call's value, or null when it failed. With refused, the engine's reason for a refusal
-    /// goes on the status line as "{refused}: {reason}".
+    /// The call's value, or null when it failed. If refused is set, an engine refusal shows on the
+    /// status line as "{refused}: {reason}".
     /// </summary>
     public static async Task<T?> TryAsync<T>(
         StatusBarViewModel status, string step, Func<Task<T>> call, string? refused = null)

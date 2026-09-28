@@ -4,10 +4,7 @@ using ClinicAVT.Client.Tests.Support;
 
 namespace ClinicAVT.Client.Tests.Contract;
 
-/// <summary>
-/// The real shell client against the real engine process. This is the evidence
-/// the two halves agree on the wire as well as against fixtures.
-/// </summary>
+/// <summary>Real shell client against the real engine, checking the wire beyond fixtures.</summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
 public class ContractTest
@@ -92,8 +89,8 @@ public class ContractTest
         }
     }
 
-    // The app starts the engine without --scripted. A model that is not installed is then named
-    // and refuses a consultation, where CI's scripted engine gives it a stand-in
+    // The app starts the engine without --scripted, so a missing model is reported and
+    // consultations are refused. CI's scripted engine uses a stand-in instead
     [Fact]
     public async Task WithoutScriptedAMissingModelIsNamedAndRefusesAConsultation()
     {
@@ -116,7 +113,7 @@ public class ContractTest
         Assert.True(engine.IsRunning, "it keeps serving, so the app can say why");
     }
 
-    // A replay reads whatever file it names, so only an engine started to allow it takes one
+    // Replay reads any file it is given, so only an engine started with --allow-replay accepts it
     [Fact]
     public async Task ReplayNeedsAnEngineStartedToAllowIt()
     {
@@ -164,7 +161,7 @@ public class ContractTest
         await using var second = EngineProcess.Start();
         var exitCode = await second.WaitForExitAsync(Timeout);
 
-        // Its own exit code, so the app takes the first one over rather than counting a crash
+        // Exit code 3 tells the app to adopt the running engine instead of counting a crash
         Assert.Equal(3, exitCode);
         Assert.Contains("pipe name already claimed", second.StandardError, StringComparison.Ordinal);
     }

@@ -11,9 +11,8 @@
 
 namespace clinicavt::models {
 
-// Hold the place of a role that is not installed when the engine runs without --scripted.
-// Consultations are refused before they reach one, so a call is a bug and fails loudly rather
-// than record a placeholder
+// Placeholders for roles that are not installed when the engine runs without --scripted.
+// Consultations are refused before reaching them, so any call is a bug and throws
 class MissingTranscriber : public asr::ITranscriber {
    public:
     std::vector<asr::Turn> DecodeClipChunks(std::span<const float>, std::uint64_t) override {

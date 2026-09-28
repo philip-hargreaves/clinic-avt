@@ -71,6 +71,7 @@ TEST(PageClean, CleanPagesLearnsTheHyphenCodeAndRejoinsWordsTheDocumentUsesWhole
                      "0.1%)")})};
     EXPECT_EQ(HyphenCodes(pages), (std::set<char32_t>{2}));
     CleanPages(pages);
+    // NOLINTBEGIN(bugprone-suspicious-missing-comma) literals split at a hex escape
     EXPECT_EQ(Texts(pages[0]),
               (std::vector<std::string>{"Start treatment", "early, then treatment of the condition",
                                         "of the condition",
@@ -79,6 +80,7 @@ TEST(PageClean, CleanPagesLearnsTheHyphenCodeAndRejoinsWordsTheDocumentUsesWhole
                                         "cases, P - 0.001, ap-propriate.",
                                         "Rarely (\xEF\xBF\xBD"
                                         "0.1%)"}));
+    // NOLINTEND(bugprone-suspicious-missing-comma)
 
     // A broken word rejoins only when the document also uses it whole
     auto page = PageOf({Line("Start treat-"), Line("ment early. Later treatment stops."),

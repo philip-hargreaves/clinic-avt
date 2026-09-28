@@ -6,25 +6,25 @@ using ClinicAVT.App.Core.Hosting;
 namespace ClinicAVT.App.Core.Common;
 
 /// <summary>
-/// Runs the async work behind a UI event. An exception out of an async void handler ends the
-/// app, so a failure is logged and goes no further. The clinician sees only what the view model
-/// already shows.
+/// Runs the async work for a UI event. An exception from an async void handler would end the
+/// app, so failures are logged and swallowed. Any message for the clinician comes from the view
+/// model.
 /// </summary>
 public static class UiEvent
 {
-    /// <summary>Where failures go, set once at startup.</summary>
+    /// <summary>Logger for failures, set once at startup.</summary>
     public static ILogger? Logger { get; set; }
 
     /// <summary>
-    /// Starts the work from an event handler and returns at its first await. The log names the
-    /// handler as "ReflectionEditorView.OnTitleCommitted".
+    /// Starts the work and returns at its first await. Failures are logged under the calling
+    /// handler, such as "ReflectionEditorView.OnTitleCommitted".
     /// </summary>
     public static async void Run(Func<Task> work, [CallerFilePath] string file = "",
         [CallerMemberName] string handler = "") =>
         await RunAsync(work, Logger, $"{Path.GetFileName(file).Split('.')[0]}.{handler}")
             .ConfigureAwait(true);
 
-    /// <summary>The work, a failure logged rather than thrown.</summary>
+    /// <summary>Runs the work and logs a failure instead of throwing it.</summary>
     public static async Task RunAsync(Func<Task> work, ILogger? logger, string handler)
     {
         try
