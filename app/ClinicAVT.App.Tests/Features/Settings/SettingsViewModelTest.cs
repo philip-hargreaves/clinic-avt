@@ -244,30 +244,6 @@ public class SettingsViewModelTest
         Assert.False(settings.Guidance.DocumentsExpanded, "the same failure does not reopen it");
     }
 
-    [Fact]
-    public void DemoModeRowFollowsTheSavedRuns()
-    {
-        var masters = Path.Combine(Path.GetTempPath(), $"clinicavt-masters-{Guid.NewGuid():N}.json");
-        File.WriteAllText(masters, """{"Elbow swelling":{"id":"s-elbow","audioSeconds":540},"Chest pain":{"id":"s-chest","audioSeconds":457}}""");
-        var preferences = TempPreferences();
-        var demo = new ClinicAVT.App.Core.Features.Demo.DemoMode(preferences, masters, []);
-        var settings = new SettingsViewModel(preferences, demo: demo);
-
-        Assert.True(settings.Appearance.DemoTracksAvailable);
-        Assert.False(settings.Appearance.DemoModeEnabled);
-        settings.Appearance.DemoModeEnabled = true;
-        settings.Appearance.DemoTrackIndex = 1;
-        Assert.True(demo.Enabled);
-        Assert.Equal("s-chest", demo.Master!.SessionId);
-        Assert.True(preferences.DemoMode);
-        Assert.Equal("Chest pain", preferences.DemoTrack);
-
-        var none = new SettingsViewModel(preferences, demo: new ClinicAVT.App.Core.Features.Demo.DemoMode(
-            preferences, Path.Combine(Path.GetTempPath(), "missing.json"), []));
-        Assert.False(none.Appearance.DemoTracksAvailable);
-        Assert.Contains("record_masters", none.Appearance.DemoModeCaption);
-    }
-
     private static FakeEngineClient TieredEngine()
     {
         var engine = new FakeEngineClient();

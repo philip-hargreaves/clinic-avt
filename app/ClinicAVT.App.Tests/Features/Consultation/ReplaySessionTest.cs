@@ -131,7 +131,7 @@ public class ReplaySessionTest
         var stored = await connection.RequestAsync("session/note", new { id }, Timeout);
         Assert.Equal(note, stored.GetProperty("text").GetString());
 
-        // The patient sheet follows the note
+        // The patient information follows the note
         var patient = await patientReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
         Assert.Contains("Your appointment today", patient);
         var storedPatient =

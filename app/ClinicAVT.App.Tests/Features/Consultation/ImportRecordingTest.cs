@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
@@ -72,6 +73,38 @@ public class ImportRecordingTest
         Assert.Equal(inspections, engine.Requests.Count(r => r.Method == "recording/inspect"));
         Assert.Contains("not a recording", import.Problem);
         Assert.False(import.CanImport);
+    }
+
+    // A bundled example goes through the same inspection and import as a chosen file
+    [Fact]
+    public async Task AnExampleImportsLikeAChosenFileAndAChosenFileReplacesIt()
+    {
+        var engine = new FakeEngineClient();
+        var picker = new FakeFilePicker { OpenPath = FixturePath };
+        var import = new ImportRecordingViewModel(new EngineApi(engine), picker, FakeTimeProvider.London(),
+            [new DemoTrack("Elbow swelling", @"C:\demo\elbow.wav"), new DemoTrack("Chest pain", @"C:\demo\chest.wav")]);
+        Assert.Equal(["Elbow swelling", "Chest pain"], import.ExampleNames);
+        Assert.True(import.ExamplesVisible);
+        Assert.Equal(-1, import.ExampleIndex);
+
+        import.ExampleIndex = 1;
+        await Waits.WaitUntilAsync(() => import.Inspected);
+
+        Assert.Equal(@"C:\demo\chest.wav", import.Path);
+        Assert.False(import.ShowFile);  // the example list already names it
+        Assert.True(import.ShowDropArea);
+        Assert.False(import.ShowWhen);  // dated when added
+        Assert.True(import.CanImport);
+        Assert.Equal(@"C:\demo\chest.wav", import.Result!.Path);
+
+        await import.ChooseCommand.ExecuteAsync(null);
+        Assert.Equal(-1, import.ExampleIndex);
+        Assert.Equal("Home visit 26 Sep.m4a", import.FileName);
+        Assert.True(import.ShowFile);
+        Assert.True(import.ShowWhen);
+
+        var none = new ImportRecordingViewModel(new EngineApi(engine), picker, FakeTimeProvider.London(), []);
+        Assert.False(none.ExamplesVisible);
     }
 
     [Fact]

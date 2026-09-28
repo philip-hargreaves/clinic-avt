@@ -25,7 +25,6 @@ public sealed partial class SessionRecorder : ObservableObject
     private readonly TranscriptViewModel _transcript;
     private readonly Metrics.PerformanceCollector? _metrics;
     private readonly AppPreferences? _preferences;
-    private readonly DemoMode? _demo;
 
     // A replay stops itself at the end of its file. Zero when the length is unknown
     private double _replayEndSeconds;
@@ -33,7 +32,7 @@ public sealed partial class SessionRecorder : ObservableObject
     public SessionRecorder(
         IEngineApi engine, StatusBarViewModel status, NoteViewModel note, GuidanceViewModel guidance,
         PageViewModel pageView, TranscriptViewModel transcript,
-        Metrics.PerformanceCollector? metrics, AppPreferences? preferences, DemoMode? demo)
+        Metrics.PerformanceCollector? metrics, AppPreferences? preferences)
     {
         _engine = engine;
         _status = status;
@@ -43,7 +42,6 @@ public sealed partial class SessionRecorder : ObservableObject
         _transcript = transcript;
         _metrics = metrics;
         _preferences = preferences;
-        _demo = demo;
     }
 
     [ObservableProperty]
@@ -77,13 +75,7 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial ReplayRequest? ActiveReplay { get; private set; }
 
-    /// <summary>The saved run being played back, null unless a demo plays.</summary>
-    [ObservableProperty]
-    public partial DemoMaster? ActivePlayback { get; private set; }
-
-    /// <summary>
-    /// True for a demo record until the next idle. The badge shows for it and for demo mode.
-    /// </summary>
+    /// <summary>True for a demo record until the next idle. The badge shows for it.</summary>
     public bool DemoRecord { get; private set; }
 
     /// <summary>The session the engine is recording into, for a resume after a restart.</summary>
@@ -101,7 +93,7 @@ public sealed partial class SessionRecorder : ObservableObject
     public void ShowDemo(bool record)
     {
         DemoRecord = record;
-        _status.Demo = record || _demo is { Enabled: true };
+        _status.Demo = record;
         _note.ExampleCasesVisible = record && _note.ExampleCases.Count > 0;
         if (!record)
         {
@@ -192,13 +184,10 @@ public sealed partial class SessionRecorder : ObservableObject
         State = SessionState.Idle;
         Paused = false;
         ActiveReplay = null;
-        ActivePlayback = null;
         _status.SetMicVisible(false);
     }
 
-    /// <summary>
-    /// A level reading. A playback's reading carries the position its clock has reached.
-    /// </summary>
+    /// <summary>A level reading.</summary>
     public void OnAudioLevel(AudioLevel level)
     {
         _status.SetMicLevel(level.Level);
@@ -208,9 +197,8 @@ public sealed partial class SessionRecorder : ObservableObject
         }
 
         AudioSeconds = level.Seconds ?? AudioSeconds + 0.1;
-        // A playback or a replay stops itself at the end of its audio
-        var end = ActivePlayback?.AudioSeconds ?? _replayEndSeconds;
-        if (end > 0 && AudioSeconds >= end - 0.05)
+        // A replay stops itself at the end of its audio
+        if (_replayEndSeconds > 0 && AudioSeconds >= _replayEndSeconds - 0.05)
         {
             _ = StopRecordingAsync();
         }
@@ -223,18 +211,11 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        // In demo mode the record button plays the chosen saved run back
-        if (replay is null && _demo is { Enabled: true } && _demo.Master is { } master)
-        {
-            await StartPlaybackAsync(master).ConfigureAwait(true);
-            return;
-        }
-
         // An empty mic id means the default, and a missing device falls back to it with a log line
         var start = replay is null
             ? () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")
             : (Func<Task<string>>)(() => _engine.StartReplayAsync(Retain, replay));
-        if (!await BeginAsync(start, replay, null).ConfigureAwait(true))
+        if (!await BeginAsync(start, replay).ConfigureAwait(true))
         {
             return;
         }
@@ -245,29 +226,7 @@ public sealed partial class SessionRecorder : ObservableObject
             replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
     }
 
-    /// <summary>
-    /// Plays a stored consultation back as a demo. It passes through the same states, sped up,
-    /// and generates nothing. Performance measurement ignores it.
-    /// </summary>
-    public async Task StartPlaybackAsync(DemoMaster playback)
-    {
-        if (State != SessionState.Idle)
-        {
-            return;
-        }
-
-        var start = () => _engine.StartPlaybackAsync(playback.SessionId);
-        if (!await BeginAsync(start, null, playback).ConfigureAwait(true))
-        {
-            return;
-        }
-
-        ShowDemo(true);
-        _status.Append("Recording");
-    }
-
-    private async Task<bool> BeginAsync(
-        Func<Task<string>> start, ReplayRequest? replay, DemoMaster? playback)
+    private async Task<bool> BeginAsync(Func<Task<string>> start, ReplayRequest? replay)
     {
         var started = await EngineCall.TryAsync(_status, "session/start", start).ConfigureAwait(true);
         if (started is null)
@@ -281,7 +240,6 @@ public sealed partial class SessionRecorder : ObservableObject
         Phase = FinalisePhase.None;
         ActiveReplay = replay;
         _replayEndSeconds = replay is null ? 0 : DemoTracks.DurationSeconds(replay.Path);
-        ActivePlayback = playback;
         State = SessionState.Recording;
         ResetForNewConsultation();
         _status.SetMicVisible(true);
@@ -301,16 +259,6 @@ public sealed partial class SessionRecorder : ObservableObject
         var resume = RecordingSessionId;
         if (resume is null)
         {
-            return;
-        }
-
-        // A demo has no audio to resume from
-        if (ActivePlayback is not null)
-        {
-            State = SessionState.Idle;
-            ActivePlayback = null;
-            _status.SetMicVisible(false);
-            _status.Append("Playback interrupted");
             return;
         }
 
@@ -369,13 +317,7 @@ public sealed partial class SessionRecorder : ObservableObject
 
         Paused = false;
         ActiveReplay = null;
-        // A playback's timings are staged, so the collector never sees them
-        if (ActivePlayback is null)
-        {
-            _metrics?.StopRequested();
-        }
-
-        ActivePlayback = null;
+        _metrics?.StopRequested();
         _status.SetMicVisible(false);
         // The recording is safe in the store even when the stop fails
         await FinaliseAsync("session/stop", "Stop failed, consultation kept", _engine.StopSessionAsync)

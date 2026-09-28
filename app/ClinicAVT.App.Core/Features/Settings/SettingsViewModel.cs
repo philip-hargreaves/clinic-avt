@@ -22,7 +22,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         ISessionState? session = null, StatusBarViewModel? status = null,
         IMachineInfoProvider? machine = null, PerformanceCollector? metrics = null,
         IEngineApi? client = null,
-        IUiDispatcher? dispatcher = null, DemoMode? demo = null, IDialogService? dialogs = null,
+        IUiDispatcher? dispatcher = null, IDialogService? dialogs = null,
         IFilePicker? picker = null, ILauncher? launcher = null, IThemeService? theme = null)
     {
         _dispatcher = dispatcher;
@@ -30,7 +30,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Guidance = new GuidanceLibrary(preferences, client, status, dialogs, picker, launcher);
         Privacy = new PrivacySettings(preferences, client, session, status, dialogs);
         Appearance = new AppearanceAndDiagnostics(
-            preferences, client, session, status, machine, metrics, demo, picker, theme);
+            preferences, client, session, status, machine, metrics, picker, theme);
 
         if (client is null)
         {

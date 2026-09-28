@@ -43,7 +43,6 @@ public class CompositionTest
         services.AddSingleton<IProcessMetrics, NoProcessMetrics>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new AppPreferences(new MemoryPreferencesStore()));
-        services.AddSingleton(new DemoMode());
         services.AddSingleton(sp => new PerformanceCollector(
             sp.GetRequiredService<IEngineApi>(), () => false, () => null,
             Path.Combine(Path.GetTempPath(), $"clinicavt-composition-{Guid.NewGuid():N}.jsonl")));

@@ -14,7 +14,8 @@ internal static class TestSession
     /// <summary>A consultation over a quiet fake engine. The status bar is the session's own, and its lines go to the log when one is given.</summary>
     public static (ConsultationViewModel Session, FakeEngineClient Engine, NoteViewModel Note) Create(
         AppPreferences? preferences = null, FakeDialogService? dialogs = null,
-        FakeEngineClient? engine = null, DemoMode? demo = null, TimeSpan? readinessPollInterval = null,
+        FakeEngineClient? engine = null, IReadOnlyList<DemoCase>? exampleCases = null,
+        TimeSpan? readinessPollInterval = null,
         ListLogger? log = null)
     {
         engine ??= new FakeEngineClient(autoNotify: false);
@@ -23,7 +24,8 @@ internal static class TestSession
         var session = new ConsultationViewModel(
             new EngineApi(engine), new InlineDispatcher(), new TranscriptViewModel(), note, status,
             dialogs ?? new FakeDialogService(), Page(engine, status), Guidance(status),
-            readinessPollInterval: readinessPollInterval, preferences: preferences, demo: demo);
+            readinessPollInterval: readinessPollInterval, preferences: preferences,
+            exampleCases: exampleCases);
         return (session, engine, note);
     }
 

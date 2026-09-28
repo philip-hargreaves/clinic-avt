@@ -12,7 +12,7 @@ public class ExampleCaseTest
     private static readonly DemoCase Gout = new("Case 3, gout", "38-year-old man with recurrent effusions.");
 
     private static (ConsultationViewModel Session, FakeEngineClient Engine, NoteViewModel Note) Create() =>
-        TestSession.Create(demo: new DemoMode(null, Path.Combine(Path.GetTempPath(), "missing.json"), [Gout]));
+        TestSession.Create(exampleCases: [Gout]);
 
     [Fact]
     public void CasesParseAsTitledBlocksAndTheShippedFileLoads()

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.Client;
@@ -30,11 +31,11 @@ public sealed partial class DemoTrayViewModel : ObservableObject
         _picker = picker;
         Tracks = new List<DemoTrack>(tracks ?? DemoTracks.Load());
         SelectedTrack = Tracks.FirstOrDefault();
-        // The tray exists only while the settings toggle says so
-        Visible = preferences?.DemoTrayEnabled ?? false;
+        // The tray exists only while the settings toggle says so, and never in a release build
+        Visible = BuildFlags.Debug && (preferences?.DemoTrayEnabled ?? false);
         if (preferences is not null)
         {
-            preferences.Saved += () => Visible = preferences.DemoTrayEnabled;
+            preferences.Saved += () => Visible = BuildFlags.Debug && preferences.DemoTrayEnabled;
         }
 
         _session.PropertyChanged += (_, e) =>

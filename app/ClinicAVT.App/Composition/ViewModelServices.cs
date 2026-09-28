@@ -26,7 +26,6 @@ internal static class ViewModelServices
             paths.Metrics,
             sp.GetRequiredService<IProcessMetrics>(), PowerStateReader.Read,
             sp.GetRequiredService<ILogger<PerformanceCollector>>()));
-        services.AddSingleton(sp => new DemoMode(sp.GetRequiredService<AppPreferences>(), paths.Masters));
 
         services.AddSingleton(sp => new StatusBarViewModel(
             sp.GetRequiredService<IEngineApi>(), sp.GetRequiredService<IUiDispatcher>(),

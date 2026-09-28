@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.Client;
 
@@ -26,14 +27,49 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
     private readonly IEngineApi _engine;
     private readonly IFilePicker _picker;
     private readonly TimeProvider _clock;
+    private readonly IReadOnlyList<DemoTrack> _examples;
+    private bool _choosingExample;
     private int _inspection;
 
-    public ImportRecordingViewModel(IEngineApi engine, IFilePicker picker, TimeProvider? clock = null)
+    public ImportRecordingViewModel(IEngineApi engine, IFilePicker picker, TimeProvider? clock = null,
+        IReadOnlyList<DemoTrack>? examples = null)
     {
         _engine = engine;
         _picker = picker;
         _clock = clock ?? TimeProvider.System;
+        _examples = examples ?? DemoTracks.Load();
+        ExampleNames = [.. _examples.Select(e => e.Display)];
     }
+
+    /// <summary>The bundled example consultations, which import like any recording.</summary>
+    public IReadOnlyList<string> ExampleNames { get; }
+
+    public bool ExamplesVisible => ExampleNames.Count > 0;
+
+    /// <summary>The chosen example, -1 for none, which shows the placeholder.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UsingExample), nameof(ShowFile), nameof(ShowDropArea), nameof(ShowWhen))]
+    public partial int ExampleIndex { get; set; } = -1;
+
+    partial void OnExampleIndexChanged(int value)
+    {
+        if (value >= 0 && value < _examples.Count)
+        {
+            _choosingExample = true;
+            _ = UseFileAsync(_examples[value].Path);
+            _choosingExample = false;
+        }
+    }
+
+    /// <summary>An example is named in its own list and dated when added, so it shows neither.</summary>
+    public bool UsingExample => ExampleIndex >= 0;
+
+    public bool ShowFile => HasFile && !UsingExample;
+
+    /// <summary>Stays with an example chosen, so a file can still replace it.</summary>
+    public bool ShowDropArea => !ShowFile;
+
+    public bool ShowWhen => Inspected && !UsingExample;
 
     public static bool IsAudio(string path) =>
         Extensions.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
@@ -43,7 +79,8 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
         $"{string.Join(", ", Extensions.SkipLast(1).Select(TypeName))} or {TypeName(Extensions[^1])}";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(NoFile), nameof(CanImport))]
+    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(NoFile), nameof(ShowFile), nameof(ShowDropArea),
+        nameof(CanImport))]
     public partial string Path { get; private set; } = "";
 
     public string FileName => System.IO.Path.GetFileName(Path);
@@ -58,7 +95,8 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
 
     /// <summary>True once the engine has read the file's length.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LengthText), nameof(TooShort), nameof(Problem), nameof(CanImport))]
+    [NotifyPropertyChangedFor(nameof(LengthText), nameof(TooShort), nameof(Problem), nameof(CanImport),
+        nameof(ShowWhen))]
     public partial bool Inspected { get; private set; }
 
     [ObservableProperty]
@@ -136,6 +174,12 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
     public async Task UseFileAsync(string path)
     {
         var inspection = ++_inspection;
+        // A chosen or dropped file replaces an example
+        if (!_choosingExample)
+        {
+            ExampleIndex = -1;
+        }
+
         Path = path;
         Error = "";
         Inspected = false;
@@ -158,7 +202,7 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
             Reading = false;
             Seconds = info.Seconds;
             Inspected = true;
-            SetWhen(DateTimeOffset.TryParse(info.RecordedAt, CultureInfo.InvariantCulture,
+            SetWhen(!UsingExample && DateTimeOffset.TryParse(info.RecordedAt, CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeUniversal, out var recorded)
                 ? TimeZoneInfo.ConvertTime(recorded, _clock.LocalTimeZone)
                 : _clock.GetLocalNow());

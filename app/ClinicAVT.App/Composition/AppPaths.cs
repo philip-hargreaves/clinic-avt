@@ -22,6 +22,4 @@ public sealed record AppPaths(string LocalState)
     public string Crashes => Path.Combine(LocalState, "crashes.jsonl");
 
     public string Dumps => Path.Combine(LocalState, "dumps");
-
-    public string Masters => Path.Combine(LocalState, "masters.json");
 }

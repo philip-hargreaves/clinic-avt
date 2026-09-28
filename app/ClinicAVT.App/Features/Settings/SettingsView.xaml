@@ -217,27 +217,14 @@
                     Header="Developer tools"
                     IsExpanded="{x:Bind ViewModel.Appearance.DeveloperToolsExpanded, Mode=TwoWay}">
                     <toolkit:SettingsExpander.Items>
-                        <toolkit:SettingsCard Description="Replay recordings through the pipeline" Header="Demo tray">
+                        <toolkit:SettingsCard
+                            Description="Replay recordings through the pipeline"
+                            Header="Demo tray"
+                            Visibility="{x:Bind ViewModel.Appearance.DemoTrayAvailable}">
                             <ToggleSwitch
                                 MinWidth="0"
                                 AutomationProperties.Name="Demo tray"
                                 IsOn="{x:Bind ViewModel.Appearance.DemoTrayEnabled, Mode=TwoWay}" />
-                        </toolkit:SettingsCard>
-                        <toolkit:SettingsCard Description="{x:Bind ViewModel.Appearance.DemoModeCaption}" Header="Demo mode">
-                            <ToggleSwitch
-                                MinWidth="0"
-                                AutomationProperties.Name="Demo mode"
-                                IsEnabled="{x:Bind ViewModel.Appearance.DemoTracksAvailable}"
-                                IsOn="{x:Bind ViewModel.Appearance.DemoModeEnabled, Mode=TwoWay}" />
-                        </toolkit:SettingsCard>
-                        <toolkit:SettingsCard
-                            Description="The consultation the record button plays back"
-                            Header="Demo consultation"
-                            Visibility="{x:Bind ViewModel.Appearance.DemoModeEnabled, Mode=OneWay}">
-                            <ComboBox
-                                MinWidth="160"
-                                ItemsSource="{x:Bind ViewModel.Appearance.DemoTrackOptions, Mode=OneWay}"
-                                SelectedIndex="{x:Bind ViewModel.Appearance.DemoTrackIndex, Mode=TwoWay}" />
                         </toolkit:SettingsCard>
                         <toolkit:SettingsCard Description="A year of consultations and reflections from PriMock57 recordings" Header="Seed data">
                             <ToggleSwitch

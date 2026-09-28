@@ -13,8 +13,6 @@ public class AppPreferencesTest
         var preferences = new AppPreferences(store)
         {
             DemoTrayEnabled = true,
-            DemoMode = true,
-            DemoTrack = "Elbow swelling",
             SeedDataEnabled = true,
             NpuTranscription = true,
             CollectPerformanceData = true,
@@ -34,8 +32,6 @@ public class AppPreferencesTest
         var version = JsonDocument.Parse(store.Json!).RootElement.GetProperty("SchemaVersion").GetInt32();
         Assert.Equal(AppPreferences.CurrentSchema, version);
         Assert.True(loaded.DemoTrayEnabled);
-        Assert.True(loaded.DemoMode);
-        Assert.Equal("Elbow swelling", loaded.DemoTrack);
         Assert.True(loaded.SeedDataEnabled);
         Assert.True(loaded.NpuTranscription);
         Assert.True(loaded.CollectPerformanceData);

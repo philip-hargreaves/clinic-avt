@@ -20,10 +20,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
         public bool DemoTrayEnabled { get; init; }
 
-        public bool DemoMode { get; init; }
-
-        public string? DemoTrack { get; init; }
-
         public bool SeedDataEnabled { get; init; }
 
         public bool NpuTranscription { get; init; }
@@ -71,12 +67,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     public event Action? Saved;
 
     public bool DemoTrayEnabled { get; set; }
-
-    /// <summary>Record plays a saved run back. A developer control.</summary>
-    public bool DemoMode { get; set; }
-
-    /// <summary>The track whose saved run demo mode plays. Empty means the first.</summary>
-    public string DemoTrack { get; set; } = "";
 
     public bool SeedDataEnabled { get; set; }
 
@@ -149,8 +139,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
         // A newer document is read for what this build knows. A save rewrites it at this schema
         preferences.DemoTrayEnabled = stored.DemoTrayEnabled;
-        preferences.DemoMode = stored.DemoMode;
-        preferences.DemoTrack = stored.DemoTrack ?? "";
         preferences.SeedDataEnabled = stored.SeedDataEnabled;
         preferences.NpuTranscription = stored.NpuTranscription;
         preferences.CollectPerformanceData = stored.CollectPerformanceData;
@@ -176,8 +164,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
             store.Write(JsonSerializer.Serialize(new PreferencesFile
             {
                 DemoTrayEnabled = DemoTrayEnabled,
-                DemoMode = DemoMode,
-                DemoTrack = DemoTrack,
                 SeedDataEnabled = SeedDataEnabled,
                 NpuTranscription = NpuTranscription,
                 CollectPerformanceData = CollectPerformanceData,

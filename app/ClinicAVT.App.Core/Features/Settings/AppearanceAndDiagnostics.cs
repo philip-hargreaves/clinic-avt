@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Demo;
+using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
@@ -22,7 +22,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     private readonly StatusBarViewModel? _status;
     private readonly IMachineInfoProvider? _machine;
     private readonly PerformanceCollector? _metrics;
-    private readonly DemoMode? _demo;
     private readonly IFilePicker? _picker;
     private readonly IThemeService? _theme;
     private readonly bool _initialising;
@@ -31,7 +30,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     public AppearanceAndDiagnostics(
         AppPreferences? preferences, IEngineApi? client, ISessionState? session,
         StatusBarViewModel? status, IMachineInfoProvider? machine, PerformanceCollector? metrics,
-        DemoMode? demo, IFilePicker? picker, IThemeService? theme)
+        IFilePicker? picker, IThemeService? theme)
     {
         _preferences = preferences;
         _client = client;
@@ -39,13 +38,11 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         _status = status;
         _machine = machine;
         _metrics = metrics;
-        _demo = demo;
         _picker = picker;
         _theme = theme;
         // Restoring saved values is not the clinician changing them
         _initialising = true;
         DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
-        DemoModeEnabled = demo?.Enabled ?? false;
         NpuTranscription = preferences?.NpuTranscription ?? false;
         CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
         ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? false;
@@ -153,6 +150,9 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     [ObservableProperty]
     public partial bool DeveloperToolsExpanded { get; set; }
 
+    /// <summary>Shows the replay tray. A developer control, in debug builds only.</summary>
+    public bool DemoTrayAvailable { get; } = BuildFlags.Debug;
+
     /// <summary>Shows the replay tray. A developer control.</summary>
     [ObservableProperty]
     public partial bool DemoTrayEnabled { get; set; }
@@ -162,44 +162,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         if (!_initialising)
         {
             _preferences.Update(p => p.DemoTrayEnabled = value);
-        }
-    }
-
-    /// <summary>Record plays a saved run back. A developer control.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DemoTrackOptions))]
-    [NotifyPropertyChangedFor(nameof(DemoTrackIndex))]
-    public partial bool DemoModeEnabled { get; set; }
-
-    partial void OnDemoModeEnabledChanged(bool value)
-    {
-        if (!_initialising && _demo is not null)
-        {
-            _demo.Enabled = value;
-        }
-    }
-
-    /// <summary>The tracks with a saved run, as the picker's items.</summary>
-    public IReadOnlyList<string> DemoTrackOptions => _demo?.Tracks ?? [];
-
-    public bool DemoTracksAvailable => DemoTrackOptions.Count > 0;
-
-    public string DemoModeCaption => DemoTracksAvailable
-        ? "Record plays the chosen saved run back in seconds; nothing is transcribed or written"
-        : "No saved runs yet: record them with tools/demo/record_masters.py";
-
-    /// <summary>
-    /// The chosen track as the picker's selection. An unknown track falls back to the first.
-    /// </summary>
-    public int DemoTrackIndex
-    {
-        get => Math.Max(0, DemoTrackOptions.ToList().IndexOf(_demo?.Track ?? ""));
-        set
-        {
-            if (_demo is not null && value >= 0 && value < DemoTrackOptions.Count)
-            {
-                _demo.Track = DemoTrackOptions[value];
-            }
         }
     }
 
