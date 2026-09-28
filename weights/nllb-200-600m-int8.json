@@ -5,7 +5,7 @@
   "files": {
     "config.json": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3",
     "generation_config.json": "ec0e7781184aa37a75a8a85327ac4a80dba7d46f727ff0e1aa8c720ed84ebe7c",
-    "languages.json": "80038df9c628bc698723085d5346ffb43290319970616bbd61ff6df86bcfed17",
+    "languages.json": "4732753621c60b093a17abc30630a7b10f0bc7ee83a1a82b50426697c6296a11",
     "openvino_config.json": "24c0f5322f7dfc4f5301364896d4b935c98db6462fa0cf778107dfbb788a8954",
     "openvino_decoder_model.bin": "312a3b97a33a4dac3e3f56dd6ec10b2ea994a1d712d43e5b6900ed728ca708d7",
     "openvino_decoder_model.xml": "8ab412daab1db9a563dbf33823c3899beb5e448d57c6873fd5ed4ac119d459ff",
@@ -38,9 +38,9 @@
     ],
     "languages.json": [
       {
-        "name": "nllb-200-600m-int8--languages.json",
-        "size": 1207,
-        "sha256": "80038df9c628bc698723085d5346ffb43290319970616bbd61ff6df86bcfed17"
+        "name": "nllb-200-600m-int8--languages-24.json",
+        "size": 1803,
+        "sha256": "4732753621c60b093a17abc30630a7b10f0bc7ee83a1a82b50426697c6296a11"
       }
     ],
     "openvino_config.json": [
@@ -160,7 +160,7 @@
     "files": {
       "config.json": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3",
       "generation_config.json": "ec0e7781184aa37a75a8a85327ac4a80dba7d46f727ff0e1aa8c720ed84ebe7c",
-      "languages.json": "80038df9c628bc698723085d5346ffb43290319970616bbd61ff6df86bcfed17",
+      "languages.json": "4732753621c60b093a17abc30630a7b10f0bc7ee83a1a82b50426697c6296a11",
       "openvino_config.json": "24c0f5322f7dfc4f5301364896d4b935c98db6462fa0cf778107dfbb788a8954",
       "openvino_decoder_model.bin": "312a3b97a33a4dac3e3f56dd6ec10b2ea994a1d712d43e5b6900ed728ca708d7",
       "openvino_decoder_model.xml": "8ab412daab1db9a563dbf33823c3899beb5e448d57c6873fd5ed4ac119d459ff",
@@ -177,5 +177,5 @@
       "NOTICE.txt": "9d22af7a37751eaa1ec1d38a80f9f77f783da4e4cb23c3fce80494185d67e29f"
     }
   },
-  "totalBytes": 931242009
+  "totalBytes": 931242605
 }
