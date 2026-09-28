@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: nuget
+    directories:
+      - /app/*
+      - /tools/*
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ['*']
+
+  # The evaluation pins are the versions its banked results were measured with; review before merging
+  - package-ecosystem: pip
+    directory: /evaluation
+    schedule:
+      interval: weekly
+    groups:
+      evaluation:
+        patterns: ['*']
