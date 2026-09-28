@@ -61,9 +61,19 @@ public sealed record BackupPeriod(DateOnly? First, DateOnly? Last)
         _ => "",
     };
 
-    /// <summary>The file name without its extension, dated by what it holds.</summary>
-    public string FileName(DateOnly today) =>
-        First is null && Last is null ? $"ClinicAVT backup {Day(today)}" : $"ClinicAVT backup {Span()}";
+    /// <summary>True when the moment falls on one of the period's local days.</summary>
+    public bool Holds(DateTimeOffset when, TimeZoneInfo zone)
+    {
+        var day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(when, zone).DateTime);
+        return (First is null || day >= First) && (Last is null || day <= Last);
+    }
+
+    /// <summary>
+    /// The file name without its extension, such as "ClinicAVT backup 1 Aug to 31 Aug 2026",
+    /// dated by what it holds.
+    /// </summary>
+    public string FileName(DateOnly today, string kind = "backup") =>
+        First is null && Last is null ? $"ClinicAVT {kind} {Day(today)}" : $"ClinicAVT {kind} {Span()}";
 
     /// <summary>A period the engine gave back, from its half-open UTC ends, in local days.</summary>
     public static BackupPeriod FromWire(string? from, string? to, TimeZoneInfo zone) =>

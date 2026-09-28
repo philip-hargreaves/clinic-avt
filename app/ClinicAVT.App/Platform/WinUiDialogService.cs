@@ -61,7 +61,7 @@ public sealed class WinUiDialogService(
 
     public async Task<bool> RunBackupAsync()
     {
-        using var backup = new BackupViewModel(engine, picker, clipboard, launcher, preferences, dispatcher, clock,
+        using var backup = new BackupViewModel(engine, picker, launcher, preferences, dispatcher, clock,
             session: session);
         var dialog = new BackupDialog(backup) { XamlRoot = window.XamlRoot };
         _ = backup.LoadAsync();
@@ -75,6 +75,14 @@ public sealed class WinUiDialogService(
         var dialog = new RestoreDialog(restore) { XamlRoot = window.XamlRoot };
         await dialog.ShowAsync();
         return restore.RestoredAny;
+    }
+
+    public async Task RunExportReflectionsAsync()
+    {
+        var export = new ExportReflectionsViewModel(engine, picker, launcher, clock);
+        var dialog = new ExportReflectionsDialog(export) { XamlRoot = window.XamlRoot };
+        _ = export.LoadAsync();
+        await dialog.ShowAsync();
     }
 
     // Add closes the dialog; the consultation page then shows the finalise

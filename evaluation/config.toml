@@ -1,0 +1,212 @@
+# Where the evaluation suite finds its data and models, and which models it runs.
+#
+# Relative paths are from the repo root. {name} expands to another [paths] entry.
+# Every [paths] entry can be overridden with an environment variable EVAL_<NAME>,
+# e.g. EVAL_PRIMOCK57=E:\primock57. Defaults point at the research SSD layout.
+
+[paths]
+out = "build/evaluation"                               # everything a run writes
+app_models = "models"                                  # staged app models (fetch-models)
+prompts = "prompts"                                    # the app's prompts
+engine = "build/release/engine/clinicavt_engine.exe"
+diar_runner = "build/release/engine/tests/diar_eval_runner.exe"   # the engine diarisation, offline
+perf_loop = "build/perf-loop"                          # replay tracks, sealed transcripts, runs
+primock57 = "C:/dev/intelliscribe/data/primock57"      # audio/, transcripts/, consultation_checklists/
+mixed_audio = "C:/dev/intelliscribe/bench/transcription/mixed"   # transcription/mix.py output
+summarisation = "{out}/summarisation"                  # prep/, notes/, runs/ (judge records), reps/
+research_bench = "C:/dev/intelliscribe/bench"          # banked research outputs, read for re-scoring
+research_models = "D:/dev/intelliscribe/ml-models"
+comparison_models = "D:/models-eval/openvino"
+asr_models = "D:/dev/intelliscribe/asr-ir"             # the exported Whisper suite (transcription/README.md: export)
+sample_consult = "C:/dev/intelliscribe/sample-consult-rheum.txt"   # decode bench input
+mts_dialog = "C:/dev/intelliscribe/Previous Work/ambience-new/conversation-data/mts_dialog_val.json"   # 100 validation pairs
+mt_root = "D:/ambient-mt"                              # translation candidates, test sets, results
+rag_candidates = "D:/ambient-rag/candidates"           # retrieval exports (rag/candidates holds a subset)
+rag_native = "D:/ambient-rag/native-build/Release/proof.exe"   # retrieval/native C++ parity proof
+rag = "rag"                                          # corpus, gold sets, results
+guidelines_folder = "~/Documents/ClinicAVT guidelines" # the clinician's own folder, for the folder study
+
+# Note models. Each entry names a model folder and how to prompt it.
+#   path       the OpenVINO export
+#   pipeline   "llm" (openvino_model.xml) or "vlm" (openvino_language_model.xml split);
+#              left out, it is read from the folder
+#   template   "chatml" wraps the prompt exactly as the engine does (user turn, empty think block);
+#              "model" applies the model's own chat template with thinking off
+#   properties plugin properties, e.g. ACTIVATIONS_SCALE_FACTOR for deep Qwen models on the iGPU
+#   cache      keep the compiled model in <path>/.cache, as the app does
+#   bos        prepend BOS for loglikelihood scoring (Gemma-4 ships add_bos_token=False)
+#   label      the name tables print
+#   params_b   total parameters in billions, and active_b for MoE, for decode bandwidth efficiency
+#
+# The shipped tiers read pipeline and properties from the app manifest in the folder.
+
+[models."qwen3.5-4b-int4"]
+path = "{app_models}/qwen3.5-4b-int4"
+template = "chatml"
+cache = true
+label = "Qwen3.5-4B (constrained tier)"
+params_b = 4
+
+[models."qwen3.5-9b-int4"]
+path = "{app_models}/qwen3.5-9b-int4"
+template = "chatml"
+cache = true
+label = "Qwen3.5-9B (default tier)"
+params_b = 9
+
+[models."qwen3.6-35b-a3b-int4"]
+path = "{app_models}/qwen3.6-35b-a3b-int4"
+template = "chatml"
+cache = true
+label = "Qwen3.6-35B-A3B (accuracy tier)"
+params_b = 35
+active_b = 3
+
+[models."qwen3.8-27b-int4-ov"]
+path = "{comparison_models}/Qwen3.8-27B-int4-ov"
+pipeline = "vlm"
+template = "model"
+properties = { ACTIVATIONS_SCALE_FACTOR = "32" }
+label = "Qwen3.8-27B"
+params_b = 27
+
+[models."qwen3.6-27b-int4-ov-intel"]
+path = "{comparison_models}/Qwen3.6-27B-int4-ov"
+pipeline = "vlm"
+template = "model"
+properties = { ACTIVATIONS_SCALE_FACTOR = "32" }
+label = "Qwen3.6-27B (Intel export)"
+params_b = 27
+
+[models."gemma-4-e4b-it-int4-ov"]
+path = "{comparison_models}/gemma-4-E4B-it-int4-ov"
+pipeline = "vlm"
+template = "model"
+bos = true
+label = "Gemma-4-E4B"
+
+[models."gemma-4-12b-it-qat-int4-ov"]
+path = "{comparison_models}/gemma-4-12B-it-qat-int4-ov"
+pipeline = "vlm"
+template = "model"
+bos = true
+label = "Gemma-4-12B (community QAT)"
+params_b = 12
+
+[models."gemma-4-26b-a4b-it-int4-ov"]
+path = "{comparison_models}/gemma-4-26b-a4b-it-int4-ov"
+pipeline = "vlm"
+template = "model"
+bos = true
+label = "Gemma-4-26B-A4B"
+params_b = 26
+active_b = 4
+
+[models."gemma-4-31b-it-int4-ov"]
+path = "{comparison_models}/gemma-4-31B-it-int4-ov"
+pipeline = "vlm"
+template = "model"
+bos = true
+label = "Gemma-4-31B"
+params_b = 31
+
+# Screening candidates. Exports were on the returned SSD; re-export into research_models to rerun.
+[models."qwen3.5-4b-int4-ov"]
+path = "{research_models}/summariser/qwen3.5-4b-int4"
+template = "model"
+label = "Qwen3.5-4B"
+params_b = 4
+
+[models."qwen3-8b-int4-ov"]
+path = "{research_models}/summariser/qwen3-8b-int4-ov"
+template = "model"
+label = "Qwen3-8B"
+params_b = 8
+
+[models."qwen3.5-9b-int4-ov"]
+path = "{research_models}/summariser/qwen3.5-9b-int4"
+template = "model"
+label = "Qwen3.5-9B"
+params_b = 9
+
+[models."qwen3.6-27b-int4-ov"]
+path = "{research_models}/summariser/qwen3.6-27b-int4-ov"
+template = "model"
+properties = { ACTIVATIONS_SCALE_FACTOR = "32" }
+label = "Qwen3.6-27B"
+params_b = 27
+
+[models."qwen3-30b-a3b-int4-ov-official"]
+path = "{research_models}/summariser/qwen3-30b-a3b-instruct-int4-ov"
+template = "model"
+label = "Qwen3-30B-A3B"
+params_b = 30
+active_b = 3
+
+[models."qwen3.6-35b-a3b-int4-ov-official"]
+path = "{research_models}/summariser/qwen3.6-35b-a3b-int4-ov"
+pipeline = "vlm"
+template = "model"
+properties = { ACTIVATIONS_SCALE_FACTOR = "32" }
+label = "Qwen3.6-35B-A3B"
+params_b = 35
+active_b = 3
+
+[models."med42-8b-int4-ov"]
+path = "{research_models}/summariser/med42-8b-int4-ov"
+template = "model"
+label = "Med42-8B (v1)"
+params_b = 8
+
+[models."phi-4-int4-ov"]
+path = "{research_models}/summariser/phi-4-int4-ov"
+template = "model"
+label = "Phi-4"
+params_b = 14
+
+[models."medgemma-27b-text-it-int4-ov"]
+path = "{research_models}/summariser/medgemma-27b-text-it-int4-ov"
+template = "model"
+label = "MedGemma-27B"
+params_b = 27
+
+[models."granite-4.1-30b-int4-ov"]
+path = "{research_models}/summariser/granite-4.1-30b-int4-ov"
+template = "model"
+label = "Granite-4.1-30B"
+params_b = 30
+
+[models."gemma-3-27b-it-int4-ov"]
+path = "{research_models}/summariser/gemma-3-27b-it-int4-ov"
+template = "model"
+label = "Gemma-3-27B"
+params_b = 27
+
+[summarisation]
+# The screening set, in table order, and the subsets the rigor checks use
+screening = ["qwen3.5-4b-int4-ov", "qwen3-8b-int4-ov", "qwen3.5-9b-int4-ov", "qwen3.6-27b-int4-ov",
+             "qwen3-30b-a3b-int4-ov-official", "qwen3.6-35b-a3b-int4-ov-official", "med42-8b-int4-ov",
+             "phi-4-int4-ov", "medgemma-27b-text-it-int4-ov", "granite-4.1-30b-int4-ov",
+             "gemma-3-27b-it-int4-ov"]
+bootstrap = ["qwen3.5-4b-int4-ov", "qwen3-8b-int4-ov", "qwen3.5-9b-int4-ov", "qwen3.6-27b-int4-ov",
+             "qwen3-30b-a3b-int4-ov-official", "qwen3.6-35b-a3b-int4-ov-official"]
+reliability = ["qwen3.5-4b-int4-ov", "qwen3.5-9b-int4-ov", "qwen3-30b-a3b-int4-ov-official"]
+tiers = { constrained = "qwen3.5-4b-int4", default = "qwen3.5-9b-int4", accuracy = "qwen3.6-35b-a3b-int4" }
+comparison = ["qwen3.8-27b-int4-ov", "qwen3.6-27b-int4-ov-intel", "gemma-4-e4b-it-int4-ov",
+              "gemma-4-12b-it-qat-int4-ov", "gemma-4-26b-a4b-it-int4-ov", "gemma-4-31b-it-int4-ov"]
+transcript_tag = "ACC16L"          # perf-loop tag of the sealed transcripts the tiers are judged on
+
+[transcription]
+# The Whisper exports compared, folders under asr_models (or app_models for the shipped one)
+models = ["whisper-large-v3-turbo-int8-ov", "whisper-large-v3-turbo-int4-ov", "whisper-large-v3-turbo-fp16-ov",
+          "whisper-large-v3-int8-ov", "whisper-large-v3-int4-ov", "whisper-large-v3-fp16-ov",
+          "distil-large-v3.5-int8-ov", "distil-large-v3.5-fp16-ov",
+          "whisper-medium-int8-ov", "whisper-medium-fp16-ov", "whisper-medium-int8-npu-ov",
+          "whisper-medium.en-int8-ov", "whisper-medium.en-fp16-ov",
+          "whisper-small-int8-ov", "whisper-small-int4-ov", "whisper-small-fp16-ov", "whisper-small-int8-npu-ov"]
+shipped = "whisper-turbo-int8"
+
+[knowledge]
+tasks = ["medqa_4options", "medmcqa", "pubmedqa",
+         "mmlu_clinical_knowledge", "mmlu_professional_medicine", "mmlu_anatomy",
+         "mmlu_college_medicine", "mmlu_medical_genetics", "mmlu_college_biology"]

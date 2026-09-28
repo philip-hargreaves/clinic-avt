@@ -18,12 +18,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     {
         public int SchemaVersion { get; init; } = CurrentSchema;
 
-        public bool DemoTrayEnabled { get; init; }
-
-        public bool DemoMode { get; init; }
-
-        public string? DemoTrack { get; init; }
-
         public bool SeedDataEnabled { get; init; }
 
         public bool NpuTranscription { get; init; }
@@ -32,7 +26,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
         public bool KeepConsultations { get; init; }
 
-        public bool ShowPerformanceMetrics { get; init; }
+        public bool ShowPerformanceMetrics { get; init; } = true;
 
         public bool IncludeResearchGuidance { get; init; }
 
@@ -57,6 +51,9 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// <summary>The note model tiers the engine's store can resolve, in ladder order.</summary>
     public static readonly IReadOnlyList<string> NoteTiers = ["constrained", "default", "accuracy"];
 
+    /// <summary>A note model never chosen: the engine picks one for the machine.</summary>
+    public const string AutoNoteTier = "auto";
+
     public AppPreferences(string path, ILogger? logger = null)
         : this(new FilePreferencesStore(path), logger)
     {
@@ -66,14 +63,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// Raised after every save, so a page can follow a preference it does not own.
     /// </summary>
     public event Action? Saved;
-
-    public bool DemoTrayEnabled { get; set; }
-
-    /// <summary>Record plays a saved run back. A developer control.</summary>
-    public bool DemoMode { get; set; }
-
-    /// <summary>The track whose saved run demo mode plays. Empty means the first.</summary>
-    public string DemoTrack { get; set; } = "";
 
     public bool SeedDataEnabled { get; set; }
 
@@ -87,8 +76,8 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// </summary>
     public bool KeepConsultations { get; set; }
 
-    /// <summary>Off by default because the status-bar chips are for testing.</summary>
-    public bool ShowPerformanceMetrics { get; set; }
+    /// <summary>On by default, so evaluators see the status-bar timings from the first run.</summary>
+    public bool ShowPerformanceMetrics { get; set; } = true;
 
     /// <summary>
     /// Searches corpora marked research, such as the local NICE demo. Only a debug build shows
@@ -108,9 +97,9 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
     /// <summary>
     /// Which note model the engine loads, as a role such as "default", "accuracy" or
-    /// "constrained". The engine's store resolves it to a model.
+    /// "constrained". The engine's store resolves it to a model. "auto" until one is chosen.
     /// </summary>
-    public string NoteTier { get; set; } = "default";
+    public string NoteTier { get; set; } = AutoNoteTier;
 
     /// <summary>The last checked backup, null before the first.</summary>
     public LastBackup? LastBackup { get; set; }
@@ -145,9 +134,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         }
 
         // A newer document is read for what this build knows. A save rewrites it at this schema
-        preferences.DemoTrayEnabled = stored.DemoTrayEnabled;
-        preferences.DemoMode = stored.DemoMode;
-        preferences.DemoTrack = stored.DemoTrack ?? "";
         preferences.SeedDataEnabled = stored.SeedDataEnabled;
         preferences.NpuTranscription = stored.NpuTranscription;
         preferences.CollectPerformanceData = stored.CollectPerformanceData;
@@ -158,7 +144,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         preferences.Theme = Known(stored.Theme, Themes, Themes[0]);
         preferences.NoteStyle = NoteOptions.Style(stored.NoteStyle).Value;
         preferences.NoteDetail = NoteOptions.Detail(stored.NoteDetail).Value;
-        preferences.NoteTier = Known(stored.NoteTier, NoteTiers, "default");
+        preferences.NoteTier = Known(stored.NoteTier, [.. NoteTiers, AutoNoteTier], AutoNoteTier);
         preferences.LastBackup = stored.LastBackup is { From: not null, To: not null } last
             && DateTimeOffset.TryParse(last.CreatedAt, CultureInfo.InvariantCulture, out _)
                 ? last
@@ -172,9 +158,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         {
             store.Write(JsonSerializer.Serialize(new PreferencesFile
             {
-                DemoTrayEnabled = DemoTrayEnabled,
-                DemoMode = DemoMode,
-                DemoTrack = DemoTrack,
                 SeedDataEnabled = SeedDataEnabled,
                 NpuTranscription = NpuTranscription,
                 CollectPerformanceData = CollectPerformanceData,

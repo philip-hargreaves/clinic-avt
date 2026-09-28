@@ -97,10 +97,9 @@ struct SystemSid {
     SystemSid& operator=(const SystemSid&) = delete;
 };
 
-TEST(PipeSecurity, TheDescriptorIsExplicitAndNotInheritable) {
+TEST(PipeSecurity, AnExplicitUninheritableDaclGivesOnlyThisLogonAndSystemTheIntendedRights) {
     PipeSecurity security;
     auto* attributes = AttributesOf(security);
-
     ASSERT_NE(attributes, nullptr);
     EXPECT_EQ(attributes->nLength, sizeof(SECURITY_ATTRIBUTES));
     EXPECT_NE(attributes->lpSecurityDescriptor, nullptr);
@@ -114,10 +113,7 @@ TEST(PipeSecurity, TheDescriptorIsExplicitAndNotInheritable) {
     EXPECT_TRUE(present);
     EXPECT_NE(dacl, nullptr);
     EXPECT_FALSE(defaulted);
-}
 
-TEST(PipeSecurity, OnlyThisLogonAndSystemGetTheIntendedRights) {
-    PipeSecurity security;
     const auto groups = ProcessTokenGroups();
     PSID logon_sid = LogonSidWithin(groups);
     ASSERT_NE(logon_sid, nullptr);

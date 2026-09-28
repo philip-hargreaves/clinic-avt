@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
@@ -31,7 +32,7 @@ public class ImportRecordingTest
         var engine = new FakeEngineClient();
         var picker = new FakeFilePicker { OpenPath = FixturePath };
         var import = Dialog(engine, picker);
-        Assert.True(import.NoFile);
+        Assert.False(import.HasFile);
         Assert.False(import.CanImport);
 
         await import.ChooseCommand.ExecuteAsync(null);
@@ -74,14 +75,49 @@ public class ImportRecordingTest
         Assert.False(import.CanImport);
     }
 
+    // A bundled example goes through the same inspection and import as a chosen file
     [Fact]
-    public async Task AnImportEndsTheOpenReviewThenWalksTheFinaliseStagesIntoReview()
+    public async Task AnExampleImportsLikeAChosenFileAndAChosenFileReplacesIt()
+    {
+        var engine = new FakeEngineClient();
+        var picker = new FakeFilePicker { OpenPath = FixturePath };
+        var import = new ImportRecordingViewModel(new EngineApi(engine), picker, FakeTimeProvider.London(),
+            [new DemoTrack("Elbow swelling", @"C:\demo\elbow.wav"), new DemoTrack("Chest pain", @"C:\demo\chest.wav")]);
+        Assert.Equal(["Elbow swelling", "Chest pain"], import.ExampleNames);
+        Assert.True(import.ExamplesVisible);
+        Assert.Equal(-1, import.ExampleIndex);
+
+        import.ExampleIndex = 1;
+        await Waits.WaitUntilAsync(() => import.Inspected);
+
+        Assert.Equal(@"C:\demo\chest.wav", import.Path);
+        Assert.False(import.ShowFile);  // the example list already names it
+        Assert.True(import.ShowDropArea);
+        Assert.False(import.ShowWhen);  // dated when added
+        Assert.True(import.CanImport);
+        Assert.Equal(@"C:\demo\chest.wav", import.Result!.Path);
+
+        await import.ChooseCommand.ExecuteAsync(null);
+        Assert.Equal(-1, import.ExampleIndex);
+        Assert.Equal("Home visit 26 Sep.m4a", import.FileName);
+        Assert.True(import.ShowFile);
+        Assert.True(import.ShowWhen);
+
+        var none = new ImportRecordingViewModel(new EngineApi(engine), picker, FakeTimeProvider.London(), []);
+        Assert.False(none.ExamplesVisible);
+    }
+
+    [Fact]
+    public async Task AnImportEndsTheOpenReviewThenWalksTheFinaliseStagesIntoReviewHeadedWithItsOwnTime()
     {
         var dialogs = new FakeDialogService();
         var (session, engine, _) = TestSession.Create(dialogs: dialogs);
         var controls = new SessionControlsViewModel(session, TestSession.Mic());
-        var header = new ConsultationHeaderViewModel(session);
+        var recordedAt = new DateTimeOffset(2026, 9, 25, 9, 31, 0, TimeSpan.Zero);
+        var header = new ConsultationHeaderViewModel(session, () => recordedAt);
+        Assert.Equal("", header.Title);
         await session.StartRecordingAsync();
+        Assert.Equal(SessionText.Heading(recordedAt), header.Title);  // a recording is headed with its start
         await session.StopRecordingAsync();
         engine.RaiseNotification("note/ready", Params(new { text = "note" }));
         Assert.Equal(SessionState.Review, session.State);
@@ -128,7 +164,7 @@ public class ImportRecordingTest
     }
 
     [Fact]
-    public async Task AnImportShowsHowFarItsTranscriptionHasGotUntilTheEngineSealsIt()
+    public async Task AnImportShowsOneFigureAcrossItsStagesUntilTheEngineSealsIt()
     {
         var dialogs = new FakeDialogService { Import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4) };
         var (session, engine, _) = TestSession.Create(dialogs: dialogs);
@@ -137,22 +173,28 @@ public class ImportRecordingTest
         engine.ImportStages.Clear();
 
         var importing = controls.ImportRecordingCommand.ExecuteAsync(null);
-        Assert.Equal("Transcribing", controls.FinalisingLabel);
+        Assert.Equal("Preparing", controls.FinalisingLabel);
         Assert.True(controls.ImportCancelVisible);
         Assert.True(controls.CancelImportCommand.CanExecute(null));
 
+        // Reading the file and finding the speech both prepare
+        engine.ImportProgress("reading", 3);
+        Assert.Equal("Preparing · 3%", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
-        engine.ImportProgress(304.2, 760.4);
-        Assert.Equal("Transcribing · 40%", controls.FinalisingLabel);
-        Assert.Equal("Transcribing · 40%", session.Status.LatestActivity);
-        engine.ImportProgress(744.9, 760.4);
-        Assert.Equal("Transcribing · 97%", controls.FinalisingLabel);
+        engine.ImportProgress("speech", 12);
+        Assert.Equal("Preparing · 12%", controls.FinalisingLabel);
+        Assert.Equal("Preparing · 12%", session.Status.LatestActivity);
+        engine.ImportProgress("transcribing", 60);
+        Assert.Equal("Transcribing · 60%", controls.FinalisingLabel);
+        Assert.Equal("Transcribing · 60%", session.Status.LatestActivity);
 
-        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
-        Assert.Equal("Labelling speakers", controls.FinalisingLabel);
+        // The figure's last five points are the finalise, which names no percentage
+        engine.ImportProgress("finalising", 95);
+        Assert.Equal("Finalising", controls.FinalisingLabel);
         Assert.Equal("Finalising", session.Status.LatestActivity);
-        // A late figure is ignored
-        engine.ImportProgress(760.4, 760.4);
+        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
+        Assert.Equal("Finalising", controls.FinalisingLabel);
+        engine.ImportProgress("finalising", 100);
         Assert.Equal("Finalising", session.Status.LatestActivity);
 
         engine.FinishImport();
@@ -173,7 +215,7 @@ public class ImportRecordingTest
         engine.HoldImport = true;
 
         var importing = controls.ImportRecordingCommand.ExecuteAsync(null);
-        engine.ImportProgress(380.2, 760.4);
+        engine.ImportProgress("transcribing", 55);
         await controls.CancelImportCommand.ExecuteAsync(null);
         await importing;
 

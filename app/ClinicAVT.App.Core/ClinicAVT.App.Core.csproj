@@ -11,11 +11,6 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
   </ItemGroup>
 
-  <!-- The EFF Large Wordlist (CC BY 3.0 US), credited on the About page -->
-  <ItemGroup>
-    <EmbeddedResource Include="Features\Backup\eff_large_wordlist.txt" LogicalName="eff_large_wordlist.txt" />
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\ClinicAVT.Client\ClinicAVT.Client.csproj" />
   </ItemGroup>

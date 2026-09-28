@@ -6,18 +6,16 @@
     IsHitTestVisible="False">
 
     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-        <Ellipse x:Name="Glow" RenderTransformOrigin="0.5,0.5">
-            <Ellipse.RenderTransform>
-                <ScaleTransform x:Name="GlowScale" ScaleX="1" ScaleY="1" />
-            </Ellipse.RenderTransform>
+        <!-- Readings arrive ten times a second; the transitions glide between them -->
+        <Ellipse x:Name="Glow">
+            <Ellipse.ScaleTransition>
+                <Vector3Transition Duration="0:0:0.12" />
+            </Ellipse.ScaleTransition>
         </Ellipse>
-        <Ellipse
-            x:Name="Ring"
-            StrokeThickness="1.25"
-            RenderTransformOrigin="0.5,0.5">
-            <Ellipse.RenderTransform>
-                <ScaleTransform x:Name="RingScale" ScaleX="1" ScaleY="1" />
-            </Ellipse.RenderTransform>
+        <Ellipse x:Name="Ring" StrokeThickness="1.5">
+            <Ellipse.ScaleTransition>
+                <Vector3Transition Duration="0:0:0.12" />
+            </Ellipse.ScaleTransition>
         </Ellipse>
     </Grid>
 </UserControl>

@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Composition;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
@@ -26,12 +25,11 @@ internal static class ViewModelServices
             paths.Metrics,
             sp.GetRequiredService<IProcessMetrics>(), PowerStateReader.Read,
             sp.GetRequiredService<ILogger<PerformanceCollector>>()));
-        services.AddSingleton(sp => new DemoMode(sp.GetRequiredService<AppPreferences>(), paths.Masters));
 
         services.AddSingleton(sp => new StatusBarViewModel(
             sp.GetRequiredService<IEngineApi>(), sp.GetRequiredService<IUiDispatcher>(),
             memoryGb: () => sp.GetRequiredService<IProcessMetrics>()
-                .WorkingSetGb(EngineLayout.EngineProcess, EngineLayout.NoteHostProcess),
+                .CommittedGb(EngineLayout.EngineProcess, EngineLayout.NoteHostProcess),
             logger: sp.GetRequiredService<ILogger<StatusBarViewModel>>()));
         services.AddSingleton<CreditsViewModel>();
         services.AddCoreViewModels();

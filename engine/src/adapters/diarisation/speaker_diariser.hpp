@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <map>
 #include <span>
@@ -39,6 +41,21 @@ class SpeakerDiariser : public IDiariser {
     void Settle(std::span<const float> audio, const DecodeClipFn& decode,
                 const StopFn& stop) override {
         worker_.Advance(audio, decode, std::numeric_limits<int>::max(), stop);
+    }
+
+    // Capture's pass over growing tenths of the recording, decoding nothing. Its results are
+    // keyed on spans, so the Settle after it matches one run alone
+    void FindSpeech(std::span<const float> audio, const std::function<void(double)>& progress,
+                    const StopFn& stop) override {
+        const DecodeClipFn none = [](std::span<const float>, std::uint64_t) {
+            return std::vector<asr::Turn>{};
+        };
+        constexpr std::size_t kSteps = 10;
+        for (std::size_t step = 1; step <= kSteps; ++step) {
+            if (stop && stop()) return;
+            worker_.Advance(audio.first(audio.size() * step / kSteps), none, 0, stop);
+            if (progress) progress(static_cast<double>(step) / kSteps);
+        }
     }
 
     TurnTexts TakeTurnTexts() override {

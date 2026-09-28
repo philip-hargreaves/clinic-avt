@@ -22,6 +22,9 @@ public interface IDialogService
     /// <summary>The Restore dialog. True when it added consultations.</summary>
     Task<bool> RunRestoreAsync();
 
+    /// <summary>The Export reflections dialog, which saves reflections as plain text.</summary>
+    Task RunExportReflectionsAsync();
+
     /// <summary>
     /// The Add consultation recording dialog, opened on the given file when one was dropped. The
     /// file and its date, or null when cancelled.

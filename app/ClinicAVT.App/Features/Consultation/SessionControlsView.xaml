@@ -57,8 +57,11 @@
                     <FontIcon FontSize="32" Glyph="&#xE720;" />
                 </Button>
             </Grid>
+            <!-- Clear of the breathing ring -->
             <TextBlock
+                Margin="0,10,0,0"
                 HorizontalAlignment="Center"
+                FontSize="24"
                 Style="{StaticResource SubtitleTextBlockStyle}"
                 Text="{x:Bind ViewModel.StartLabel, Mode=OneWay}" />
         </StackPanel>
@@ -77,6 +80,7 @@
                 </Button>
             </Grid>
             <TextBlock
+                Margin="0,10,0,0"
                 HorizontalAlignment="Center"
                 Style="{StaticResource ClockText}"
                 Text="{x:Bind ViewModel.ElapsedLabel, Mode=OneWay}" />

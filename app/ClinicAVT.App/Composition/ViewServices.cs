@@ -4,7 +4,6 @@ using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Features.Appraisal;
 using ClinicAVT.App.Features.Consultation;
-using ClinicAVT.App.Features.Demo;
 using ClinicAVT.App.Features.Documents;
 using ClinicAVT.App.Features.Guidance;
 using ClinicAVT.App.Features.Help;
@@ -25,7 +24,6 @@ internal static class ViewServices
     public static IServiceCollection AddViews(this IServiceCollection services)
     {
         services.AddTransient<SessionControlsView>();
-        services.AddTransient<DemoTrayView>();
         services.AddTransient<TranscriptPaneView>();
         services.AddTransient<GuidanceSectionView>();
         services.AddTransient<PageView>();

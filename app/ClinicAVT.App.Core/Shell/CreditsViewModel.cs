@@ -46,7 +46,8 @@ public sealed class CreditsViewModel
                     entry.GetProperty("name").GetString() ?? "",
                     lightPath,
                     File.Exists(darkPath) ? darkPath : lightPath,
-                    entry.TryGetProperty("height", out var h) ? h.GetDouble() : 16));
+                    entry.TryGetProperty("height", out var h) ? h.GetDouble() : 16,
+                    entry.TryGetProperty("space", out var s) ? s.GetDouble() : 0));
             }
 
             return marks;

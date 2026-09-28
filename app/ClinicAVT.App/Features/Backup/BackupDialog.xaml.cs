@@ -32,9 +32,9 @@ public sealed partial class BackupDialog : ContentDialog
         args.Cancel = ViewModel.BlocksClose;
 
     // A PasswordBox has no binding for its text, so each change is handed over here
-    private void OnOwnChanged(object sender, RoutedEventArgs e) =>
-        ViewModel.OwnPassword = ((PasswordBox)sender).Password;
+    private void OnPasswordChanged(object sender, RoutedEventArgs e) =>
+        ViewModel.Password = ((PasswordBox)sender).Password;
 
     private void OnAgainChanged(object sender, RoutedEventArgs e) =>
-        ViewModel.OwnAgain = ((PasswordBox)sender).Password;
+        ViewModel.PasswordAgain = ((PasswordBox)sender).Password;
 }

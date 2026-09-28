@@ -13,17 +13,15 @@ namespace ClinicAVT.App.Tests.Shell;
 public class ShellHelpersTest
 {
     [Fact]
-    public void TheLevelCurveIsClampedAndRestrained()
+    public void TheLevelCurveRestsOnRoomNoiseAndSpreadsSpeechOverTheSwing()
     {
-        Assert.Equal(1.0, LevelCurve.GlowScale(0));
-        Assert.Equal(1.6, LevelCurve.GlowScale(1));
-        Assert.Equal(1.6, LevelCurve.GlowScale(4), 10);
         Assert.Equal(1.0, LevelCurve.RingScale(-1));
-        Assert.Equal(0.08, LevelCurve.GlowAlpha(0), 10);
-        Assert.Equal(0.42, LevelCurve.GlowAlpha(1), 10);
-        Assert.Equal(0.25, LevelCurve.RingAlpha(0), 10);
-        Assert.Equal(0.85, LevelCurve.RingAlpha(1), 10);
+        Assert.Equal(1.0, LevelCurve.RingScale(0.2), 10);  // room noise: at rest
+        Assert.InRange(LevelCurve.RingScale(0.55), 1.18, 1.25);  // ordinary speech moves the ring visibly
+        Assert.Equal(1.0, LevelCurve.GlowScale(0));
+        Assert.Equal(LevelCurve.GlowScale(1), LevelCurve.GlowScale(4), 10);  // loud input saturates
         Assert.True(LevelCurve.GlowAlpha(0.5) < LevelCurve.GlowAlpha(0.6));
+        Assert.True(LevelCurve.RingAlpha(0) < LevelCurve.RingAlpha(1));
     }
 
     [Theory]
@@ -34,15 +32,6 @@ public class ShellHelpersTest
     [InlineData("", false)]
     public void OnlyWebAddressesOpenInTheBrowser(string link, bool expected) =>
         Assert.Equal(expected, WebLinks.IsWeb(link));
-
-    [Fact]
-    public async Task NavigationGoesThroughThePort()
-    {
-        var navigation = new RecordingNavigationService();
-        var (shell, _, _, _) = Shell(navigation);
-        await shell.ShowSettingsCommand.ExecuteAsync(null);
-        Assert.Equal(Routes.Settings, navigation.Current);
-    }
 
     [Fact]
     public async Task GoingToRecordEndsAStoredReviewAndLeavingAppraisalClosesTheOpenReflection()
@@ -74,6 +63,9 @@ public class ShellHelpersTest
         Assert.False(card.Expanded);
         Assert.Equal(Routes.Help, navigation.Current);
         Assert.Null(sessions.Selected);
+
+        await shell.ShowSettingsCommand.ExecuteAsync(null);
+        Assert.Equal(Routes.Settings, navigation.Current);
     }
 
     private static (ShellViewModel Shell,

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,8 +10,8 @@ using ClinicAVT.App.Themes;
 namespace ClinicAVT.App.Controls;
 
 /// <summary>
-/// A soft accent glow behind a disc button that grows with the microphone level, and a
-/// hairline ring that eases outward from the disc.
+/// A soft accent glow behind a disc button that grows with the microphone level, and a ring
+/// that eases outward from the disc.
 /// </summary>
 public sealed partial class LevelRing : UserControl
 {
@@ -70,8 +71,12 @@ public sealed partial class LevelRing : UserControl
         var level = Level;
         Glow.Width = Glow.Height = Diameter;
         Ring.Width = Ring.Height = Diameter + 6;
-        GlowScale.ScaleX = GlowScale.ScaleY = LevelCurve.GlowScale(level);
-        RingScale.ScaleX = RingScale.ScaleY = LevelCurve.RingScale(level);
+        Glow.CenterPoint = new Vector3((float)(Diameter / 2), (float)(Diameter / 2), 0);
+        Ring.CenterPoint = new Vector3((float)((Diameter + 6) / 2), (float)((Diameter + 6) / 2), 0);
+        var glow = (float)LevelCurve.GlowScale(level);
+        var ring = (float)LevelCurve.RingScale(level);
+        Glow.Scale = new Vector3(glow, glow, 1);
+        Ring.Scale = new Vector3(ring, ring, 1);
         _glow.GradientStops[0].Color = WithAlpha(LevelCurve.GlowAlpha(level));
         _glow.GradientStops[1].Color = WithAlpha(LevelCurve.GlowAlpha(level) * 0.45);
         _glow.GradientStops[2].Color = WithAlpha(0);

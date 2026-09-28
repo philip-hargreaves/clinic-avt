@@ -15,11 +15,19 @@ public sealed class EngineSupervisor(
     /// <summary>The engine's exit code when another engine already serves the pipe.</summary>
     public const int AlreadyServing = 3;
 
+    /// <summary>The retry interval while another engine holds the pipe.</summary>
+    public static readonly TimeSpan ServerWait = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long to wait for that engine before its exits count as crashes.</summary>
+    public static readonly TimeSpan ServerWaitLimit = TimeSpan.FromMinutes(10);
+
     private readonly object _gate = new();
     private readonly List<DateTimeOffset> _crashes = [];
     private IEngineProcess? _process;
     private ITimer? _relaunch;
     private DateTimeOffset _launchedAt;
+    private DateTimeOffset? _waitingSince;
+    private DateTimeOffset _lastWait;
 
     public event Action<EngineStatus>? StatusChanged;
 
@@ -48,6 +56,7 @@ public sealed class EngineSupervisor(
 
             CancelRelaunchLocked();
             _crashes.Clear();
+            _waitingSince = null;
             LaunchLocked(changes);
         }
 
@@ -169,6 +178,26 @@ public sealed class EngineSupervisor(
         }
 
         var now = clock.GetUtcNow();
+        // The engine holding the pipe could not be adopted yet: it is finishing work it cannot
+        // cancel, such as a first NPU compile, and accepts again once done. Waiting is not a crash
+        if (exitCode == AlreadyServing)
+        {
+            // A gap well past one retry starts a fresh wait
+            if (_waitingSince is null || now - _lastWait > ServerWait + TimeSpan.FromSeconds(30))
+            {
+                _waitingSince = now;
+            }
+
+            _lastWait = now;
+            if (now - _waitingSince.Value < ServerWaitLimit)
+            {
+                SetStatusLocked(EngineStatus.Restarting, changes);
+                CancelRelaunchLocked();
+                _relaunch = clock.CreateTimer(_ => Relaunch(), null, ServerWait, Timeout.InfiniteTimeSpan);
+                return;
+            }
+        }
+
         _crashes.RemoveAll(crash => now - crash > RestartPolicy.StormWindow);
         _crashes.Add(now);
 

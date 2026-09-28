@@ -1,11 +1,11 @@
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 
 #include "adapters/archive/archive_lane.hpp"
 #include "adapters/demo/sample_year.hpp"
@@ -82,12 +82,15 @@ std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& 
         using clinicavt::store::DocumentKind;
         const auto patient = sessions.ReadDocument(id, DocumentKind::kPatient);
         const auto translation = sessions.ReadDocument(id, DocumentKind::kTranslation);
+        // Both times, so the shell can flag a sheet edited after its translation
         json result{{"text", patient.text},
                     {"generatedAt", NullWhenEmpty(patient.generated_at)},
+                    {"editedAt", NullWhenEmpty(patient.edited_at)},
                     {"translation", nullptr}};
         if (!translation.text.empty()) {
-            result["translation"] =
-                json{{"language", translation.language}, {"text", translation.text}};
+            result["translation"] = json{{"language", translation.language},
+                                         {"text", translation.text},
+                                         {"translatedAt", NullWhenEmpty(translation.generated_at)}};
         }
         return result;
     });
@@ -338,13 +341,14 @@ bool NoTranscript(clinicavt::store::ISessionStore& sessions, const std::string& 
     }
 }
 
-// Checks style and detail as the shell sends them. confirmed says the
-// clinician insists it was a consultation
+// confirmed: the clinician insists it was a consultation. "standard", the retired middle
+// length, reads as concise
 std::variant<clinicavt::note::NoteOptions, Error> NoteOptionsFrom(const json& params) {
     const std::string style = params.value("style", "prose");
-    const std::string detail = params.value("detail", "standard");
+    std::string detail = params.value("detail", "concise");
+    if (detail == "standard") detail = "concise";
     if (style != "prose" && style != "soap") return InvalidParams("unknown style: " + style);
-    if (detail != "concise" && detail != "standard" && detail != "detailed") {
+    if (detail != "concise" && detail != "detailed") {
         return InvalidParams("unknown detail: " + detail);
     }
     clinicavt::note::NoteOptions options{style, detail};
@@ -387,9 +391,13 @@ auto ReadRecording(Read read) -> std::variant<decltype(read()), Error> {
 
 }  // namespace
 
-json ImportProgressJson(const std::string& id, double seconds, double total) {
-    const auto tenths = [](double value) { return std::round(value * 10.0) / 10.0; };
-    return json{{"sessionId", id}, {"seconds", tenths(seconds)}, {"total", tenths(total)}};
+json ImportProgressJson(const std::string& id, clinicavt::session::ImportStage stage, int percent) {
+    using clinicavt::session::ImportStage;
+    const char* name = stage == ImportStage::kReading        ? "reading"
+                       : stage == ImportStage::kSpeech       ? "speech"
+                       : stage == ImportStage::kTranscribing ? "transcribing"
+                                                             : "finalising";
+    return json{{"sessionId", id}, {"stage", name}, {"percent", percent}};
 }
 
 std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
@@ -405,7 +413,6 @@ std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingRea
 
 std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
                                               clinicavt::session::SessionController& controller,
-                                              bool playback_active,
                                               clinicavt::translate::ITranslator* translator,
                                               const Notify& push, const json& params) {
     const auto path = RecordingPath(params);
@@ -422,16 +429,15 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     if (started_at > clinicavt::Iso8601Now()) {
         return SessionError("the recording's date and time are in the future");
     }
-    if (playback_active) return SessionError("a playback is running");
     if (controller.Running()) return SessionError("a session is running");
     // A file that cannot be opened is refused here. Its decode runs on the import's thread
     const auto readable = ReadRecording([&] { return reader.Inspect(*path); });
     if (std::holds_alternative<Error>(readable)) return std::get<Error>(readable);
     // The whole recording and its finalise need the memory
     if (translator != nullptr) translator->Release();
-    const auto read = [&reader, file = *path] {
+    const auto read = [&reader, file = *path](const clinicavt::audio::ReadProgress& progress) {
         try {
-            return reader.Decode(file);
+            return reader.Decode(file, progress);
         } catch (const clinicavt::audio::RecordingError&) {
             throw;
         } catch (const std::exception&) {
@@ -441,13 +447,13 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     const bool stubs = !controller.HasNoteWriter();
     clinicavt::session::ImportReport report{
         .progress =
-            [push, percent = std::make_shared<int>(-1)](const std::string& id, double seconds,
-                                                        double total) {
-                // One notification per whole percent, so a long file never floods the pipe
-                const int now = total > 0 ? static_cast<int>(100.0 * seconds / total) : 0;
-                if (now <= *percent) return;
-                *percent = now;
-                push("session/importProgress", ImportProgressJson(id, seconds, total));
+            [push, last = std::make_shared<std::pair<int, int>>(-1, -1)](
+                const std::string& id, clinicavt::session::ImportStage stage, int percent) {
+                // At most one push per percent or stage, so a long file never floods the pipe
+                const int now = static_cast<int>(stage);
+                if (now == last->first && percent <= last->second) return;
+                *last = {now, percent};
+                push("session/importProgress", ImportProgressJson(id, stage, percent));
             },
         .done =
             [push, stubs](const std::string& id, const std::string& error) {
@@ -473,7 +479,6 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     auto* const translator = services.translator;
     auto* const translate_lane = services.translate_lane;
     const auto demo_dir = services.demo_dir;
-    auto* const playback = services.playback;
     auto* const archive_lane = services.archive_lane;
     const auto archive_busy = [archive_lane] {
         return archive_lane != nullptr && archive_lane->Busy();
@@ -583,22 +588,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         });
     server.RegisterMethod(
         "session/start",
-        [&controller, playback, translator](const json& params) -> std::variant<json, Error> {
-            // A playback block replays a stored consultation as a demo.
-            // Nothing is captured or generated
-            if (params.contains("playback")) {
-                const auto& p = params["playback"];
-                if (playback == nullptr || !p.contains("id") || !p["id"].is_string()) {
-                    return Error{kInvalidParams, "playback.id is required", {}};
-                }
-                if (controller.Running() || !playback->Start(p["id"].get<std::string>())) {
-                    return SessionError("a session is running, or nothing to play back");
-                }
-                return json{{"sessionId", playback->Current()}};
-            }
-            if (playback != nullptr && playback->Active()) {
-                return SessionError("a playback is running");
-            }
+        [&controller, translator](const json& params) -> std::variant<json, Error> {
             // An optional replay block plays a file through the same
             // pipeline. Absent means microphone
             std::optional<clinicavt::session::ReplaySpec> replay;
@@ -607,8 +597,8 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                 if (!r.contains("path") || !r["path"].is_string()) {
                     return Error{kInvalidParams, "replay.path is required", {}};
                 }
-                replay = clinicavt::session::ReplaySpec{
-                    r["path"].get<std::string>(), r.value("speed", 1.0), r.value("monitor", false)};
+                replay = clinicavt::session::ReplaySpec{r["path"].get<std::string>(),
+                                                        r.value("speed", 1.0)};
             }
             // micId pins the picker's choice. One that has gone falls back
             // to the default, logged, and the snapshot records the fallback
@@ -665,24 +655,8 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
                           EditDocument(sessions, clinicavt::store::DocumentKind::kNote));
     server.RegisterMethod("patient/update",
                           EditDocument(sessions, clinicavt::store::DocumentKind::kPatient));
-    server.RegisterMethod("session/pause", [&controller, playback](const json& params) {
-        if (playback != nullptr && playback->Listening()) {
-            playback->SetPaused(params.value("paused", true));
-        } else {
-            controller.SetPaused(params.value("paused", true));
-        }
-        return json::object();
-    });
-    server.RegisterMethod("session/monitor", [&controller](const json& params) {
-        controller.SetMonitor(params.value("on", true));
-        return json::object();
-    });
-    server.RegisterMethod("session/cancel", [&controller, playback](const json&) {
-        if (playback != nullptr && playback->Listening()) {
-            playback->Cancel();
-        } else {
-            controller.Cancel();
-        }
+    server.RegisterMethod("session/cancel", [&controller](const json&) {
+        controller.Cancel();
         return json::object();
     });
     // Regenerate and translate act on a past session under review as on a
@@ -710,29 +684,24 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         controller.Close();
         return json::object();
     });
-    server.RegisterMethod(
-        "session/stop", [&server, &controller, playback](const json&) -> std::variant<json, Error> {
-            if (playback != nullptr && playback->Active()) {
-                playback->Stop();
-                return json{{"sessionId", playback->Current()}};
-            }
-            // Stop would wait out the import, holding every request behind it
-            if (controller.Importing()) return SessionError("an import is running");
-            controller.Stop();
-            if (!controller.HasNoteWriter()) StubDocuments(QueueTo(server));
-            return json{{"sessionId", controller.LastFinalised()}};
-        });
+    server.RegisterMethod("session/stop",
+                          [&server, &controller](const json&) -> std::variant<json, Error> {
+                              // Stop would wait out the import, holding every request behind it
+                              if (controller.Importing())
+                                  return SessionError("an import is running");
+                              controller.Stop();
+                              if (!controller.HasNoteWriter()) StubDocuments(QueueTo(server));
+                              return json{{"sessionId", controller.LastFinalised()}};
+                          });
     if (services.recordings != nullptr) {
         auto& reader = *services.recordings;
         server.RegisterMethod("recording/inspect", [&reader](const json& params) {
             return HandleRecordingInspect(reader, params);
         });
-        server.RegisterMethod("session/import", [&server, &controller, &reader, playback,
-                                                 translator](const json& params) {
-            return HandleSessionImport(reader, controller,
-                                       playback != nullptr && playback->Active(), translator,
-                                       PushTo(server), params);
-        });
+        server.RegisterMethod(
+            "session/import", [&server, &controller, &reader, translator](const json& params) {
+                return HandleSessionImport(reader, controller, translator, PushTo(server), params);
+            });
     }
 }
 

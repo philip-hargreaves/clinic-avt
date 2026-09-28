@@ -81,7 +81,7 @@ public class GuidanceViewModelTest
 
     // The note-edit caption wins over changed documents, whether the record loads stale or goes stale
     [Fact]
-    public async Task ChangedDocumentsMarkAStoredResultStaleWithTheirOwnCaptionUntilTheNoteIsEdited()
+    public async Task ChangedDocumentsMarkAStoredResultStaleWithTheirOwnCaptionUntilTheNoteIsEditedAndSearchAgainByThemselves()
     {
         var (session, engine, note) = await ReopenedAsync(Record([Result("fx100-1_1_1")]));
 
@@ -107,12 +107,34 @@ public class GuidanceViewModelTest
         Assert.True(session.Guidance.SearchAgainVisible);
         Assert.Equal(
             "This guidance was found before your note edits.", session.Guidance.StaleCaption);
+
+        // A note older than the documents loads stale and searches again by itself
+        await session.CloseReviewAsync();
+        engine.StoredGuidance = Record([], documentsChanged: true);
+        session.Review.DocumentsSettle = TimeSpan.FromMilliseconds(80);
+        var searches = engine.Requests.Count(r => r.Method == "guidance/search");
+        await session.OpenStoredSessionAsync("abc");
+
+        Assert.True(session.Guidance.Stale);
+        Assert.Equal(
+            "Added documents changed since this guidance was found.",
+            session.Guidance.StaleCaption);
+        await WaitUntilAsync(() => engine.Requests.Count(r => r.Method == "guidance/search") > searches);
     }
 
     [Fact]
-    public async Task ReopeningWithoutARecordIsNotSearchedAndAQueryWithNoMatchSaysSo()
+    public async Task AnEmptyNoteHidesTheSectionANoteNeverSearchedSaysSoAndSoDoesAQueryWithNoMatch()
     {
-        var (session, engine, _) = await ReopenedAsync();
+        var (session, engine, _) = TestSession.Create();
+        engine.StoredGuidance = Record([Result("fx100-1_1_1")]);
+        await session.OpenStoredSessionAsync("abc");
+        Assert.Equal(GuidanceSection.Hidden, session.Guidance.Section);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/guidance");
+
+        await session.CloseReviewAsync();
+        engine.StoredNote = "the stored note";
+        engine.StoredGuidance = null;
+        await session.OpenStoredSessionAsync("abc");
 
         Assert.Equal(GuidanceSection.NotSearched, session.Guidance.Section);
         Assert.Equal(
@@ -158,18 +180,6 @@ public class GuidanceViewModelTest
         Assert.False(session.Guidance.QuerySearching);
         Assert.Equal("Search failed.", session.Guidance.QueryCaption);
         Assert.True(session.Guidance.QueryShown);
-    }
-
-    [Fact]
-    public async Task AnEmptyNoteAsksForNoGuidance()
-    {
-        var (session, engine, _) = TestSession.Create();
-        engine.StoredGuidance = Record([Result("fx100-1_1_1")]);
-
-        await session.OpenStoredSessionAsync("abc");
-
-        Assert.Equal(GuidanceSection.Hidden, session.Guidance.Section);
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/guidance");
     }
 
     [Fact]
@@ -309,6 +319,8 @@ public class GuidanceViewModelTest
 
         engine.RaiseNotification("guidance/ready", Ready("s1", [], searched: false));
         Assert.Equal(GuidanceSection.NoCorpusAtSearch, session.Guidance.Section);
+        Assert.StartsWith("No guideline documents yet", session.Guidance.StateCaption);
+        Assert.True(session.Guidance.SettingsLinkVisible, "Settings holds the folder");
 
         // A result whose corpus was not in the searched list shows its code
         engine.RaiseNotification("guidance/ready",
@@ -324,31 +336,20 @@ public class GuidanceViewModelTest
             log.Lines, e => e.Contains("disk full", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task AResultThatArrivesBeforeTheNoteIsKept()
+    [Theory]
+    [InlineData("guidance/ready", GuidanceSection.Results)]
+    [InlineData("guidance/failed", GuidanceSection.Failed)]
+    public async Task AnOutcomeThatArrivesBeforeTheNoteStands(string method, GuidanceSection section)
     {
         var (session, engine, _) = TestSession.Create();
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
 
-        engine.RaiseNotification("guidance/ready", Ready("s1", [Result("fx100-1_1_1")]));
+        engine.RaiseNotification(method,
+            method == "guidance/ready" ? Ready("s1", [Result("fx100-1_1_1")]) : Failed("s1", "embedder gone"));
         engine.RaiseNotification("note/ready", Note("the clinical note"));
 
-        Assert.Equal(GuidanceSection.Results, session.Guidance.Section);
-    }
-
-    [Fact]
-    public async Task AFailureThatArrivesBeforeTheNoteStands()
-    {
-        var (session, engine, _) = TestSession.Create();
-        await session.StartRecordingAsync();
-        await session.StopRecordingAsync();
-
-        engine.RaiseNotification("guidance/failed", Failed("s1", "embedder gone"));
-        engine.RaiseNotification("note/ready", Note("the clinical note"));
-
-        Assert.Equal(GuidanceSection.Failed, session.Guidance.Section);
-        Assert.True(session.Guidance.SearchNoteCommand.CanExecute(null));
+        Assert.Equal(section, session.Guidance.Section);
     }
 
     [Fact]
@@ -410,21 +411,6 @@ public class GuidanceViewModelTest
     }
 
     [Fact]
-    public void AFailedCorporaPollReadsAsUnavailable()
-    {
-        var engine = new FakeEngineClient(autoNotify: false)
-        {
-            FailNext = m => m == "guidance/corpora" ? new IOException("pipe closed") : null,
-        };
-        var log = new ListLogger();
-        var (session, _, _) = TestSession.Create(engine: engine, log: log);
-
-        Assert.Equal(GuidanceReadiness.Unavailable, session.Guidance.Readiness);
-        Assert.Contains(
-            log.Lines, e => e.Contains("pipe closed", StringComparison.Ordinal));
-    }
-
-    [Fact]
     public async Task ABurstOfDocumentChangesSearchesTheNoteOnceAfterTheySettle()
     {
         var (session, engine, _) = await ReopenedAsync(Record([Result("fx100-1_1_1")]));
@@ -479,23 +465,6 @@ public class GuidanceViewModelTest
 
         Assert.Equal(2, announced);
         Assert.Equal("found in 0.0 s", guidance.FoundIn);
-    }
-
-    [Fact]
-    public async Task AReopenedNoteOlderThanTheDocumentsIsStaleAndSearchesAgainByItself()
-    {
-        var (session, engine, _) = await ReopenedAsync(
-            Record([], documentsChanged: true));
-        session.Review.DocumentsSettle = TimeSpan.FromMilliseconds(80);
-
-        Assert.True(session.Guidance.Stale);
-        Assert.Equal(
-            "Added documents changed since this guidance was found.",
-            session.Guidance.StaleCaption);
-
-        await WaitUntilAsync(() => engine.Requests.Any(r => r.Method == "guidance/search"));
-
-        Assert.Contains(engine.Requests, r => r.Method == "guidance/search");
     }
 
     [Fact]
@@ -621,14 +590,22 @@ public class GuidanceViewModelTest
     }
 
     [Fact]
-    public void AnUnavailableEmbedderLogsItsReasonWithoutShowingIt()
+    public void AFailedPollOrAnUnavailableEmbedderReadsAsUnavailableAndOnlyTheLogSaysWhy()
     {
+        var log = new ListLogger();
+        var failing = new FakeEngineClient(autoNotify: false)
+        {
+            FailNext = m => m == "guidance/corpora" ? new IOException("pipe closed") : null,
+        };
+        var (polled, _, _) = TestSession.Create(engine: failing, log: log);
+        Assert.Equal(GuidanceReadiness.Unavailable, polled.Guidance.Readiness);
+        Assert.Contains(log.Lines, e => e.Contains("pipe closed", StringComparison.Ordinal));
+
         var engine = new FakeEngineClient(autoNotify: false)
         {
             GuidanceState = "unavailable",
             GuidanceDetail = "no model for embedding/default",
         };
-        var log = new ListLogger();
         var (session, _, _) = TestSession.Create(engine: engine, log: log);
         var status = session.Status;
 

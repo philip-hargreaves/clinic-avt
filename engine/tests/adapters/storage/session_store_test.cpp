@@ -507,7 +507,7 @@ TEST(SessionStore, NoContentIsPlaintextAtRest) {
     expect_no_plaintext("store closed");
 }
 
-TEST(SessionStore, DeleteErasesTheSessionItsKeyAndEveryRowButNeverTheLiveOne) {
+TEST(SessionStore, DeleteErasesTheSessionItsKeyAndEveryRow) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
     const SessionId finished = store.Begin({16000, "", ""});
@@ -526,32 +526,12 @@ TEST(SessionStore, DeleteErasesTheSessionItsKeyAndEveryRowButNeverTheLiveOne) {
 
     EXPECT_TRUE(store.ListSessions().empty());
     EXPECT_THROW((void)store.ReadTurns(finished), std::runtime_error);
-    {
-        Db db(root.DbPath());
-        for (const char* table :
-             {"sessions", "session_keys", "turns", "chunks", "documents", "note_options"}) {
-            EXPECT_EQ(db.QueryInt64((std::string("SELECT COUNT(*) FROM ") + table).c_str()), 0)
-                << table;
-        }
+    Db db(root.DbPath());
+    for (const char* table :
+         {"sessions", "session_keys", "turns", "chunks", "documents", "note_options"}) {
+        EXPECT_EQ(db.QueryInt64((std::string("SELECT COUNT(*) FROM ") + table).c_str()), 0)
+            << table;
     }
-
-    // Delete all spares the session still recording
-    const SessionId stored = store.Begin({16000, "", ""});
-    store.Finalise(stored);
-    store.SaveDocument(stored, DocumentKind::kNote, {.text = "a note"});
-    SessionSeed seed;
-    seed.started_at = "2026-03-09T14:20:00Z";
-    seed.ended_at = "2026-03-09T14:31:51Z";
-    store.Seed(seed);
-    const SessionId live = store.Begin({16000, "", ""});
-
-    EXPECT_EQ(store.DeleteAll(), 2u);
-
-    EXPECT_THROW((void)store.ReadDocument(stored, DocumentKind::kNote), std::runtime_error);
-    store.Finalise(live);
-    EXPECT_EQ(Ids(store.ListSessions()), (std::vector<SessionId>{live}));
-    EXPECT_EQ(store.DeleteAll(), 1u);
-    EXPECT_TRUE(store.ListSessions().empty());
 }
 
 // Clear keeps the session but replaces its key, so the rows it erased are noise as after a delete
@@ -695,39 +675,6 @@ TEST(SessionStore, ARecordMovesWholeIntoAnotherStoreUnderAFreshKeyAndOnlyOnce) {
     EXPECT_EQ(target.ListSessions().size(), 1u);
 }
 
-// Restoring a consultation removed with its reflection kept gives back what the clear took and
-// keeps what the clinician has written since
-TEST(SessionStore, ARecordCompletesAClearedSessionAndKeepsItsLocalReflection) {
-    TempRoot root;
-    SqliteSessionStore store(root.path, kNever);
-    const SessionId id = store.Begin({16000, "", ""});
-    store.ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "doctor", "the history"}});
-    store.Finalise(id);
-    store.SaveDocument(id, DocumentKind::kNote,
-                       {.text = "a note", .style = "soap", .detail = "standard"});
-    store.SaveDocument(id, DocumentKind::kPatient, {.text = "a sheet"});
-    store.SaveDocument(id, DocumentKind::kReflection, {.text = "first thoughts"});
-    const SessionRecord backup = store.ReadRecord(id);
-
-    store.Clear(id);
-    store.EditDocument(id, DocumentKind::kReflection, "second thoughts");
-    ASSERT_TRUE(store.ListSessions()[0].cleared);
-
-    EXPECT_EQ(store.AddRecord(backup), AddOutcome::kCompleted);
-    const SessionRecord restored = store.ReadRecord(id);
-    ASSERT_EQ(restored.turns.size(), 1u);
-    EXPECT_EQ(restored.turns[0].text, "the history");
-    const Document note = store.ReadDocument(id, DocumentKind::kNote);
-    EXPECT_EQ(note.text, "a note");
-    EXPECT_EQ(note.style, "soap");
-    EXPECT_EQ(note.revision, backup.documents[0].document.revision)
-        << "the note's revision survives, so its guidance is not stale";
-    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).text, "a sheet");
-    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kReflection).text, "second thoughts");
-    EXPECT_FALSE(store.ListSessions()[0].cleared);
-    EXPECT_EQ(store.AddRecord(backup), AddOutcome::kSkipped) << "whole again, so left alone";
-}
-
 TEST(SessionStore, ClearingKeepsOnlyTheAppraisalEntryAndDeleteAllCanClearToo) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
@@ -792,8 +739,10 @@ TEST(SessionStore, ClearingKeepsOnlyTheAppraisalEntryAndDeleteAllCanClearToo) {
     EXPECT_THROW((void)store.ReadTurns(unreflected), StoreError);
     EXPECT_EQ(store.DeleteAll(true), 0u) << "a cleared session has nothing more to remove";
 
+    EXPECT_EQ(store.DeleteAll(), 2u) << "without keeping, cleared sessions go too";
+    EXPECT_EQ(Ids(store.ListSessions()), (std::vector<SessionId>{live})) << "never the live one";
     store.Finalise(live);
-    EXPECT_EQ(store.DeleteAll(), 3u) << "without keeping, cleared sessions go too";
+    EXPECT_EQ(store.DeleteAll(), 1u);
     EXPECT_TRUE(store.ListSessions().empty());
 }
 

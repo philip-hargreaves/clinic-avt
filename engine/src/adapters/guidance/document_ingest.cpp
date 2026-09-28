@@ -79,6 +79,22 @@ DocumentInfo Removed(DocumentInfo info) {
 
 }  // namespace
 
+std::size_t SeedGuidelines(const std::filesystem::path& folder,
+                           const std::filesystem::path& shipped) {
+    std::error_code ec;
+    if (std::filesystem::exists(folder, ec) || !std::filesystem::is_directory(shipped, ec))
+        return 0;
+    std::filesystem::create_directories(folder, ec);
+    if (ec) return 0;
+    std::size_t copied = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(shipped, ec)) {
+        if (!entry.is_regular_file(ec)) continue;
+        if (std::filesystem::copy_file(entry.path(), folder / entry.path().filename(), ec))
+            ++copied;
+    }
+    return copied;
+}
+
 DocumentIngest::DocumentIngest(Retriever& retriever, std::filesystem::path folder,
                                std::filesystem::path root, std::function<bool()> busy,
                                std::filesystem::path host_exe, HostLimits host_limits,

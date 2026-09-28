@@ -34,15 +34,16 @@ enum class Phase { kWriting, kChecking, kRestoring };
 using Progress = std::function<void(Phase phase, std::size_t done, std::size_t total)>;
 
 struct BackupResult {
-    std::vector<store::SessionId> ids;  // written and checked
+    std::vector<store::SessionId> ids;  // written and checked; none for reflections only
     std::size_t reflections = 0;
     Manifest manifest;
 };
 
 // Writes every finalised real consultation in the period, cleared ones included since their
-// appraisal entry is a record, then commits the sink, which checks the whole file
+// appraisal entry is a record, then commits the sink, which checks the whole file. With
+// reflections_only, only those with an appraisal entry go, each stripped as a clear would
 BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveSink& sink,
-                    const Progress& progress);
+                    const Progress& progress, bool reflections_only);
 
 struct RestoreResult {
     std::size_t added = 0;

@@ -18,7 +18,7 @@ asr::Turn T(std::uint64_t first_s10, std::uint64_t end_s10, const char* who, con
 }
 
 // A clinical "No." is a whole answer: only contentless slivers may go
-TEST(TidyTranscript, DropsContentlessSliversButKeepsShortAnswers) {
+TEST(TidyTranscript, DropsContentlessSliversAndPunctuationButKeepsShortAnswers) {
     const auto out = TidyTranscript({T(0, 5, "patient", "um"), T(6, 9, "patient", "uh"),
                                      T(10, 14, "patient", "and"), T(15, 20, "doctor", "No."),
                                      T(21, 25, "patient", "Yes, certainly.")});
@@ -31,6 +31,16 @@ TEST(TidyTranscript, DropsContentlessSliversButKeepsShortAnswers) {
     EXPECT_FALSE(NoContent("Right."));
     EXPECT_TRUE(NoContent("So I"));
     EXPECT_FALSE(NoContent("so I want to")) << "three function words: a real fragment";
+
+    // A clipped decode can leave a turn of punctuation alone. It goes, and never joins a
+    // neighbour's sentence
+    const auto clipped = TidyTranscript({T(0, 10, "patient", "I don't know."),
+                                         T(11, 12, "patient", "."), T(13, 15, "doctor", "No."),
+                                         T(16, 17, "doctor", " ? "), T(18, 20, "patient", "Yes.")});
+    ASSERT_EQ(clipped.size(), 3u);
+    EXPECT_EQ(clipped[0].text, "I don't know.");
+    EXPECT_EQ(clipped[1].text, "No.");
+    EXPECT_EQ(clipped[2].text, "Yes.");
 }
 
 TEST(TidyTranscript, MergesOneSpeakersNearbyFragmentsIntoSentences) {

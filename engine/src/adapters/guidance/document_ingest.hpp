@@ -21,6 +21,11 @@ namespace clinicavt::guidance {
 
 inline constexpr const char* kReadMe = "Instructions.txt";
 
+// Creates a missing folder with the shipped guidelines in it and returns how many were copied.
+// An existing folder is the clinician's and is never refilled, so their deletions stick
+std::size_t SeedGuidelines(const std::filesystem::path& folder,
+                           const std::filesystem::path& shipped);
+
 // Watches the guidelines folder. A scan every few seconds takes new and
 // changed files by content, drops documents whose files went, and queues the
 // rest for the ingest thread. That thread reads a document through the host,

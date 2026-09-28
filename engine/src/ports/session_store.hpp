@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -55,6 +56,14 @@ inline constexpr std::array kDocumentKinds{DocumentKind::kNote,        DocumentK
                                            DocumentKind::kTranslation, DocumentKind::kLabel,
                                            DocumentKind::kSummary,     DocumentKind::kReflection,
                                            DocumentKind::kGuidance};
+
+// What a cleared session keeps: the appraisal entry and the line that names it
+inline constexpr std::array kKeptOnClear{DocumentKind::kLabel, DocumentKind::kSummary,
+                                         DocumentKind::kReflection};
+
+inline constexpr bool KeptOnClear(DocumentKind kind) {
+    return std::ranges::find(kKeptOnClear, kind) != kKeptOnClear.end();
+}
 
 struct Document {
     std::string text;             // Empty when the session has no such document

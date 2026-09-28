@@ -35,6 +35,11 @@ class DeferredDiariser : public IDiariser {
         inner_.Get().Settle(audio, decode, stop);
     }
 
+    void FindSpeech(std::span<const float> audio, const std::function<void(double)>& progress,
+                    const StopFn& stop) override {
+        inner_.Get().FindSpeech(audio, progress, stop);
+    }
+
     TurnTexts TakeTurnTexts() override {
         return inner_.Get().TakeTurnTexts();
     }

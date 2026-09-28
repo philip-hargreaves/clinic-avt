@@ -6,21 +6,29 @@ namespace ClinicAVT.App.Core.Features.Backup;
 /// <summary>The backup and restore dialogs' wording.</summary>
 public static class BackupWords
 {
-    public const string Caption =
-        "This backup contains patient records. Store in accordance with your practice's data policy.";
-
     public const string Includes =
         "Includes transcripts, notes, patient information, translations and reflections. Audio is not included.";
 
+    public const string ReflectionsIncludes =
+        "Includes reflections, with each consultation's title and summary. Transcripts, notes, "
+        + "patient information and audio are not included.";
+
     public const string RestoreCaption =
-        "Choose the backup file and enter its password. Nothing is added until you confirm.";
+        "Choose the backup file and enter its password. Nothing is added until you confirm. Restore "
+        + "only on a computer your practice has approved for patient information.";
 
     public const string PasswordNote =
         "Save this password somewhere safe. Without it, this backup can't be opened.";
 
-    public const string SameAsLast = "Use the same password as your last backup.";
-
     public const string ReflectionsTick = "Delete associated reflections";
+
+    /// <summary>"Saved as b in Documents.", naming the drive for a root such as a USB stick.</summary>
+    public static string SavedLine(string path)
+    {
+        var folder = Path.GetDirectoryName(path) ?? "";
+        var name = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
+        return $"Saved as {Path.GetFileNameWithoutExtension(path)} in {(name.Length > 0 ? name : folder)}.";
+    }
 
     /// <summary>A failed backup or restore in plain words, from the engine's fixed code.</summary>
     public static string Failure(string job, string code)

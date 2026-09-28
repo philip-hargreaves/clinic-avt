@@ -15,7 +15,8 @@
     {
       "name": "NHS",
       "light": "nhs.svg",
-      "height": 16
+      "height": 16,
+      "space": 4
     }
   ]
 }

@@ -83,7 +83,7 @@ public sealed partial class PrivacySettings : ObservableObject
     private async Task AskThenEnableAsync()
     {
         if (await _dialogs!.ConfirmAsync("Save consultation data?",
-                "Transcripts, notes and patient sheets will be stored encrypted on this device."
+                "Transcripts, notes and patient information will be stored encrypted on this device."
                 + "\n\nContinue only if you have the necessary consent and approval.", "Turn on")
             .ConfigureAwait(true))
         {

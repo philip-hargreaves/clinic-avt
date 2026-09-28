@@ -3,7 +3,8 @@
     x:Class="ClinicAVT.App.Features.Documents.PatientEditorView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:ClinicAVT.App.Controls">
+    xmlns:controls="using:ClinicAVT.App.Controls"
+    xmlns:local="using:ClinicAVT.App.Features.Documents">
 
     <Grid x:Name="Editor" Padding="0,10,0,8" RowSpacing="10">
         <!-- The sheet sizes to its text up to a cap set in code. The actions sit under the
@@ -29,7 +30,7 @@
                 <controls:StaleNotice
                     ActionText="Regenerate from note"
                     Command="{x:Bind ViewModel.RegeneratePatientCommand}"
-                    Text="This sheet was written before your note edits."
+                    Text="This patient information was written before your note edits."
                     Visibility="{x:Bind ViewModel.PatientStale, Mode=OneWay}" />
             </StackPanel>
             <!-- Only the sheet is translated. The note is the clinical
@@ -37,7 +38,7 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                 <ComboBox
                     MinWidth="160"
-                    AutomationProperties.Name="Sheet language"
+                    AutomationProperties.Name="Language"
                     IsEnabled="{x:Bind ViewModel.PatientDocumentReady, Mode=OneWay}"
                     ItemsSource="{x:Bind ViewModel.Languages, Mode=OneWay}"
                     PlaceholderText="Language"
@@ -125,6 +126,7 @@
                 x:Name="TranslationView"
                 Grid.Row="1"
                 MinHeight="96"
+                FlowDirection="{x:Bind local:PatientEditorView.Flow(ViewModel.TranslationRightToLeft), Mode=OneWay}"
                 Label="{x:Bind ViewModel.TranslationCaption, Mode=OneWay}"
                 Text="{x:Bind ViewModel.TranslationText, Mode=OneWay}" />
         </Grid>

@@ -23,7 +23,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
         IDialogService dialogs, PageViewModel pageView, GuidanceViewModel guidance,
         Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null,
-        AppPreferences? preferences = null, DemoMode? demo = null)
+        AppPreferences? preferences = null, IReadOnlyList<DemoCase>? exampleCases = null)
     {
         _dialogs = dialogs;
         Transcript = transcript;
@@ -32,7 +32,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         PageView = pageView;
         Status = status;
         Recorder = new SessionRecorder(
-            engine, status, note, guidance, pageView, transcript, metrics, preferences, demo);
+            engine, status, note, guidance, pageView, transcript, metrics, preferences);
         Review = new SessionReview(
             engine, dispatcher, status, note, guidance, transcript, dialogs, Recorder, preferences);
         Readiness = new ConsultationReadiness(
@@ -44,12 +44,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Recorder.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
         Readiness.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
 
-        if (demo is not null)
-        {
-            demo.Changed += () => dispatcher.Post(() => Recorder.ShowDemo(Recorder.DemoRecord));
-            Status.Demo = demo.Enabled;
-        }
-
         EngineReady = engine.Connected;
         Note.TranslateRequested = Review.TranslateAsync;
         Note.RegenerateRequested = Review.RegenerateNoteAsync;
@@ -58,7 +52,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Note.ReflectRequested = Review.ReflectAsync;
         Note.SaveNoteRequested = Review.SaveNoteAsync;
         Note.SavePatientRequested = Review.SavePatientAsync;
-        Note.ExampleCases = demo?.Cases ?? [];
+        Note.ExampleCases = exampleCases ?? DemoCases.Load();
         Note.ExampleCaseRequested = example => _ = Review.ApplyExampleCaseAsync(example);
         Note.OriginalNoteRequested = () => _ = Review.RestoreOriginalNoteAsync();
         Guidance.SearchNoteRequested = Review.SearchGuidanceAsync;
@@ -142,15 +136,11 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public FinalisePhase Phase => Recorder.Phase;
 
-    public bool Paused => Recorder.Paused;
-
     public double AudioSeconds => Recorder.AudioSeconds;
 
     public bool Importing => Recorder.Importing;
 
-    public int? ImportPercent => Recorder.ImportPercent;
-
-    public ReplayRequest? ActiveReplay => Recorder.ActiveReplay;
+    public string? ImportLine => Recorder.ImportLine;
 
     public bool ModelsReady => Readiness.ModelsReady;
 
@@ -168,9 +158,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     public string SessionPhase =>
         State == SessionState.Finalising ? $"{State}:{Phase}" : State.ToString();
 
-    public Task StartRecordingAsync(ReplayRequest? replay = null) => Recorder.StartRecordingAsync(replay);
-
-    public Task StartPlaybackAsync(DemoMaster playback) => Recorder.StartPlaybackAsync(playback);
+    public Task StartRecordingAsync() => Recorder.StartRecordingAsync();
 
     public Task StopRecordingAsync() => Recorder.StopRecordingAsync();
 
@@ -192,10 +180,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     }
 
     public Task CancelImportAsync() => Recorder.CancelImportAsync();
-
-    public Task SetPausedAsync(bool paused) => Recorder.SetPausedAsync(paused);
-
-    public Task SetMonitorAsync(bool on) => Recorder.SetMonitorAsync(on);
 
     public Task<bool> OpenStoredSessionAsync(string id, string startedLabel = "",
         string startedAt = "", bool hasReflection = false, bool demo = false) =>
@@ -219,5 +203,5 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public Task RegenerateNoteAsync() => Review.RegenerateNoteAsync();
 
-    public void StartNewConsultation() => _ = CloseReviewAsync();
+    public void FinishConsultation() => _ = CloseReviewAsync();
 }

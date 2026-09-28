@@ -1,0 +1,58 @@
+{
+  "_comment": "Columns the screening table takes from elsewhere: knowledge = the 9-task medical knowledge average (knowledge stage); tok/s and seconds per note from the full 6 x 57 generation run on the Arc 140T iGPU.",
+  "qwen3.5-4b-int4-ov": {
+    "knowledge": 73.8,
+    "tok_s": 22.0,
+    "time_note_s": 10
+  },
+  "qwen3-8b-int4-ov": {
+    "knowledge": 72.7,
+    "tok_s": 13.0,
+    "time_note_s": 15
+  },
+  "med42-8b-int4-ov": {
+    "knowledge": 68.1,
+    "tok_s": 11.0,
+    "time_note_s": 21
+  },
+  "qwen3.5-9b-int4-ov": {
+    "knowledge": 78.5,
+    "tok_s": 13.4,
+    "time_note_s": 19
+  },
+  "qwen3.6-27b-int4-ov": {
+    "knowledge": 84.4,
+    "tok_s": 4.5,
+    "time_note_s": 50
+  },
+  "qwen3-30b-a3b-int4-ov-official": {
+    "knowledge": 82.5,
+    "tok_s": 16.1,
+    "time_note_s": 13
+  },
+  "qwen3.6-35b-a3b-int4-ov-official": {
+    "knowledge": 80.0,
+    "tok_s": 15.1,
+    "time_note_s": 16
+  },
+  "phi-4-int4-ov": {
+    "knowledge": 78.0,
+    "tok_s": 7.6,
+    "time_note_s": 41
+  },
+  "medgemma-27b-text-it-int4-ov": {
+    "knowledge": 75.7,
+    "tok_s": 3.7,
+    "time_note_s": 58
+  },
+  "granite-4.1-30b-int4-ov": {
+    "knowledge": 76.2,
+    "tok_s": 3.6,
+    "time_note_s": 54
+  },
+  "gemma-3-27b-it-int4-ov": {
+    "knowledge": 73.9,
+    "tok_s": 3.8,
+    "time_note_s": 56
+  }
+}

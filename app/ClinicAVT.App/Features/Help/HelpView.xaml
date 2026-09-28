@@ -11,6 +11,25 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
+        <!-- A part within one section, such as Back up and Restore -->
+        <Style x:Key="HelpHeading" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="Margin" Value="0,4,0,4" />
+        </Style>
+        <!-- Tables: fixed columns so both tables line up, a hairline under each row -->
+        <Style x:Key="HelpTableRow" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="0,7" />
+        </Style>
+        <Style x:Key="HelpTableGrid" TargetType="Grid">
+            <Setter Property="ColumnSpacing" Value="16" />
+        </Style>
+        <Style x:Key="HelpTableHeader" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="HelpTableCell" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -36,88 +55,105 @@
                     Style="{StaticResource SettingsGroupHeader}"
                     Text="Using ClinicAVT" />
 
-                <toolkit:SettingsExpander Description="Consent, and what the app does with the audio" Header="Before you start">
+                <toolkit:SettingsExpander Description="Consent before recording" Header="Before you start">
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Ask everyone in the room before you record, including an interpreter on the phone. A sentence is enough: the consultation is transcribed by software on this computer to help write the notes, and the recording is not kept." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Start the consultation after the patient has given their name and date of birth, so the transcript carries neither." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="The audio is used to write the transcript and is then discarded. It is never kept." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Ask everyone in the room before you record, including an interpreter on the phone. A sentence is enough: the consultation is transcribed by software on this computer to help write the notes, and the audio recording is not kept." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
-                <toolkit:SettingsExpander Description="Start, stop, and what happens next" Header="Recording">
+                <toolkit:SettingsExpander Description="Start, stop and voice enrolment" Header="Recording">
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource HelpText}" Text="Press the microphone button on the Consultation page. The microphone named at the top right is the one in use; pick another there if you need to." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Press Stop when the consultation ends. The transcript is finished first, then the clinical note is written, then the patient information sheet. Nothing shows until the transcript is complete." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Voices are told apart automatically. The doctor and the patient are labelled; anyone else is labelled as another speaker, and what they say still counts towards the note." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Press Stop when the consultation ends. The transcript is finished first, then the clinical note is written, then the patient information. Cancel stops the recording and discards it." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Voices are identified automatically. The doctor and the patient are labelled; anyone else is labelled as another speaker, and what they say still contributes towards the note." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Voice enrolment is optional and is available in Settings. Speaker identification is approximately as accurate with or without it. Enrolment involves reading a short passage aloud, so that your voice is recognised from the first consultation; without enrolment, your voice is learned during your consultations. In both cases, recognition continues to improve over time. To remove your enrolled voice, select Forget in Settings." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
-                <toolkit:SettingsExpander Description="Note styles, editing, regenerate, copy and export" Header="Reviewing the note">
+                <toolkit:SettingsExpander Description="Import a recording, or try an example" Header="Adding a recording">
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Every document is a draft. Read it against what was said and change what is wrong: press Edit, make your changes, then Save note." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Note style sets the shape of the note, prose or SOAP, and how much detail it carries. Changing either and pressing Regenerate writes the note again from the transcript, so do that before you edit, not after." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Copy puts the note on the clipboard as plain text, ready to paste into the patient record. Export saves it as a text file." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Guidelines beside the note are passages from your guideline documents that match its wording. They are there to check against, and nothing from them is written into the note." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Already have a recording? On the Consultation page, select Import the file and choose an audio file (M4A, MP3, WAV, WMA, FLAC or AAC). Check the date and time it was made, then select Add. The recording is transcribed and written up in the same way as a live consultation, and the percentage shows the transcription progress." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="To try ClinicAVT without recording, choose one of the example consultations in the same window. These are mock consultations from Babylon Health's PriMock57 dataset, conducted by qualified clinicians, and are processed in the same way as your own recordings." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
-                <toolkit:SettingsExpander Description="The sheet for the patient, and its translation" Header="Patient information">
+                <toolkit:SettingsExpander Description="Note style, length, editing, copy and export" Header="Reviewing the note">
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="The patient information sheet explains the consultation in plain English: what was found, what the plan is, and when to get in touch. Edit it the same way as the note." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Pick a language and press Translate to add a translation under the English. Copy takes both, so the patient leaves with the sheet in their own language and the record shows what they were given." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Translation is automatic and can make mistakes. Where the wording matters, check it with the interpreter." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Every document is a draft. Check it against what was said, then select Edit, correct it and select Save note." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Note style sets the format, prose or SOAP, and the length: Concise, about 80 words, or Detailed, about 160. Regenerate rewrites the note from the transcript, so change these before editing." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="If a recording contains too little clinical content, no note is written. If it was a consultation, select Write a note anyway." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Copy places the note on the clipboard as plain text for the patient record. Export saves it as a text file." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Guidelines beside the note are relevant passages from your documents, for reference only; nothing from them is added to the note. To search them directly, type a question in the Guidelines section." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="When you have finished, select Finish consultation. Your changes are saved and the app is ready for the next patient." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
-                <toolkit:SettingsExpander Description="Where they live, and how to add or remove one" Header="Guideline documents">
+                <toolkit:SettingsExpander Description="Plain-English information for the patient, and its translation" Header="Patient information">
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Guideline documents are PDF, text or Markdown files in a folder inside your Documents. Settings, Guideline documents shows the folder, and Add documents copies files into it. Remove takes one out; removing a file from the folder does the same." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Each document is read once and searched on this computer after every note. A scanned PDF with no text cannot be searched and says so in the list." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Do not add anything that identifies a patient." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Patient information explains the consultation in plain English, written for a UK reading age of 8: what was found, the plan, and when to get in touch. Edit it in the same way as the note." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="To translate it, choose a language and select Translate. The translation appears below the English, and Copy includes both." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="If the patient information changes after translation, select Translate again to update it." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Translation is automatic and can contain mistakes. Where the wording matters, check it with an interpreter." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
-                <toolkit:SettingsExpander Description="Finding, renaming and deleting stored consultations" Header="Sessions">
+                <toolkit:SettingsExpander Description="Where they are kept, and how to add or remove them" Header="Guideline documents">
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Sessions lists every consultation kept on this computer, newest first, with its transcript, note and patient sheet. Search finds a consultation by its label." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Click the label above a consultation to rename it. Delete on a row removes that consultation; Delete all in Settings removes every one and cannot be undone." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Consultations are stored encrypted on this computer, under your Windows account. They leave it only when you copy, export or back them up. Turn off Save consultation data in Settings and each one is erased when you leave it." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Guideline documents are PDF, text or Markdown files in a folder in your Documents. In Settings, Guideline documents shows the folder; Add documents copies files into it, and Remove takes one out." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="An example set of rheumatology guidelines, mostly from the British Society for Rheumatology, is included." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Each document is read once and searched on this computer after every note. Scanned PDFs without text cannot be searched and are marked in the list." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Do not add documents that contain patient-identifying information." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
-                <toolkit:SettingsExpander Description="Saving consultations to a file, removing them, and bringing them back" Header="Backing up">
+                <toolkit:SettingsExpander Description="Finding, renaming and deleting saved consultations" Header="Sessions">
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Back up, in Settings or on the Sessions page, saves finished consultations to a file protected by a password: their transcripts, notes, patient information and appraisal reflections. Choose which consultations, then where to save the file. The file is checked before the app says it is done." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="The first time, the app offers a password made of five words. Keep it somewhere safe away from this computer, such as your practice's password manager, and use the same one each time. Without it nobody can open the backup, and it cannot be reset." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="After a backup, Remove these from this computer clears exactly the consultations the file holds. Delete all in Settings clears every one and says how many are in no backup. Appraisal reflections stay unless you tick Delete associated reflections. Neither touches your backup files; delete those yourself when your practice no longer needs them." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Restore, in Settings, brings consultations back from a backup. It shows what the file holds first, and any consultation already on this computer is left as it is." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="A backup holds patient information. Keep it only where your practice allows, such as a practice network drive, and never on a personal computer or personal cloud storage. Restore only on a computer your practice has approved for patient information." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Sessions lists every consultation saved on this computer, newest first, with its transcript, note and patient information. Search finds a consultation by its name." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Each consultation is named automatically from its note. To rename one, select its name at the top of the consultation and type a new one." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Delete removes a single consultation. Delete all consultation data, in Settings, removes every consultation and cannot be undone." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Consultations are stored encrypted on this computer, under your Windows account, and leave it only when you copy, export or back them up. If Save consultation data is turned off in Settings, each consultation is erased when you select Finish consultation, or when the app closes." />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsExpander Description="Encrypted backups of your consultations and reflections" Header="Back up and restore">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HelpHeading}" Text="Back up" />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Back up, in Settings or on the Sessions page, saves consultations and reflections to a password-protected, encrypted file. Choose Reflections only to leave out transcripts, notes and patient information." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="After a backup, Remove backed-up consultations deletes them from this computer." />
+                                <TextBlock Style="{StaticResource HelpHeading}" Text="Restore" />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Restore, in Settings, shows what a backup contains before adding it. Consultations already on this computer are not changed." />
+                                <TextBlock Style="{StaticResource HelpHeading}" Text="Keeping backups safe" />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Backups contain patient information. Store them only where your practice allows, such as a practice network drive." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
@@ -127,57 +163,244 @@
                     <toolkit:SettingsExpander.Items>
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource HelpText}" Text="Create reflection on a clinical note starts a reflection for that consultation. The case is summarised without identifying details, and you answer what stood out, what you learned and whether you would do anything differently. The guidance the consultation drew on is listed with a tick box each, so you can record which guideline or document you looked up." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Reflections gather on the Appraisal page by month. Copy takes one as plain text for your appraisal portfolio." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Create reflection, on a clinical note, starts an appraisal reflection for that consultation. The case is summarised without identifying details; you then record what stood out, what you learned and what you would do differently, and tick any guidelines you consulted." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Reflections are listed by month on the Appraisal page. Copy copies one as plain text, and Export reflections saves them to a text file for your appraisal portfolio. Check each summary for identifying details before sharing it." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
-                <toolkit:SettingsCard Description="ClinicAVT follows the text size in Windows Settings, Accessibility, Text size. Change it there and the app resizes as you do." Header="Larger text" />
+                <toolkit:SettingsExpander Description="Accuracy, speed, memory and battery" Header="Note models and power">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HelpHeading}" Text="Note models" />
+                                <TextBlock Style="{StaticResource HelpText}" Text="ClinicAVT selects the note model that suits this computer. To change it, go to Settings, Note model." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="&#x2022;  Qwen3.5 4B: quickest; minimum 16 GB of memory&#x0a;&#x2022;  Qwen3.5 9B: more accurate, slower; minimum 24 GB&#x0a;&#x2022;  Qwen3.6 35B: most accurate; similar speed to the 4B, but slower to load; minimum 32 GB" />
+                                <TextBlock Style="{StaticResource HelpHeading}" Text="Low-power mode" />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Runs speech recognition on the NPU to save battery. Transcripts take a little longer." />
+                                <TextBlock Style="{StaticResource HelpHeading}" Text="First-time setup" />
+                                <TextBlock Style="{StaticResource HelpText}" Text="The first time ClinicAVT starts, and the first time each note model is used, ClinicAVT optimises it for this computer. This happens once per model and can take a few minutes." />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsCard Description="Text in ClinicAVT follows the Windows text size setting (Settings &gt; Accessibility &gt; Text size). Changes apply immediately." Header="Larger text" />
 
                 <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="About" />
-                <toolkit:SettingsExpander Description="{x:Bind ViewModel.VersionLine}" Header="ClinicAVT">
-                    <!-- The partner marks come from Assets/logos/credits.json -->
-                    <StackPanel
-                        x:Name="AboutMarks"
-                        Orientation="Horizontal"
-                        Spacing="16" />
+                <toolkit:SettingsCard Description="{x:Bind ViewModel.VersionLine}" Header="ClinicAVT" />
+
+                <toolkit:SettingsExpander Description="Purpose and intended use" Header="Overview">
                     <toolkit:SettingsExpander.Items>
-                        <toolkit:SettingsCard Header="What it does">
-                            <toolkit:SettingsCard.Description>
-                                <StackPanel Spacing="6">
-                                    <TextBlock TextWrapping="Wrap" Text="ClinicAVT produces a draft transcript, clinical note and patient information sheet from a consultation. The patient sheet can also be translated into the patient's own language. Every document is a draft for a clinician to review and edit - nothing is final until a clinician has checked it." />
-                                    <TextBlock TextWrapping="Wrap" Text="This app is a demonstrative product, developed by Philip Hargreaves in collaboration with Intel and the NHS. It is for demonstration and evaluation only, and is not for use in real clinical settings." />
-                                </StackPanel>
-                            </toolkit:SettingsCard.Description>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HelpText}" Text="ClinicAVT produces a draft transcript, clinical note and patient information from a consultation, and can translate the patient information into the patient's own language. Every document is a draft for a clinician to review and edit; nothing is final until a clinician has checked it." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="ClinicAVT is a demonstration product for evaluation purposes only and is not intended for use in clinical practice." />
+                            </StackPanel>
                         </toolkit:SettingsCard>
-                        <toolkit:SettingsCard Header="Disclaimer">
-                            <toolkit:SettingsCard.Description>
-                                <StackPanel Spacing="6">
-                                    <TextBlock TextWrapping="Wrap" Text="&#x2022;  ClinicAVT does not diagnose, recommend treatment or add clinical information of its own. It is not a medical device." />
-                                    <TextBlock TextWrapping="Wrap" Text="&#x2022;  Automatic transcription, drafting and translation make mistakes - missed words, wrong speaker labels, wording that changes meaning. ClinicAVT is built on the principle that a clinician checks every document against what was actually said." />
-                                    <TextBlock TextWrapping="Wrap" Text="&#x2022;  Nothing ClinicAVT produces is a substitute for clinical judgement; responsibility for any clinical record always rests with a clinician." />
-                                    <TextBlock TextWrapping="Wrap" Text="&#x2022;  Guidelines shown beside a note are matched to it by wording and are there for review. Nothing from them enters the note." />
-                                </StackPanel>
-                            </toolkit:SettingsCard.Description>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsExpander Description="Limitations and clinical responsibility" Header="Disclaimer">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HelpText}" Text="ClinicAVT does not diagnose, recommend treatment or add clinical information of its own. It is not a medical device." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Automatic transcription, drafting and translation make mistakes - missed words, wrong speaker labels, wording that changes meaning. ClinicAVT is built on the principle that a clinician checks every document against what was actually said." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Nothing ClinicAVT produces is a substitute for clinical judgement; responsibility for any clinical record always rests with a clinician." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Guidelines shown beside a note are for reference only and are not incorporated into the note." />
+                            </StackPanel>
                         </toolkit:SettingsCard>
-                        <toolkit:SettingsCard Header="Privacy">
-                            <toolkit:SettingsCard.Description>
-                                <StackPanel Spacing="6">
-                                    <TextBlock TextWrapping="Wrap" Text="Everything runs on this computer and nothing is sent over the internet. Consultations you keep are stored encrypted here. Copies leave the app only when you copy, export or back them up." />
-                                    <TextBlock TextWrapping="Wrap" Text="Guideline documents you add are kept in a folder in your Documents and searched on this device. The app reads them where they are and sends nothing anywhere." />
-                                </StackPanel>
-                            </toolkit:SettingsCard.Description>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsExpander Description="Data handling and storage" Header="Privacy">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HelpText}" Text="All processing takes place locally on this device. ClinicAVT does not send or receive data over the internet, and saved consultations are stored encrypted." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Guideline documents are kept in a folder in your Documents and are searched only on this device." />
+                            </StackPanel>
                         </toolkit:SettingsCard>
-                        <toolkit:SettingsCard Description="PDFs are read with PDFium (The PDFium Authors, BSD 3-Clause licence) from the pdfium-binaries build (Benoit Blanchon, MIT licence). The licence texts sit in the licences folder beside the app. Passwords made of five words use the EFF Large Wordlist by the Electronic Frontier Foundation, licensed under CC BY 3.0 US (creativecommons.org/licenses/by/3.0/us)." Header="Third-party software" />
-                        <toolkit:SettingsCard Header="Minimum system requirements">
-                            <toolkit:SettingsCard.Description>
-                                <StackPanel Spacing="6">
-                                    <TextBlock TextWrapping="Wrap" Text="&#x2022;  Windows 11, 64-bit&#x0a;&#x2022;  Intel Core Ultra Series 2 processor with Intel Arc iGPU&#x0a;&#x2022;  16 GB RAM&#x0a;&#x2022;  20 GB free disk space, for the models and their compiled caches" />
-                                    <TextBlock TextWrapping="Wrap" Text="Developed and tested on an Intel Core Ultra 9 285H with Intel Arc 140T graphics and 64 GB RAM." />
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsExpander Description="AI models and licences" Header="Models">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <StackPanel Margin="0,0,0,8">
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableHeader}" Text="Model" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableHeader}" Text="Purpose" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableHeader}" Text="Licence" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="Whisper Large v3 Turbo (OpenAI)" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Speech recognition" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="MIT" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="Silero VAD" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Voice activity detection" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="MIT" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="pyannote segmentation 3.0" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Speaker segmentation" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="MIT" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="ERes2NetV2 (3D-Speaker)" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Speaker identification" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="Apache 2.0" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="Qwen3.5 4B and 9B, Qwen3.6 35B (Alibaba)" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Note writing" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="Apache 2.0" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="NLLB-200 distilled 600M (Meta AI)" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Translation" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="CC BY-NC 4.0" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="GTE-large" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Guideline search" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="MIT" />
+                                        </Grid>
+                                    </Border>
                                 </StackPanel>
-                            </toolkit:SettingsCard.Description>
+                                <TextBlock Style="{StaticResource HelpText}" Text="Models are converted to OpenVINO with 8-bit or 4-bit weights and are not retrained." />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsExpander Description="Libraries and licences" Header="Third-party software">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <StackPanel Margin="0,0,0,8">
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableHeader}" Text="Software" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableHeader}" Text="Purpose" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableHeader}" Text="Licence" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="OpenVINO (Intel)" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="On-device model runtime" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="Apache 2.0" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="PDFium, pdfium-binaries" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="PDF reading" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="BSD 3-Clause; MIT" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource HelpTableRow}">
+                                        <Grid Style="{StaticResource HelpTableGrid}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="300" />
+                                                <ColumnDefinition Width="230" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource HelpTableCell}" Text="Other open-source libraries" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource HelpTableCell}" Text="Listed in THIRD-PARTY-NOTICES.txt" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource HelpTableCell}" Text="MIT; Apache 2.0; BSD" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource HelpText}" Text="Full licence texts are in THIRD-PARTY-NOTICES.txt in the licences folder of the installation." />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsExpander Description="Supported hardware and software" Header="System requirements">
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard ContentAlignment="Left">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource HelpText}" Text="&#x2022;  Windows 11, 64-bit&#x0a;&#x2022;  Intel Core Ultra Series 2 or later processor with Intel Arc iGPU&#x0a;&#x2022;  16 GB RAM, 24 GB for the standard note model and 32 GB for the largest&#x0a;&#x2022;  40 GB free disk space, for the models and their compiled caches" />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Developed and tested on an Intel Core Ultra 9 285H with Intel Arc 140T graphics and 64 GB RAM." />
+                            </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>

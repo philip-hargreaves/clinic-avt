@@ -5,7 +5,7 @@ namespace ClinicAVT.App.Tests.Shell;
 public class ThroughputMeterTest
 {
     [Fact]
-    public void TheWindowRollsWithTheStreamAndAStallDecaysToZero()
+    public void TheWindowRollsWithTheStreamAStallDecaysToZeroAndEndFreezesTheValueUntilReset()
     {
         var meter = new ThroughputMeter(windowSeconds: 2.0);
         for (var i = 0; i < 20; i++)
@@ -27,12 +27,8 @@ public class ThroughputMeterTest
         // With nothing more arriving the window empties
         Assert.Equal(0, meter.TokensPerSecond(8.0));
         Assert.True(meter.Streaming, "stalled is not finished");
-    }
 
-    [Fact]
-    public void EndFreezesTheValueResetClearsItAndANewStreamMetersFreshly()
-    {
-        var meter = new ThroughputMeter();
+        meter = new ThroughputMeter();
         meter.Token(0.0);
         Assert.Equal(0, meter.TokensPerSecond(0.5));  // one token is not a rate
 

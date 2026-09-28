@@ -40,6 +40,9 @@ public sealed partial class StatusBarViewModel : ObservableObject
     // First-time setup holds recording while the models compile for this computer
     private bool _settingUp;
     private DateTimeOffset _setupSince;
+    // A switch in progress: its status line, with {time} standing for the elapsed clock
+    private string? _switchLine;
+    private DateTimeOffset _switchSince;
     private ITimer? _tick;
     // The store stopped taking writes. It stays on the line until the next consultation starts
     private string _storageFault = "";
@@ -78,16 +81,17 @@ public sealed partial class StatusBarViewModel : ObservableObject
         {
             switch (notification)
             {
-                case NotePartial or PatientPartial or TranslationPartial:
+                // The translator is not the note model, so its rate never reaches this chip
+                case NotePartial or PatientPartial:
                     _meter.Token(Now());
                     PublishThroughput(SourceRate(notification));
                     break;
-                case NoteReady or PatientReady or TranslationReady:
+                case NoteReady or PatientReady:
                     _meter.End(Now());
                     // The ready event carries the whole-generation average
                     PublishThroughput(SourceRate(notification));
                     break;
-                case NoteFailed or PatientFailed or TranslationFailed:
+                case NoteFailed or PatientFailed:
                     _meter.End(Now());
                     PublishThroughput(null);
                     break;
@@ -121,9 +125,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [ObservableProperty]
     public partial string LatestActivity { get; private set; } = "";
 
-    /// <summary>
-    /// True when demo mode is on or a demo record is on screen. It shows beside the app name.
-    /// </summary>
+    /// <summary>True while a seeded sample is on screen. It shows beside the app name.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DemoLabel))]
     public partial bool Demo { get; set; }
@@ -153,7 +155,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [ObservableProperty]
     public partial bool DecodeActive { get; private set; }
 
-    /// <summary>The chips are for testing and stay off unless opted in.</summary>
+    /// <summary>The chips are for testing, and Settings can hide them.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AsrChipVisible), nameof(NoteChipVisible), nameof(MemoryChipVisible))]
     public partial bool MetricsVisible { get; set; }
@@ -168,7 +170,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NoteChipVisible))]
     public partial string NoteChip { get; private set; } = "";
 
-    /// <summary>"Memory · 5.1 GB", the product's whole working set.</summary>
+    /// <summary>"Memory · 5.1 GB", the memory the product holds, resident model included.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MemoryChipVisible))]
     public partial string MemoryChip { get; private set; } = "";
@@ -196,10 +198,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public partial string SetupElapsed { get; private set; } = "";
 
     /// <summary>The consent reminder, shown only while a recording could start.</summary>
-    public bool ConsentVisible => _status == EngineStatus.Running && _ready && _sessionIdle && !_settingUp;
+    public bool ConsentVisible => _status == EngineStatus.Running && _ready && _sessionIdle
+        && !_settingUp && _switchLine is null;
 
     public string SetupLine =>
-        $"Setting up for this computer · {SetupElapsed} · this can take a few minutes";
+        $"First-time setup · {SetupElapsed} · optimising for your PC";
 
     /// <summary>A note model is loading. Loads can take minutes, so the line counts the time.</summary>
     [ObservableProperty]
@@ -252,6 +255,34 @@ public sealed partial class StatusBarViewModel : ObservableObject
         Tick();
     }
 
+    /// <summary>
+    /// A switch the user started, of note model or transcription device. A first switch compiles
+    /// for minutes, so the line counts the time until the engine reports the outcome.
+    /// </summary>
+    public void BeginSwitch(string line)
+    {
+        _switchLine = line;
+        _switchSince = _time.GetUtcNow();
+        Append(SwitchLine(0), busy: true);
+        Tick();
+        OnPropertyChanged(nameof(ConsentVisible));
+    }
+
+    public void EndSwitch()
+    {
+        if (_switchLine is null)
+        {
+            return;
+        }
+
+        _switchLine = null;
+        Tick();
+        OnPropertyChanged(nameof(ConsentVisible));
+    }
+
+    private string SwitchLine(double seconds) =>
+        _switchLine!.Replace("{time}", Words.Clock(seconds), StringComparison.Ordinal);
+
     /// <summary>Recording is held while the models compile for this computer.</summary>
     public void SetSettingUp(bool settingUp)
     {
@@ -275,10 +306,10 @@ public sealed partial class StatusBarViewModel : ObservableObject
         OnPropertyChanged(nameof(ConsentVisible));
     }
 
-    // One clock for both counters, running only while one of them counts
+    // One clock for every counter, running only while one of them counts
     private void Tick()
     {
-        if (ModelLoading || _settingUp)
+        if (ModelLoading || _settingUp || _switchLine is not null)
         {
             _tick ??= _time.CreateTimer(
                 _ => _dispatcher.Post(OnTick), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
@@ -301,6 +332,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
         if (_settingUp)
         {
             SetupElapsed = Words.Clock((now - _setupSince).TotalSeconds);
+        }
+
+        if (_switchLine is not null)
+        {
+            Show(SwitchLine((now - _switchSince).TotalSeconds), busy: true);
         }
     }
 
@@ -344,6 +380,11 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public void SetEngineReady(bool ready)
     {
         _ready = ready;
+        if (!ready)
+        {
+            EndSwitch();
+        }
+
         Recompute();
     }
 

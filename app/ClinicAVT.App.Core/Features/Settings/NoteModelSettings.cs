@@ -10,7 +10,8 @@ namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
 /// The note model tier. It lists the staged models as a ladder, makes the switch, and takes a
-/// failed switch back. The engine's store resolves a tier to a model.
+/// failed switch back. The engine's store resolves a tier to a model. Until the user chooses,
+/// the preference is "auto" and the control shows the model the engine picked.
 /// </summary>
 public sealed partial class NoteModelSettings : ObservableObject
 {
@@ -21,7 +22,8 @@ public sealed partial class NoteModelSettings : ObservableObject
 
     // Tier keys in ladder order, parallel to NoteModelOptions
     private readonly List<string> _tiers = [];
-    private string _noteTier;
+    private string _noteTier;  // the preference, "auto" until one is chosen
+    private string? _residentTier;  // what the engine has loaded, as it last said
     private string? _revertTier;  // where a failed switch goes back to
     private bool _populating;
     private bool _reverting;
@@ -33,7 +35,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         _client = client;
         _session = session;
         _status = status;
-        _noteTier = preferences?.NoteTier ?? "default";
+        _noteTier = preferences?.NoteTier ?? AppPreferences.AutoNoteTier;
         if (status is not null)
         {
             status.PropertyChanged += (_, e) =>
@@ -77,6 +79,11 @@ public sealed partial class NoteModelSettings : ObservableObject
     /// <summary>A load is running: the picker waits and a bar shows under it.</summary>
     public bool ModelLoading => _status?.ModelLoading == true;
 
+    private bool Automatic => _noteTier == AppPreferences.AutoNoteTier;
+
+    // The tier the control shows: the choice, or while automatic the engine's pick
+    private string? ShownTier => Automatic ? _residentTier : _noteTier;
+
     /// <summary>On connect the options load from the engine's store.</summary>
     public void Connected() => _ = LoadNoteModelsAsync();
 
@@ -95,6 +102,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         {
             var ladder = AppPreferences.NoteTiers.ToList();
             var models = await _client.ListModelsAsync().ConfigureAwait(true);
+            _residentTier = models.FirstOrDefault(m => m.Task == "note" && m.Active)?.Tier ?? _residentTier;
             var staged = models
                 .Where(m => m.Task == "note" && ladder.Contains(m.Tier))
                 .Select(m => (m.Tier, Name: ModelNames.Display(m)))
@@ -120,16 +128,16 @@ public sealed partial class NoteModelSettings : ObservableObject
             }
 
             NoteModelStatus = _tiers.Count <= 1 ? "Only one model installed" : "";
-            // For a saved tier that is not staged the engine stays on the default, and the
-            // control shows that
-            if (!_tiers.Contains(_noteTier) && _tiers.Contains("default"))
+            // For a saved tier that is not staged the engine starts on its own pick, and the
+            // choice goes back to automatic
+            if (!Automatic && !_tiers.Contains(_noteTier))
             {
-                NoteModelStatus = "Saved model not installed; using the default";
-                _noteTier = "default";
+                NoteModelStatus = "Saved model not installed; chose one for this computer";
+                _noteTier = AppPreferences.AutoNoteTier;
                 PersistTier();
             }
 
-            NoteModelIndex = _tiers.IndexOf(_noteTier);
+            NoteModelIndex = ShownTier is { } shown ? _tiers.IndexOf(shown) : -1;
             NoteModelEnabled = _tiers.Count > 1;
         }).ConfigureAwait(true);
         _populating = false;
@@ -143,7 +151,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         }
 
         var tier = _tiers[value];
-        if (tier == _noteTier)
+        if (tier == ShownTier)
         {
             return;
         }
@@ -151,7 +159,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         // The switch ends the resident model. A consultation needs it
         if (ConsultationGuard.Blocks(_session, _status, "changing the note model"))
         {
-            Reselect(_noteTier);
+            Reselect(ShownTier);
             return;
         }
 
@@ -161,14 +169,15 @@ public sealed partial class NoteModelSettings : ObservableObject
         NoteModelEnabled = false;
         NoteModelStatus = "";
         _status?.ApplyNoteModel("loading", firstUse: false);
+        _status?.BeginSwitch($"Switching to {NoteModelOptions[value]} · {{time}}");
         _ = SendTierAsync(tier);
     }
 
     // Moves the control's selection without treating it as a switch
-    private void Reselect(string tier)
+    private void Reselect(string? tier)
     {
         _reverting = true;
-        NoteModelIndex = _tiers.IndexOf(tier);
+        NoteModelIndex = tier is null ? -1 : _tiers.IndexOf(tier);
         _reverting = false;
     }
 
@@ -193,16 +202,36 @@ public sealed partial class NoteModelSettings : ObservableObject
         }
         catch (Exception e)
         {
-            RevertTier(e.Message);
+            RefuseTier(e.Message);
         }
     }
 
-    // A refused or failed switch reverts to the previous tier, once, and the
-    // engine is told
+    // The engine refused the request, so the resident model never changed: the selection goes
+    // back and the load that began optimistically ends. Nothing is sent again
+    private void RefuseTier(string reason)
+    {
+        var back = _revertTier;
+        _revertTier = null;
+        _status?.ApplyNoteModel("failed", firstUse: null);
+        _status?.EndSwitch();
+        NoteModelStatus = $"Could not switch: {reason}";
+        _status?.Append($"Could not switch note model: {reason}");
+        if (back is not null)
+        {
+            _noteTier = back;
+            PersistTier();
+            Reselect(ShownTier);
+        }
+
+        NoteModelEnabled = _tiers.Count > 1;
+    }
+
+    // A failed load reverts to the previous tier, once, and the engine is told
     private void RevertTier(string reason)
     {
         var back = _revertTier;
         _revertTier = null;
+        _status?.EndSwitch();
         // Without a switch in hand this is the model failing where it is
         NoteModelStatus = back is null ? reason : $"Could not switch: {reason}";
         _status?.Append(back is null ? $"Note model: {reason}" : $"Could not switch note model: {reason}");
@@ -214,7 +243,7 @@ public sealed partial class NoteModelSettings : ObservableObject
 
         _noteTier = back;
         PersistTier();
-        Reselect(back);
+        Reselect(ShownTier);
         _ = SendTierAsync(back);
     }
 
@@ -223,12 +252,17 @@ public sealed partial class NoteModelSettings : ObservableObject
         switch (state)
         {
             case "loading":
+                if (Automatic)
+                {
+                    _residentTier = tier;
+                }
+
                 // The caption shows the load's own line while it runs
                 NoteModelEnabled = false;
                 NoteModelStatus = "";
                 break;
             case "ready":
-                // A switch in flight puts a busy line on the status bar. The ready state ends it.
+                _status?.EndSwitch();
                 // A revert lands on the model still resident, whose ready must not wipe the
                 // reason the switch failed
                 if (_revertTier is not null)
@@ -239,8 +273,14 @@ public sealed partial class NoteModelSettings : ObservableObject
 
                 _revertTier = null;
                 NoteModelEnabled = _tiers.Count > 1;
-                // The engine is authoritative about what is resident
-                if (_tiers.Contains(tier) && tier != _noteTier)
+                // The engine is authoritative about what is resident. Its own pick is shown,
+                // never saved as a choice
+                _residentTier = tier;
+                if (Automatic)
+                {
+                    Reselect(tier);
+                }
+                else if (_tiers.Contains(tier) && tier != _noteTier)
                 {
                     _noteTier = tier;
                     PersistTier();
@@ -249,7 +289,7 @@ public sealed partial class NoteModelSettings : ObservableObject
 
                 break;
             case "failed":
-                if (tier == _noteTier)
+                if (tier == _noteTier || (Automatic && tier == _residentTier))
                 {
                     RevertTier(detail);
                 }

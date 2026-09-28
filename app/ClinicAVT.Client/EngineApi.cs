@@ -58,18 +58,8 @@ public sealed class EngineApi : IEngineApi
     public Task<string> StartSessionAsync(bool retain, string micId) =>
         StartAsync(new { retain, micId }, StartTimeout);
 
-    public Task<string> StartReplayAsync(bool retain, ReplayRequest replay) =>
-        StartAsync(new { retain, replay }, StartTimeout);
-
-    public Task<string> StartPlaybackAsync(string sessionId) =>
-        StartAsync(new { playback = new { id = sessionId } }, StartTimeout);
-
-    public Task<string> ResumeSessionAsync(string sessionId, bool retain, ReplayRequest? replay) =>
-        StartAsync(
-            replay is null
-                ? new { resume = sessionId, retain }
-                : new { resume = sessionId, retain, replay },
-            ResumeTimeout);
+    public Task<string> ResumeSessionAsync(string sessionId, bool retain) =>
+        StartAsync(new { resume = sessionId, retain }, ResumeTimeout);
 
     public async Task<string> StopSessionAsync() =>
         Text(await CallAsync("session/stop", null, StopTimeout).ConfigureAwait(false), "sessionId");
@@ -98,10 +88,6 @@ public sealed class EngineApi : IEngineApi
     }
 
     public Task CancelSessionAsync() => CallAsync("session/cancel");
-
-    public Task PauseSessionAsync(bool paused) => CallAsync("session/pause", new { paused });
-
-    public Task MonitorSessionAsync(bool monitor) => CallAsync("session/monitor", new { on = monitor });
 
     public Task OpenSessionAsync(string id) => CallAsync("session/open", new { id });
 
@@ -147,9 +133,10 @@ public sealed class EngineApi : IEngineApi
             LongTimeout);
 
     // The job runs on the engine's own thread, so these return once it has started
-    public Task BackUpAsync(string periodStart, string periodEnd, string path, string password) =>
+    public Task BackUpAsync(
+        string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false) =>
         CallAsync("archive/backup",
-            new { from = periodStart, to = periodEnd, path, password }, LongTimeout);
+            new { from = periodStart, to = periodEnd, path, password, reflectionsOnly }, LongTimeout);
 
     public Task RestoreAsync(string path, string password, bool dryRun) =>
         CallAsync("archive/restore", new { path, password, dryRun }, LongTimeout);

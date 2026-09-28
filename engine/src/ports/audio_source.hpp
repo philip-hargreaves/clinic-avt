@@ -42,12 +42,6 @@ class IAudioSource {
 
     virtual void Run(IAudioSink& sink) = 0;
     virtual void RequestStop() = 0;
-
-    // Holds delivery without ending the stream. Optional, any thread
-    virtual void SetPaused(bool) {}
-
-    // Toggles audible monitoring mid-stream. Optional, any thread
-    virtual void SetMonitor(bool) {}
 };
 
 }  // namespace clinicavt::audio

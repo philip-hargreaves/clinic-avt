@@ -24,20 +24,38 @@ public class DocumentExportViewModelTest
         var (export, note, clipboard, _, status) = Create();
         note.ClinicalNoteText = "the note";
         note.PatientInfoText = "take\rone tablet";  // as an edit box leaves it
-        Assert.Equal("Copies the sheet", note.PatientCopyTip);
+        Assert.Equal("Copies the patient information", note.PatientCopyTip);
 
         await export.CopyNoteCommand.ExecuteAsync(null);
         await export.CopyPatientCommand.ExecuteAsync(null);
         Assert.Equal(["the note", "take\r\none tablet"], clipboard.Copied);
-        Assert.Contains("Patient note copied", status.LatestActivity);
+        Assert.Contains("Patient information copied", status.LatestActivity);
 
         note.TranslationLanguage = "Urdu";
         note.TranslationText = "ایک گولی لیں";
-        Assert.Equal("Copies the sheet and its translation", note.PatientCopyTip);
+        Assert.Equal("Copies the patient information and its translation", note.PatientCopyTip);
         Assert.Contains("translation", note.PatientExportTip);
 
         await export.CopyPatientCommand.ExecuteAsync(null);
         Assert.Equal("take\r\none tablet\r\n\r\nUrdu translation\r\n\r\nایک گولی لیں", clipboard.Copied[^1]);
+    }
+
+    // Arabic-script translations read right to left, so their box flows that way
+    [Fact]
+    public void RightToLeftLanguagesFlowRightToLeft()
+    {
+        var note = new NoteViewModel();
+        foreach (var language in new[] { "Arabic", "Farsi", "Kurdish (Sorani)", "Urdu" })
+        {
+            note.TranslationLanguage = language;
+            Assert.True(note.TranslationRightToLeft, language);
+        }
+
+        foreach (var language in new[] { "Kurdish (Kurmanji)", "Greek", "Chinese (Simplified)", "" })
+        {
+            note.TranslationLanguage = language;
+            Assert.False(note.TranslationRightToLeft, language);
+        }
     }
 
     [Fact]

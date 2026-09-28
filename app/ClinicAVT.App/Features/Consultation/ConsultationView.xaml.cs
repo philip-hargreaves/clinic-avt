@@ -1,8 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using ClinicAVT.App.Controls;
 using ClinicAVT.App.Core.Features.Consultation;
-using ClinicAVT.App.Core.Features.Demo;
-using ClinicAVT.App.Features.Demo;
 using ClinicAVT.App.Features.Documents;
 
 namespace ClinicAVT.App.Features.Consultation;
@@ -10,17 +8,15 @@ namespace ClinicAVT.App.Features.Consultation;
 public sealed partial class ConsultationView : UserControl
 {
     public ConsultationView(
-        SessionControlsView controls, ReviewSurfaceView surface, DemoTrayView demoTray,
-        MicViewModel mic, ConsultationHeaderViewModel header)
+        SessionControlsView controls, ReviewSurfaceView surface, MicViewModel mic,
+        ConsultationHeaderViewModel header)
     {
         Controls = controls.ViewModel;
-        DemoTray = demoTray.ViewModel;
         Mic = mic;
         Header = header;
         InitializeComponent();
         ControlsHost.Content = controls;
         SurfaceHost.Content = surface;
-        DemoTrayHost.Content = demoTray;
         AudioDrop.Attach(Root, DropHighlight, () => Controls.ImportRecordingCommand.CanExecute(null),
             path => Controls.ImportRecordingCommand.ExecuteAsync(path));
 
@@ -36,8 +32,6 @@ public sealed partial class ConsultationView : UserControl
     }
 
     public SessionControlsViewModel Controls { get; }
-
-    public DemoTrayViewModel DemoTray { get; }
 
     public MicViewModel Mic { get; }
 

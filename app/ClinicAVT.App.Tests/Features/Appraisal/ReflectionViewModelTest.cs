@@ -87,7 +87,7 @@ public class ReflectionViewModelTest
     }
 
     [Fact]
-    public async Task TheConsultationsGuidelinesListOnePerDocumentWithTheStoredTicks()
+    public async Task TheConsultationsGuidelinesListOnePerDocumentWithTheStoredTicksAndAnAddedDocumentNamesItsPages()
     {
         var (reflection, engine) = Create();
         engine.StoredGuidance = Guidance("ng100-1_1_1", "ng100-1_2_3", "cg79-1_1_1");
@@ -104,13 +104,10 @@ public class ReflectionViewModelTest
         Assert.Equal("Old leaflet", reflection.References[2].Title);
         Assert.False(reflection.Dirty);
         Assert.Contains("Guidance referred to\nCG79 Fictional guideline (NICE)", reflection.ExportText);
-    }
 
-    [Fact]
-    public async Task AnAddedDocumentIsOneRowNamingItsPages()
-    {
-        var (reflection, engine) = Create();
+        // An added document is one row naming its pages
         engine.StoredGuidance = Guidance("doc7-p19", "doc7-p21", "doc7-p19b");
+        engine.ReflectionReferences.Clear();
         await reflection.LoadAsync("abc");
 
         var row = Assert.Single(reflection.References);
@@ -233,26 +230,10 @@ public class ReflectionViewModelTest
         Assert.Equal(mine, reflection.Summary);
     }
 
-    // A summary on its way is lost with the engine writing it, and the sheet stops waiting
+    // A summary asked for while the model loads waits for it and says so. One on its way is lost
+    // with the engine writing it, and the sheet stops waiting
     [Fact]
-    public async Task ASummaryLostWithTheEngineSaysSoInsteadOfWaiting()
-    {
-        var (reflection, engine) = Create();
-        engine.SummarySilent = true;
-        await reflection.LoadAsync("abc");
-        Assert.True(reflection.SummaryPending);
-        Assert.Equal("Writing the case study", reflection.SummaryPlaceholder);
-
-        engine.SetConnected(false);
-
-        Assert.False(reflection.SummaryPending);
-        Assert.Contains("the engine restarted", reflection.SummaryProblem);
-        Assert.Equal("", reflection.SummaryPlaceholder);
-    }
-
-    // A summary asked for while the model loads waits for it, and says so
-    [Fact]
-    public async Task ASummaryWaitingOnALoadSaysSo()
+    public async Task ASummaryInFlightSaysWhatItWaitsForAndEndsWhenTheEngineGoes()
     {
         var engine = new FakeEngineClient { SummarySilent = true };
         var status = TestSession.Status(engine);
@@ -261,9 +242,16 @@ public class ReflectionViewModelTest
 
         await reflection.LoadAsync("abc");
 
+        Assert.True(reflection.SummaryPending);
         Assert.StartsWith("Waiting for the note model to load · 0:00", reflection.SummaryPlaceholder);
         status.ApplyNoteModel("ready", firstUse: false);
         Assert.Equal("Writing the case study", reflection.SummaryPlaceholder);
+
+        engine.SetConnected(false);
+
+        Assert.False(reflection.SummaryPending);
+        Assert.Contains("the engine restarted", reflection.SummaryProblem);
+        Assert.Equal("", reflection.SummaryPlaceholder);
     }
 
     [Fact]

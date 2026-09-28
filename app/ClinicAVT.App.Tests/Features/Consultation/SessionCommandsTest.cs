@@ -21,13 +21,12 @@ public class SessionCommandsTest
         Assert.True(controls.StartRecordingCommand.CanExecute(null));
 
         Assert.False(controls.StopRecordingCommand.CanExecute(null));
-        Assert.False(controls.NewConsultationCommand.CanExecute(null));
+        Assert.False(controls.FinishConsultationCommand.CanExecute(null));
         Assert.True(controls.IdleVisible);
         Assert.True(controls.CentreStageVisible);
         Assert.False(controls.PanesVisible);
         Assert.False(controls.ReviewVisible);
         Assert.True(controls.MicPickerVisible);
-        Assert.True(controls.MicPickerEnabled);
 
         await controls.StartRecordingCommand.ExecuteAsync(null);
         Assert.Equal(SessionState.Recording, session.State);
@@ -37,8 +36,7 @@ public class SessionCommandsTest
         Assert.False(controls.IdleVisible);
         Assert.True(controls.RecordingVisible);
         Assert.True(controls.CentreStageVisible);
-        Assert.True(controls.MicPickerVisible, "shown while recording, read-only");
-        Assert.False(controls.MicPickerEnabled, "pinned: changes apply next time");
+        Assert.False(controls.MicPickerVisible, "gone from Record until Finish consultation");
 
         // The clock and the ring follow delivered audio
         for (var i = 0; i < 754; i++)
@@ -55,38 +53,45 @@ public class SessionCommandsTest
         Assert.True(controls.FinalisingVisible);
         Assert.False(controls.PanesVisible);
         Assert.Equal("Preparing note", controls.FinalisingLabel);
+        Assert.False(controls.MicPickerVisible);
 
         // The first token opens the panes, with the note already filling
         engine.RaiseNotification("note/partial", Params(new { text = "The" }));
         Assert.True(controls.PanesVisible);
         Assert.False(controls.FinalisingVisible);
+        Assert.False(controls.MicPickerVisible, "not while the note streams");
         engine.RaiseNotification("note/ready");
         Assert.True(controls.ReviewVisible);
         Assert.False(controls.RecordingVisible);
         Assert.False(controls.CentreStageVisible);
-        Assert.True(controls.NewConsultationCommand.CanExecute(null));
-        Assert.False(controls.MicPickerVisible, "the cell is New consultation's now");
+        Assert.True(controls.FinishConsultationCommand.CanExecute(null));
+        Assert.False(controls.MicPickerVisible, "the cell is Finish consultation's now");
 
-        controls.NewConsultationCommand.Execute(null);
+        controls.FinishConsultationCommand.Execute(null);
         Assert.Equal(SessionState.Idle, session.State);
         Assert.True(controls.IdleVisible);
+        Assert.True(controls.MicPickerVisible, "back for the next consultation");
     }
 
+    // No partial streams for a thin recording, so note/ready must open the panes on its own or
+    // the centre would spin forever, and nothing may claim to be writing
     [Fact]
-    public async Task AThinRecordingOpensThePanesOnTheCannedNote()
+    public async Task AThinRecordingOpensThePanesOnTheCannedNoteAndNeverClaimsToBeWriting()
     {
-        // No partial streams for a thin recording, so note/ready must open
-        // the panes on its own or the centre would spin forever
-        var (session, engine, _) = TestSession.Create();
+        var log = new ListLogger();
+        var (session, engine, _) = TestSession.Create(log: log);
         var controls = new SessionControlsViewModel(session, TestSession.Mic());
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         Assert.True(controls.CentreStageVisible);
 
-        engine.RaiseNotification("note/ready", Params(new { text = "The recording was too short" }));
+        engine.RaiseNotification("note/ready", Params(new { text = "The recording was too short." }));
+        engine.RaiseNotification("patient/ready", Params(new { text = "The recording was too short." }));
 
         Assert.True(controls.PanesVisible);
         Assert.True(controls.ReviewVisible);
+        Assert.DoesNotContain(log.Lines, l => l.Contains("Writing", StringComparison.Ordinal));
+        Assert.Equal("Ready for review", session.Status.LatestActivity);
     }
 
     [Fact]
@@ -104,7 +109,7 @@ public class SessionCommandsTest
         Assert.False(controls.StartRecordingCommand.CanExecute(null));
         Assert.True(bar.ShowsSetup);
         Assert.False(bar.Busy, "the bar stands in for the ring");
-        Assert.Equal("Setting up for this computer · 0:00 · this can take a few minutes", bar.DisplayLabel);
+        Assert.Equal("First-time setup · 0:00 · optimising for your PC", bar.DisplayLabel);
         bar.SetMicVisible(true);
         Assert.False(bar.ShowsSetup, "the level meter has the bar's place");
         bar.SetMicVisible(false);
@@ -140,7 +145,7 @@ public class SessionCommandsTest
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "loading", firstUse = true }));
         Assert.False(session.ModelsReady);
-        Assert.StartsWith("Setting up for this computer", session.Status.DisplayLabel);
+        Assert.StartsWith("First-time setup", session.Status.DisplayLabel);
 
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "ready" }));
@@ -194,7 +199,7 @@ public class SessionCommandsTest
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         // A note that waits on the model's load says so
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "loading" }));
-        Assert.Equal("Waiting for the note model to load · 0:00", controls.FinalisingLabel);
+        Assert.Equal("Waiting for the note model · 0:00", controls.FinalisingLabel);
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "ready" }));
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
@@ -212,15 +217,16 @@ public class SessionCommandsTest
         Assert.Equal(FinalisePhase.Streaming, session.Phase);
         engine.RaiseNotification("note/ready", Params(new { text = "note" }));
         engine.RaiseNotification("patient/ready", Params(new { text = "sheet" }));
-        session.StartNewConsultation();
+        session.FinishConsultation();
         Assert.Equal(FinalisePhase.None, session.Phase);
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         Assert.Equal(FinalisePhase.Note, session.Phase);
     }
 
+    // A resume the engine dies during stays recording, and the next reconnect retries it
     [Fact]
-    public async Task ARestartedEngineResumesTheLiveSessionButNothingWhileIdle()
+    public async Task ARestartedEngineResumesTheLiveSessionUntilItTakesButNothingWhileIdle()
     {
         var (session, engine, _) = TestSession.Create();
 
@@ -230,24 +236,6 @@ public class SessionCommandsTest
         Assert.Equal(SessionState.Idle, session.State);
 
         await session.StartRecordingAsync();
-        engine.SetConnected(false);
-        engine.SetConnected(true);
-
-        var starts = engine.Requests.Where(r => r.Method == "session/start").ToList();
-        Assert.Equal(2, starts.Count);
-        Assert.Contains("resume", starts[1].Params);
-        Assert.Contains("s1", starts[1].Params);
-        Assert.Equal(SessionState.Recording, session.State);
-    }
-
-    [Fact]
-    public async Task AResumeThatLosesTheEngineStaysRecordingForTheNextReconnect()
-    {
-        var (session, engine, _) = TestSession.Create();
-        await session.StartRecordingAsync();
-
-        // The engine dies again while the resume is in flight, and the next
-        // reconnect must retry it
         engine.FailNext = method => method == "session/start"
             ? new IOException("pipe transport is closed") : null;
         engine.SetConnected(false);
@@ -258,7 +246,10 @@ public class SessionCommandsTest
         engine.SetConnected(false);
         engine.SetConnected(true);
 
-        Assert.Equal(3, engine.Requests.Count(r => r.Method == "session/start"));
+        var starts = engine.Requests.Where(r => r.Method == "session/start").ToList();
+        Assert.Equal(3, starts.Count);
+        Assert.Contains("resume", starts[2].Params);
+        Assert.Contains("s1", starts[2].Params);
         Assert.Equal(SessionState.Recording, session.State);
         Assert.Equal("Recording", session.Status.LatestActivity);
     }

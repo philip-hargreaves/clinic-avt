@@ -14,7 +14,6 @@ add_library(clinicavt_core STATIC
     src/core/guidance/reference_tail.cpp
     src/core/session/enrolment.cpp
     src/core/session/note_lane.cpp
-    src/core/session/playback.cpp
     src/core/session/session_controller.cpp
     src/core/session/transcribe_recording.cpp
     src/core/archive/backup.cpp
@@ -243,7 +242,6 @@ add_library(clinicavt_audio STATIC
     src/adapters/audio/capture_devices.cpp
     src/adapters/audio/media_foundation_reader.cpp
     src/adapters/audio/wasapi_capture.cpp
-    src/adapters/audio/wasapi_player.cpp
     src/adapters/audio/wav_source.cpp)
 target_link_libraries(clinicavt_audio
     PUBLIC clinicavt_core
@@ -254,7 +252,7 @@ target_link_options(clinicavt_audio INTERFACE /DELAYLOAD:mfplat.dll /DELAYLOAD:m
 add_executable(clinicavt_engine src/engine_main.cpp)
 target_link_libraries(clinicavt_engine PRIVATE
     clinicavt_ipc clinicavt_audio clinicavt_diarisation clinicavt_guidance clinicavt_note clinicavt_storage
-    clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings ole32 shell32)
+    clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings dxgi ole32 shell32)
 clinicavt_deploy_openvino(ov_engine_runtime)
 add_dependencies(clinicavt_engine ov_engine_runtime)
 

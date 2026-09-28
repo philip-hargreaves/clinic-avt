@@ -38,6 +38,7 @@ json DoneJson(const char* job, bool dry_run, std::size_t consultations, std::siz
                 {"from", manifest.from},
                 {"to", manifest.to},
                 {"createdAt", manifest.created_at},
+                {"reflectionsOnly", manifest.reflections_only},
                 {"ids", std::move(ids)}};
 }
 
@@ -113,9 +114,10 @@ Progress ArchiveLane::Reporter(std::string job) {
     };
 }
 
-bool ArchiveLane::BackUp(Period period, std::filesystem::path path, const std::string& password) {
+bool ArchiveLane::BackUp(Period period, std::filesystem::path path, const std::string& password,
+                         bool reflections_only) {
     return Launch([this, period = std::move(period), path = std::move(path),
-                   password = std::string(password)]() mutable -> Outcome {
+                   password = std::string(password), reflections_only]() mutable -> Outcome {
         try {
             std::optional<ArchiveFileSink> sink;
             {
@@ -123,7 +125,8 @@ bool ArchiveLane::BackUp(Period period, std::filesystem::path path, const std::s
                 sink.emplace(path, password, iterations_);
             }
             return {"archive/done",
-                    BackupDoneJson(archive::BackUp(store_, period, *sink, Reporter("backup")))};
+                    BackupDoneJson(archive::BackUp(store_, period, *sink, Reporter("backup"),
+                                                   reflections_only))};
         } catch (...) {
             return {"archive/failed",
                     ArchiveFailedJson("backup", CodeOf(std::current_exception()))};

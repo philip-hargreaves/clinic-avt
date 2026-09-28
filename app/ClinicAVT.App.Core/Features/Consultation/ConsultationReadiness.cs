@@ -140,7 +140,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
             // A shell that reconnects mid-load learns of it from the reply
             await EngineCall.TryAsync(_status, "note/tier", async () =>
             {
-                var reply = await _engine.SetNoteTierAsync(_preferences?.NoteTier ?? "default")
+                var reply = await _engine.SetNoteTierAsync(_preferences?.NoteTier ?? AppPreferences.AutoNoteTier)
                     .ConfigureAwait(true);
                 _status.ApplyNoteModel(reply.State, firstUse: null, reply.Name);
             }).ConfigureAwait(true);

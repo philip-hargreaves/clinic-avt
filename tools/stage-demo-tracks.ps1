@@ -1,5 +1,5 @@
 # Rebuilds demo/ from the research repo: five PriMock mixed consultations plus
-# the manifest the demo tray reads. Only needed to repack the demo-tracks
+# the manifest the import dialog's examples come from. Only needed to repack the demo-tracks
 # weights pack; a checkout gets demo/ from fetch-models. Wavs never enter git.
 #
 #   stage-demo-tracks.ps1

@@ -219,13 +219,15 @@ RecordingInfo MediaFoundationReader::Inspect(const std::filesystem::path& path) 
     return info;
 }
 
-std::vector<float> MediaFoundationReader::Decode(const std::filesystem::path& path) {
+std::vector<float> MediaFoundationReader::Decode(const std::filesystem::path& path,
+                                                 const ReadProgress& progress) {
     const MediaFoundation mf;
     const auto reader = OpenAudio(path);
 
+    const double seconds = Seconds(*reader.Get());
     std::vector<float> audio;
-    audio.reserve(static_cast<std::size_t>(std::min(Seconds(*reader.Get()), kMostSecondsReserved) *
-                                           kSampleRate));
+    audio.reserve(static_cast<std::size_t>(std::min(seconds, kMostSecondsReserved) * kSampleRate));
+    double reported = 0;
     for (;;) {
         DWORD flags = 0;
         ComPtr<IMFSample> sample;
@@ -249,6 +251,12 @@ std::vector<float> MediaFoundationReader::Decode(const std::filesystem::path& pa
         const auto* first = reinterpret_cast<const float*>(bytes);
         audio.insert(audio.end(), first, first + length / sizeof(float));
         buffer->Unlock();
+        // Samples are a few milliseconds each, so report in steps of a hundredth
+        const double done = static_cast<double>(audio.size()) / kSampleRate / seconds;
+        if (progress && seconds > 0 && done - reported >= 0.01) {
+            reported = done;
+            progress(std::min(done, 1.0));
+        }
     }
     if (audio.empty()) throw RecordingError("the file holds no sound");
     return audio;

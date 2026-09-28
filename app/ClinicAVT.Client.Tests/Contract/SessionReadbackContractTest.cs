@@ -82,7 +82,7 @@ public class SessionReadbackContractTest
             await client.RequestAsync("session/open", new { id }, Timeout);
             await Assert.ThrowsAnyAsync<Exception>(
                 () => client.RequestAsync(
-                    "note/regenerate", new { style = "prose", detail = "standard" }, Timeout));
+                    "note/regenerate", new { style = "prose", detail = "concise" }, Timeout));
             await client.RequestAsync("session/close", null, Timeout);
             await Assert.ThrowsAnyAsync<Exception>(
                 () => client.RequestAsync("session/open", new { id = "nope" }, Timeout));

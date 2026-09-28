@@ -24,7 +24,6 @@ public class SettingsViewModelTest
         {
             NpuTranscription = true,
             KeepConsultations = true,
-            DemoTrayEnabled = true,
             Theme = "light",
         };
         var engine = new FakeEngineClient();
@@ -37,7 +36,6 @@ public class SettingsViewModelTest
 
         Assert.True(settings.Appearance.NpuTranscription);
         Assert.True(settings.Privacy.KeepConsultations);
-        Assert.True(settings.Appearance.DemoTrayEnabled);
         Assert.Equal("light", settings.Appearance.Theme);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "asr/device");  // a launch moves nothing
         Assert.Equal(0, asked);
@@ -145,16 +143,20 @@ public class SettingsViewModelTest
         Assert.Contains("Last backup: 1 Sep 2026, 32 consultations.", settings.Privacy.BackupDescription);
     }
 
-    // Everything that restarts or reconfigures the engine waits for the consultation to end
+    // Everything that restarts or reconfigures the engine waits for the consultation to end. A
+    // finished one on screen blocks nothing, and deleting everything closes its review first so
+    // the screen never shows erased data
     [Fact]
-    public async Task DuringAConsultationDeleteAllTheNpuToggleAndTheTierAreRefused()
+    public async Task EngineChangesWaitForTheConsultationToEndAndDeleteAllClosesTheReviewOnScreen()
     {
         var preferences = TempPreferences();
         var engine = TieredEngine();
         engine.StoredSessions = 3;
         var status = TestSession.Status(engine);
-        var settings = new SettingsViewModel(preferences, new FakeSession { ConsultationInProgress = true },
-            status: status, client: new EngineApi(engine), dialogs: new FakeDialogService());
+        var session = new FakeSession { ConsultationInProgress = true };
+        var dialogs = new FakeDialogService();
+        var settings = new SettingsViewModel(preferences, session,
+            status: status, client: new EngineApi(engine), dialogs: dialogs);
 
         await settings.Privacy.DeleteAllConsultationsCommand.ExecuteAsync(null);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "session/deleteAll");
@@ -167,23 +169,11 @@ public class SettingsViewModelTest
 
         settings.NoteModel.NoteModelIndex = 2;
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
-    }
 
-    // Deleting everything closes the review first, so the screen never shows erased data
-    [Fact]
-    public async Task AFinishedConsultationOnScreenBlocksNothingAndDeleteAllClosesItsReview()
-    {
-        var preferences = TempPreferences();
-        var engine = TieredEngine();
-        engine.StoredSessions = 3;
-        var status = TestSession.Status(engine);
-        var session = new FakeSession { ReviewedSessionId = "s1" };
-        var dialogs = new FakeDialogService();
-        var settings = new SettingsViewModel(preferences, session,
-            status: status, client: new EngineApi(engine), dialogs: dialogs);
-
+        session.ConsultationInProgress = false;
+        session.ReviewedSessionId = "s1";
         await settings.Privacy.BackUpCommand.ExecuteAsync(null);
         Assert.Equal(1, dialogs.BackupsRun);
 
@@ -224,48 +214,6 @@ public class SettingsViewModelTest
         settings.Privacy.KeepConsultations = false;  // turning off needs no confirmation
         Assert.Equal(2, asked);
         Assert.False(preferences.KeepConsultations);
-    }
-
-    [Fact]
-    public void TheDocumentsListIsClosedAndAFailureOpensItOnce()
-    {
-        var engine = new FakeEngineClient();
-        engine.GuidanceDocuments.Add(Document(1, "Gout", "ready", 41));
-        var settings = new SettingsViewModel(TempPreferences(), client: new EngineApi(engine));
-
-        Assert.Equal("1 document", settings.Guidance.DocumentsSummary);
-        Assert.False(settings.Guidance.DocumentsExpanded);
-
-        engine.RaiseNotification("guidance/document", Params(Document(2, "Letter", "failed", error: "password")));
-        Assert.True(settings.Guidance.DocumentsExpanded);
-
-        settings.Guidance.DocumentsExpanded = false;
-        engine.RaiseNotification("guidance/document", Params(Document(3, "PMR", "ready", 10)));
-        Assert.False(settings.Guidance.DocumentsExpanded, "the same failure does not reopen it");
-    }
-
-    [Fact]
-    public void DemoModeRowFollowsTheSavedRuns()
-    {
-        var masters = Path.Combine(Path.GetTempPath(), $"clinicavt-masters-{Guid.NewGuid():N}.json");
-        File.WriteAllText(masters, """{"Elbow swelling":{"id":"s-elbow","audioSeconds":540},"Chest pain":{"id":"s-chest","audioSeconds":457}}""");
-        var preferences = TempPreferences();
-        var demo = new ClinicAVT.App.Core.Features.Demo.DemoMode(preferences, masters, []);
-        var settings = new SettingsViewModel(preferences, demo: demo);
-
-        Assert.True(settings.Appearance.DemoTracksAvailable);
-        Assert.False(settings.Appearance.DemoModeEnabled);
-        settings.Appearance.DemoModeEnabled = true;
-        settings.Appearance.DemoTrackIndex = 1;
-        Assert.True(demo.Enabled);
-        Assert.Equal("s-chest", demo.Master!.SessionId);
-        Assert.True(preferences.DemoMode);
-        Assert.Equal("Chest pain", preferences.DemoTrack);
-
-        var none = new SettingsViewModel(preferences, demo: new ClinicAVT.App.Core.Features.Demo.DemoMode(
-            preferences, Path.Combine(Path.GetTempPath(), "missing.json"), []));
-        Assert.False(none.Appearance.DemoTracksAvailable);
-        Assert.Contains("record_masters", none.Appearance.DemoModeCaption);
     }
 
     private static FakeEngineClient TieredEngine()
@@ -324,7 +272,9 @@ public class SettingsViewModelTest
         Assert.Equal(
             "Loading the note model · 0:00 · this can take a few minutes",
             settings.NoteModel.NoteModelCaption);
-        Assert.False(status.Busy, "the load's bar stands in for the ring");
+        // A switch the user asked for says so on the status bar, with the time it has taken
+        Assert.Equal("Switching to Qwen3.5 4B · 0:00", status.LatestActivity);
+        Assert.True(status.Busy);
 
         engine.RaiseNotification("note/model", NoteModel("loading", "constrained", "Qwen3.5 4B"));
         Assert.False(settings.NoteModel.NoteModelEnabled);
@@ -379,48 +329,68 @@ public class SettingsViewModelTest
         preferences.NoteTier = "accuracy";
         var uninstalled = new SettingsViewModel(preferences, client: new EngineApi(new FakeEngineClient()));
 
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.Equal(0, uninstalled.NoteModel.NoteModelIndex);
         Assert.Contains("not installed", uninstalled.NoteModel.NoteModelStatus);
     }
 
+    // A refusal, as while a note is being written, leaves the resident model as it was, so
+    // nothing is sent again and the load that began optimistically ends
     [Fact]
-    public void AFailedLoadOrARefusedRequestRevertsToTheTierThatWorked()
+    public void AFailedLoadOrARefusedSwitchRevertsToTheTierThatWorked()
     {
         var preferences = TempPreferences();
         var engine = TieredEngine();
-        var settings = new SettingsViewModel(preferences, client: new EngineApi(engine), session: new FakeSession());
+        var status = TestSession.Status(engine);
+        var settings = new SettingsViewModel(preferences, client: new EngineApi(engine), session: new FakeSession(), status: status);
         settings.NoteModel.NoteModelIndex = 2;
         engine.Requests.Clear();
 
         engine.RaiseNotification(
             "note/model", NoteModel("failed", "accuracy", "Qwen3.6 35B", "out of memory"));
 
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Equal("auto", preferences.NoteTier);
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
         Assert.Contains("out of memory", settings.NoteModel.NoteModelStatus);
         var back = engine.Requests.Single(r => r.Method == "note/tier");
-        Assert.Contains("default", back.Params);
+        Assert.Contains("auto", back.Params);
         engine.RaiseNotification("note/model", NoteModel("ready", "default", "Qwen3.5 9B"));
 
-        engine.FailNext = method => method == "note/tier" ? new IOException("no such device") : null;
+        engine.Requests.Clear();
+        engine.Failing.Add("note/tier");
         settings.NoteModel.NoteModelIndex = 0;
 
-        Assert.Equal("default", preferences.NoteTier);
+        Assert.Single(engine.Requests, r => r.Method == "note/tier");
+        Assert.False(settings.NoteModel.ModelLoading);
+        Assert.True(settings.NoteModel.PickerEnabled);
         Assert.Equal(1, settings.NoteModel.NoteModelIndex);
-        Assert.Contains("no such device", settings.NoteModel.NoteModelStatus);
+        Assert.Equal("auto", preferences.NoteTier);
+        Assert.StartsWith("Could not switch", settings.NoteModel.NoteModelStatus);
     }
 
+    // Never chosen: the engine picks for the machine, and the control shows its pick without
+    // saving it, so a machine that changes is picked for again. A choice is saved, and the engine
+    // stays authoritative about what is resident
     [Fact]
-    public void TheEngineIsAuthoritativeAboutWhatIsResident()
+    public void TheEnginesOwnPickIsShownUnsavedAndOnceChosenTheEngineStillSaysWhatIsResident()
     {
         var preferences = TempPreferences();
         var engine = TieredEngine();
+        engine.NoteTier = "constrained";
         var settings = new SettingsViewModel(preferences, client: new EngineApi(engine), session: new FakeSession());
 
-        // The control follows a tier set by another shell instance or the engine's own default
-        engine.RaiseNotification("note/model", NoteModel("ready", "constrained", "Qwen3.5 4B"));
+        Assert.Equal(0, settings.NoteModel.NoteModelIndex);
+        engine.RaiseNotification("note/model", NoteModel("ready", "default", "Qwen3.5 9B"));
+        Assert.Equal(1, settings.NoteModel.NoteModelIndex);
+        Assert.Equal("auto", preferences.NoteTier);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
 
+        settings.NoteModel.NoteModelIndex = 2;
+        Assert.Equal("accuracy", preferences.NoteTier);
+        engine.RaiseNotification("note/model", NoteModel("ready", "accuracy", "Qwen3.6 35B"));
+
+        // The control follows a tier set by another shell instance
+        engine.RaiseNotification("note/model", NoteModel("ready", "constrained", "Qwen3.5 4B"));
         Assert.Equal(0, settings.NoteModel.NoteModelIndex);
         Assert.Equal("constrained", preferences.NoteTier);
     }
@@ -442,7 +412,7 @@ public class SettingsViewModelTest
         Directory.CreateDirectory(dir);
         var collector = new ClinicAVT.App.Core.Metrics.PerformanceCollector(
             new EngineApi(new FakeEngineClient()), () => true, () => null, Path.Combine(dir, "metrics.jsonl"));
-        collector.SessionStarted("mic", 0, null);
+        collector.SessionStarted();
         collector.StopRequested();
         await collector.SessionFinishedAsync(null, 10);
         var picker = new FakeFilePicker();
@@ -462,48 +432,33 @@ public class SettingsViewModelTest
     }
 
     [Fact]
-    public void ThemeDefaultsToSystemPersistsAndAppliesLive()
+    public void ThemeAndMetricsChipsPersistAndApplyLiveWhileDeveloperToolsCloseOnEveryLaunch()
     {
-        var preferences = TempPreferences();
+        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         var theme = new FakeThemeService();
-        var settings = new SettingsViewModel(preferences, theme: theme);
+        var bar = TestSession.Status();
+        var settings = new SettingsViewModel(new AppPreferences(path), status: bar, theme: theme);
         Assert.Equal("system", settings.Appearance.Theme);
         Assert.Equal(0, settings.Appearance.ThemeIndex);
+        Assert.True(settings.Appearance.ShowPerformanceMetrics, "evaluators see the timings from the first run");
+        Assert.False(settings.Appearance.DeveloperToolsExpanded);
 
         settings.Appearance.ThemeIndex = 2;
+        settings.Appearance.ShowPerformanceMetrics = false;
+        settings.Appearance.DeveloperToolsExpanded = true;
 
         Assert.Equal("dark", settings.Appearance.Theme);
         Assert.Equal(["dark"], theme.Applied);
-        Assert.Equal("dark", preferences.Theme);
-
-        var reopened = new SettingsViewModel(preferences);
-        Assert.Equal(2, reopened.Appearance.ThemeIndex);
-    }
-
-    [Fact]
-    public void MetricsChipsDefaultOffAndPersistWhileDeveloperToolsCloseOnEveryLaunch()
-    {
-        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var preferences = new AppPreferences(path);
-        var bar = TestSession.Status();
-        var settings = new SettingsViewModel(preferences, status: bar);
-        Assert.False(settings.Appearance.ShowPerformanceMetrics, "chips are for testing, not GPs");
         Assert.False(bar.MetricsVisible);
-        Assert.False(settings.Appearance.DeveloperToolsExpanded);
-
-        settings.Appearance.ShowPerformanceMetrics = true;
-        settings.Appearance.DeveloperToolsExpanded = true;
-
-        Assert.True(bar.MetricsVisible);
-        Assert.True(preferences.ShowPerformanceMetrics);
 
         var relaunched = new SettingsViewModel(AppPreferences.Load(path));
-        Assert.True(relaunched.Appearance.ShowPerformanceMetrics);
+        Assert.Equal(2, relaunched.Appearance.ThemeIndex);
+        Assert.False(relaunched.Appearance.ShowPerformanceMetrics);
         Assert.False(relaunched.Appearance.DeveloperToolsExpanded);
     }
 
     [Fact]
-    public void InstalledCorporaFollowTheEngineAndARefusedOneKeepsItsPlace()
+    public void InstalledCorporaFollowTheEngineARefusedOneKeepsItsPlaceAndAnUnavailableModelSaysWhy()
     {
         var engine = new FakeEngineClient();
         var settings = new SettingsViewModel(TempPreferences(), client: new EngineApi(engine));
@@ -550,21 +505,17 @@ public class SettingsViewModelTest
         Assert.True(refused.Refused);
         Assert.False(refused.Loaded);
         Assert.Equal("", settings.Guidance.GuidanceCaption);
-    }
 
-    [Fact]
-    public void NothingInstalledHidesTheCardAndAnUnavailableModelSaysWhy()
-    {
-        var empty = new FakeEngineClient { GuidanceState = "ready" };
-        empty.GuidanceCorpora.Clear();
-        var settings = new SettingsViewModel(TempPreferences(), client: new EngineApi(empty));
+        // Nothing installed hides the card
+        engine.GuidanceCorpora.Clear();
+        engine.RaiseNotification("guidance/model");
         Assert.Empty(settings.Guidance.GuidanceCorpora);
         Assert.Equal("", settings.Guidance.GuidanceCaption);
         Assert.False(settings.Guidance.GuidanceInstalledVisible);
 
-        empty.GuidanceState = "unavailable";
-        empty.GuidanceDetail = "guidance embedder gte-large-int8: tokenizer ignores max_length";
-        empty.RaiseNotification("guidance/model");
+        engine.GuidanceState = "unavailable";
+        engine.GuidanceDetail = "guidance embedder gte-large-int8: tokenizer ignores max_length";
+        engine.RaiseNotification("guidance/model");
 
         Assert.Empty(settings.Guidance.GuidanceCorpora);
         Assert.Equal(
@@ -592,14 +543,17 @@ public class SettingsViewModelTest
         };
 
     [Fact]
-    public void AddedDocumentsListWorkingRowsFirstThenUnreadableThenByName()
+    public void AddedDocumentsListWorkingRowsFirstThenUnreadableThenByNameAndAFailureOpensTheListOnce()
     {
         var engine = new FakeEngineClient();
         engine.GuidanceDocuments.Add(Document(1, "Gout", "ready", 41));
-        engine.GuidanceDocuments.Add(Document(2, "asthma", "ready", 12));
-        engine.GuidanceDocuments.Add(Document(3, "PMR", "indexing"));
-        engine.GuidanceDocuments.Add(Document(4, "Letter", "failed", error: "patientData"));
         var settings = new SettingsViewModel(TempPreferences(), client: new EngineApi(engine));
+        Assert.Equal("1 document", settings.Guidance.DocumentsSummary);
+        Assert.False(settings.Guidance.DocumentsExpanded);
+
+        engine.RaiseNotification("guidance/document", Params(Document(2, "asthma", "ready", 12)));
+        engine.RaiseNotification("guidance/document", Params(Document(3, "PMR", "indexing")));
+        engine.RaiseNotification("guidance/document", Params(Document(4, "Letter", "failed", error: "patientData")));
 
         Assert.Equal(["PMR", "Letter", "asthma", "Gout"], settings.Guidance.Documents.Select(d => d.Name));
         Assert.Equal("Waiting", settings.Guidance.Documents[0].Detail);
@@ -612,6 +566,10 @@ public class SettingsViewModelTest
         Assert.True(settings.Guidance.DocumentsExpanded, "a failure opens the list");
         Assert.True(settings.Guidance.DocumentsPresent);
         Assert.True(settings.Guidance.AddDocumentsCommand.CanExecute(null));
+
+        settings.Guidance.DocumentsExpanded = false;
+        engine.RaiseNotification("guidance/document", Params(Document(3, "PMR", "ready", 10)));
+        Assert.False(settings.Guidance.DocumentsExpanded, "the same failure does not reopen it");
     }
 
     [Fact]
@@ -675,38 +633,30 @@ public class SettingsViewModelTest
         Assert.False(settings.Guidance.DocumentsPresent);
     }
 
+    // Copying a file into the folder needs no embedder, so Add is always available
     [Fact]
-    public void TheFolderIsListedAndAddableEvenBeforeTheGuidanceModelLoads()
+    public void TheFolderIsListedAndAddableBeforeTheModelLoadsAnUnreachableOneRemovesNothingAndOneDriveIsRecognised()
     {
         var engine = new FakeEngineClient { GuidanceState = "loading" };
         engine.GuidanceDocuments.Add(Document(1, "Gout", "ready", 41));
         var settings = new SettingsViewModel(TempPreferences(), client: new EngineApi(engine));
 
-        // Copying a file into the folder needs no embedder, so Add is always available
         Assert.True(settings.Guidance.AddDocumentsCommand.CanExecute(null));
         Assert.Single(settings.Guidance.Documents);
         Assert.Equal(@"C:\Users\clinician\Documents\ClinicAVT guidelines", settings.Guidance.GuidelinesFolder);
         Assert.False(settings.Guidance.FolderMissing);
-    }
 
-    [Fact]
-    public void OneDriveFolderIsRecognised()
-    {
+        engine.GuidelinesFolderFound = false;
+        engine.UnsupportedFiles = 2;
+        var unreachable = new SettingsViewModel(TempPreferences(), client: new EngineApi(engine));
+
+        Assert.True(unreachable.Guidance.FolderMissing);
+        Assert.Single(unreachable.Guidance.Documents);
+        Assert.Equal("2 other files are not searched, not PDF or text", unreachable.Guidance.DocumentsCaption);
+
         var roots = new[] { @"C:\Users\p\OneDrive", @"C:\Users\p\OneDrive - UCL" };
         Assert.True(GuidanceLibrary.InOneDrive(@"C:\Users\p\onedrive - ucl\Documents\ClinicAVT guidelines", roots));
         Assert.False(GuidanceLibrary.InOneDrive(@"C:\Users\p\Documents\ClinicAVT guidelines", roots));
         Assert.False(GuidanceLibrary.InOneDrive("", roots));
-    }
-
-    [Fact]
-    public void AnUnreachableFolderIsFlaggedAndNothingIsRemoved()
-    {
-        var engine = new FakeEngineClient { GuidelinesFolderFound = false, UnsupportedFiles = 2 };
-        engine.GuidanceDocuments.Add(Document(1, "Gout", "ready", 41));
-        var settings = new SettingsViewModel(TempPreferences(), client: new EngineApi(engine));
-
-        Assert.True(settings.Guidance.FolderMissing);
-        Assert.Single(settings.Guidance.Documents);
-        Assert.Equal("2 other files are not searched, not PDF or text", settings.Guidance.DocumentsCaption);
     }
 }

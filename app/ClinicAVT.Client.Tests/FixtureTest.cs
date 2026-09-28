@@ -51,15 +51,6 @@ public class FixtureTest
         Assert.Equal(0.5, level.GetProperty("params").GetProperty("level").GetDouble());
         Assert.False(level.GetProperty("params").GetProperty("clipped").GetBoolean());
 
-        var start = Fixtures.Load("session-start-playback.json");
-        Assert.Equal("session/start", start.GetProperty("method").GetString());
-        Assert.False(string.IsNullOrEmpty(
-            start.GetProperty("params").GetProperty("playback").GetProperty("id").GetString()));
-
-        var playback = Fixtures.Load("audio-level-playback.json");
-        Assert.Equal("audio.level", playback.GetProperty("method").GetString());
-        Assert.Equal(271.4, playback.GetProperty("params").GetProperty("seconds").GetDouble());
-
         var interrupted = Fixtures.Load("session-interrupted.json");
         Assert.Equal("session/interrupted", interrupted.GetProperty("method").GetString());
         Assert.Equal("deviceLost", interrupted.GetProperty("params").GetProperty("reason").GetString());
@@ -93,8 +84,10 @@ public class FixtureTest
 
         var patient = Fixtures.Load("session-patient.json").GetProperty("result");
         Assert.True(DateTimeOffset.TryParse(patient.GetProperty("generatedAt").GetString(), out _));
+        Assert.True(DateTimeOffset.TryParse(patient.GetProperty("editedAt").GetString(), out _));
         var translation = patient.GetProperty("translation");
         Assert.Equal("pl", translation.GetProperty("language").GetString());
+        Assert.True(DateTimeOffset.TryParse(translation.GetProperty("translatedAt").GetString(), out _));
         Assert.Contains("łokcia", translation.GetProperty("text").GetString(), StringComparison.Ordinal);
 
         var guidance = Fixtures.Load("session-guidance.json")
@@ -324,7 +317,8 @@ public class FixtureTest
         var backupParams = backup.GetProperty("params");
         await api.BackUpAsync(backupParams.GetProperty("from").GetString()!,
             backupParams.GetProperty("to").GetString()!, backupParams.GetProperty("path").GetString()!,
-            backupParams.GetProperty("password").GetString()!);
+            backupParams.GetProperty("password").GetString()!,
+            backupParams.GetProperty("reflectionsOnly").GetBoolean());
         transport.AssertSent("archive/backup", backupParams);
 
         var restore = Fixtures.Load("archive-restore.json").GetProperty("request").GetProperty("params");
@@ -374,7 +368,7 @@ public class FixtureTest
         transport.AssertSent("recording/inspect", inspectParams);
         Assert.Equal(new RecordingInfo(760.4, "2026-09-26T13:05:00Z"), info);
 
-        Assert.Equal(new ImportProgress("a1b2c3d4e5f60718293a4b5c6d7e8f90", 304.2, 760.4),
+        Assert.Equal(new ImportProgress("a1b2c3d4e5f60718293a4b5c6d7e8f90", "transcribing", 60),
             Parse("session-importProgress.json"));
         Assert.Equal(new ImportDone("a1b2c3d4e5f60718293a4b5c6d7e8f90"), Parse("session-imported.json"));
         Assert.Equal(new ImportFailed("a1b2c3d4e5f60718293a4b5c6d7e8f90", "cancelled"),

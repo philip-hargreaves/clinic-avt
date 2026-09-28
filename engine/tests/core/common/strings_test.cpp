@@ -10,7 +10,7 @@
 namespace clinicavt::strings {
 namespace {
 
-TEST(Strings, WhitespaceAndCaseHelpersLeaveNonAsciiAlone) {
+TEST(Strings, WhitespaceCaseAndTokenHelpersSplitWhereTheirCallersNeed) {
     EXPECT_EQ(Lower("Dr Smith 5mg"), "dr smith 5mg");
     EXPECT_EQ(Lower("caf\xC3\xA9"), "caf\xC3\xA9");
 
@@ -21,9 +21,7 @@ TEST(Strings, WhitespaceAndCaseHelpersLeaveNonAsciiAlone) {
     EXPECT_TRUE(Words(" \t").empty());
     EXPECT_EQ(WordCount("  one  two three "), 3);
     EXPECT_EQ(WordCount(""), 0);
-}
 
-TEST(Strings, SqueezeAndLowerTokensSplitWhereTheirCallersNeed) {
     EXPECT_EQ(Squeeze("  a \t b\r\n c  "), "a b c");
     EXPECT_EQ(Squeeze(" \t "), "");
 

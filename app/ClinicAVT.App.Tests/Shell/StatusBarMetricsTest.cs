@@ -16,9 +16,10 @@ public class StatusBarMetricsTest
     }
 
     // A load behind a ready app stays off the status line: nothing waits on it. The time is
-    // counted for the places that do wait, and a switch's idle step cannot end the count
+    // counted for the places that do wait, and a switch's idle step cannot end the count. A first
+    // move to the NPU compiles for minutes, so its line counts the time and never looks hung
     [Fact]
-    public void AModelLoadCountsItsTimeAndClearsWhenReady()
+    public void AModelLoadAndADeviceMoveCountTheirTimeUntilTheyEnd()
     {
         var engine = new FakeEngineClient(autoNotify: false);
         var clock = new FakeTimeProvider();
@@ -40,28 +41,23 @@ public class StatusBarMetricsTest
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "ready" }));
         Assert.False(status.ModelLoading);
         Assert.Equal("Ready", status.DisplayLabel);
-    }
 
-    // At start the model list is fetched before the shell sends its saved tier, so it names the
-    // engine's default. The lane's own messages name the model being loaded, from the start
-    [Fact]
-    public async Task TheNoteChipNamesTheModelBeingLoadedNotTheEnginesDefault()
-    {
-        var (status, engine) = Create();
-        await WaitUntilAsync(() => status.NoteChip.Length > 0);
-        Assert.StartsWith("Qwen3.5 9B", status.NoteChip);
+        status.BeginSwitch("Switching to the NPU · {time} · first time may take longer");
+        Assert.Equal("Switching to the NPU · 0:00 · first time may take longer", status.DisplayLabel);
+        Assert.False(status.ConsentVisible, "no consent reminder over a wait");
+        clock.Advance(TimeSpan.FromSeconds(72));
+        Assert.Equal("Switching to the NPU · 1:12 · first time may take longer", status.DisplayLabel);
+        Assert.True(status.Busy);
 
-        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "loading" }));
-        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
-
-        // The list fetched again on ready still has the engine's default first here
-        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "ready" }));
-        await WaitUntilAsync(() => engine.Requests.Count(r => r.Method == "engine/models") >= 2);
-        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
+        status.EndSwitch();
+        Assert.True(status.ConsentVisible);
+        status.Append("Ready");
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal("Ready", status.DisplayLabel);
     }
 
     [Fact]
-    public async Task TheNoteChipThroughAGeneration()
+    public async Task TheNoteChipThroughAGenerationAndAModelLoad()
     {
         var (status, engine) = Create();
         await WaitUntilAsync(() => status.NoteChip.Length > 0);
@@ -87,15 +83,17 @@ public class StatusBarMetricsTest
         Assert.False(status.NoteActive);
         Assert.Contains("Averaged 14.2 tok/s", status.NoteChip);
 
-        // A failure ends the stream too, and a translation meters the same way
+        // The translator is another model: its rate never reaches the note chip
+        engine.RaiseNotification("translate/partial", Params(new { text = "Twoja", tokensPerSecond = 95.2 }));
+        engine.RaiseNotification("translate/ready", Params(new { text = "Twoja notatka.", language = "Polish", tokensPerSecond = 98.1 }));
+        Assert.Equal(14.2, status.TokensPerSecond);
+        Assert.False(status.TokensStreaming);
+        Assert.Contains("Averaged 14.2 tok/s", status.NoteChip);
+
+        // A failure ends the stream too
         engine.RaiseNotification("note/partial", Params(new { text = "The" }));
         Assert.True(status.TokensStreaming);
         engine.RaiseNotification("note/failed");
-        Assert.False(status.TokensStreaming);
-
-        engine.RaiseNotification("translate/partial", Params(new { text = "Twoja" }));
-        Assert.True(status.TokensStreaming);
-        engine.RaiseNotification("translate/failed");
         Assert.False(status.TokensStreaming);
 
         // A new consultation clears the frozen value
@@ -103,6 +101,15 @@ public class StatusBarMetricsTest
         Assert.Equal("Qwen3.5 9B · GPU", status.NoteChip);
         Assert.False(status.TokensStreaming);
         Assert.Equal(0, status.TokensPerSecond);
+
+        // At start the model list is fetched before the shell sends its saved tier, so it names
+        // the engine's default. The lane's own messages name the model being loaded
+        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "loading" }));
+        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
+        var fetched = engine.Requests.Count(r => r.Method == "engine/models");
+        engine.RaiseNotification("note/model", Params(new { tier = "constrained", name = "Qwen3.5 4B", state = "ready" }));
+        await WaitUntilAsync(() => engine.Requests.Count(r => r.Method == "engine/models") > fetched);
+        Assert.StartsWith("Qwen3.5 4B", status.NoteChip);
 
         // A tier switch renames the chip even when the engine is too busy to
         // answer the store call

@@ -26,6 +26,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     private readonly IFilePicker _picker;
     private readonly IUiDispatcher? _dispatcher;
     private readonly TimeProvider _clock;
+    private string _things = "consultation";
 
     public RestoreViewModel(IEngineApi engine, IFilePicker picker, AppPreferences? preferences = null,
         IUiDispatcher? dispatcher = null, TimeProvider? clock = null)
@@ -136,7 +137,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     {
         Error = "";
         Progress = 0;
-        ProgressText = dryRun ? "Checking the backup…" : "Restoring consultations…";
+        ProgressText = dryRun ? "Checking the backup…" : $"Restoring {_things}s…";
         var back = Step;
         Step = dryRun ? RestoreStep.Checking : RestoreStep.Restoring;
         try
@@ -163,7 +164,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
                 Progress = progress.Total > 0 ? (double)progress.Done / progress.Total : 0;
                 if (Step == RestoreStep.Restoring)
                 {
-                    ProgressText = $"Restoring {progress.Done} of {Words.Count(progress.Total, "consultation")}…";
+                    ProgressText = $"Restoring {progress.Done} of {Words.Count(progress.Total, _things)}…";
                 }
 
                 break;
@@ -172,7 +173,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
                 break;
             case ArchiveDone { Job: "restore" } done:
                 RestoredAny = done.Consultations > 0;
-                DoneLine = $"{Words.Count(done.Consultations, "consultation")} restored.";
+                DoneLine = $"{Words.Count(done.Consultations, _things)} restored.";
                 Step = RestoreStep.Done;
                 break;
             case ArchiveFailed { Job: "restore" } failed:
@@ -186,10 +187,13 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     // "33 consultations to restore, 1 Jul to 30 Sep 2026." Only what would be added counts
     private void Summarise(ArchiveDone done)
     {
+        // A reflections-only backup restores each reflection with a removed consultation, so the
+        // counts are reflections
+        _things = done.ReflectionsOnly ? "reflection" : "consultation";
         ToAdd = done.Consultations;
         if (done.Consultations + done.Skipped == 0)
         {
-            SummaryLine = "This backup has no consultations.";
+            SummaryLine = $"This backup has no {_things}s.";
         }
         else if (done.Consultations == 0)
         {
@@ -203,7 +207,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
                 span = $"backed up on {made}";
             }
 
-            var count = Words.Count(done.Consultations, "consultation");
+            var count = Words.Count(done.Consultations, _things);
             SummaryLine = span.Length > 0 ? $"{count} to restore, {span}." : $"{count} to restore.";
         }
 

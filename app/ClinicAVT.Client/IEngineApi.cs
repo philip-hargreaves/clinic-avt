@@ -27,11 +27,7 @@ public interface IEngineApi
     // Every start returns the session id, empty when the engine sent none
     Task<string> StartSessionAsync(bool retain, string micId);
 
-    Task<string> StartReplayAsync(bool retain, ReplayRequest replay);
-
-    Task<string> StartPlaybackAsync(string sessionId);
-
-    Task<string> ResumeSessionAsync(string sessionId, bool retain, ReplayRequest? replay);
+    Task<string> ResumeSessionAsync(string sessionId, bool retain);
 
     Task<string> StopSessionAsync();
 
@@ -45,10 +41,6 @@ public interface IEngineApi
     Task<string> ImportRecordingAsync(string path, string startedAt, bool retain);
 
     Task CancelSessionAsync();
-
-    Task PauseSessionAsync(bool paused);
-
-    Task MonitorSessionAsync(bool monitor);
 
     Task OpenSessionAsync(string id);
 
@@ -85,8 +77,12 @@ public interface IEngineApi
     Task<ArchiveSummary> ArchiveSummaryAsync(
         string periodStart, string periodEnd, ArchiveCoverage? covered = null);
 
-    /// <summary>Starts a backup. archive/progress, then archive/done or archive/failed follow.</summary>
-    Task BackUpAsync(string periodStart, string periodEnd, string path, string password);
+    /// <summary>
+    /// Starts a backup. archive/progress, then archive/done or archive/failed follow. Reflections
+    /// only writes just the appraisal entries, and backs up no consultation.
+    /// </summary>
+    Task BackUpAsync(
+        string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false);
 
     /// <summary>Starts a restore, or on a dry run only reads the file and counts.</summary>
     Task RestoreAsync(string path, string password, bool dryRun);

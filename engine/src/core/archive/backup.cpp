@@ -37,6 +37,25 @@ bool HasContent(const store::SessionRecord& record) {
            });
 }
 
+// The record as a cleared session holds it: no transcript, no device, only the kept documents
+store::SessionRecord Stripped(store::SessionRecord record) {
+    record.device_id.clear();
+    record.device_name.clear();
+    record.lost_frames = 0;
+    record.turns.clear();
+    std::erase_if(record.documents, [](const store::RecordDocument& entry) {
+        return !store::KeptOnClear(entry.kind);
+    });
+    return record;
+}
+
+bool OnlyKept(const store::SessionRecord& record) {
+    return record.turns.empty() &&
+           std::ranges::all_of(record.documents, [](const store::RecordDocument& entry) {
+               return store::KeptOnClear(entry.kind);
+           });
+}
+
 void Report(const Progress& progress, Phase phase, std::size_t done, std::size_t total) {
     if (progress) progress(phase, done, total);
 }
@@ -70,12 +89,16 @@ std::size_t Uncovered(store::ISessionStore& store, const Period& covered, const 
 }
 
 BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveSink& sink,
-                    const Progress& progress) {
+                    const Progress& progress, bool reflections_only) {
     BackupResult result;
     result.manifest.created_at = Iso8601Now();
+    result.manifest.reflections_only = reflections_only;
     std::vector<store::SessionId> selected;
     for (const store::SessionSummary& session : store.ListSessions()) {
-        if (Eligible(session) && Within(period, session.started_at)) selected.push_back(session.id);
+        if (Eligible(session) && Within(period, session.started_at) &&
+            (!reflections_only || session.has_reflection)) {
+            selected.push_back(session.id);
+        }
     }
     std::ranges::reverse(selected);  // oldest first
 
@@ -84,12 +107,15 @@ BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveS
     result.manifest.consultations = selected.size();
     result.manifest.app_version = kVersion;
     sink.Begin(result.manifest);
+    std::size_t written = 0;
     for (const store::SessionId& id : selected) {
-        const store::SessionRecord record = store.ReadRecord(id);
+        store::SessionRecord record = store.ReadRecord(id);
+        if (reflections_only) record = Stripped(std::move(record));
         sink.Add(record);
         if (HasAppraisal(record)) result.reflections += 1;
-        result.ids.push_back(id);
-        Report(progress, Phase::kWriting, result.ids.size(), selected.size());
+        // A reflections-only file backs up no consultation
+        if (!reflections_only) result.ids.push_back(id);
+        Report(progress, Phase::kWriting, ++written, selected.size());
     }
     Report(progress, Phase::kChecking, selected.size(), selected.size());
     sink.Commit();
@@ -109,7 +135,9 @@ RestoreResult Restore(store::ISessionStore& store, IArchiveSource& source, bool 
     std::set<store::SessionId> seen;
     std::size_t read = 0;
     while (const std::optional<store::SessionRecord> record = source.Next()) {
-        if (!ValidRecord(*record)) throw ArchiveError(ArchiveCode::kDamaged);
+        if (!ValidRecord(*record) || (expected.manifest.reflections_only && !OnlyKept(*record))) {
+            throw ArchiveError(ArchiveCode::kDamaged);
+        }
         const auto here = stored.find(record->id);
         const bool fresh = here == stored.end() && seen.insert(record->id).second;
         const bool completes = here != stored.end() && here->second && HasContent(*record);

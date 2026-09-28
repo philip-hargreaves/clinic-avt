@@ -23,7 +23,7 @@
             <Grid
                 x:Name="DropArea"
                 MinHeight="168"
-                Visibility="{x:Bind ViewModel.NoFile, Mode=OneWay}">
+                Visibility="{x:Bind ViewModel.ShowDropArea, Mode=OneWay}">
                 <Rectangle
                     Fill="{ThemeResource SubtleFillColorSecondaryBrush}"
                     RadiusX="8"
@@ -65,7 +65,7 @@
             </Grid>
 
             <!-- Headed and sized like the date and time pickers below -->
-            <StackPanel Visibility="{x:Bind ViewModel.HasFile, Mode=OneWay}">
+            <StackPanel Visibility="{x:Bind ViewModel.ShowFile, Mode=OneWay}">
                 <TextBlock Margin="0,0,0,8" Text="File" />
                 <Border
                     Padding="12,0,0,0"
@@ -100,25 +100,45 @@
                 </Border>
             </StackPanel>
 
+            <!-- The bundled consultations import like any recording -->
+            <ComboBox
+                HorizontalAlignment="Stretch"
+                Header="Or use an example consultation"
+                ItemsSource="{x:Bind ViewModel.ExampleNames}"
+                PlaceholderText="Choose an example"
+                SelectedIndex="{x:Bind ViewModel.ExampleIndex, Mode=TwoWay}"
+                Visibility="{x:Bind ViewModel.ExamplesVisible}" />
+
             <controls:WarningLine Text="{x:Bind ViewModel.Problem, Mode=OneWay}" />
 
-            <!-- The headers are the pickers' accessible names -->
-            <Grid ColumnSpacing="12" Visibility="{x:Bind ViewModel.Inspected, Mode=OneWay}">
+            <!-- Headed like the file box, since the two pickers place their own headers differently -->
+            <Grid
+                ColumnSpacing="12"
+                RowSpacing="8"
+                Visibility="{x:Bind ViewModel.ShowWhen, Mode=OneWay}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Date" />
+                <TextBlock Grid.Column="1" Text="Time" />
                 <!-- The date takes the spare width so the time ends in line with the file box -->
                 <CalendarDatePicker
+                    Grid.Row="1"
                     HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="Date"
                     Date="{x:Bind ViewModel.Day, Mode=TwoWay}"
                     DateFormat="{}{day.integer} {month.abbreviated} {year.full}"
-                    Header="Date"
                     MaxDate="{x:Bind ViewModel.Today}"
                     PlaceholderText="Date" />
                 <TimePicker
+                    Grid.Row="1"
                     Grid.Column="1"
-                    Header="Time"
+                    AutomationProperties.Name="Time"
                     SelectedTime="{x:Bind ViewModel.Time, Mode=TwoWay}" />
             </Grid>
         </StackPanel>

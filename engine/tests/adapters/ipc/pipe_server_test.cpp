@@ -66,13 +66,13 @@ TEST(PipeServer, AClientThatLeavesEarlyNeverBlocksTheNext) {
     EXPECT_TRUE(spoke.back());
 }
 
+// An engine already asked to exit waits at zero idle, and busy still holds it
 TEST(PipeServer, AnIdleServerGivesUpOnlyOnceNothingKeepsItBusy) {
     PipeServer server(PipeName("idle"));
     const auto t0 = std::chrono::steady_clock::now();
-    const auto busy_until = t0 + 1500ms;
 
     const auto accept =
-        server.AwaitClient(100ms, [&] { return std::chrono::steady_clock::now() < busy_until; });
+        server.AwaitClient(0ms, [&] { return std::chrono::steady_clock::now() < t0 + 1500ms; });
 
     EXPECT_EQ(accept, PipeServer::Accept::kIdle);
     EXPECT_GE(std::chrono::steady_clock::now() - t0, 1500ms);

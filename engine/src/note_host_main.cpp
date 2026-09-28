@@ -162,7 +162,7 @@ int main(int argc, char* argv[]) {
         // error would let the engine's next attempt mistake it for its own
         server.RegisterMethod("prefill", [&writer](const json& params) {
             try {
-                writer.Prefill(TurnsFrom(params), {params.value("style", "prose"), "standard"});
+                writer.Prefill(TurnsFrom(params), {params.value("style", "prose"), "concise"});
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "clinicavt-note-host: prefill dropped (%s)\n", e.what());
                 ExitIfPoisoned(e.what());
@@ -171,7 +171,7 @@ int main(int argc, char* argv[]) {
         });
         server.RegisterMethod("write", [&writer, &lane](const json& params) {
             clinicavt::note::NoteOptions options{params.value("style", "prose"),
-                                                 params.value("detail", "standard")};
+                                                 params.value("detail", "concise")};
             options.confirmed = params.value("confirmed", false);
             return lane.Start([&writer, turns = TurnsFrom(params),
                                options = std::move(options)](const auto& progress) {

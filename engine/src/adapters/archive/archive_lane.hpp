@@ -44,7 +44,8 @@ class ArchiveLane {
 
     // False when a job is already running. The lane's copy of the password is wiped once the key
     // is derived
-    bool BackUp(Period period, std::filesystem::path path, const std::string& password);
+    bool BackUp(Period period, std::filesystem::path path, const std::string& password,
+                bool reflections_only);
     bool Restore(std::filesystem::path path, const std::string& password, bool dry_run);
 
    private:

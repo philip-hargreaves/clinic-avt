@@ -29,7 +29,14 @@ public sealed partial class NoteViewModel : ObservableObject
     /// <summary>The translation's language, such as "Polish". It heads the output box.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(TranslateAgainCommand))]
+    [NotifyPropertyChangedFor(nameof(TranslationRightToLeft))]
     public partial string TranslationLanguage { get; set; } = "";
+
+    // By the names the translation model lists
+    private static readonly HashSet<string> RightToLeftLanguages = ["Arabic", "Farsi", "Kurdish (Sorani)", "Urdu"];
+
+    /// <summary>The translation reads right to left, so its box flows that way.</summary>
+    public bool TranslationRightToLeft => RightToLeftLanguages.Contains(TranslationLanguage);
 
     [ObservableProperty]
     public partial bool ExampleCasesVisible { get; set; }
@@ -44,7 +51,7 @@ public sealed partial class NoteViewModel : ObservableObject
     [ObservableProperty]
     public partial string Style { get; set; } = NoteOptions.DefaultStyle.Value;
 
-    /// <summary>"concise", "standard" or "detailed".</summary>
+    /// <summary>"concise" or "detailed".</summary>
     [ObservableProperty]
     public partial string Detail { get; set; } = NoteOptions.DefaultDetail.Value;
 
@@ -192,9 +199,9 @@ public sealed partial class NoteViewModel : ObservableObject
     public string PatientStateCaption => PipelineState switch
     {
         NotePipelineState.NoteWriting or NotePipelineState.NoteReadyPatientWriting =>
-            "The information sheet follows the note",
+            "Patient information follows the note",
         NotePipelineState.PatientFailed =>
-            "The information sheet could not be written - see the status bar",
+            "Patient information could not be written - see the status bar",
         _ => "",
     };
 
@@ -207,10 +214,10 @@ public sealed partial class NoteViewModel : ObservableObject
 
     /// <summary>Copy and Export take the sheet, with its translation once there is one.</summary>
     public string PatientCopyTip =>
-        TranslationText.Length > 0 ? "Copies the sheet and its translation" : "Copies the sheet";
+        TranslationText.Length > 0 ? "Copies the patient information and its translation" : "Copies the patient information";
 
     public string PatientExportTip =>
-        TranslationText.Length > 0 ? "Saves the sheet and its translation as a text file" : "Saves the sheet as a text file";
+        TranslationText.Length > 0 ? "Saves the patient information and its translation as a text file" : "Saves the patient information as a text file";
 
     [RelayCommand(CanExecute = nameof(CanWriteAnyway))]
     private Task WriteAnyway() => WriteAnywayRequested!();

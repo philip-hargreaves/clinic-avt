@@ -38,6 +38,7 @@
     <!-- The PDF reader. Without it added PDFs are skipped -->
     <Content Include="..\..\build\$(EnginePreset)\engine\clinicavt_ingest_host.exe" Link="clinicavt_ingest_host.exe" CopyToOutputDirectory="PreserveNewest" Visible="false" Condition="Exists('..\..\build\$(EnginePreset)\engine\clinicavt_ingest_host.exe')" />
     <Content Include="..\..\engine\licences\pdfium\*.txt" Link="licences\pdfium\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <Content Include="..\..\engine\licences\THIRD-PARTY-NOTICES.txt" Link="licences\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <!-- The note worker. Without it the engine writes notes in-process -->
     <Content Include="..\..\build\$(EnginePreset)\engine\clinicavt_note_host.exe" Link="clinicavt_note_host.exe" CopyToOutputDirectory="PreserveNewest" Visible="false" Condition="Exists('..\..\build\$(EnginePreset)\engine\clinicavt_note_host.exe')" />
     <!-- The engine's OpenVINO runtime, deployed beside it by the CMake build -->

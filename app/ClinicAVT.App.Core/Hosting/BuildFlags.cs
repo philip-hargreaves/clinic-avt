@@ -4,10 +4,9 @@ namespace ClinicAVT.App.Core.Hosting;
 public static class BuildFlags
 {
     /// <summary>Developer-only surfaces show in a debug build and never ship.</summary>
-    public static bool Debug { get; } =
 #if DEBUG
-        true;
+    public static bool Debug => true;
 #else
-        false;
+    public static bool Debug => false;
 #endif
 }

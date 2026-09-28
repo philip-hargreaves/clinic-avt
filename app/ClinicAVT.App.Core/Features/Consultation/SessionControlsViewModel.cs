@@ -23,14 +23,12 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 or nameof(ConsultationViewModel.Phase)
                 or nameof(ConsultationViewModel.ModelsReady)
                 or nameof(ConsultationViewModel.Importing)
-                or nameof(ConsultationViewModel.ImportPercent))
+                or nameof(ConsultationViewModel.ImportLine))
             {
                 OnPropertyChanged(nameof(IdleVisible));
                 OnPropertyChanged(nameof(RecordingVisible));
                 OnPropertyChanged(nameof(ReviewVisible));
                 OnPropertyChanged(nameof(MicPickerVisible));
-                OnPropertyChanged(nameof(MicPickerEnabled));
-                OnPropertyChanged(nameof(MicTip));
                 OnPropertyChanged(nameof(CentreStageVisible));
                 OnPropertyChanged(nameof(PanesVisible));
                 OnPropertyChanged(nameof(FinalisingVisible));
@@ -44,7 +42,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
                 CancelImportCommand.NotifyCanExecuteChanged();
-                NewConsultationCommand.NotifyCanExecuteChanged();
+                FinishConsultationCommand.NotifyCanExecuteChanged();
             }
             else if (e.PropertyName is nameof(ConsultationViewModel.AudioSeconds))
             {
@@ -67,17 +65,16 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     /// <summary>Microphone level, 0 to 1, for the ring around the disc.</summary>
     public double Level => _session.Status.MicLevel;
 
-    /// <summary>The centre-stage caption for the current finalise phase, with an import's
-    /// percentage. A note that waits on the note model's load says so, with the time.</summary>
+    /// <summary>The centre-stage caption for the finalise phase. An import shows its own progress
+    /// until it is sealed.</summary>
     public string FinalisingLabel => _session.Phase switch
     {
-        FinalisePhase.Sealing or FinalisePhase.Transcript when _session.Importing =>
-            _session.ImportPercent is { } percent ? $"Transcribing · {percent}%" : "Transcribing",
+        < FinalisePhase.Note when _session.Importing => _session.ImportLine ?? "Preparing",
         FinalisePhase.Transcript => "Writing transcript",
         FinalisePhase.Speakers => "Labelling speakers",
         FinalisePhase.Turns => "Writing transcript",
         FinalisePhase.Note when _session.Status.ModelLoading =>
-            $"Waiting for the note model to load · {_session.Status.ModelLoadElapsed}",
+            $"Waiting for the note model · {_session.Status.ModelLoadElapsed}",
         FinalisePhase.Note => "Preparing note",
         _ => "Finalising",
     };
@@ -94,17 +91,10 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     /// <summary>The refusal card reads its reason and override from here.</summary>
     public NoteViewModel Note => _session.Note;
 
-    // Derived from ReviewVisible, so the picker and New consultation never show together
-    public bool MicPickerVisible => !ReviewVisible;
+    // Idle only: the device is pinned from Record, and Finish consultation takes the cell in review
+    public bool MicPickerVisible => _session.State == SessionState.Idle;
 
-    /// <summary>
-    /// The device is pinned once recording starts. A change applies to the next consultation.
-    /// </summary>
-    public bool MicPickerEnabled => _session.State == SessionState.Idle;
-
-    public string MicTip => MicPickerEnabled
-        ? _mic.FullName
-        : "In use - changes apply to the next consultation";
+    public string MicTip => _mic.FullName;
 
     // The centre holds until the note streams. Panes and centre never show together
     public bool CentreStageVisible =>
@@ -154,10 +144,10 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(ImportCancelVisible))]
     private Task CancelImport() => _session.CancelImportAsync();
 
-    [RelayCommand(CanExecute = nameof(CanNewConsultation))]
-    private void NewConsultation() => _session.StartNewConsultation();
+    [RelayCommand(CanExecute = nameof(CanFinishConsultation))]
+    private void FinishConsultation() => _session.FinishConsultation();
 
-    private bool CanNewConsultation() => _session.State == SessionState.Review;
+    private bool CanFinishConsultation() => _session.State == SessionState.Review;
 
     [RelayCommand(CanExecute = nameof(CanDone))]
     private Task Done() => _session.CloseReviewAsync();

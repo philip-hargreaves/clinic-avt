@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
@@ -11,8 +10,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
-/// The theme, the transcription device and the developer tools. The tools are the demo
-/// controls, the metrics chips, the performance log and its report.
+/// The theme, the transcription device and the developer tools. The tools are the metrics
+/// chips, the performance log and its report.
 /// </summary>
 public sealed partial class AppearanceAndDiagnostics : ObservableObject
 {
@@ -22,7 +21,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     private readonly StatusBarViewModel? _status;
     private readonly IMachineInfoProvider? _machine;
     private readonly PerformanceCollector? _metrics;
-    private readonly DemoMode? _demo;
     private readonly IFilePicker? _picker;
     private readonly IThemeService? _theme;
     private readonly bool _initialising;
@@ -31,7 +29,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     public AppearanceAndDiagnostics(
         AppPreferences? preferences, IEngineApi? client, ISessionState? session,
         StatusBarViewModel? status, IMachineInfoProvider? machine, PerformanceCollector? metrics,
-        DemoMode? demo, IFilePicker? picker, IThemeService? theme)
+        IFilePicker? picker, IThemeService? theme)
     {
         _preferences = preferences;
         _client = client;
@@ -39,16 +37,13 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         _status = status;
         _machine = machine;
         _metrics = metrics;
-        _demo = demo;
         _picker = picker;
         _theme = theme;
         // Restoring saved values is not the clinician changing them
         _initialising = true;
-        DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
-        DemoModeEnabled = demo?.Enabled ?? false;
         NpuTranscription = preferences?.NpuTranscription ?? false;
         CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
-        ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? false;
+        ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? true;
         Theme = preferences?.Theme ?? "system";
         _initialising = false;
     }
@@ -105,9 +100,9 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         _preferences.Update(p => p.NpuTranscription = value);
         if (_client.IsConnected())
         {
-            _status?.Append(value
-                ? "preparing the low-power model - the first switch can take a few minutes"
-                : "switching speech recognition to the GPU", busy: true);
+            _status?.BeginSwitch(value
+                ? "Switching to the NPU · {time} · first time may take longer"
+                : "Switching to the GPU · {time}");
             _ = MoveSpeechRecognitionAsync(value);
         }
     }
@@ -117,6 +112,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     {
         if (state.State == "ready")
         {
+            _status?.EndSwitch();
             _status?.Append("Ready");
         }
         else if (state.State == "failed")
@@ -144,62 +140,13 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         NpuTranscription = !npu;
         _reverting = false;
         _preferences.Update(p => p.NpuTranscription = !npu);
+        _status?.EndSwitch();
         _status?.Append($"Could not switch transcription device: {reason}");
     }
 
     /// <summary>The Developer tools group, closed on every launch.</summary>
     [ObservableProperty]
     public partial bool DeveloperToolsExpanded { get; set; }
-
-    /// <summary>Shows the replay tray. A developer control.</summary>
-    [ObservableProperty]
-    public partial bool DemoTrayEnabled { get; set; }
-
-    partial void OnDemoTrayEnabledChanged(bool value)
-    {
-        if (!_initialising)
-        {
-            _preferences.Update(p => p.DemoTrayEnabled = value);
-        }
-    }
-
-    /// <summary>Record plays a saved run back. A developer control.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DemoTrackOptions))]
-    [NotifyPropertyChangedFor(nameof(DemoTrackIndex))]
-    public partial bool DemoModeEnabled { get; set; }
-
-    partial void OnDemoModeEnabledChanged(bool value)
-    {
-        if (!_initialising && _demo is not null)
-        {
-            _demo.Enabled = value;
-        }
-    }
-
-    /// <summary>The tracks with a saved run, as the picker's items.</summary>
-    public IReadOnlyList<string> DemoTrackOptions => _demo?.Tracks ?? [];
-
-    public bool DemoTracksAvailable => DemoTrackOptions.Count > 0;
-
-    public string DemoModeCaption => DemoTracksAvailable
-        ? "Record plays the chosen saved run back in seconds; nothing is transcribed or written"
-        : "No saved runs yet: record them with tools/demo/record_masters.py";
-
-    /// <summary>
-    /// The chosen track as the picker's selection. An unknown track falls back to the first.
-    /// </summary>
-    public int DemoTrackIndex
-    {
-        get => Math.Max(0, DemoTrackOptions.ToList().IndexOf(_demo?.Track ?? ""));
-        set
-        {
-            if (_demo is not null && value >= 0 && value < DemoTrackOptions.Count)
-            {
-                _demo.Track = DemoTrackOptions[value];
-            }
-        }
-    }
 
     /// <summary>Shows the status-bar model and memory chips. For testing.</summary>
     [ObservableProperty]

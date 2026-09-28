@@ -170,6 +170,11 @@ TEST(ModelStore, VerifyRefusesAMissingOrChangedFileByName) {
 
     WriteFile(changed / "weights.bin", "jello");  // same size, different bytes
     EXPECT_EQ(Refusal([&] { store.Verify(changed_model); }), "") << "the load check reads no bytes";
+
+    // A drive that dropped out takes the whole folder, and says so rather than naming a file
+    std::filesystem::remove_all(changed);
+    const auto gone = Refusal([&] { store.Verify(changed_model); });
+    EXPECT_TRUE(Says(gone, "models folder cannot be read") && !Says(gone, "missing file")) << gone;
 }
 
 // A manifest this build cannot read is a corrupt one, refused outright at scan

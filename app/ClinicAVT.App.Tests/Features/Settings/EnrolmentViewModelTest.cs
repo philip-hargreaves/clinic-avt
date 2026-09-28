@@ -35,12 +35,16 @@ public class EnrolmentViewModelTest
         engine.RaiseNotification("anchor/progress",
             Params(new { elapsed = 12.0, speech = 10.0, level = 0.7, clipped = false }));
         Assert.Equal(0.7, enrolment.Level);
-        Assert.Equal(0.5, enrolment.Progress);
+        Assert.Equal(0.4, enrolment.Progress, 10);
         Assert.False(enrolment.EnoughCaptured);
         Assert.StartsWith("Listening. Read to the end", enrolment.StatusLine);
 
         engine.RaiseNotification("anchor/progress",
-            Params(new { elapsed = 30.0, speech = 24.0, level = 0.4, clipped = false }));
+            Params(new { elapsed = 25.0, speech = 22.0, level = 0.5, clipped = false }));
+        Assert.False(enrolment.EnoughCaptured, "past the engine's 20 s, short of the bar's 25");
+
+        engine.RaiseNotification("anchor/progress",
+            Params(new { elapsed = 30.0, speech = 26.0, level = 0.4, clipped = false }));
         Assert.Equal(1.0, enrolment.Progress);
         Assert.True(enrolment.EnoughCaptured);
         Assert.StartsWith("Enough captured", enrolment.StatusLine);
@@ -59,11 +63,20 @@ public class EnrolmentViewModelTest
     }
 
     [Fact]
-    public async Task ARefusalSaysWhyAndOffersAnotherGo()
+    public async Task ADownEngineOrARefusalSaysWhyAndOffersAnotherGoAndDismissalKeepsNothing()
     {
         var engine = new FakeEngineClient();
-        using var enrolment = new EnrolmentViewModel(new EngineApi(engine));
+        engine.SetConnected(false);
+        var enrolment = new EnrolmentViewModel(new EngineApi(engine));
+
         await enrolment.PrimaryCommand.ExecuteAsync(null);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/enrol");
+        Assert.Equal(EnrolmentState.Failed, enrolment.State);
+        Assert.Equal("That did not work: recording is not available yet.", enrolment.StatusLine);
+
+        engine.SetConnected(true);
+        await enrolment.PrimaryCommand.ExecuteAsync(null);
+        Assert.Equal(EnrolmentState.Recording, enrolment.State);
 
         engine.RaiseNotification("anchor/enrolled", Params(new
         {
@@ -79,36 +92,10 @@ public class EnrolmentViewModelTest
         await enrolment.PrimaryCommand.ExecuteAsync(null);
         Assert.Equal(EnrolmentState.Recording, enrolment.State);
         Assert.Equal(2, engine.Requests.Count(r => r.Method == "anchor/enrol"));
-    }
-
-    [Fact]
-    public async Task CancelAndDismissalReportNothingKept()
-    {
-        var engine = new FakeEngineClient();
-        var enrolment = new EnrolmentViewModel(new EngineApi(engine));
-        await enrolment.PrimaryCommand.ExecuteAsync(null);
 
         enrolment.Dismiss();
         Assert.Contains(engine.Requests, r => r.Method == "anchor/enrol/cancel");
         Assert.False(await enrolment.Outcome);
         enrolment.Dispose();
-    }
-
-    [Fact]
-    public async Task NoReadingStartsWhileTheEngineIsDown()
-    {
-        var engine = new FakeEngineClient();
-        engine.SetConnected(false);
-        using var enrolment = new EnrolmentViewModel(new EngineApi(engine));
-
-        await enrolment.PrimaryCommand.ExecuteAsync(null);
-
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/enrol");
-        Assert.Equal(EnrolmentState.Failed, enrolment.State);
-        Assert.Equal("That did not work: recording is not available yet.", enrolment.StatusLine);
-
-        engine.SetConnected(true);
-        await enrolment.PrimaryCommand.ExecuteAsync(null);
-        Assert.Equal(EnrolmentState.Recording, enrolment.State);
     }
 }

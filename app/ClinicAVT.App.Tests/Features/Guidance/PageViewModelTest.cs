@@ -28,10 +28,12 @@ public class PageViewModelTest
     }
 
     [Fact]
-    public async Task EveryShowIsAnnouncedAndThePaneClosesByCommandOrWhenItsCardGoes()
+    public async Task EveryShowIsAnnouncedOpenHandsTheCopyToTheViewerAndThePaneClosesByCommandOrWhenItsCardGoes()
     {
         var clipboard = new FakeClipboard();
-        var (view, _) = Create(Reply(Box(1, 0.1, 0.2, 0.6, 0.3)), new FakeLauncher(), clipboard);
+        var launcher = new FakeLauncher();
+        var (view, engine) = Create(Reply(Box(1, 0.1, 0.2, 0.6, 0.3)), launcher, clipboard);
+        engine.OpenedPath = @"C:\scratch\7.pdf";
         var shown = 0;
         view.Shown += () => shown++;
 
@@ -50,6 +52,11 @@ public class PageViewModelTest
         Assert.True(view.Visible);
         view.KeepOnlyFor([]);
         Assert.False(view.Visible);
+
+        await view.OpenAsync(Found());
+        Assert.Equal([@"C:\scratch\7.pdf"], launcher.Files);
+        var request = Assert.Single(engine.Requests, r => r.Method == "guidance/documents/open");
+        Assert.Equal("{\"id\":7}", request.Params);
     }
 
     [Fact]
@@ -136,19 +143,5 @@ public class PageViewModelTest
         Assert.False(view.Failed);
         Assert.Single(view.Boxes);
         Assert.Equal(2, engine.Requests.Count(r => r.Method == "guidance/page"));
-    }
-
-    [Fact]
-    public async Task OpenAsksForTheCopyAndHandsThePathToTheViewer()
-    {
-        var launcher = new FakeLauncher();
-        var (view, engine) = Create(null, launcher, new FakeClipboard());
-        engine.OpenedPath = @"C:\scratch\7.pdf";
-
-        await view.OpenAsync(Found());
-
-        Assert.Equal([@"C:\scratch\7.pdf"], launcher.Files);
-        var request = Assert.Single(engine.Requests, r => r.Method == "guidance/documents/open");
-        Assert.Equal("{\"id\":7}", request.Params);
     }
 }

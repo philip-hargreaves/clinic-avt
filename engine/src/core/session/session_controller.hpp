@@ -29,12 +29,22 @@
 
 namespace clinicavt::session {
 
-// An import's reports, from its own thread: seconds of the recording transcribed so far, then
-// the outcome, an empty error once sealed and stored, otherwise the reason it was erased
+// An import's stages, each a band of the one figure it reports: reading the file 0-5 %,
+// finding the speech 5-15 %, transcribing 15-95 % and finalising 95-100 %
+enum class ImportStage { kReading, kSpeech, kTranscribing, kFinalising };
+
+// The whole import's percentage at a fraction of one stage
+int ImportPercent(ImportStage stage, double fraction);
+
+// An import's reports, from its own thread: its stage and percentage as it goes, then the
+// outcome, an empty error once sealed and stored, otherwise the reason it was erased
 struct ImportReport {
-    std::function<void(const store::SessionId&, double seconds, double total)> progress;
+    std::function<void(const store::SessionId&, ImportStage stage, int percent)> progress;
     std::function<void(const store::SessionId&, const std::string& error)> done;
 };
+
+// Reads a recording, reporting the fraction read
+using ImportRead = std::function<std::vector<float>(const std::function<void(double)>& progress)>;
 
 // The error an import cancelled by Cancel ends with
 inline constexpr const char* kImportCancelled = "cancelled";
@@ -68,8 +78,8 @@ class SessionController {
     // A recording made elsewhere, dated started_at (empty: now). Returns the begun session's id,
     // then decodes and finalises it as Stop does on the import's thread, without teaching the
     // print. Empty while a session or an enrolment runs, or when the store refuses
-    store::SessionId Import(std::function<std::vector<float>()> read, const std::string& started_at,
-                            bool retain, ImportReport report);
+    store::SessionId Import(ImportRead read, const std::string& started_at, bool retain,
+                            ImportReport report);
     bool Importing() const;
     // Idempotent. A stop is the user's, so it never counts as an interruption.
     // The recording is kept, and an import runs to its end first
@@ -77,9 +87,6 @@ class SessionController {
     // Idempotent. The recording is erased. An import stops at its next span and is erased
     // on its own thread
     void Cancel();
-    // Holds the source's delivery. Stop and cancel always win
-    void SetPaused(bool paused);
-    void SetMonitor(bool monitor);
     bool Running() const;
     // Capturing, or still writing the consultation's note, sheet or case summary
     bool Busy() const;
@@ -143,7 +150,7 @@ class SessionController {
     void DiarLoop();
     void JoinDiarThread();
     void EndCapture();
-    void RunImport(const std::function<std::vector<float>()>& read, const ImportReport& report);
+    void RunImport(const ImportRead& read, const ImportReport& report);
     // learn false keeps the print from accruing this session. Answers the outcome reached,
     // which a cancelled import turns from kFinalise to kCancel
     Outcome FinishSession(Outcome outcome, bool learn = true);
@@ -168,7 +175,7 @@ class SessionController {
     bool importing_ = false;  // under mutex_
     std::atomic<bool> import_cancel_{false};
     // Set on the import thread for its finalise
-    std::function<void(double seconds)> import_progress_;
+    std::function<void(ImportStage, double fraction)> import_progress_;
     bool diar_stop_ = false;  // under mutex_
     int diar_ticks_ = 0;      // under mutex_, diagnostics
     audio::LevelMeter meter_;

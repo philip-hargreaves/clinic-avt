@@ -11,7 +11,7 @@ public interface IMetered
     double? TokensPerSecond { get; }
 }
 
-public sealed record AudioLevel(double Level = 0, bool Clipped = false, double? Seconds = null)
+public sealed record AudioLevel(double Level = 0, bool Clipped = false)
     : EngineNotification;
 
 public sealed record SessionInterrupted(string? Reason = null, string? Detail = null)
@@ -19,8 +19,11 @@ public sealed record SessionInterrupted(string? Reason = null, string? Detail = 
 
 public sealed record SessionProgress(string Stage = "") : EngineNotification;
 
-/// <summary>An import's transcription pass: seconds of the recording done out of its total.</summary>
-public sealed record ImportProgress(string SessionId = "", double Seconds = 0, double Total = 0)
+/// <summary>
+/// How far an import has got: its stage (reading, speech, transcribing or finalising) and one
+/// percentage across all of them.
+/// </summary>
+public sealed record ImportProgress(string SessionId = "", string Stage = "", int Percent = 0)
     : EngineNotification;
 
 /// <summary>An import sealed and stored. The note follows as after a stop.</summary>
@@ -101,11 +104,13 @@ public sealed record ArchiveProgress(string Job = "", string Phase = "", int Don
 
 /// <summary>
 /// A finished backup or restore. A backup lists the ids it wrote and checked. A restore counts
-/// what it added, or would add on a dry run, and what was already here.
+/// what it added, or would add on a dry run, and what was already here. ReflectionsOnly marks a
+/// file holding only appraisal entries.
 /// </summary>
 public sealed record ArchiveDone(
     string Job = "", bool DryRun = false, int Consultations = 0, int Reflections = 0,
-    int Skipped = 0, string? From = null, string? To = null, string? CreatedAt = null)
+    int Skipped = 0, string? From = null, string? To = null, string? CreatedAt = null,
+    bool ReflectionsOnly = false)
     : EngineNotification
 {
     public IReadOnlyList<string> Ids { get; init; } = [];

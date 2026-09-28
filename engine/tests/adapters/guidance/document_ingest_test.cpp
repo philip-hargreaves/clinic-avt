@@ -287,6 +287,28 @@ TEST(DocumentIngest, ARenameKeepsTheDocumentAndAChangedFileIsANewOne) {
     EXPECT_NE(h.ingest.List().documents[0].id, id) << "so old citations never point into new text";
 }
 
+TEST(DocumentIngest, TheShippedGuidelinesStartANewFolderAndNeverRefillOne) {
+    fixture::TempDir dir{"seed"};
+    const auto shipped = dir.path / "shipped";
+    std::filesystem::create_directories(shipped);
+    std::ofstream(shipped / "BSR gout.pdf") << "a";
+    std::ofstream(shipped / "BSR lupus.pdf") << "b";
+    const auto folder = dir.path / "Documents" / "ClinicAVT guidelines";
+
+    EXPECT_EQ(SeedGuidelines(folder, shipped), 2u);
+    EXPECT_TRUE(std::filesystem::exists(folder / "BSR lupus.pdf"));
+
+    std::filesystem::remove(folder / "BSR gout.pdf");
+    EXPECT_EQ(SeedGuidelines(folder, shipped), 0u) << "the clinician removed it";
+    EXPECT_FALSE(std::filesystem::exists(folder / "BSR gout.pdf"));
+
+    const auto empty = dir.path / "empty";
+    std::filesystem::create_directories(empty);
+    EXPECT_EQ(SeedGuidelines(empty, shipped), 0u) << "an existing folder is the clinician's";
+    EXPECT_EQ(SeedGuidelines(dir.path / "other", dir.path / "nothing shipped"), 0u);
+    EXPECT_FALSE(std::filesystem::exists(dir.path / "other"));
+}
+
 TEST(DocumentIngest, ADeletedFolderIsMadeAgainEmptyAndAnUnreachableParentHoldsTheRows) {
     fixture::TempDir dir{"ingest"};
     Harness h(dir.path);

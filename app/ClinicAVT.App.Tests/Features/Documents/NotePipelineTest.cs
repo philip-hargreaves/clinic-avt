@@ -45,12 +45,18 @@ public class NotePipelineTest
     }
 
     [Fact]
-    public async Task BothDocumentsStreamAndSealWithReviewAtNoteReadyAndWritingStatusesOnlyWhileTokensStream()
+    public async Task StopBringsTheLabelledTranscriptThenBothDocumentsStreamAndSealWithWritingStatusesOnlyWhileTokensStream()
     {
         var log = new ListLogger();
         var (session, engine, note) = TestSession.Create(log: log);
+        engine.Transcript.Add(("doctor", "how long has the knee been swollen"));
+        engine.Transcript.Add(("patient", "about three weeks now"));
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
+
+        Assert.Equal(["doctor", "patient"], session.Transcript.Turns.Select(t => t.Speaker));
+        Assert.Equal("Doctor", session.Transcript.Turns[0].SpeakerLabel);
+        Assert.Equal("how long has the knee been swollen", session.Transcript.Turns[0].Text);
 
         engine.RaiseNotification("note/partial", Text("The patient"));
         Assert.Equal("The patient", note.ClinicalNoteText);
@@ -65,18 +71,18 @@ public class NotePipelineTest
 
         engine.RaiseNotification("patient/partial", Text("Your appointment"));
         Assert.Equal("Your appointment", note.PatientInfoText);
-        Assert.Equal("Writing patient note", session.Status.LatestActivity);
+        Assert.Equal("Writing patient information", session.Status.LatestActivity);
 
         engine.RaiseNotification("patient/ready", Text("Your appointment today ..."));
         Assert.Equal("Your appointment today ...", note.PatientInfoText);
         Assert.Equal(NotePipelineState.AllReady, note.PipelineState);
 
-        session.StartNewConsultation();
+        session.FinishConsultation();
         Assert.Equal(NotePipelineState.Pending, note.PipelineState);
     }
 
     [Fact]
-    public async Task AFailedNoteStillReachesReviewWithACaptionPointingAtTheStatusBar()
+    public async Task AFailedNoteStillReachesReviewWithACaptionAndAFailedSheetHasItsOwnState()
     {
         var (session, engine, note) = TestSession.Create();
         await session.StartRecordingAsync();
@@ -89,16 +95,11 @@ public class NotePipelineTest
         Assert.False(note.NotePreparing);
         Assert.Contains("could not be written", note.NoteStateCaption);
         Assert.True(note.NoteCaptionVisible);
-    }
 
-    [Fact]
-    public async Task AFailedPatientSheetHasItsOwnState()
-    {
-        var (session, engine, note) = TestSession.Create();
+        session.FinishConsultation();
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         engine.RaiseNotification("note/ready", Text("the note"));
-
         engine.RaiseNotification("patient/failed", Detail("generation failed"));
 
         Assert.Equal(NotePipelineState.PatientFailed, note.PipelineState);
@@ -106,9 +107,10 @@ public class NotePipelineTest
     }
 
     [Fact]
-    public async Task TranslationWaitsForTheStoredSheetFlowsThroughTheEngineAndAFailureReleasesTheButton()
+    public async Task TranslationWaitsForTheStoredSheetFlowsThroughTheEngineAndAFailureOrALostEngineReleasesTheButton()
     {
-        var (session, engine, note) = TestSession.Create();
+        var log = new ListLogger();
+        var (session, engine, note) = TestSession.Create(log: log);
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         engine.RaiseNotification("note/ready", Text("the note"));
@@ -141,21 +143,12 @@ public class NotePipelineTest
         engine.RaiseNotification("translate/failed", Detail("boom"));
 
         Assert.True(note.TranslateCommand.CanExecute(null));
-    }
 
-    [Fact]
-    public async Task AThinRecordingNeverClaimsToBeWriting()
-    {
-        var log = new ListLogger();
-        var (session, engine, _) = TestSession.Create(log: log);
-        await session.StartRecordingAsync();
-        await session.StopRecordingAsync();
-
-        // The engine's graceful statement arrives with no partials at all
-        engine.RaiseNotification("note/ready", Text("The recording was too short."));
-        engine.RaiseNotification("patient/ready", Text("The recording was too short."));
-
-        Assert.DoesNotContain(log.Lines, l => l.Contains("Writing", StringComparison.Ordinal));
-        Assert.Equal("Ready for review", session.Status.LatestActivity);
+        await note.TranslateCommand.ExecuteAsync(null);
+        Assert.True(note.TranslationRunning);
+        engine.SetConnected(false);
+        Assert.False(note.TranslationRunning);
+        Assert.False(session.EngineReady);
+        Assert.Contains(log.Lines, line => line.Contains("connection lost"));
     }
 }

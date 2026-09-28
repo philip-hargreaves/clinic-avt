@@ -290,7 +290,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     private async Task Delete(SessionRow row)
     {
         if (!await _dialogs.ConfirmAsync("Delete this consultation?",
-                "The transcript, note and patient sheet are erased and cannot be recovered.",
+                "The transcript, note and patient information are erased and cannot be recovered.",
                 "Delete", "Keep").ConfigureAwait(true))
         {
             return;

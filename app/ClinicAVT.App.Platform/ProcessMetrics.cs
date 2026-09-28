@@ -35,18 +35,19 @@ public sealed class ProcessMetrics : IProcessMetrics
         }
     }
 
-    public double WorkingSetGb(params string[] processNames)
+    public double CommittedGb(params string[] processNames)
     {
         try
         {
-            var bytes = Environment.WorkingSet;
+            using var self = Process.GetCurrentProcess();
+            var bytes = self.PrivateMemorySize64;
             foreach (var name in processNames)
             {
                 foreach (var process in Process.GetProcessesByName(name))
                 {
                     using (process)
                     {
-                        bytes += process.WorkingSet64;
+                        bytes += process.PrivateMemorySize64;
                     }
                 }
             }

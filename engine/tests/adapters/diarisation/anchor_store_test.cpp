@@ -102,18 +102,13 @@ TEST(AnchorStore, ACorruptFileResetsToEmpty) {
     EXPECT_EQ(store.Status().sessions, 1u);
 }
 
-TEST(AnchorRecord, RoundTripsAndRefusesAnotherVersion) {
-    const detail::AnchorRecord record{{0.6f, 0.8f}, 5, 42};
-    auto plain = detail::SerializeAnchor(record);
-    const auto again = detail::ParseAnchor(plain);
-    ASSERT_TRUE(again.has_value());
-    EXPECT_EQ(again->sum, record.sum);
-    EXPECT_EQ(again->sessions, 5u);
-    EXPECT_EQ(again->enrolled_at, 42u);
-
+// A print from another build's layout starts fresh rather than being misread
+TEST(AnchorRecord, AnotherVersionOrAShortRecordStartsFresh) {
+    auto plain = detail::SerializeAnchor({{0.6f, 0.8f}, 5, 42});
+    ASSERT_TRUE(detail::ParseAnchor(plain).has_value());
     const std::uint32_t version = 1;
     std::memcpy(plain.data(), &version, 4);
-    EXPECT_FALSE(detail::ParseAnchor(plain).has_value()) << "another version starts fresh";
+    EXPECT_FALSE(detail::ParseAnchor(plain).has_value()) << "another version";
     EXPECT_FALSE(detail::ParseAnchor(std::vector<std::uint8_t>(10)).has_value()) << "too short";
 }
 

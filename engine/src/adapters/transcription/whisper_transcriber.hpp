@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -52,6 +53,11 @@ class WhisperTranscriber : public ITranscriber {
     // error or an empty string. False when this transcriber cannot switch
     bool SwitchDevice(std::string device, std::function<void(const std::string&)> done);
 
+    // True from a switch request until its load settles
+    bool Moving() const {
+        return moving_.load();
+    }
+
     // Blocks until the worker has decoded the clip
     std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
                                        std::uint64_t first_frame) override;
@@ -66,13 +72,14 @@ class WhisperTranscriber : public ITranscriber {
     };
 
     void WorkerLoop();
-    std::string LoadIfPending();
+    std::string Load(DecodeLoader loader);
     void RecordDecode(std::size_t frames, std::chrono::steady_clock::time_point t0);
 
     DecodeLoader loader_;
     DeviceLoader by_device_;  // set when the transcriber can move between devices
     std::function<void(const std::string&)> switched_;  // under mutex_, the pending switch's
     bool switching_ = false;                            // under mutex_
+    std::atomic<bool> moving_{false};
     DecodeFn decode_;  // Worker-thread only once the loader has run
     metrics::Registry* metrics_ = nullptr;
     std::mutex mutex_;

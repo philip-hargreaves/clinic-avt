@@ -5,7 +5,7 @@ namespace ClinicAVT.FetchModels.Tests;
 /// <summary>Serves a directory over loopback HTTP with range support.</summary>
 public sealed class AssetServer : IDisposable
 {
-    private readonly HttpListener _listener = new();
+    private readonly HttpListener _listener;
     private readonly string _dir;
     private readonly CancellationTokenSource _stop = new();
 
@@ -16,14 +16,31 @@ public sealed class AssetServer : IDisposable
     public AssetServer(string dir)
     {
         _dir = dir;
-        var port = Random.Shared.Next(20000, 60000);
-        BaseUrl = $"http://127.0.0.1:{port}";
-        _listener.Prefixes.Add(BaseUrl + "/");
-        _listener.Start();
+        (_listener, BaseUrl) = Listen();
         _ = Task.Run(ServeAsync);
     }
 
     public string BaseUrl { get; }
+
+    // Below the dynamic port range, and another port if one is taken. A failed start disposes
+    // the listener, so each try needs a new one
+    private static (HttpListener, string) Listen()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var url = $"http://127.0.0.1:{Random.Shared.Next(20000, 49000)}";
+            var listener = new HttpListener();
+            listener.Prefixes.Add(url + "/");
+            try
+            {
+                listener.Start();
+                return (listener, url);
+            }
+            catch (HttpListenerException) when (attempt < 20)
+            {
+            }
+        }
+    }
 
     private async Task ServeAsync()
     {
@@ -140,7 +157,7 @@ public class FetchTest : IDisposable
     }
 
     [Fact]
-    public async Task FetchInstallsVerifiedAndIsIdempotent()
+    public async Task FetchInstallsVerifiedSkipsAValidStoreAndRepairsADamagedOne()
     {
         using var server = new AssetServer(_upload);
         var pack = PackTiny(server.BaseUrl);
@@ -151,41 +168,36 @@ public class FetchTest : IDisposable
         var before = server.Requests;
         Assert.False(await NewFetcher().InstallAsync(pack, _store), "a valid store is skipped");
         Assert.Equal(before, server.Requests);
-    }
 
-    [Fact]
-    public async Task ATruncatedShardResumesAndVerifies()
-    {
-        using var server = new AssetServer(_upload);
-        var pack = PackTiny(server.BaseUrl);
-
-        // A previous run died mid-shard
-        var work = Path.Combine(_store, ".fetch", "tiny");
-        Directory.CreateDirectory(work);
-        var shard = pack.Shards["weights.bin"][0];
-        var full = File.ReadAllBytes(Path.Combine(_upload, shard.Name));
-        File.WriteAllBytes(Path.Combine(work, shard.Name), full[..100_000]);
-
+        File.WriteAllText(Path.Combine(_store, "models", "tiny", "weights.bin"), "damaged");
         Assert.True(await NewFetcher().InstallAsync(pack, _store));
         AssertInstalled();
     }
 
     [Fact]
-    public async Task AStagedFileResumesFromTheShardBoundary()
+    public async Task AnInterruptedRunResumesFromWhatItKept()
     {
         using var server = new AssetServer(_upload);
         var pack = PackTiny(server.BaseUrl);
 
         // A previous run staged the first shard whole, then died
-        var stage = Path.Combine(_store, ".fetch", "tiny", "stage");
-        Directory.CreateDirectory(stage);
+        var work = Path.Combine(_store, ".fetch", "tiny");
+        Directory.CreateDirectory(Path.Combine(work, "stage"));
         var first = pack.Shards["weights.bin"][0];
-        File.WriteAllBytes(Path.Combine(stage, "weights.bin"),
-            File.ReadAllBytes(Path.Combine(_upload, first.Name)));
+        var shard = File.ReadAllBytes(Path.Combine(_upload, first.Name));
+        File.WriteAllBytes(Path.Combine(work, "stage", "weights.bin"), shard);
 
         Assert.True(await NewFetcher().InstallAsync(pack, _store));
         AssertInstalled();
         Assert.Equal(3, server.Requests);  // two remaining shards + config, never the first
+
+        // Another died mid-shard
+        Directory.Delete(Path.Combine(_store, "models"), recursive: true);
+        Directory.CreateDirectory(work);
+        File.WriteAllBytes(Path.Combine(work, first.Name), shard[..100_000]);
+
+        Assert.True(await NewFetcher().InstallAsync(pack, _store));
+        AssertInstalled();
     }
 
     [Fact]
@@ -201,19 +213,5 @@ public class FetchTest : IDisposable
         await Assert.ThrowsAsync<InvalidDataException>(
             () => NewFetcher().InstallAsync(pack, _store));
         Assert.False(Directory.Exists(Path.Combine(_store, "models", "tiny")));
-    }
-
-    [Fact]
-    public async Task ACorruptedInstallIsRepairedOnTheNextRun()
-    {
-        using var server = new AssetServer(_upload);
-        var pack = PackTiny(server.BaseUrl);
-        Assert.True(await NewFetcher().InstallAsync(pack, _store));
-
-        var installed = Path.Combine(_store, "models", "tiny", "weights.bin");
-        File.WriteAllText(installed, "damaged");
-
-        Assert.True(await NewFetcher().InstallAsync(pack, _store));
-        AssertInstalled();
     }
 }

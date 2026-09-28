@@ -176,6 +176,13 @@ TEST(Handlers, NoteTierLoadsATierAndRefusesWhatItCannotServe) {
     ASSERT_TRUE(std::holds_alternative<Error>(outcome));
     EXPECT_EQ(std::get<Error>(outcome).code, kSessionError);
 
+    // Automatic is this machine's pick
+    lane.refuse.clear();
+    lane.configured.clear();
+    outcome = HandleNoteTier(&lane, false, json{{"tier", "auto"}}, "constrained");
+    ASSERT_TRUE(std::holds_alternative<json>(outcome));
+    EXPECT_EQ(lane.configured, std::vector<std::string>{"constrained"});
+
     // The note/model notification the lane's listener sends
     clinicavt::note::NoteModelState ready;
     ready.phase = clinicavt::note::NoteModelState::Phase::kReady;
@@ -383,9 +390,19 @@ TEST(Handlers, SessionNoteAndPatientMatchTheFixtures) {
     patient = ResultOf(HandleSessionPatient(*fixture.store, json{{"id", id}}));
     EXPECT_EQ(patient["translation"]["language"], "pl");
     EXPECT_EQ(patient["translation"]["text"], "Masz zapalenie kaletki.");
+    EXPECT_TRUE(patient["editedAt"].is_null());
+    fixture.store->EditDocument(id, DocumentKind::kPatient, "You have bursitis of the elbow.");
+    patient = ResultOf(HandleSessionPatient(*fixture.store, json{{"id", id}}));
+    const auto translated_at = patient["translation"]["translatedAt"].get<std::string>();
+    const auto edited_at = patient["editedAt"].get<std::string>();
+    EXPECT_GE(edited_at, translated_at) << "the sheet changed after its translation";
+    EXPECT_EQ(patient["translation"]["text"], "Masz zapalenie kaletki.") << "the edit keeps it";
     const json patient_fixture = LoadFixture("session-patient.json");
     for (const auto& [key, value] : patient_fixture["result"].items()) {
         EXPECT_TRUE(patient.contains(key)) << key;
+    }
+    for (const auto& [key, value] : patient_fixture["result"]["translation"].items()) {
+        EXPECT_TRUE(patient["translation"].contains(key)) << key;
     }
 }
 
@@ -1028,23 +1045,16 @@ TEST(Handlers, GuidanceSearchRunsAStoredNoteOrFreeText) {
     EXPECT_EQ(sent.all[1].second.at("stale"), nullptr) << "no note, nothing to be stale against";
     ASSERT_EQ(retriever.searches.size(), 2u);
     EXPECT_EQ(retriever.searches[1], (std::pair<std::string, int>{"Chest pain on exertion.", 5}));
-    EXPECT_EQ(retriever.modes[1], clinicavt::guidance::SearchMode::kQuery);
-}
 
-TEST(Handlers, GuidanceSearchRunsTypedTextAsANoteOnRequest) {
-    SessionStoreFixture fixture;
-    EchoRetriever retriever;
-    Sent sent;
-    clinicavt::guidance::GuidanceLane lane(retriever);
-
-    const auto outcome = HandleGuidanceSearch(
+    // Typed text is searched as a note when asked
+    ASSERT_TRUE(std::holds_alternative<json>(HandleGuidanceSearch(
         *fixture.store, lane, json{{"text", "Chest pain on exertion."}, {"mode", "note"}},
-        sent.Sink());
-    ASSERT_TRUE(std::holds_alternative<json>(outcome));
-    ASSERT_TRUE(sent.WaitFor(1));
-    EXPECT_EQ(
-        retriever.modes,
-        (std::vector<clinicavt::guidance::SearchMode>{clinicavt::guidance::SearchMode::kNote}));
+        sent.Sink())));
+    ASSERT_TRUE(sent.WaitFor(3));
+    EXPECT_EQ(retriever.modes,
+              (std::vector<clinicavt::guidance::SearchMode>{
+                  clinicavt::guidance::SearchMode::kNote, clinicavt::guidance::SearchMode::kQuery,
+                  clinicavt::guidance::SearchMode::kNote}));
 }
 
 TEST(Handlers, GuidanceSearchRefusesBadParamsAndAMissingNote) {
@@ -1181,10 +1191,12 @@ struct FakeReader : clinicavt::audio::IRecordingReader {
         return info;
     }
 
-    std::vector<float> Decode(const std::filesystem::path&) override {
+    std::vector<float> Decode(const std::filesystem::path&,
+                              const clinicavt::audio::ReadProgress& progress) override {
         ++decodes;
         if (fail) fail();
         if (fail_decode) fail_decode();
+        progress(1.0);
         return audio;
     }
 };
@@ -1230,9 +1242,9 @@ struct ImportRig {
         vad,
         diariser};
 
-    std::variant<json, Error> Import(const json& params, bool playback_active = false) {
+    std::variant<json, Error> Import(const json& params) {
         return HandleSessionImport(
-            reader, controller, playback_active, nullptr,
+            reader, controller, nullptr,
             [this](const std::string& method, json body) {
                 const std::lock_guard<std::mutex> lock(mutex);
                 pushed.emplace_back(method, std::move(body));
@@ -1240,11 +1252,27 @@ struct ImportRig {
             params);
     }
 
+    // Every push but progress
     std::vector<std::string> Methods() {
         const std::lock_guard<std::mutex> lock(mutex);
         std::vector<std::string> methods;
-        for (const auto& [method, body] : pushed) methods.push_back(method);
+        for (const auto& [method, body] : pushed) {
+            if (method != "session/importProgress") methods.push_back(method);
+        }
         return methods;
+    }
+
+    // The progress pushed, as "stage percent"
+    std::vector<std::string> Progress() {
+        const std::lock_guard<std::mutex> lock(mutex);
+        std::vector<std::string> progress;
+        for (const auto& [method, body] : pushed) {
+            if (method == "session/importProgress") {
+                progress.push_back(body["stage"].get<std::string>() + " " +
+                                   std::to_string(body["percent"].get<int>()));
+            }
+        }
+        return progress;
     }
 
     // The import's last word, session/imported or session/importFailed
@@ -1295,6 +1323,9 @@ TEST(Handlers, RecordingInspectAndSessionImportMatchTheFixtures) {
     EXPECT_EQ(rig.Methods(),
               (std::vector<std::string>{"session/imported", "note/ready", "patient/ready"}))
         << "without a writer the stubs keep the contract, after the seal";
+    EXPECT_EQ(rig.Progress(),
+              (std::vector<std::string>{"reading 5", "finalising 95", "finalising 100"}))
+        << "the scripted diariser finds and decodes nothing, so those stages say nothing";
 
     const json list = HandleSessionList(*rig.fixture.store);
     ASSERT_EQ(list["sessions"].size(), 1u);
@@ -1303,9 +1334,9 @@ TEST(Handlers, RecordingInspectAndSessionImportMatchTheFixtures) {
     EXPECT_FALSE(list["sessions"][0]["endedAt"].get<std::string>().empty());
 
     const json progress = LoadFixture("session-importProgress.json");
-    EXPECT_EQ(ImportProgressJson("a1b2c3d4e5f60718293a4b5c6d7e8f90", 304.2371, 760.4049),
-              progress["params"])
-        << "to a tenth of a second";
+    EXPECT_EQ(ImportProgressJson("a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                                 clinicavt::session::ImportStage::kTranscribing, 60),
+              progress["params"]);
 }
 
 TEST(Handlers, ACancelledImportEndsAsAFailureNamedCancelledAndLeavesNothing) {
@@ -1364,10 +1395,6 @@ TEST(Handlers, SessionImportRefusesBeforeReadingAnything) {
         ASSERT_TRUE(std::holds_alternative<Error>(outcome));
         EXPECT_EQ(std::get<Error>(outcome).code, row.code);
     }
-
-    const auto during_playback = rig.Import(good, true);
-    ASSERT_TRUE(std::holds_alternative<Error>(during_playback));
-    EXPECT_EQ(std::get<Error>(during_playback).data, json("a playback is running"));
 
     ASSERT_TRUE(rig.controller.Start());
     const auto while_recording = rig.Import(good);

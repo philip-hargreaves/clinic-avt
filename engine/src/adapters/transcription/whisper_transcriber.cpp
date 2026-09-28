@@ -115,6 +115,7 @@ bool WhisperTranscriber::SwitchDevice(std::string device,
         loader_ = [loader = by_device_, device = std::move(device)] { return loader(device); };
         switched_ = std::move(done);
         switching_ = true;
+        moving_ = true;
     }
     cv_.notify_all();
     return true;
@@ -163,12 +164,7 @@ void WhisperTranscriber::RecordDecode(std::size_t frames,
 
 // Load off the hot path. A failed load drains clips without turns, so
 // nothing hangs. Returns the error, empty on success
-std::string WhisperTranscriber::LoadIfPending() {
-    DecodeLoader loader;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        loader = std::exchange(loader_, {});
-    }
+std::string WhisperTranscriber::Load(DecodeLoader loader) {
     if (!loader) {
         return {};
     }
@@ -190,20 +186,30 @@ std::string WhisperTranscriber::LoadIfPending() {
 }
 
 void WhisperTranscriber::WorkerLoop() {
-    LoadIfPending();
-
     std::unique_lock<std::mutex> lock(mutex_);
+    // A switch asked for before the first load replaces it
+    if (!switching_) {
+        auto first = std::exchange(loader_, {});
+        lock.unlock();
+        Load(std::move(first));
+        lock.lock();
+    }
     while (!stopping_) {
         cv_.wait(lock, [this] { return !clips_.empty() || stopping_ || switching_; });
         if (stopping_) break;
-        if (loader_) {
+        // A switch's load and reply are taken together, so a later switch can't split them
+        if (switching_) {
+            auto loader = std::exchange(loader_, {});
             auto done = std::exchange(switched_, {});
             switching_ = false;
             lock.unlock();
-            const std::string error = LoadIfPending();
+            const std::string error = Load(std::move(loader));
+            lock.lock();
+            moving_ = switching_;  // one asked for during this load is still to come
+            lock.unlock();
             if (done) done(error);
             lock.lock();
-            if (clips_.empty()) continue;
+            continue;
         }
 
         Clip clip = std::move(clips_.front());

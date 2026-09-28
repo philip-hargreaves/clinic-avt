@@ -73,14 +73,6 @@
         <Setter Property="Padding" Value="9,5" />
     </Style>
 
-    <Style x:Key="TrayToggleButton" TargetType="ToggleButton">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
-        <Setter Property="Padding" Value="9,5" />
-        <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-
     <Style x:Key="CaptionLink" TargetType="HyperlinkButton" BasedOn="{StaticResource DefaultHyperlinkButtonStyle}">
         <Setter Property="Padding" Value="2,0" />
         <Setter Property="VerticalAlignment" Value="Center" />

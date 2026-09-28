@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Core.Ports;
@@ -25,15 +24,11 @@ public sealed partial class SessionRecorder : ObservableObject
     private readonly TranscriptViewModel _transcript;
     private readonly Metrics.PerformanceCollector? _metrics;
     private readonly AppPreferences? _preferences;
-    private readonly DemoMode? _demo;
-
-    // A replay stops itself at the end of its file. Zero when the length is unknown
-    private double _replayEndSeconds;
 
     public SessionRecorder(
         IEngineApi engine, StatusBarViewModel status, NoteViewModel note, GuidanceViewModel guidance,
         PageViewModel pageView, TranscriptViewModel transcript,
-        Metrics.PerformanceCollector? metrics, AppPreferences? preferences, DemoMode? demo)
+        Metrics.PerformanceCollector? metrics, AppPreferences? preferences)
     {
         _engine = engine;
         _status = status;
@@ -43,7 +38,6 @@ public sealed partial class SessionRecorder : ObservableObject
         _transcript = transcript;
         _metrics = metrics;
         _preferences = preferences;
-        _demo = demo;
     }
 
     [ObservableProperty]
@@ -57,11 +51,7 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial FinalisePhase Phase { get; private set; } = FinalisePhase.None;
 
-    [ObservableProperty]
-    public partial bool Paused { get; private set; }
-
-    // Position in the delivered audio. One level event arrives per 100 ms of audio at any
-    // replay speed
+    // Position in the delivered audio. One level event arrives per 100 ms of audio
     [ObservableProperty]
     public partial double AudioSeconds { get; private set; }
 
@@ -69,21 +59,11 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial bool Importing { get; private set; }
 
-    /// <summary>How far the import's transcription has got, null until the engine says.</summary>
+    /// <summary>How far the import has got, in words and one percentage, null until the engine says.</summary>
     [ObservableProperty]
-    public partial int? ImportPercent { get; private set; }
+    public partial string? ImportLine { get; private set; }
 
-    /// <summary>The active session's replay request, null for a microphone.</summary>
-    [ObservableProperty]
-    public partial ReplayRequest? ActiveReplay { get; private set; }
-
-    /// <summary>The saved run being played back, null unless a demo plays.</summary>
-    [ObservableProperty]
-    public partial DemoMaster? ActivePlayback { get; private set; }
-
-    /// <summary>
-    /// True for a demo record until the next idle. The badge shows for it and for demo mode.
-    /// </summary>
+    /// <summary>True while a seeded sample is under review. The Demo badge shows for it.</summary>
     public bool DemoRecord { get; private set; }
 
     /// <summary>The session the engine is recording into, for a resume after a restart.</summary>
@@ -101,7 +81,7 @@ public sealed partial class SessionRecorder : ObservableObject
     public void ShowDemo(bool record)
     {
         DemoRecord = record;
-        _status.Demo = record || _demo is { Enabled: true };
+        _status.Demo = record;
         _note.ExampleCasesVisible = record && _note.ExampleCases.Count > 0;
         if (!record)
         {
@@ -190,15 +170,9 @@ public sealed partial class SessionRecorder : ObservableObject
     private void DropSession()
     {
         State = SessionState.Idle;
-        Paused = false;
-        ActiveReplay = null;
-        ActivePlayback = null;
         _status.SetMicVisible(false);
     }
 
-    /// <summary>
-    /// A level reading. A playback's reading carries the position its clock has reached.
-    /// </summary>
     public void OnAudioLevel(AudioLevel level)
     {
         _status.SetMicLevel(level.Level);
@@ -207,85 +181,32 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        AudioSeconds = level.Seconds ?? AudioSeconds + 0.1;
-        // A playback or a replay stops itself at the end of its audio
-        var end = ActivePlayback?.AudioSeconds ?? _replayEndSeconds;
-        if (end > 0 && AudioSeconds >= end - 0.05)
-        {
-            _ = StopRecordingAsync();
-        }
+        AudioSeconds += 0.1;
     }
 
-    public async Task StartRecordingAsync(ReplayRequest? replay = null)
+    public async Task StartRecordingAsync()
     {
         if (State != SessionState.Idle)
         {
-            return;
-        }
-
-        // In demo mode the record button plays the chosen saved run back
-        if (replay is null && _demo is { Enabled: true } && _demo.Master is { } master)
-        {
-            await StartPlaybackAsync(master).ConfigureAwait(true);
             return;
         }
 
         // An empty mic id means the default, and a missing device falls back to it with a log line
-        var start = replay is null
-            ? () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")
-            : (Func<Task<string>>)(() => _engine.StartReplayAsync(Retain, replay));
-        if (!await BeginAsync(start, replay, null).ConfigureAwait(true))
-        {
-            return;
-        }
-
-        _status.Append(replay is null ? "Recording" : "Replaying");
-        _metrics?.SessionStarted(
-            replay is null ? "mic" : "replay", replay?.Speed ?? 0,
-            replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
-    }
-
-    /// <summary>
-    /// Plays a stored consultation back as a demo. It passes through the same states, sped up,
-    /// and generates nothing. Performance measurement ignores it.
-    /// </summary>
-    public async Task StartPlaybackAsync(DemoMaster playback)
-    {
-        if (State != SessionState.Idle)
-        {
-            return;
-        }
-
-        var start = () => _engine.StartPlaybackAsync(playback.SessionId);
-        if (!await BeginAsync(start, null, playback).ConfigureAwait(true))
-        {
-            return;
-        }
-
-        ShowDemo(true);
-        _status.Append("Recording");
-    }
-
-    private async Task<bool> BeginAsync(
-        Func<Task<string>> start, ReplayRequest? replay, DemoMaster? playback)
-    {
-        var started = await EngineCall.TryAsync(_status, "session/start", start).ConfigureAwait(true);
+        var started = await EngineCall.TryAsync(_status, "session/start",
+            () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")).ConfigureAwait(true);
         if (started is null)
         {
-            return false;
+            return;
         }
 
         RecordingSessionId = started.Length > 0 ? started : null;
-        Paused = false;
         AudioSeconds = 0;
         Phase = FinalisePhase.None;
-        ActiveReplay = replay;
-        _replayEndSeconds = replay is null ? 0 : DemoTracks.DurationSeconds(replay.Path);
-        ActivePlayback = playback;
         State = SessionState.Recording;
         ResetForNewConsultation();
         _status.SetMicVisible(true);
-        return true;
+        _status.Append("Recording");
+        _metrics?.SessionStarted();
     }
 
     private void ResetForNewConsultation()
@@ -294,8 +215,8 @@ public sealed partial class SessionRecorder : ObservableObject
         _status.ResetThroughput();
     }
 
-    // A restarted engine has lost the live session, but its audio is stored. Resume replays it
-    // into a fresh session and recording carries on
+    // A restarted engine has lost the live session, but its audio is stored. The engine feeds it
+    // into a fresh session ahead of the microphone and recording carries on
     public async Task ResumeAfterRestartAsync()
     {
         var resume = RecordingSessionId;
@@ -304,21 +225,10 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        // A demo has no audio to resume from
-        if (ActivePlayback is not null)
-        {
-            State = SessionState.Idle;
-            ActivePlayback = null;
-            _status.SetMicVisible(false);
-            _status.Append("Playback interrupted");
-            return;
-        }
-
         try
         {
             // The raw call tells a lost engine from one that answered
-            var started = await _engine.ResumeSessionAsync(resume, Retain, ActiveReplay)
-                .ConfigureAwait(true);
+            var started = await _engine.ResumeSessionAsync(resume, Retain).ConfigureAwait(true);
             RecordingSessionId = started.Length > 0 ? started : null;
             _status.Append("Recording");
         }
@@ -337,29 +247,6 @@ public sealed partial class SessionRecorder : ObservableObject
         }
     }
 
-    public async Task SetPausedAsync(bool paused)
-    {
-        if (State != SessionState.Recording || paused == Paused)
-        {
-            return;
-        }
-
-        if (await EngineCall.TryAsync(_status, "session/pause", () => _engine.PauseSessionAsync(paused))
-            .ConfigureAwait(true))
-        {
-            Paused = paused;
-        }
-    }
-
-    public async Task SetMonitorAsync(bool on)
-    {
-        if (State == SessionState.Recording)
-        {
-            await EngineCall.TryAsync(_status, "session/monitor", () => _engine.MonitorSessionAsync(on))
-                .ConfigureAwait(true);
-        }
-    }
-
     public async Task StopRecordingAsync()
     {
         if (State != SessionState.Recording)
@@ -367,15 +254,7 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        Paused = false;
-        ActiveReplay = null;
-        // A playback's timings are staged, so the collector never sees them
-        if (ActivePlayback is null)
-        {
-            _metrics?.StopRequested();
-        }
-
-        ActivePlayback = null;
+        _metrics?.StopRequested();
         _status.SetMicVisible(false);
         // The recording is safe in the store even when the stop fails
         await FinaliseAsync("session/stop", "Stop failed, consultation kept", _engine.StopSessionAsync)
@@ -396,7 +275,7 @@ public sealed partial class SessionRecorder : ObservableObject
         AudioSeconds = import.Seconds;
         ResetForNewConsultation();
         ImportStarted?.Invoke(import);
-        ImportPercent = null;
+        ImportLine = null;
         Importing = true;
         try
         {
@@ -410,22 +289,27 @@ public sealed partial class SessionRecorder : ObservableObject
         }
     }
 
-    /// <summary>The import's pass through the file, shown as a percentage.</summary>
+    /// <summary>The import's stage, with the one percentage across all of them until it finalises.</summary>
     public void OnImportProgress(ImportProgress progress)
     {
-        if (!Importing || Phase > FinalisePhase.Transcript || progress.Total <= 0)
+        if (!Importing || Phase >= FinalisePhase.Note)
         {
             return;
         }
 
-        var percent = (int)Math.Clamp(100 * progress.Seconds / progress.Total, 0, 100);
-        if (percent == ImportPercent)
+        var line = progress.Stage switch
+        {
+            "reading" or "speech" => $"Preparing · {progress.Percent}%",
+            "transcribing" => $"Transcribing · {progress.Percent}%",
+            _ => "Finalising",
+        };
+        if (line == ImportLine)
         {
             return;
         }
 
-        ImportPercent = percent;
-        _status.Show($"Transcribing · {percent}%", busy: true);
+        ImportLine = line;
+        _status.Show(line, busy: true);
     }
 
     /// <summary>Stops an import. The engine erases what it began and the page goes back to idle.</summary>
@@ -435,15 +319,6 @@ public sealed partial class SessionRecorder : ObservableObject
         {
             await EngineCall.TryAsync(_status, "session/cancel", () => _engine.CancelSessionAsync())
                 .ConfigureAwait(true);
-        }
-    }
-
-    // Past transcription the status line drops the percentage
-    partial void OnPhaseChanged(FinalisePhase value)
-    {
-        if (Importing && value is FinalisePhase.Speakers)
-        {
-            _status.Append("Finalising", busy: true);
         }
     }
 

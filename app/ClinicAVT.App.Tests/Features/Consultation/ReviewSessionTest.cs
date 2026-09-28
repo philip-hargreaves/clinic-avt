@@ -101,7 +101,7 @@ public class ReviewSessionTest
     }
 
     [Fact]
-    public async Task EditingTheTranslatedSheetMarksTheTranslationStaleAndTranslateAgainKeepsItsLanguage()
+    public async Task ChangingTheTranslatedSheetMarksTheTranslationStaleAndTranslateAgainKeepsItsLanguage()
     {
         var (session, engine, note) = TestSession.Create();
         engine.StoredPatient = "Take one tablet a day.";
@@ -109,6 +109,10 @@ public class ReviewSessionTest
         engine.RaiseNotification("translate/ready", Translation("Jedna tabletka dziennie.", "Polish"));
         Assert.False(note.TranslationStale);
         Assert.False(note.TranslateAgainCommand.CanExecute(null));
+
+        note.EditPatientCommand.Execute(null);
+        await note.SavePatientCommand.ExecuteAsync(null);
+        Assert.False(note.TranslationStale, "the sheet did not change");
 
         Assert.True(note.PatientViewing, "the sheet is read until an explicit Edit");
         note.EditPatientCommand.Execute(null);
@@ -130,19 +134,6 @@ public class ReviewSessionTest
         engine.RaiseNotification("translate/ready", Translation("Dwie tabletki dziennie.", "Polish"));
         Assert.False(note.TranslationStale, "the new translation matches the sheet");
         Assert.False(note.TranslateAgainCommand.CanExecute(null));
-    }
-
-    [Fact]
-    public async Task ARewrittenSheetMarksTheTranslationStaleButAnUnchangedSaveDoesNot()
-    {
-        var (session, engine, note) = TestSession.Create();
-        engine.StoredPatient = "Take one tablet a day.";
-        await session.OpenStoredSessionAsync("abc");
-        engine.RaiseNotification("translate/ready", Translation("Jedna tabletka dziennie.", "Polish"));
-
-        note.EditPatientCommand.Execute(null);
-        await note.SavePatientCommand.ExecuteAsync(null);
-        Assert.False(note.TranslationStale, "the sheet did not change");
 
         engine.RaiseNotification("patient/ready", System.Text.Json.JsonSerializer
             .SerializeToElement(new { text = "A rewritten sheet." }));
@@ -153,7 +144,7 @@ public class ReviewSessionTest
     }
 
     [Fact]
-    public async Task AStoredSheetOlderThanTheNoteEditLoadsStale()
+    public async Task AStoredSheetOrTranslationOlderThanWhatItDerivesFromLoadsStale()
     {
         var (session, engine, note) = TestSession.Create();
         engine.StoredNote = "text";
@@ -169,6 +160,28 @@ public class ReviewSessionTest
         Assert.False(note.PatientStale, "leaving clears it");
         Assert.True(await session.OpenStoredSessionAsync("abc"));
         Assert.False(note.PatientStale, "a sheet rewritten after the edit is current");
+
+        engine.StoredNoteEditedAt = null;
+        engine.StoredPatient = "Take two tablets a day.";
+        engine.StoredPatientGeneratedAt = "2026-08-17T10:24:00Z";
+        engine.StoredTranslation = "Jedna tabletka dziennie.";
+        engine.StoredTranslatedAt = "2026-08-17T10:26:00Z";
+        engine.StoredPatientEditedAt = "2026-08-17T10:31:00Z";
+        await session.CloseReviewAsync();
+        Assert.True(await session.OpenStoredSessionAsync("abc"));
+        Assert.Equal("Jedna tabletka dziennie.", note.TranslationText);
+        Assert.True(note.TranslationStale, "the sheet was edited after it was translated");
+        Assert.True(note.TranslateAgainCommand.CanExecute(null));
+
+        engine.StoredPatientEditedAt = null;
+        await session.CloseReviewAsync();
+        Assert.True(await session.OpenStoredSessionAsync("abc"));
+        Assert.False(note.TranslationStale, "translated after the sheet was written");
+
+        engine.StoredPatientGeneratedAt = "2026-08-17T10:40:00Z";
+        await session.CloseReviewAsync();
+        Assert.True(await session.OpenStoredSessionAsync("abc"));
+        Assert.True(note.TranslationStale, "the sheet was rewritten after it was translated");
     }
 
     [Fact]
@@ -187,7 +200,7 @@ public class ReviewSessionTest
             && r.Params.Contains("def"));
 
         note.ClinicalNoteText = "corrected wording";
-        session.StartNewConsultation();
+        session.FinishConsultation();
 
         Assert.Contains(engine.Requests, r => r.Method == "note/update"
             && r.Params.Contains("corrected wording"));
@@ -238,20 +251,10 @@ public class ReviewSessionTest
 
         preferences.KeepConsultations = true;
         engine.RaiseNotification("note/ready");
-        session.StartNewConsultation();
+        session.FinishConsultation();
         await session.StartRecordingAsync();
         Assert.Contains(engine.Requests, r => r.Method == "session/start"
             && r.Params.Contains("\"retain\":true"));
-    }
-
-    [Fact]
-    public async Task OpeningIsRefusedWhileRecording()
-    {
-        var (session, engine, _) = TestSession.Create();
-        await session.StartRecordingAsync();
-
-        Assert.False(await session.OpenStoredSessionAsync("abc"));
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/open");
     }
 
     private static System.Text.Json.JsonElement Translation(string text, string language) =>

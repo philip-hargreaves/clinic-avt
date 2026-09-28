@@ -132,6 +132,45 @@ TEST(WhisperWorker, SwitchingDeviceLoadsThereAtOnceAndAFailedSwitchSaysWhy) {
     }
 }
 
+// A switch asked for during another's load keeps the transcriber moving until it too has
+// loaded, so the engine never counts the gap between the two as idle
+TEST(WhisperWorker, ASwitchQueuedDuringALoadKeepsItMovingUntilBothSettle) {
+    std::promise<void> npu_loading;
+    std::promise<void> npu_gate;
+    std::promise<void> cpu_gate;
+    auto npu_released = npu_gate.get_future().share();
+    auto cpu_released = cpu_gate.get_future().share();
+    WhisperTranscriber transcriber(DeviceLoader([&](const std::string& device) {
+                                       if (device == "NPU") {
+                                           npu_loading.set_value();
+                                           npu_released.wait();
+                                       }
+                                       if (device == "CPU") cpu_released.wait();
+                                       return DecodeFn([](std::span<const float>, std::uint64_t) {
+                                           return std::vector<Turn>{};
+                                       });
+                                   }),
+                                   "GPU");
+    std::promise<std::string> npu_settled;
+    std::promise<std::string> cpu_settled;
+    auto first = npu_settled.get_future();
+    auto second = cpu_settled.get_future();
+    ASSERT_TRUE(transcriber.SwitchDevice(
+        "NPU", [&](const std::string& error) { npu_settled.set_value(error); }));
+    npu_loading.get_future().wait();
+    ASSERT_TRUE(transcriber.SwitchDevice(
+        "CPU", [&](const std::string& error) { cpu_settled.set_value(error); }));
+
+    npu_gate.set_value();
+    ASSERT_EQ(first.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    EXPECT_TRUE(transcriber.Moving()) << "the queued switch has not loaded yet";
+
+    cpu_gate.set_value();
+    ASSERT_EQ(second.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    EXPECT_EQ(second.get(), "");
+    EXPECT_FALSE(transcriber.Moving());
+}
+
 // A driver fault in one decode loses that clip's text, not the session
 TEST(WhisperWorker, AThrowingDecodeLosesOnlyThatClipsText) {
     WhisperTranscriber transcriber(Ready([](std::span<const float>, std::uint64_t first) {

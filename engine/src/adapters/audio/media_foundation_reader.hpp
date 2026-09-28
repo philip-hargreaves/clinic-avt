@@ -13,7 +13,8 @@ namespace clinicavt::audio {
 class MediaFoundationReader : public IRecordingReader {
    public:
     RecordingInfo Inspect(const std::filesystem::path& path) override;
-    std::vector<float> Decode(const std::filesystem::path& path) override;
+    std::vector<float> Decode(const std::filesystem::path& path,
+                              const ReadProgress& progress) override;
 };
 
 }  // namespace clinicavt::audio

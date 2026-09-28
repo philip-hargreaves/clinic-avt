@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Composition;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
@@ -43,7 +42,6 @@ public class CompositionTest
         services.AddSingleton<IProcessMetrics, NoProcessMetrics>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new AppPreferences(new MemoryPreferencesStore()));
-        services.AddSingleton(new DemoMode());
         services.AddSingleton(sp => new PerformanceCollector(
             sp.GetRequiredService<IEngineApi>(), () => false, () => null,
             Path.Combine(Path.GetTempPath(), $"clinicavt-composition-{Guid.NewGuid():N}.jsonl")));

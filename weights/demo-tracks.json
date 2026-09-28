@@ -3,28 +3,13 @@
   "baseUrl": "https://github.com/philip-hargreaves/clinic-avt/releases/download/weights-v1",
   "target": "demo",
   "files": {
-    "day1_consultation01_mixed.wav": "40caebae31e53da130d3c61b2a03c86802ad93f0e08730e922cf504fcea03c2b",
-    "day1_consultation09_mixed.wav": "1378d794a283b0c68adb23084c5b7899c4e4e29d1ea8732b47ac66901964bf1b",
     "day2_consultation02_mixed.wav": "bbb5edaaf2494f3f54670a1821edfd2085d1caf4c31780b203b58642b5ca7076",
-    "day2_consultation07_mixed.wav": "7b32aa0608d4f6739ac20ddb491956b78dc2e0f2bd249bff6c169e96d44610a5",
-    "day3_consultation03_mixed.wav": "63d2c832a95760aa4a277030db09b32f160a7d7775d59aa8e99793ed29f185bb",
-    "tracks.json": "71beb4fbe609064ee8aea200007bb4d44b303a1d5764231449ea6be1e1251030"
+    "day5_consultation11_mixed.wav": "32619a9f37d3adad6805602599088244776a16920be9a66ad784f35aa0910cb9",
+    "day5_consultation08_mixed.wav": "a3b2f53467316ab2937d9e57b11864638654ef2837f7bd5af599462693df63e6",
+    "day5_consultation12_mixed.wav": "6152dd0e9e51e83c604e1d34ad70b0695b0c91b5f6ea97627d7f12086c7a0853",
+    "tracks.json": "bde5f087f564817a79b73a6e1ee2baebb0ff2c8786bc3f886d651df18924ed12"
   },
   "shards": {
-    "day1_consultation01_mixed.wav": [
-      {
-        "name": "demo-tracks--day1_consultation01_mixed.wav",
-        "size": 14651564,
-        "sha256": "40caebae31e53da130d3c61b2a03c86802ad93f0e08730e922cf504fcea03c2b"
-      }
-    ],
-    "day1_consultation09_mixed.wav": [
-      {
-        "name": "demo-tracks--day1_consultation09_mixed.wav",
-        "size": 17178284,
-        "sha256": "1378d794a283b0c68adb23084c5b7899c4e4e29d1ea8732b47ac66901964bf1b"
-      }
-    ],
     "day2_consultation02_mixed.wav": [
       {
         "name": "demo-tracks--day2_consultation02_mixed.wav",
@@ -32,27 +17,34 @@
         "sha256": "bbb5edaaf2494f3f54670a1821edfd2085d1caf4c31780b203b58642b5ca7076"
       }
     ],
-    "day2_consultation07_mixed.wav": [
+    "day5_consultation11_mixed.wav": [
       {
-        "name": "demo-tracks--day2_consultation07_mixed.wav",
-        "size": 14638124,
-        "sha256": "7b32aa0608d4f6739ac20ddb491956b78dc2e0f2bd249bff6c169e96d44610a5"
+        "name": "demo-tracks--day5_consultation11_mixed.wav",
+        "size": 21302444,
+        "sha256": "32619a9f37d3adad6805602599088244776a16920be9a66ad784f35aa0910cb9"
       }
     ],
-    "day3_consultation03_mixed.wav": [
+    "day5_consultation08_mixed.wav": [
       {
-        "name": "demo-tracks--day3_consultation03_mixed.wav",
-        "size": 22281644,
-        "sha256": "63d2c832a95760aa4a277030db09b32f160a7d7775d59aa8e99793ed29f185bb"
+        "name": "demo-tracks--day5_consultation08_mixed.wav",
+        "size": 18025004,
+        "sha256": "a3b2f53467316ab2937d9e57b11864638654ef2837f7bd5af599462693df63e6"
+      }
+    ],
+    "day5_consultation12_mixed.wav": [
+      {
+        "name": "demo-tracks--day5_consultation12_mixed.wav",
+        "size": 10416044,
+        "sha256": "6152dd0e9e51e83c604e1d34ad70b0695b0c91b5f6ea97627d7f12086c7a0853"
       }
     ],
     "tracks.json": [
       {
-        "name": "demo-tracks--tracks.json",
-        "size": 496,
-        "sha256": "71beb4fbe609064ee8aea200007bb4d44b303a1d5764231449ea6be1e1251030"
+        "name": "demo-tracks--tracks-v2.json",
+        "size": 395,
+        "sha256": "bde5f087f564817a79b73a6e1ee2baebb0ff2c8786bc3f886d651df18924ed12"
       }
     ]
   },
-  "totalBytes": 86078156
+  "totalBytes": 67071931
 }

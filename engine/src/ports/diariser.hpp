@@ -67,6 +67,11 @@ class IDiariser {
     // decoded and cut before Diarise, however far capture lagged. A stop leaves it part done
     virtual void Settle(std::span<const float>, const DecodeClipFn&, const StopFn&) {}
 
+    // Settle's speech finding alone, in steps with progress, so an import can report it.
+    // Settle then only decodes
+    virtual void FindSpeech(std::span<const float>, const std::function<void(double)>&,
+                            const StopFn&) {}
+
     // Turn texts speculated by Advance, keyed on exact decode spans. Valid
     // after Diarise
     virtual TurnTexts TakeTurnTexts() {

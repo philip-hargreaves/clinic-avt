@@ -38,7 +38,6 @@ add_executable(engine_tests
     core/diarisation/role_naming_test.cpp
     adapters/diarisation/seg_decode_test.cpp
     core/metrics/throughput_test.cpp
-    core/session/playback_test.cpp
     core/session/session_controller_test.cpp
     core/diarisation/slice_refinement_test.cpp
     core/note/summary_scrub_test.cpp
@@ -51,6 +50,7 @@ add_executable(engine_tests
     adapters/storage/chunk_cipher_test.cpp
     adapters/models/compile_properties_test.cpp
     adapters/models/deferred_load_test.cpp
+    adapters/models/note_tier_test.cpp
     adapters/models/residency_test.cpp
     adapters/storage/db_test.cpp
     adapters/diarisation/fbank_test.cpp

@@ -40,6 +40,14 @@ public sealed class FakeDialogService : IDialogService
 
     public Task<bool> RunRestoreAsync() => Task.FromResult(false);
 
+    public int ExportsRun { get; private set; }
+
+    public Task RunExportReflectionsAsync()
+    {
+        ExportsRun++;
+        return Task.CompletedTask;
+    }
+
     /// <summary>What the import dialog hands back, null for a cancel.</summary>
     public RecordingImport? Import { get; set; }
 
@@ -96,9 +104,9 @@ public sealed class FakeLauncher : ILauncher
         return Task.CompletedTask;
     }
 
-    public void RevealFolder(string path)
-    {
-    }
+    public List<string> Folders { get; } = [];
+
+    public void RevealFolder(string path) => Folders.Add(path);
 }
 
 public sealed class FakeClipboard : IClipboard
@@ -108,15 +116,6 @@ public sealed class FakeClipboard : IClipboard
     public Task<bool> CopyAsync(string text)
     {
         Copied.Add(text);
-        return Task.FromResult(true);
-    }
-
-    /// <summary>Secrets copied, kept apart from ordinary copies.</summary>
-    public List<string> Secrets { get; } = [];
-
-    public Task<bool> CopySecretAsync(string text)
-    {
-        Secrets.Add(text);
         return Task.FromResult(true);
     }
 }

@@ -19,6 +19,7 @@ target_compile_options(clinicavt_warnings INTERFACE
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /utf-8>)
 
 add_subdirectory(engine)
+add_subdirectory(launcher)
 
 # Developer weight acquisition: verified download into the repo model store
 add_custom_target(fetch-models

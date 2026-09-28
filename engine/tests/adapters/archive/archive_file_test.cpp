@@ -331,21 +331,21 @@ TEST(ArchiveFile, DamagedBackupsAreRefusedWithTheirReason) {
 
 // Counted in code points after NFC, so neither multi-byte letters nor decomposed accents pass
 // a short password
-TEST(ArchiveFile, APasswordUnderTwelveCharactersIsRefusedBeforeAnythingIsWritten) {
+TEST(ArchiveFile, APasswordUnderEightCharactersIsRefusedBeforeAnythingIsWritten) {
     TempDir dir;
     const auto path = dir.path / "backup.clinicavt";
-    std::string eleven_accents;
-    std::string six_decomposed;
-    for (int i = 0; i < 11; ++i) eleven_accents += "\xC3\xA9";
-    for (int i = 0; i < 6; ++i) six_decomposed += "e\xCC\x81";
-    for (const std::string& weak : {std::string("short pass"), eleven_accents, six_decomposed}) {
+    std::string seven_accents;
+    std::string four_decomposed;
+    for (int i = 0; i < 7; ++i) seven_accents += "\xC3\xA9";
+    for (int i = 0; i < 4; ++i) four_decomposed += "e\xCC\x81";
+    for (const std::string& weak : {std::string("shorter"), seven_accents, four_decomposed}) {
         EXPECT_EQ(CodeOf([&] { ArchiveFileSink(path, weak, kLowIterations); }),
                   ArchiveCode::kWeakPassword);
     }
     EXPECT_FALSE(std::filesystem::exists(path));
     EXPECT_FALSE(std::filesystem::exists(PartialOf(path)));
 
-    EXPECT_EQ(CodeOf([&] { ArchiveFileSink(path, "twelve chars", kLowIterations); }), std::nullopt);
+    EXPECT_EQ(CodeOf([&] { ArchiveFileSink(path, "eight ch", kLowIterations); }), std::nullopt);
     EXPECT_FALSE(std::filesystem::exists(PartialOf(path))) << "abandoned, so removed";
 }
 

@@ -100,7 +100,7 @@
     "name": "gte-large",
     "task": "embedding",
     "tier": "default",
-    "licence": "Apache-2.0",
+    "licence": "MIT",
     "runtime": {
       "device": "CPU",
       "pipeline": "embedding",

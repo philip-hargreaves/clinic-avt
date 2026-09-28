@@ -25,9 +25,6 @@ public sealed record AudioInput(
     string Id = "", string? Name = null, string? ShortName = null, bool IsDefault = false,
     bool Bluetooth = false);
 
-/// <summary>A file replayed as the session's audio source.</summary>
-public sealed record ReplayRequest(string Path, double Speed, bool Monitor);
-
 /// <summary>
 /// An audio file's length, and when it was recorded as an ISO UTC instant: the container's
 /// own time, else the file's modified time.
@@ -45,10 +42,12 @@ public sealed record StoredNote(
     string? Text = null, string? Style = null, string? Detail = null, string? GeneratedAt = null,
     string? EditedAt = null);
 
-public sealed record StoredTranslation(string? Text = null, string? Language = null);
+public sealed record StoredTranslation(
+    string? Text = null, string? Language = null, string? TranslatedAt = null);
 
 public sealed record StoredPatient(
-    string? Text = null, string? GeneratedAt = null, StoredTranslation? Translation = null);
+    string? Text = null, string? GeneratedAt = null, string? EditedAt = null,
+    StoredTranslation? Translation = null);
 
 public sealed record NoteTierState(
     string Tier = "", string Id = "", string Name = "", string State = "");

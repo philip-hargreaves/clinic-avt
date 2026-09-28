@@ -30,7 +30,7 @@ public class PerformanceCollectorTest : IDisposable
     public async Task OnlyAFinishedSessionWithCollectionOnAppendsALine()
     {
         var disabled = NewCollector(new FakeEngineClient(), enabled: false);
-        disabled.SessionStarted("mic", 0, null);
+        disabled.SessionStarted();
         disabled.StopRequested();
         await disabled.SessionFinishedAsync(null, 100);
         Assert.False(File.Exists(_path));
@@ -40,7 +40,7 @@ public class PerformanceCollectorTest : IDisposable
         Assert.False(File.Exists(_path));
 
         collector.NoteModel("Qwen3.5 9B", "default", 24.1);
-        collector.SessionStarted("replay", 1.0, "Elbow swelling");
+        collector.SessionStarted();
         collector.StopRequested();
         collector.NotePartial(15.3);
         collector.NotePartial(16.1);
@@ -51,9 +51,6 @@ public class PerformanceCollectorTest : IDisposable
         var line = Assert.Single(File.ReadAllLines(_path));
         using var record = JsonDocument.Parse(line);
         var root = record.RootElement;
-        Assert.Equal("replay", root.GetProperty("source").GetString());
-        Assert.Equal(1.0, root.GetProperty("replaySpeed").GetDouble());
-        Assert.Equal("Elbow swelling", root.GetProperty("track").GetString());
         Assert.Equal(33.4, root.GetProperty("engine").GetProperty("asrRealtimeFactor").GetDouble());
         Assert.Equal(1290, root.GetProperty("note").GetProperty("chars").GetInt32());
         Assert.True(root.GetProperty("note").GetProperty("firstPartialAfterStopSeconds")
@@ -77,16 +74,16 @@ public class PerformanceCollectorTest : IDisposable
     {
         var collector = NewCollector(new FakeEngineClient());
 
-        collector.SessionStarted("mic", 0, null);
+        collector.SessionStarted();
         collector.StopRequested();
         await collector.SessionFinishedAsync("the transcript is empty", 0);
-        collector.SessionStarted("mic", 0, null);
+        collector.SessionStarted();
         collector.StopRequested();
         await collector.SessionFinishedAsync(null, 42);
-        collector.SessionStarted("mic", 0, null);
+        collector.SessionStarted();
         collector.StopRequested();
         await collector.SessionFinishedAsync("refused: not a consultation", 0);
-        collector.SessionStarted("mic", 0, null);
+        collector.SessionStarted();
         collector.StopRequested();
         collector.NotePartial();
         collector.NoteReady();
