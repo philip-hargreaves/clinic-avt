@@ -1,0 +1,38 @@
+{
+  "$comment": "StructuredOutput schema each judge subagent must return. score.py computes the scores from it.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "claims": {
+      "type": "array",
+      "description": "Every atomic clinical claim extracted from the NOTE, with its verdict vs the transcript.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "verdict": { "type": "string", "enum": ["supported", "contradicted", "unsupported"] },
+          "severity": { "type": ["string", "null"], "enum": ["critical", "minor", null] },
+          "evidence": { "type": "string" }
+        },
+        "required": ["text", "verdict", "severity", "evidence"]
+      }
+    },
+    "checklist": {
+      "type": "array",
+      "description": "One row per fed checklist item, marking whether its meaning is present in the NOTE.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "item": { "type": "string" },
+          "present": { "type": "boolean" },
+          "severity": { "type": "string", "enum": ["critical", "minor"] }
+        },
+        "required": ["id", "item", "present", "severity"]
+      }
+    }
+  },
+  "required": ["claims", "checklist"]
+}

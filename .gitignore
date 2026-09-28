@@ -58,6 +58,12 @@ desktop.ini
 !/demo/cases.txt
 __pycache__/
 
+# Evaluation data and outputs: runs write to build/eval, datasets stay outside the repo
+/eval/**/*.wav
+/eval/**/*.TextGrid
+/eval/**/*.npy
+/eval/**/data/
+
 # Guidance retrieval data
 /rag/*
 !/rag/README.md

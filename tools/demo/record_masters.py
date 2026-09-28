@@ -16,8 +16,8 @@ import time
 import wave
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(ROOT, "tools", "common"))
-from engine_pipe import Engine  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "eval"))
+from common.engine_pipe import Engine  # noqa: E402
 
 APP_BIN = glob.glob(os.path.join(ROOT, "app", "ClinicAVT.App", "bin", "x64", "Debug", "net*", "win-x64"))
 ENGINE = os.path.join(APP_BIN[0], "clinicavt_engine.exe") if APP_BIN else ""
