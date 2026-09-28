@@ -40,6 +40,24 @@ public class DocumentExportViewModelTest
         Assert.Equal("take\r\none tablet\r\n\r\nUrdu translation\r\n\r\nایک گولی لیں", clipboard.Copied[^1]);
     }
 
+    // Arabic-script translations read right to left, so their box flows that way
+    [Fact]
+    public void RightToLeftLanguagesFlowRightToLeft()
+    {
+        var note = new NoteViewModel();
+        foreach (var language in new[] { "Arabic", "Farsi", "Kurdish (Sorani)", "Urdu" })
+        {
+            note.TranslationLanguage = language;
+            Assert.True(note.TranslationRightToLeft, language);
+        }
+
+        foreach (var language in new[] { "Kurdish (Kurmanji)", "Greek", "Chinese (Simplified)", "" })
+        {
+            note.TranslationLanguage = language;
+            Assert.False(note.TranslationRightToLeft, language);
+        }
+    }
+
     [Fact]
     public async Task ExportWritesTheFileWithTheMarkerAndTheTranslationAndACancelledPickerWritesNothing()
     {

@@ -11,6 +11,9 @@ public sealed partial class PatientEditorView : UserControl
     private readonly TabFit _fitShared;
     private FrameworkElement? _area;
 
+    public static FlowDirection Flow(bool rightToLeft) =>
+        rightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+
     public PatientEditorView(NoteViewModel viewModel, DocumentExportViewModel export)
     {
         ViewModel = viewModel;

@@ -29,7 +29,14 @@ public sealed partial class NoteViewModel : ObservableObject
     /// <summary>The translation's language, such as "Polish". It heads the output box.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(TranslateAgainCommand))]
+    [NotifyPropertyChangedFor(nameof(TranslationRightToLeft))]
     public partial string TranslationLanguage { get; set; } = "";
+
+    // By the names the translation model lists
+    private static readonly HashSet<string> RightToLeftLanguages = ["Arabic", "Farsi", "Kurdish (Sorani)", "Urdu"];
+
+    /// <summary>The translation reads right to left, so its box flows that way.</summary>
+    public bool TranslationRightToLeft => RightToLeftLanguages.Contains(TranslationLanguage);
 
     [ObservableProperty]
     public partial bool ExampleCasesVisible { get; set; }
