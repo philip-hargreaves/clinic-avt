@@ -18,7 +18,8 @@ struct EnergyVad : IStreamingVad {
     void Reset() override {}
 };
 
-TEST(EnrolmentSink, KeepsOnlyTheSpeechAndStopsAtTheWindow) {
+// Cancellation and device loss are named through the controller's enrolment scenarios
+TEST(EnrolmentSink, KeepsOnlyTheSpeechStopsAtTheWindowAndNeedsEnoughOfIt) {
     EnergyVad vad;
     int stops = 0;
     std::vector<EnrolProgress> progress;
@@ -42,18 +43,8 @@ TEST(EnrolmentSink, KeepsOnlyTheSpeechAndStopsAtTheWindow) {
     ASSERT_FALSE(progress.empty());
     EXPECT_GT(progress.back().level.level, 0.0f);
     EXPECT_TRUE(EnrolRejection(capture, false, 0.5).empty());
-}
-
-TEST(EnrolRejection, NamesCancellationDeviceLossAndTooLittleSpeech) {
-    EnrolCapture capture;
-    capture.speech.assign(16000, 0.1f);
-    capture.end = {SourceEndReason::kStopped, ""};
-    EXPECT_EQ(EnrolRejection(capture, true), "cancelled");
-    EXPECT_NE(EnrolRejection(capture, false).find("not enough clear speech"), std::string::npos);
-    capture.end = {SourceEndReason::kDeviceLost, "unplugged"};
-    EXPECT_EQ(EnrolRejection(capture, false, 0.5), "microphone unplugged");
-    capture.end = {SourceEndReason::kStopped, ""};
-    EXPECT_TRUE(EnrolRejection(capture, false, 0.5).empty());
+    EXPECT_NE(EnrolRejection(capture, false).find("not enough clear speech"), std::string::npos)
+        << "a second and a half is short of what a print needs";
 }
 
 }  // namespace

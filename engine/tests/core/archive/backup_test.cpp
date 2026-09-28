@@ -166,10 +166,12 @@ TEST(Backup, AClearedConsultationIsCompletedByARestore) {
     TempDir dir;
     SqliteSessionStore store(dir.path / "store", kNever);
     const SessionId id = Consultation(store, true);
+    const store::Document note = store.ReadDocument(id, DocumentKind::kNote);
     const auto path = dir.path / "backup.clinicavt";
     BackUpTo(path, store, {});
     store.Clear(id);
     store.EditDocument(id, DocumentKind::kReflection, R"({"learned":"look twice"})");
+    ASSERT_TRUE(store.ListSessions()[0].cleared);
 
     const RestoreResult preview = RestoreFrom(path, store, true);
     EXPECT_EQ(preview.Restored(), 1u);
@@ -177,11 +179,17 @@ TEST(Backup, AClearedConsultationIsCompletedByARestore) {
     const RestoreResult restored = RestoreFrom(path, store);
     EXPECT_EQ(restored.completed, 1u);
     EXPECT_EQ(restored.reflections, 1u);
+    EXPECT_FALSE(store.ListSessions()[0].cleared);
     EXPECT_EQ(store.ReadTurns(id).size(), 2u);
-    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kNote).text, "Swollen left elbow.");
+    const store::Document back = store.ReadDocument(id, DocumentKind::kNote);
+    EXPECT_EQ(back.text, "Swollen left elbow.");
+    EXPECT_EQ(back.style, "soap");
+    EXPECT_EQ(back.revision, note.revision)
+        << "the note's revision survives, so its guidance is not stale";
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).text, "Your elbow is swollen.");
     EXPECT_EQ(store.ReadDocument(id, DocumentKind::kReflection).text,
               R"({"learned":"look twice"})");
-    EXPECT_EQ(RestoreFrom(path, store).skipped, 1u);
+    EXPECT_EQ(RestoreFrom(path, store).skipped, 1u) << "whole again, so left alone";
 }
 
 // The file authenticates, but its second record could not have come from a store: nothing is

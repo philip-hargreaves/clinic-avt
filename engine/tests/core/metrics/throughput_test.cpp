@@ -5,10 +5,21 @@
 namespace clinicavt::metrics {
 namespace {
 
-// The live rate follows the recent stream; the average is the whole generation's truth
+// The live rate follows the recent stream; the average is the whole generation's truth. A zero
+// span must read as no rate, never inf or NaN on the wire
 TEST(Throughput, TheRateFollowsTheStreamAndTheAverageTheWholeGeneration) {
     ThroughputMeter meter;
-    for (int i = 0; i <= 20; ++i) {
+    EXPECT_EQ(meter.Rate(1.0), 0);
+    EXPECT_EQ(meter.Average(), 0);
+    meter.Token(0.0);
+    EXPECT_EQ(meter.Rate(0.5), 0) << "one token is not a rate";
+    EXPECT_EQ(meter.Average(), 0);
+    ThroughputMeter same;
+    same.Token(2.0);
+    same.Token(2.0);  // same stamp: no span
+    EXPECT_EQ(same.Average(), 0);
+
+    for (int i = 1; i <= 20; ++i) {
         meter.Token(i * 0.1);  // 10 tok/s for two seconds
     }
     EXPECT_NEAR(meter.Rate(2.0), 10.0, 0.5);
@@ -22,20 +33,6 @@ TEST(Throughput, TheRateFollowsTheStreamAndTheAverageTheWholeGeneration) {
 
     EXPECT_EQ(meter.Rate(8.0), 0) << "a stall decays the rate";
     EXPECT_NEAR(meter.Average(), 70.0 / 3.0, 0.5) << "but not the average";
-}
-
-// A zero span must read as no rate, never inf or NaN on the wire
-TEST(Throughput, DegenerateInputsAreQuiet) {
-    ThroughputMeter meter;
-    EXPECT_EQ(meter.Rate(1.0), 0);
-    EXPECT_EQ(meter.Average(), 0);
-    meter.Token(1.0);
-    EXPECT_EQ(meter.Rate(1.5), 0) << "one token is not a rate";
-    EXPECT_EQ(meter.Average(), 0);
-    ThroughputMeter same;
-    same.Token(2.0);
-    same.Token(2.0);  // same stamp: no span
-    EXPECT_EQ(same.Average(), 0);
 }
 
 }  // namespace

@@ -22,6 +22,16 @@ namespace {
 constexpr const char* kWav =
     "C:/dev/intelliscribe/bench/transcription/mixed/day1_consultation01_mixed.wav";
 
+void ExpectSameDiarisation(const DiariseResult& got, const DiariseResult& want) {
+    ASSERT_EQ(got.slices.size(), want.slices.size());
+    for (std::size_t i = 0; i < got.slices.size(); ++i) {
+        EXPECT_EQ(got.slices[i].first_frame, want.slices[i].first_frame);
+        EXPECT_EQ(got.slices[i].end_frame, want.slices[i].end_frame);
+        EXPECT_EQ(got.slices[i].cluster, want.slices[i].cluster);
+    }
+    EXPECT_EQ(got.cluster_count, want.cluster_count);
+}
+
 // The voiceprints are computed off the Diarise path, overlapping the GPU turn
 // decode, and DoctorVoiceprint reuses them: the numbers must be the ones the
 // reference method produces, and the reuse must actually skip the embed
@@ -121,13 +131,7 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
     const auto want = batch.Diarise(audio);
     const auto got = fed.Diarise(audio);
 
-    ASSERT_EQ(got.slices.size(), want.slices.size());
-    for (std::size_t i = 0; i < got.slices.size(); ++i) {
-        EXPECT_EQ(got.slices[i].first_frame, want.slices[i].first_frame);
-        EXPECT_EQ(got.slices[i].end_frame, want.slices[i].end_frame);
-        EXPECT_EQ(got.slices[i].cluster, want.slices[i].cluster);
-    }
-    EXPECT_EQ(got.cluster_count, want.cluster_count);
+    ExpectSameDiarisation(got, want);
     EXPECT_FALSE(fed.TakeTurnTexts().empty()) << "capture speculated turn texts";
     EXPECT_TRUE(batch.TakeTurnTexts().empty()) << "nothing accumulates without Advance";
     std::error_code ec;
@@ -164,13 +168,7 @@ TEST(DiariserPipeline, FindingSpeechFirstChangesNothingTheSettleDoes) {
 
     const auto want = alone.Diarise(audio);
     const auto got = first.Diarise(audio);
-    ASSERT_EQ(got.slices.size(), want.slices.size());
-    for (std::size_t i = 0; i < got.slices.size(); ++i) {
-        EXPECT_EQ(got.slices[i].first_frame, want.slices[i].first_frame);
-        EXPECT_EQ(got.slices[i].end_frame, want.slices[i].end_frame);
-        EXPECT_EQ(got.slices[i].cluster, want.slices[i].cluster);
-    }
-    EXPECT_EQ(got.cluster_count, want.cluster_count);
+    ExpectSameDiarisation(got, want);
     EXPECT_EQ(first.TakeTurnTexts(), alone.TakeTurnTexts()) << "the same spans decoded";
     ASSERT_EQ(reported.size(), 10u);
     EXPECT_DOUBLE_EQ(reported.back(), 1.0);

@@ -40,7 +40,7 @@ RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
     return diar::NameRoles(Slices(turns), Texts(turns), cluster_count, anchor_similarity);
 }
 
-TEST(LexicalDoctorScore, SelfIdentificationScoresAsTheClinician) {
+TEST(LexicalDoctorScore, SelfIdentificationAndPlanSpeechScoreClinicianOnWholeTokensOnly) {
     // The named failure the suppression exists for: the old rule scored
     // this utterance -0.31, below the patient's greeting
     const double doctor =
@@ -48,9 +48,7 @@ TEST(LexicalDoctorScore, SelfIdentificationScoresAsTheClinician) {
     const double patient = LexicalDoctorScore("Nice to see you.");
     EXPECT_GT(doctor, patient);
     EXPECT_GT(doctor, 0.0);
-}
 
-TEST(LexicalDoctorScore, PlanSpeechScoresClinicianOnWholeTokensOnly) {
     EXPECT_GT(LexicalDoctorScore("I'll get the form sent out"), 0.0);
     EXPECT_GT(LexicalDoctorScore("we're going to arrange a follow-up for you"), 0.0);
     EXPECT_LT(LexicalDoctorScore("I feel dizzy and my chest hurts"), 0.0);

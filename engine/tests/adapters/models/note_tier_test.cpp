@@ -9,39 +9,39 @@ namespace clinicavt::models {
 namespace {
 
 constexpr std::uint64_t kGb = 1ULL << 30;
-const std::vector<std::string> kAll{"constrained", "default", "accuracy"};
 
 // Intel's driver lets the GPU use about three quarters of RAM
 MachineMemory Machine(std::uint64_t gb) {
     return {gb * kGb, gb * kGb * 3 / 4};
 }
 
-TEST(AutoNoteTier, TakesTheNineBOnATwentyFourGigabyteMachine) {
-    EXPECT_EQ(AutoNoteTier(kAll, Machine(64)), "default");
-    EXPECT_EQ(AutoNoteTier(kAll, Machine(32)), "default");
-    EXPECT_EQ(AutoNoteTier(kAll, Machine(24)), "default");
-    EXPECT_EQ(AutoNoteTier(kAll, Machine(16)), "constrained");
-}
-
-TEST(AutoNoteTier, AGpuHeldToLessThanTheNineBNeedsStartsSmall) {
-    EXPECT_EQ(AutoNoteTier(kAll, {32 * kGb, 8 * kGb}), "constrained");
-}
-
-TEST(AutoNoteTier, UnknownMemoryStartsSmall) {
-    EXPECT_EQ(AutoNoteTier(kAll, {std::nullopt, 24 * kGb}), "constrained");
-    EXPECT_EQ(AutoNoteTier(kAll, {32 * kGb, std::nullopt}), "constrained");
-}
-
-TEST(AutoNoteTier, TakesWhatIsStaged) {
-    EXPECT_EQ(AutoNoteTier({"constrained"}, Machine(32)), "constrained");
-    EXPECT_EQ(AutoNoteTier({"default"}, Machine(16)), "default");
-    EXPECT_EQ(AutoNoteTier({"default", "accuracy"}, Machine(16)), "default");
-    EXPECT_EQ(AutoNoteTier({"accuracy"}, Machine(16)), "accuracy");
-    EXPECT_EQ(AutoNoteTier({}, Machine(32)), "");
-}
-
-TEST(AutoNoteTier, NeverPicksTheThirtyFiveBOverAnother) {
-    EXPECT_EQ(AutoNoteTier({"constrained", "accuracy"}, Machine(64)), "constrained");
+TEST(AutoNoteTier, StartsOnTheNineBWhenItFitsElseTheSmallestStagedAndNeverTheThirtyFiveB) {
+    const std::vector<std::string> all{"constrained", "default", "accuracy"};
+    struct Row {
+        const char* why;
+        std::vector<std::string> staged;
+        MachineMemory memory;
+        std::string tier;
+    };
+    const Row rows[] = {
+        {"64 GB", all, Machine(64), "default"},
+        {"24 GB is enough for the 9B", all, Machine(24), "default"},
+        {"16 GB is not", all, Machine(16), "constrained"},
+        {"a GPU held under what the 9B needs", all, {32 * kGb, 8 * kGb}, "constrained"},
+        {"unknown RAM", all, {std::nullopt, 24 * kGb}, "constrained"},
+        {"unknown GPU memory", all, {32 * kGb, std::nullopt}, "constrained"},
+        {"only the 4B staged", {"constrained"}, Machine(32), "constrained"},
+        {"only the 9B staged, too big or not", {"default"}, Machine(16), "default"},
+        {"the 9B before the 35B", {"default", "accuracy"}, Machine(16), "default"},
+        {"only the 35B staged", {"accuracy"}, Machine(16), "accuracy"},
+        {"the 4B before the 35B on any machine",
+         {"constrained", "accuracy"},
+         Machine(64),
+         "constrained"},
+        {"nothing staged", {}, Machine(32), ""},
+    };
+    for (const Row& row : rows)
+        EXPECT_EQ(AutoNoteTier(row.staged, row.memory), row.tier) << row.why;
 }
 
 }  // namespace

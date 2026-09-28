@@ -1045,23 +1045,16 @@ TEST(Handlers, GuidanceSearchRunsAStoredNoteOrFreeText) {
     EXPECT_EQ(sent.all[1].second.at("stale"), nullptr) << "no note, nothing to be stale against";
     ASSERT_EQ(retriever.searches.size(), 2u);
     EXPECT_EQ(retriever.searches[1], (std::pair<std::string, int>{"Chest pain on exertion.", 5}));
-    EXPECT_EQ(retriever.modes[1], clinicavt::guidance::SearchMode::kQuery);
-}
 
-TEST(Handlers, GuidanceSearchRunsTypedTextAsANoteOnRequest) {
-    SessionStoreFixture fixture;
-    EchoRetriever retriever;
-    Sent sent;
-    clinicavt::guidance::GuidanceLane lane(retriever);
-
-    const auto outcome = HandleGuidanceSearch(
+    // Typed text is searched as a note when asked
+    ASSERT_TRUE(std::holds_alternative<json>(HandleGuidanceSearch(
         *fixture.store, lane, json{{"text", "Chest pain on exertion."}, {"mode", "note"}},
-        sent.Sink());
-    ASSERT_TRUE(std::holds_alternative<json>(outcome));
-    ASSERT_TRUE(sent.WaitFor(1));
-    EXPECT_EQ(
-        retriever.modes,
-        (std::vector<clinicavt::guidance::SearchMode>{clinicavt::guidance::SearchMode::kNote}));
+        sent.Sink())));
+    ASSERT_TRUE(sent.WaitFor(3));
+    EXPECT_EQ(retriever.modes,
+              (std::vector<clinicavt::guidance::SearchMode>{
+                  clinicavt::guidance::SearchMode::kNote, clinicavt::guidance::SearchMode::kQuery,
+                  clinicavt::guidance::SearchMode::kNote}));
 }
 
 TEST(Handlers, GuidanceSearchRefusesBadParamsAndAMissingNote) {
@@ -1249,9 +1242,9 @@ struct ImportRig {
         vad,
         diariser};
 
-    std::variant<json, Error> Import(const json& params, bool playback_active = false) {
+    std::variant<json, Error> Import(const json& params) {
         return HandleSessionImport(
-            reader, controller, playback_active, nullptr,
+            reader, controller, nullptr,
             [this](const std::string& method, json body) {
                 const std::lock_guard<std::mutex> lock(mutex);
                 pushed.emplace_back(method, std::move(body));
@@ -1402,10 +1395,6 @@ TEST(Handlers, SessionImportRefusesBeforeReadingAnything) {
         ASSERT_TRUE(std::holds_alternative<Error>(outcome));
         EXPECT_EQ(std::get<Error>(outcome).code, row.code);
     }
-
-    const auto during_playback = rig.Import(good, true);
-    ASSERT_TRUE(std::holds_alternative<Error>(during_playback));
-    EXPECT_EQ(std::get<Error>(during_playback).data, json("a playback is running"));
 
     ASSERT_TRUE(rig.controller.Start());
     const auto while_recording = rig.Import(good);

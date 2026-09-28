@@ -17,7 +17,6 @@
 
 #include "adapters/transcription/scripted_transcriber.hpp"
 #include "adapters/vad/passthrough_vad.hpp"
-#include "ports/recording_reader.hpp"
 
 namespace clinicavt::session {
 namespace {
@@ -89,7 +88,7 @@ class ScriptedSource : public IAudioSource {
                 return;
             case Script::kStreamUntilStopped:
                 while (!stop_.load()) {
-                    if (!paused.load()) sink.OnAudio(window, 0);
+                    sink.OnAudio(window, 0);
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 }
                 sink.OnEnd({SourceEndReason::kStopped, ""});
@@ -100,14 +99,6 @@ class ScriptedSource : public IAudioSource {
     void RequestStop() override {
         stop_.store(true);
     }
-
-    void SetPaused(bool p) override {
-        paused.store(p);
-    }
-
-    void SetMonitor(bool) override {}
-
-    std::atomic<bool> paused{false};
 
    private:
     Script script_;
@@ -941,14 +932,11 @@ TEST(SessionController, StartOptionsReachTheSourceAndTheRecord) {
     Rig rig;
     std::string mic;
     std::optional<ReplaySpec> replay;
-    ScriptedSource* source = nullptr;
     auto controller =
         rig.Make([&](const std::optional<ReplaySpec>& spec, const std::string& mic_id) {
-            auto made = std::make_unique<ScriptedSource>(Script::kStreamUntilStopped);
             mic = mic_id;
             replay = spec;
-            source = made.get();
-            return made;
+            return std::make_unique<ScriptedSource>(Script::kStreamUntilStopped);
         });
 
     ASSERT_TRUE(controller.Start(std::nullopt, {}, true,
@@ -957,20 +945,15 @@ TEST(SessionController, StartOptionsReachTheSourceAndTheRecord) {
     EXPECT_FALSE(replay.has_value());
     EXPECT_EQ(rig.store.last_device_id, "{0.0.1}.{aa}");
     EXPECT_EQ(rig.store.last_device_name, "Microphone Array (Cirrus Logic)");
-    controller.SetPaused(true);
-    ASSERT_NE(source, nullptr);
-    EXPECT_TRUE(source->paused.load());
     controller.Stop();
-    EXPECT_FALSE(controller.Running()) << "a stop while paused still ends the session";
     EXPECT_EQ(rig.store.Calls().back(), "finalise s1");
 
-    ASSERT_TRUE(controller.Start(ReplaySpec{"C:/tracks/elbow.wav", 4.0, true}, {}, true,
+    ASSERT_TRUE(controller.Start(ReplaySpec{"C:/tracks/elbow.wav", 4.0}, {}, true,
                                  {"{0.0.1}.{aa}", "Microphone Array"}));
     controller.Stop();
     ASSERT_TRUE(replay.has_value());
     EXPECT_EQ(replay->path, "C:/tracks/elbow.wav");
     EXPECT_EQ(replay->speed, 4.0);
-    EXPECT_TRUE(replay->monitor);
     EXPECT_EQ(rig.store.last_device_id, "") << "a replay carries no device snapshot";
     EXPECT_EQ(rig.store.last_device_name, "");
 }
@@ -1097,7 +1080,7 @@ TEST(SessionController, FinaliseStagesAndDiariseTimingReachTheMetrics) {
     rig.diariser.timing.embed_misses = 3;
     auto controller = rig.Make(Script::kStreamUntilStopped, {.metrics = true});
 
-    ASSERT_TRUE(controller.Start(ReplaySpec{"x.wav", 4.0, false}));
+    ASSERT_TRUE(controller.Start(ReplaySpec{"x.wav", 4.0}));
     ASSERT_TRUE(rig.WaitForFrames(kTwoTurnFrames));
     controller.Stop();
 
@@ -1630,19 +1613,6 @@ ImportRead Reads(std::vector<float> recording) {
     };
 }
 
-TEST(SessionController, AnImportsStagesAreBandsOfOneFigure) {
-    using enum ImportStage;
-    EXPECT_EQ(ImportPercent(kReading, 0.0), 0);
-    EXPECT_EQ(ImportPercent(kReading, 1.0), 5);
-    EXPECT_EQ(ImportPercent(kSpeech, 0.7), 12);
-    EXPECT_EQ(ImportPercent(kTranscribing, 0.5), 55);
-    EXPECT_EQ(ImportPercent(kTranscribing, 1.0), 95);
-    EXPECT_EQ(ImportPercent(kFinalising, 0.0), 95);
-    EXPECT_EQ(ImportPercent(kFinalising, 1.0), 100);
-    EXPECT_EQ(ImportPercent(kTranscribing, 1.2), 95) << "a stage never runs past its band";
-    EXPECT_EQ(ImportPercent(kSpeech, -0.1), 5);
-}
-
 TEST(SessionController, AnImportFinalisesAsAStopDoesButNeverTeachesThePrint) {
     Rig rig;
     rig.diariser.clusters = 2;
@@ -1674,6 +1644,8 @@ TEST(SessionController, AnImportFinalisesAsAStopDoesButNeverTeachesThePrint) {
                                                                       {kFinalising, 95},
                                                                       {kFinalising, 100}}))
         << "one figure across the stages, each span's end in order";
+    EXPECT_EQ(ImportPercent(kTranscribing, 1.2), 95) << "a stage never runs past its band";
+    EXPECT_EQ(ImportPercent(kSpeech, -0.1), 5);
     EXPECT_EQ(rig.diariser.speech_passes, 1);
     EXPECT_EQ(rig.store.last_started_at, "2026-09-26T13:05:00Z");
     EXPECT_FALSE(rig.store.last_retain);
@@ -1797,23 +1769,6 @@ TEST(SessionController, ACancelledImportIsErasedAndFreesTheSlotAtOnce) {
     ASSERT_TRUE(rig.WaitForFrames(1));
     controller.Stop();
     EXPECT_EQ(controller.LastFinalised(), "s2");
-}
-
-TEST(SessionController, AnImportWhoseFileCannotBeReadEndsWithTheReadersReason) {
-    Rig rig;
-    ImportLog log;
-    auto controller = rig.Make(Script::kNeverAudio);
-    const auto unreadable = [](const std::function<void(double)>&) -> std::vector<float> {
-        throw audio::RecordingError("this file is not a sound recording");
-    };
-    ASSERT_EQ(controller.Import(unreadable, "", true, log.Report()), "s1");
-    ASSERT_TRUE(log.Wait());
-
-    EXPECT_EQ(log.done, (std::pair<store::SessionId, std::string>{
-                            "s1", "this file is not a sound recording"}));
-    EXPECT_EQ(rig.store.Calls(), (std::vector<std::string>{"begin s1", "cancel s1"}));
-    EXPECT_FALSE(controller.Running());
-    EXPECT_TRUE(log.progress.empty());
 }
 
 // Every decode leaves a chunk edge behind, as whisper's worker does
