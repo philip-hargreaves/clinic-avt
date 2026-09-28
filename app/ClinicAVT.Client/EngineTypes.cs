@@ -45,10 +45,12 @@ public sealed record StoredNote(
     string? Text = null, string? Style = null, string? Detail = null, string? GeneratedAt = null,
     string? EditedAt = null);
 
-public sealed record StoredTranslation(string? Text = null, string? Language = null);
+public sealed record StoredTranslation(
+    string? Text = null, string? Language = null, string? TranslatedAt = null);
 
 public sealed record StoredPatient(
-    string? Text = null, string? GeneratedAt = null, StoredTranslation? Translation = null);
+    string? Text = null, string? GeneratedAt = null, string? EditedAt = null,
+    StoredTranslation? Translation = null);
 
 public sealed record NoteTierState(
     string Tier = "", string Id = "", string Name = "", string State = "");

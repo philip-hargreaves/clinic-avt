@@ -428,6 +428,12 @@ public sealed class SessionReview
         var sheetWritten = patient?.GeneratedAt ?? "";
         _note.PatientStale = noteEdited.Length > 0 && sheetWritten.Length > 0
             && string.CompareOrdinal(noteEdited, sheetWritten) > 0;
+        // A sheet rewritten or edited after its translation outdates it
+        var sheetEdited = patient?.EditedAt ?? "";
+        var sheetChanged = string.CompareOrdinal(sheetEdited, sheetWritten) > 0 ? sheetEdited : sheetWritten;
+        var translated = translation?.TranslatedAt ?? "";
+        _note.TranslationStale = _note.TranslationText.Length > 0 && translated.Length > 0
+            && string.CompareOrdinal(sheetChanged, translated) > 0;
         // The guidance this note was shown, restored without a model. An empty note has none
         if (_note.ClinicalNoteText.Length > 0)
         {

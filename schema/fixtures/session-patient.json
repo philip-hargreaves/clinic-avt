@@ -4,9 +4,11 @@
     "result": {
         "text": "You have a swelling on your left elbow. We think this is bursitis.",
         "generatedAt": "2026-08-17T10:24:20Z",
+        "editedAt": "2026-08-17T10:31:05Z",
         "translation": {
             "language": "pl",
-            "text": "Masz obrzęk lewego łokcia. Uważamy, że to zapalenie kaletki."
+            "text": "Masz obrzęk lewego łokcia. Uważamy, że to zapalenie kaletki.",
+            "translatedAt": "2026-08-17T10:26:41Z"
         }
     }
 }

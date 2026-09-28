@@ -318,7 +318,13 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
             {
                 text = StoredPatient,
                 generatedAt = StoredPatientGeneratedAt,
-                editedAt = (string?)null,
+                editedAt = StoredPatientEditedAt,
+                translation = StoredTranslation is null ? null : new
+                {
+                    language = "Polish",
+                    text = StoredTranslation,
+                    translatedAt = StoredTranslatedAt,
+                },
             }));
         }
 
@@ -440,6 +446,13 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
     public string? StoredPatient { get; set; }
 
     public string? StoredPatientGeneratedAt { get; set; }
+
+    public string? StoredPatientEditedAt { get; set; }
+
+    /// <summary>The stored sheet's Polish translation, served with it when set.</summary>
+    public string? StoredTranslation { get; set; }
+
+    public string? StoredTranslatedAt { get; set; }
 
     /// <summary>Served by session/guidance, null until a record is stored.</summary>
     public JsonElement? StoredGuidance { get; set; }

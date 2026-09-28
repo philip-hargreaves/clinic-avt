@@ -83,12 +83,15 @@ std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& 
         using clinicavt::store::DocumentKind;
         const auto patient = sessions.ReadDocument(id, DocumentKind::kPatient);
         const auto translation = sessions.ReadDocument(id, DocumentKind::kTranslation);
+        // Both times, so a reopened sheet edited after its translation can say so
         json result{{"text", patient.text},
                     {"generatedAt", NullWhenEmpty(patient.generated_at)},
+                    {"editedAt", NullWhenEmpty(patient.edited_at)},
                     {"translation", nullptr}};
         if (!translation.text.empty()) {
-            result["translation"] =
-                json{{"language", translation.language}, {"text", translation.text}};
+            result["translation"] = json{{"language", translation.language},
+                                         {"text", translation.text},
+                                         {"translatedAt", NullWhenEmpty(translation.generated_at)}};
         }
         return result;
     });

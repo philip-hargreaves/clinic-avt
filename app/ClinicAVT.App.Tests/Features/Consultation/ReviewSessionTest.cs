@@ -172,6 +172,32 @@ public class ReviewSessionTest
     }
 
     [Fact]
+    public async Task AStoredTranslationOlderThanTheSheetsLastChangeLoadsStale()
+    {
+        var (session, engine, note) = TestSession.Create();
+        engine.StoredPatient = "Take two tablets a day.";
+        engine.StoredPatientGeneratedAt = "2026-08-17T10:24:00Z";
+        engine.StoredTranslation = "Jedna tabletka dziennie.";
+        engine.StoredTranslatedAt = "2026-08-17T10:26:00Z";
+        engine.StoredPatientEditedAt = "2026-08-17T10:31:00Z";
+
+        Assert.True(await session.OpenStoredSessionAsync("abc"));
+        Assert.Equal("Jedna tabletka dziennie.", note.TranslationText);
+        Assert.True(note.TranslationStale, "the sheet was edited after it was translated");
+        Assert.True(note.TranslateAgainCommand.CanExecute(null));
+
+        engine.StoredPatientEditedAt = null;
+        await session.CloseReviewAsync();
+        Assert.True(await session.OpenStoredSessionAsync("abc"));
+        Assert.False(note.TranslationStale, "translated after the sheet was written");
+
+        engine.StoredPatientGeneratedAt = "2026-08-17T10:40:00Z";
+        await session.CloseReviewAsync();
+        Assert.True(await session.OpenStoredSessionAsync("abc"));
+        Assert.True(note.TranslationStale, "the sheet was rewritten after it was translated");
+    }
+
+    [Fact]
     public async Task OpeningAnotherStartingAnewOrClosingMidEditAllSaveTheEdits()
     {
         var (session, engine, note) = TestSession.Create();

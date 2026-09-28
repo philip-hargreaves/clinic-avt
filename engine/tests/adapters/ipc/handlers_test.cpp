@@ -383,9 +383,19 @@ TEST(Handlers, SessionNoteAndPatientMatchTheFixtures) {
     patient = ResultOf(HandleSessionPatient(*fixture.store, json{{"id", id}}));
     EXPECT_EQ(patient["translation"]["language"], "pl");
     EXPECT_EQ(patient["translation"]["text"], "Masz zapalenie kaletki.");
+    EXPECT_TRUE(patient["editedAt"].is_null());
+    fixture.store->EditDocument(id, DocumentKind::kPatient, "You have bursitis of the elbow.");
+    patient = ResultOf(HandleSessionPatient(*fixture.store, json{{"id", id}}));
+    const auto translated_at = patient["translation"]["translatedAt"].get<std::string>();
+    const auto edited_at = patient["editedAt"].get<std::string>();
+    EXPECT_GE(edited_at, translated_at) << "the sheet changed after its translation";
+    EXPECT_EQ(patient["translation"]["text"], "Masz zapalenie kaletki.") << "the edit keeps it";
     const json patient_fixture = LoadFixture("session-patient.json");
     for (const auto& [key, value] : patient_fixture["result"].items()) {
         EXPECT_TRUE(patient.contains(key)) << key;
+    }
+    for (const auto& [key, value] : patient_fixture["result"]["translation"].items()) {
+        EXPECT_TRUE(patient["translation"].contains(key)) << key;
     }
 }
 
