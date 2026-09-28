@@ -21,7 +21,7 @@ public class SessionCommandsTest
         Assert.True(controls.StartRecordingCommand.CanExecute(null));
 
         Assert.False(controls.StopRecordingCommand.CanExecute(null));
-        Assert.False(controls.NewConsultationCommand.CanExecute(null));
+        Assert.False(controls.FinishConsultationCommand.CanExecute(null));
         Assert.True(controls.IdleVisible);
         Assert.True(controls.CentreStageVisible);
         Assert.False(controls.PanesVisible);
@@ -64,10 +64,10 @@ public class SessionCommandsTest
         Assert.True(controls.ReviewVisible);
         Assert.False(controls.RecordingVisible);
         Assert.False(controls.CentreStageVisible);
-        Assert.True(controls.NewConsultationCommand.CanExecute(null));
-        Assert.False(controls.MicPickerVisible, "the cell is New consultation's now");
+        Assert.True(controls.FinishConsultationCommand.CanExecute(null));
+        Assert.False(controls.MicPickerVisible, "the cell is Finish consultation's now");
 
-        controls.NewConsultationCommand.Execute(null);
+        controls.FinishConsultationCommand.Execute(null);
         Assert.Equal(SessionState.Idle, session.State);
         Assert.True(controls.IdleVisible);
     }
@@ -212,7 +212,7 @@ public class SessionCommandsTest
         Assert.Equal(FinalisePhase.Streaming, session.Phase);
         engine.RaiseNotification("note/ready", Params(new { text = "note" }));
         engine.RaiseNotification("patient/ready", Params(new { text = "sheet" }));
-        session.StartNewConsultation();
+        session.FinishConsultation();
         Assert.Equal(FinalisePhase.None, session.Phase);
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();

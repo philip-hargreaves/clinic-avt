@@ -44,7 +44,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 StopRecordingCommand.NotifyCanExecuteChanged();
                 CancelRecordingCommand.NotifyCanExecuteChanged();
                 CancelImportCommand.NotifyCanExecuteChanged();
-                NewConsultationCommand.NotifyCanExecuteChanged();
+                FinishConsultationCommand.NotifyCanExecuteChanged();
             }
             else if (e.PropertyName is nameof(ConsultationViewModel.AudioSeconds))
             {
@@ -154,10 +154,10 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(ImportCancelVisible))]
     private Task CancelImport() => _session.CancelImportAsync();
 
-    [RelayCommand(CanExecute = nameof(CanNewConsultation))]
-    private void NewConsultation() => _session.StartNewConsultation();
+    [RelayCommand(CanExecute = nameof(CanFinishConsultation))]
+    private void FinishConsultation() => _session.FinishConsultation();
 
-    private bool CanNewConsultation() => _session.State == SessionState.Review;
+    private bool CanFinishConsultation() => _session.State == SessionState.Review;
 
     [RelayCommand(CanExecute = nameof(CanDone))]
     private Task Done() => _session.CloseReviewAsync();

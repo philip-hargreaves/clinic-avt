@@ -213,7 +213,7 @@ public class ReviewSessionTest
             && r.Params.Contains("def"));
 
         note.ClinicalNoteText = "corrected wording";
-        session.StartNewConsultation();
+        session.FinishConsultation();
 
         Assert.Contains(engine.Requests, r => r.Method == "note/update"
             && r.Params.Contains("corrected wording"));
@@ -264,7 +264,7 @@ public class ReviewSessionTest
 
         preferences.KeepConsultations = true;
         engine.RaiseNotification("note/ready");
-        session.StartNewConsultation();
+        session.FinishConsultation();
         await session.StartRecordingAsync();
         Assert.Contains(engine.Requests, r => r.Method == "session/start"
             && r.Params.Contains("\"retain\":true"));

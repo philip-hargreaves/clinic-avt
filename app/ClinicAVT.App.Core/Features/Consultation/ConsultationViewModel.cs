@@ -219,5 +219,5 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public Task RegenerateNoteAsync() => Review.RegenerateNoteAsync();
 
-    public void StartNewConsultation() => _ = CloseReviewAsync();
+    public void FinishConsultation() => _ = CloseReviewAsync();
 }

@@ -41,11 +41,9 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
                     <Button
-                        AutomationProperties.Name="New consultation"
-                        Command="{x:Bind Controls.NewConsultationCommand}"
-                        Visibility="{x:Bind Controls.ReviewVisible, Mode=OneWay}">
-                        <controls:IconLabel Glyph="&#xE710;" Text="New consultation" />
-                    </Button>
+                        Command="{x:Bind Controls.FinishConsultationCommand}"
+                        Content="Finish consultation"
+                        Visibility="{x:Bind Controls.ReviewVisible, Mode=OneWay}" />
                 </StackPanel>
             </controls:PageHeader.Commands>
         </controls:PageHeader>

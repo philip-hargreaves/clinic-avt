@@ -46,7 +46,7 @@ public class SessionStateMachineTest
         engine.RaiseNotification("note/ready");
         Assert.Equal(SessionState.Review, session.State);
 
-        session.StartNewConsultation();
+        session.FinishConsultation();
         Assert.Equal(SessionState.Idle, session.State);
 
         await session.StartRecordingAsync();
@@ -62,7 +62,7 @@ public class SessionStateMachineTest
         // Nothing but start is legal from idle
         await session.StopRecordingAsync();
         await session.CancelRecordingAsync();
-        session.StartNewConsultation();
+        session.FinishConsultation();
         Assert.Equal(SessionState.Idle, session.State);
 
         // A note/ready that arrives outside finalising must not move the state
@@ -73,7 +73,7 @@ public class SessionStateMachineTest
         await session.StartRecordingAsync();
         Assert.Equal(SessionState.Recording, session.State);
 
-        session.StartNewConsultation();
+        session.FinishConsultation();
         Assert.Equal(SessionState.Recording, session.State);
 
         engine.RaiseNotification("engine/unheard-of");

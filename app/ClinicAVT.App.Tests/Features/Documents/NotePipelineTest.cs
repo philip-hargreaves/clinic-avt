@@ -71,7 +71,7 @@ public class NotePipelineTest
         Assert.Equal("Your appointment today ...", note.PatientInfoText);
         Assert.Equal(NotePipelineState.AllReady, note.PipelineState);
 
-        session.StartNewConsultation();
+        session.FinishConsultation();
         Assert.Equal(NotePipelineState.Pending, note.PipelineState);
     }
 
