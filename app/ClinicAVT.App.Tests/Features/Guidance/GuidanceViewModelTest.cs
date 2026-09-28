@@ -309,6 +309,8 @@ public class GuidanceViewModelTest
 
         engine.RaiseNotification("guidance/ready", Ready("s1", [], searched: false));
         Assert.Equal(GuidanceSection.NoCorpusAtSearch, session.Guidance.Section);
+        Assert.StartsWith("No guideline documents yet", session.Guidance.StateCaption);
+        Assert.True(session.Guidance.SettingsLinkVisible, "Settings holds the folder");
 
         // A result whose corpus was not in the searched list shows its code
         engine.RaiseNotification("guidance/ready",

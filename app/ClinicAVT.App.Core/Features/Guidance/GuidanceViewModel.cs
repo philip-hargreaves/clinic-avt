@@ -45,7 +45,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Visible), nameof(Searching), nameof(Failed),
-        nameof(NotSearched), nameof(StateCaption), nameof(CaptionVisible),
+        nameof(NotSearched), nameof(StateCaption), nameof(CaptionVisible), nameof(SettingsLinkVisible),
         nameof(SearchAgainVisible), nameof(QueryBoxEnabled), nameof(SearchEnabled))]
     [NotifyCanExecuteChangedFor(nameof(SearchNoteCommand), nameof(SearchQueryCommand))]
     public partial GuidanceSection Section { get; private set; } = GuidanceSection.Hidden;
@@ -118,7 +118,10 @@ public sealed partial class GuidanceViewModel : ObservableObject
 
     public bool NotSearched => Section == GuidanceSection.NotSearched;
 
-    public bool SettingsLinkVisible => Readiness == GuidanceReadiness.Unavailable;
+    /// <summary>Settings holds the guidelines folder, so the link shows when there was nothing
+    /// to search as well as when guidance cannot run.</summary>
+    public bool SettingsLinkVisible => Readiness == GuidanceReadiness.Unavailable
+        || Section == GuidanceSection.NoCorpusAtSearch;
 
     public bool HasRecord => Section is GuidanceSection.Results
         or GuidanceSection.NothingMatched or GuidanceSection.NoCorpusAtSearch;
@@ -174,7 +177,8 @@ public sealed partial class GuidanceViewModel : ObservableObject
         GuidanceSection.NothingMatched => "Nothing came close enough to show. "
             + "Your documents or the installed guidance may still cover this condition.",
         GuidanceSection.NoCorpusAtSearch =>
-            "No guidance was installed when this note was searched.",
+            "No guideline documents yet. Add PDFs to the ClinicAVT guidelines folder in Documents, "
+            + "then search again.",
         GuidanceSection.Failed => "Guidance could not be searched.",
         _ when Readiness != GuidanceReadiness.Ready => Readiness switch
         {
