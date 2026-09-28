@@ -32,6 +32,7 @@ adapters/        one folder per seam, matching core/ where a stage has one
 
 Tests mirror this tree under `engine/tests/`: `core/<stage>/`, `adapters/<seam>/`,
 with stand-in hosts in `support/`, fixtures in `fixtures/` and the evaluation runner in `tools/`.
-Test binaries are split by what they need, not by folder: `engine_tests` runs anywhere,
-`models_tests` needs staged weights, `gpu_tests` the Intel GPU, `capture_tests` a microphone;
+Test binaries are split by what they need, not by folder: `core_tests` links only the core, so a
+core test that needs an adapter does not build; `engine_tests` runs anywhere, `models_tests` needs
+staged weights, `gpu_tests` the Intel GPU, `capture_tests` a microphone;
 `ctest -LE 'gpu|models|microphone'` is the CPU-only set.

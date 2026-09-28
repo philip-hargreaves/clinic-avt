@@ -14,35 +14,47 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)
 FetchContent_MakeAvailable(googletest)
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
-add_executable(engine_tests
+# Core logic only. Links no adapters, so a core test that needs one fails to build
+add_executable(core_tests
     core/audio/audio_ring_test.cpp
     core/audio/buffered_sink_test.cpp
+    core/audio/level_meter_test.cpp
+    core/audio/voice_enrolment_test.cpp
     core/common/cli_args_test.cpp
     core/common/strings_test.cpp
+    core/common/version_test.cpp
     core/diarisation/clip_cuts_test.cpp
-    core/diarisation/tidy_transcript_test.cpp
-    core/audio/voice_enrolment_test.cpp
-    core/note/note_gate_test.cpp
-    core/diarisation/resplit_test.cpp
-    core/diarisation/frontier_test.cpp
     core/diarisation/diar_regions_test.cpp
     core/diarisation/embeddings_test.cpp
+    core/diarisation/frontier_test.cpp
+    core/diarisation/resplit_test.cpp
+    core/diarisation/role_naming_test.cpp
+    core/diarisation/slice_refinement_test.cpp
+    core/diarisation/tidy_transcript_test.cpp
+    core/diarisation/turn_decode_test.cpp
+    core/guidance/document_units_test.cpp
     core/guidance/guidance_query_test.cpp
     core/guidance/guidance_rank_test.cpp
     core/guidance/guidance_scan_test.cpp
-    core/audio/level_meter_test.cpp
+    core/guidance/page_clean_test.cpp
+    core/guidance/page_text_test.cpp
+    core/guidance/patient_screen_test.cpp
+    core/guidance/recommendation_marks_test.cpp
+    core/guidance/reference_tail_test.cpp
     core/metrics/metrics_test.cpp
-    core/note/model_failure_test.cpp
-    core/note/note_label_test.cpp
-    core/diarisation/turn_decode_test.cpp
-    core/diarisation/role_naming_test.cpp
-    adapters/diarisation/seg_decode_test.cpp
     core/metrics/throughput_test.cpp
+    core/note/model_failure_test.cpp
+    core/note/note_gate_test.cpp
+    core/note/note_label_test.cpp
+    core/translate/plain_punctuation_test.cpp)
+target_compile_definitions(core_tests PRIVATE CLINICAVT_CMAKE_VERSION="${clinicavt_VERSION}")
+target_link_libraries(core_tests PRIVATE clinicavt_core clinicavt_warnings GTest::gtest_main)
+
+# Adapters, and the core tests that need one or read a JSON fixture
+add_executable(engine_tests
+    adapters/diarisation/seg_decode_test.cpp
     core/session/session_controller_test.cpp
-    core/diarisation/slice_refinement_test.cpp
     core/note/summary_scrub_test.cpp
-    core/common/version_test.cpp
-    core/translate/plain_punctuation_test.cpp
     adapters/diarisation/anchor_store_test.cpp
     adapters/demo/sample_year_test.cpp
     adapters/audio/capture_errors_test.cpp
@@ -68,12 +80,6 @@ add_executable(engine_tests
     adapters/guidance/document_ingest_test.cpp
     adapters/guidance/folder_scan_test.cpp
     adapters/guidance/ingest_host_test.cpp
-    core/guidance/document_units_test.cpp
-    core/guidance/page_text_test.cpp
-    core/guidance/page_clean_test.cpp
-    core/guidance/recommendation_marks_test.cpp
-    core/guidance/reference_tail_test.cpp
-    core/guidance/patient_screen_test.cpp
     adapters/audio/capture_devices_test.cpp
     adapters/ipc/handlers_test.cpp
     adapters/ipc/messages_test.cpp
@@ -100,13 +106,11 @@ target_compile_definitions(engine_tests PRIVATE
     CLINICAVT_ARCHIVE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/archive"
     CLINICAVT_CRASH_HELPER="$<TARGET_FILE:store_crash_helper>")
 
-# The recovery test's kill victim
 add_executable(store_crash_helper
     support/store_crash_helper.cpp)
 target_link_libraries(store_crash_helper PRIVATE clinicavt_storage clinicavt_warnings)
 add_dependencies(engine_tests store_crash_helper)
 
-# The note lane's stand-in host: the protocol without the model
 add_executable(fake_note_host
     support/fake_note_host.cpp)
 target_link_libraries(fake_note_host PRIVATE clinicavt_ipc clinicavt_models clinicavt_warnings)
@@ -114,8 +118,6 @@ add_dependencies(engine_tests fake_note_host)
 target_compile_definitions(engine_tests PRIVATE
     CLINICAVT_FAKE_NOTE_HOST="$<TARGET_FILE:fake_note_host>")
 
-# The ingest host's stand-in: canned pages, a chosen exit, a stall or garbage,
-# picked by the bytes it is given
 add_executable(fake_ingest_host
     support/fake_ingest_host.cpp)
 target_link_libraries(fake_ingest_host PRIVATE clinicavt_warnings)
@@ -182,6 +184,7 @@ add_dependencies(models_tests ov_test_runtime clinicavt_note_host)
 
 include(GoogleTest)
 # Cold CI runners can take >5 s (the default) just to start a fresh exe
+gtest_discover_tests(core_tests DISCOVERY_TIMEOUT 60)
 gtest_discover_tests(engine_tests DISCOVERY_TIMEOUT 60)
 gtest_discover_tests(capture_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS microphone)
 gtest_discover_tests(recording_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS mediafoundation)
