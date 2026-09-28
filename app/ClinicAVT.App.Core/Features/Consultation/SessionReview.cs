@@ -282,7 +282,7 @@ public sealed class SessionReview
         {
             Regenerating = true;
             _note.PatientInfoText = "";
-            _status.Append("Rewriting patient sheet", busy: true);
+            _status.Append("Rewriting patient information", busy: true);
         }
     }
 
@@ -371,7 +371,7 @@ public sealed class SessionReview
             }
 
             LoadedPatient = _note.PatientInfoText;
-            _status.Append("Patient note saved");
+            _status.Append("Patient information saved");
         }
     }
 

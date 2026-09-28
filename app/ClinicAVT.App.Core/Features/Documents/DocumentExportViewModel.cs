@@ -18,7 +18,7 @@ public sealed partial class DocumentExportViewModel(
     private Task ExportNote() => ExportAsync("clinical-note.txt", note.ClinicalNoteText);
 
     [RelayCommand]
-    private Task CopyPatient() => clipboard.CopyAsync(status, PatientSheet(), "Patient note");
+    private Task CopyPatient() => clipboard.CopyAsync(status, PatientSheet(), "Patient information");
 
     [RelayCommand]
     private Task ExportPatient() => ExportAsync("patient-sheet.txt", PatientSheet());

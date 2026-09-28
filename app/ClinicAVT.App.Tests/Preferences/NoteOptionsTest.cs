@@ -79,7 +79,7 @@ public class NoteOptionsTest
         Assert.Contains("edited note", noteSave.Params);
         var patientSave = engine.Requests.Single(r => r.Method == "patient/update");
         Assert.Contains("edited sheet", patientSave.Params);
-        Assert.Equal("Patient note saved", session.Status.LatestActivity);
+        Assert.Equal("Patient information saved", session.Status.LatestActivity);
 
         note.Style = "soap";
         Assert.True(note.RegenerateCommand.CanExecute(null));

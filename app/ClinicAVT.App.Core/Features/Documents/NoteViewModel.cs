@@ -199,9 +199,9 @@ public sealed partial class NoteViewModel : ObservableObject
     public string PatientStateCaption => PipelineState switch
     {
         NotePipelineState.NoteWriting or NotePipelineState.NoteReadyPatientWriting =>
-            "The information sheet follows the note",
+            "Patient information follows the note",
         NotePipelineState.PatientFailed =>
-            "The information sheet could not be written - see the status bar",
+            "Patient information could not be written - see the status bar",
         _ => "",
     };
 
@@ -214,10 +214,10 @@ public sealed partial class NoteViewModel : ObservableObject
 
     /// <summary>Copy and Export take the sheet, with its translation once there is one.</summary>
     public string PatientCopyTip =>
-        TranslationText.Length > 0 ? "Copies the sheet and its translation" : "Copies the sheet";
+        TranslationText.Length > 0 ? "Copies the patient information and its translation" : "Copies the patient information";
 
     public string PatientExportTip =>
-        TranslationText.Length > 0 ? "Saves the sheet and its translation as a text file" : "Saves the sheet as a text file";
+        TranslationText.Length > 0 ? "Saves the patient information and its translation as a text file" : "Saves the patient information as a text file";
 
     [RelayCommand(CanExecute = nameof(CanWriteAnyway))]
     private Task WriteAnyway() => WriteAnywayRequested!();

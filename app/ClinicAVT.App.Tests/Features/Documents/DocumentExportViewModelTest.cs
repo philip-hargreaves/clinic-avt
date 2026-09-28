@@ -24,16 +24,16 @@ public class DocumentExportViewModelTest
         var (export, note, clipboard, _, status) = Create();
         note.ClinicalNoteText = "the note";
         note.PatientInfoText = "take\rone tablet";  // as an edit box leaves it
-        Assert.Equal("Copies the sheet", note.PatientCopyTip);
+        Assert.Equal("Copies the patient information", note.PatientCopyTip);
 
         await export.CopyNoteCommand.ExecuteAsync(null);
         await export.CopyPatientCommand.ExecuteAsync(null);
         Assert.Equal(["the note", "take\r\none tablet"], clipboard.Copied);
-        Assert.Contains("Patient note copied", status.LatestActivity);
+        Assert.Contains("Patient information copied", status.LatestActivity);
 
         note.TranslationLanguage = "Urdu";
         note.TranslationText = "ایک گولی لیں";
-        Assert.Equal("Copies the sheet and its translation", note.PatientCopyTip);
+        Assert.Equal("Copies the patient information and its translation", note.PatientCopyTip);
         Assert.Contains("translation", note.PatientExportTip);
 
         await export.CopyPatientCommand.ExecuteAsync(null);

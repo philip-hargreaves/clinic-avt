@@ -30,7 +30,7 @@
                 <controls:StaleNotice
                     ActionText="Regenerate from note"
                     Command="{x:Bind ViewModel.RegeneratePatientCommand}"
-                    Text="This sheet was written before your note edits."
+                    Text="This patient information was written before your note edits."
                     Visibility="{x:Bind ViewModel.PatientStale, Mode=OneWay}" />
             </StackPanel>
             <!-- Only the sheet is translated. The note is the clinical
@@ -38,7 +38,7 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                 <ComboBox
                     MinWidth="160"
-                    AutomationProperties.Name="Sheet language"
+                    AutomationProperties.Name="Language"
                     IsEnabled="{x:Bind ViewModel.PatientDocumentReady, Mode=OneWay}"
                     ItemsSource="{x:Bind ViewModel.Languages, Mode=OneWay}"
                     PlaceholderText="Language"

@@ -159,7 +159,7 @@ public static class ReportBuilder
         Step(html, groups, "Waiting for the clinical note", r => r.Waiting);
         Step(html, groups, "Clinical note", r => r.Clinical);
         Step(html, groups, "Clinical note on screen", r => r.ClinicalOnScreen, total: true);
-        Step(html, groups, "Patient note", r => r.Patient);
+        Step(html, groups, "Patient information", r => r.Patient);
         Step(html, groups, "Both notes on screen", r => r.BothOnScreen, total: true);
         html.Append("<tr class=\"section\"><th>Other</th>")
             .Append(string.Concat(Enumerable.Repeat("<th></th>", groups.Count))).Append("</tr>");
@@ -199,7 +199,7 @@ public static class ReportBuilder
         html.Append("<p class=\"hint\">Seconds each step took after Stop was pressed. "
                     + "The bar is the total, drawn to the same scale on every row.</p>");
         html.Append("<p class=\"legend\"><i class=\"c1\"></i>Transcript <i class=\"c2\"></i>Waiting for the clinical note "
-                    + "<i class=\"c3\"></i>Clinical note <i class=\"c4\"></i>Patient note</p>");
+                    + "<i class=\"c3\"></i>Clinical note <i class=\"c4\"></i>Patient information</p>");
         html.Append("<table><tr><th>Started</th><th>Recording</th><th class=\"n\">Length</th><th>Note model</th><th></th>");
         StepHeaders(html);
         html.Append("</tr>");
@@ -259,7 +259,7 @@ public static class ReportBuilder
 
     private static void StepHeaders(StringBuilder html) =>
         html.Append("<th class=\"n\">Transcript</th><th class=\"n\">Waiting</th><th class=\"n\">Clinical note</th>")
-            .Append("<th class=\"t\">Clinical note on screen</th><th class=\"n\">Patient note</th>")
+            .Append("<th class=\"t\">Clinical note on screen</th><th class=\"n\">Patient information</th>")
             .Append("<th class=\"t\">Both notes on screen</th>");
 
     private static void StepCells(StringBuilder html, Consultation r)

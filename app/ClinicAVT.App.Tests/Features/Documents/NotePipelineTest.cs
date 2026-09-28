@@ -65,7 +65,7 @@ public class NotePipelineTest
 
         engine.RaiseNotification("patient/partial", Text("Your appointment"));
         Assert.Equal("Your appointment", note.PatientInfoText);
-        Assert.Equal("Writing patient note", session.Status.LatestActivity);
+        Assert.Equal("Writing patient information", session.Status.LatestActivity);
 
         engine.RaiseNotification("patient/ready", Text("Your appointment today ..."));
         Assert.Equal("Your appointment today ...", note.PatientInfoText);

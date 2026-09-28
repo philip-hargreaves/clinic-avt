@@ -102,7 +102,7 @@ public sealed class NotificationRouter
             case PatientPartial chunk:
                 if (_note.PatientInfoText.Length == 0)
                 {
-                    _status.Append("Writing patient note", busy: true);
+                    _status.Append("Writing patient information", busy: true);
                 }
 
                 _note.PatientInfoText = chunk.Text;
@@ -130,7 +130,7 @@ public sealed class NotificationRouter
                 break;
             case PatientFailed:
                 _note.Apply(NotePipelineEvent.PatientInfoFailed);
-                _status.Append("Patient note failed");
+                _status.Append("Patient information failed");
                 _ = SessionMetrics?.SessionFinishedAsync(null, _note.ClinicalNoteText.Length, "failed");
                 _review.Regenerating = false;
                 break;

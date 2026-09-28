@@ -173,7 +173,7 @@
                 <TextBlock
                     HorizontalAlignment="Center"
                     Style="{StaticResource CaptionText}"
-                    Text="Each one you record is kept here, with its transcript, note and patient sheet."
+                    Text="Each one you record is kept here, with its transcript, note and patient information."
                     Visibility="{x:Bind ViewModel.NothingStored, Mode=OneWay}" />
                 <TextBlock
                     HorizontalAlignment="Center"
