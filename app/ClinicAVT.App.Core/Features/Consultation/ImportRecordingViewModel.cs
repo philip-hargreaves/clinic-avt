@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Ports;
@@ -28,16 +29,18 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
     private readonly IFilePicker _picker;
     private readonly TimeProvider _clock;
     private readonly IReadOnlyList<DemoTrack> _examples;
+    private readonly ILogger? _logger;
     private bool _choosingExample;
     private int _inspection;
 
     public ImportRecordingViewModel(IEngineApi engine, IFilePicker picker, TimeProvider? clock = null,
-        IReadOnlyList<DemoTrack>? examples = null)
+        IReadOnlyList<DemoTrack>? examples = null, ILogger? logger = null)
     {
         _engine = engine;
         _picker = picker;
         _clock = clock ?? TimeProvider.System;
-        _examples = examples ?? DemoTracks.Load();
+        _logger = logger;
+        _examples = examples ?? DemoTracks.Load(logger: logger);
         ExampleNames = [.. _examples.Select(e => e.Display)];
     }
 
@@ -210,7 +213,7 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
             if (inspection == _inspection)
             {
                 Reading = false;
-                Error = $"This recording could not be read: {EngineWords.Reason(e)}.";
+                Error = $"This recording could not be read: {EngineWords.Reason(e, _logger)}.";
             }
         }
     }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using ClinicAVT.App.Core.Features.Appraisal;
@@ -18,7 +19,8 @@ namespace ClinicAVT.App.Platform;
 public sealed class WinUiDialogService(
     WindowAccessor window, IEngineApi engine, IUiDispatcher dispatcher, MicViewModel mic,
     StatusBarViewModel status, IClipboard clipboard, IFilePicker picker, ILauncher launcher,
-    AppPreferences preferences, TimeProvider clock, ISessionState session) : IDialogService
+    AppPreferences preferences, TimeProvider clock, ISessionState session,
+    ILogger<WinUiDialogService> logger) : IDialogService
 {
     // Cancel is the safe default in every confirmation
     public async Task<bool> ConfirmAsync(string title, string content, string primary, string cancel)
@@ -62,7 +64,7 @@ public sealed class WinUiDialogService(
     public async Task<bool> RunBackupAsync()
     {
         using var backup = new BackupViewModel(engine, picker, launcher, preferences, dispatcher, clock,
-            session: session);
+            session: session, logger: logger);
         var dialog = new BackupDialog(backup) { XamlRoot = window.XamlRoot };
         _ = backup.LoadAsync();
         await dialog.ShowAsync();
@@ -71,7 +73,7 @@ public sealed class WinUiDialogService(
 
     public async Task<bool> RunRestoreAsync()
     {
-        using var restore = new RestoreViewModel(engine, picker, preferences, dispatcher, clock);
+        using var restore = new RestoreViewModel(engine, picker, preferences, dispatcher, clock, logger);
         var dialog = new RestoreDialog(restore) { XamlRoot = window.XamlRoot };
         await dialog.ShowAsync();
         return restore.RestoredAny;
@@ -79,7 +81,7 @@ public sealed class WinUiDialogService(
 
     public async Task RunExportReflectionsAsync()
     {
-        var export = new ExportReflectionsViewModel(engine, picker, launcher, clock);
+        var export = new ExportReflectionsViewModel(engine, picker, launcher, clock, logger);
         var dialog = new ExportReflectionsDialog(export) { XamlRoot = window.XamlRoot };
         _ = export.LoadAsync();
         await dialog.ShowAsync();
@@ -88,7 +90,7 @@ public sealed class WinUiDialogService(
     // Add closes the dialog; the consultation page then shows the finalise
     public async Task<RecordingImport?> RunImportAsync(string? path)
     {
-        var import = new ImportRecordingViewModel(engine, picker, clock);
+        var import = new ImportRecordingViewModel(engine, picker, clock, logger: logger);
         var dialog = new ImportRecordingDialog(import) { XamlRoot = window.XamlRoot };
         if (path is not null)
         {
@@ -101,7 +103,7 @@ public sealed class WinUiDialogService(
     // A fresh reading per dialog. The outcome says whether it produced a voiceprint
     public async Task<bool> RunEnrolmentAsync()
     {
-        using var enrolment = new EnrolmentViewModel(engine, mic.MicId, dispatcher: dispatcher);
+        using var enrolment = new EnrolmentViewModel(engine, mic.MicId, dispatcher: dispatcher, logger: logger);
         var dialog = new EnrolmentDialog(enrolment) { XamlRoot = window.XamlRoot };
         await dialog.ShowAsync();
         return await enrolment.Outcome;

@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
@@ -23,7 +24,8 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
         IDialogService dialogs, PageViewModel pageView, GuidanceViewModel guidance,
         Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null,
-        AppPreferences? preferences = null, IReadOnlyList<DemoCase>? exampleCases = null)
+        AppPreferences? preferences = null, IReadOnlyList<DemoCase>? exampleCases = null,
+        ILogger<ConsultationViewModel>? logger = null)
     {
         _dialogs = dialogs;
         Transcript = transcript;
@@ -52,7 +54,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
         Note.ReflectRequested = Review.ReflectAsync;
         Note.SaveNoteRequested = Review.SaveNoteAsync;
         Note.SavePatientRequested = Review.SavePatientAsync;
-        Note.ExampleCases = exampleCases ?? DemoCases.Load();
+        Note.ExampleCases = exampleCases ?? DemoCases.Load(logger: logger);
         Note.ExampleCaseRequested = example => _ = Review.ApplyExampleCaseAsync(example);
         Note.OriginalNoteRequested = () => _ = Review.RestoreOriginalNoteAsync();
         Guidance.SearchNoteRequested = Review.SearchGuidanceAsync;

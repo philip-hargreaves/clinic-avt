@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
@@ -26,12 +27,14 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     private readonly IFilePicker _picker;
     private readonly IUiDispatcher? _dispatcher;
     private readonly TimeProvider _clock;
+    private readonly ILogger? _logger;
     private string _things = "consultation";
 
     public RestoreViewModel(IEngineApi engine, IFilePicker picker, AppPreferences? preferences = null,
-        IUiDispatcher? dispatcher = null, TimeProvider? clock = null)
+        IUiDispatcher? dispatcher = null, TimeProvider? clock = null, ILogger? logger = null)
     {
         _engine = engine;
+        _logger = logger;
         _picker = picker;
         _dispatcher = dispatcher;
         _clock = clock ?? TimeProvider.System;
@@ -146,7 +149,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
         }
         catch (Exception e)
         {
-            Error = BackupWords.Refused("restore", e);
+            Error = BackupWords.Refused("restore", e, _logger);
             Step = back;
         }
     }

@@ -38,9 +38,11 @@ internal sealed class EngineProcess : IAsyncDisposable
     }
 
     // Private pipe and roots per run so tests leave the app's alone. A replay
-    // wav stands in for the microphone
+    // wav stands in for the microphone. Scripted, a model that is not installed
+    // gets a stand-in; without it the engine refuses consultations as the app's does
     public static EngineProcess Start(
-        string? pipeName = null, string? replayWavPath = null, string? modelsRoot = null)
+        string? pipeName = null, string? replayWavPath = null, string? modelsRoot = null,
+        bool scripted = true, bool allowReplay = true)
     {
         var storeRoot = Path.Combine(Path.GetTempPath(), $"clinicavt-store-{Guid.NewGuid():N}");
         var startInfo = new ProcessStartInfo(EnginePath.Find())
@@ -48,6 +50,16 @@ internal sealed class EngineProcess : IAsyncDisposable
             UseShellExecute = false,
             RedirectStandardError = true,
         };
+        if (scripted)
+        {
+            startInfo.ArgumentList.Add("--scripted");
+        }
+
+        if (allowReplay)
+        {
+            startInfo.ArgumentList.Add("--allow-replay");
+        }
+
         startInfo.ArgumentList.Add(pipeName ?? DefaultPipeName);
         startInfo.ArgumentList.Add(storeRoot);
         startInfo.ArgumentList.Add(

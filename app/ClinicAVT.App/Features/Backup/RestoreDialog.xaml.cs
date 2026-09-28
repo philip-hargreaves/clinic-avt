@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Backup;
 
 namespace ClinicAVT.App.Features.Backup;
@@ -15,10 +16,10 @@ public sealed partial class RestoreDialog : ContentDialog
 
     public RestoreViewModel ViewModel { get; }
 
-    private async void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    private void OnPrimary(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
         args.Cancel = true;
-        await ViewModel.PrimaryCommand.ExecuteAsync(null);
+        UiEvent.Run(() => ViewModel.PrimaryCommand.ExecuteAsync(null));
     }
 
     private void OnClosing(ContentDialog sender, ContentDialogClosingEventArgs args) =>

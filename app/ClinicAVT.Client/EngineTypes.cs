@@ -6,7 +6,14 @@ namespace ClinicAVT.Client;
 // Replies as the engine sends them. Every field has a default so a sparse or
 // empty reply still parses. A null string is one the engine left out
 
-public sealed record EngineReadiness(bool FirstUse = false, bool Ready = true, bool StrayNoteHost = false);
+public sealed record EngineReadiness(bool FirstUse = false, bool Ready = true, bool StrayNoteHost = false)
+{
+    /// <summary>
+    /// The roles a consultation needs that are not installed, such as "asr". Consultations are
+    /// refused while any is missing. An older engine sends none.
+    /// </summary>
+    public IReadOnlyList<string> Missing { get; init; } = [];
+}
 
 public sealed record ModelInfo(
     string Id = "", string? Name = null, string Task = "", string Tier = "", string Device = "",

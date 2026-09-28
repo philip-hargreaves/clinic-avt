@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Consultation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -37,7 +38,7 @@ internal sealed class AudioDrop
         target.Drop += drop.OnDrop;
     }
 
-    private async void OnDragEnter(object sender, DragEventArgs e)
+    private void OnDragEnter(object sender, DragEventArgs e) => UiEvent.Run(async () =>
     {
         if (_inside++ == 0)
         {
@@ -54,7 +55,7 @@ internal sealed class AudioDrop
 
         Accept(e);
         Highlight();
-    }
+    });
 
     private void OnDragOver(object sender, DragEventArgs e) => Accept(e);
 
@@ -64,7 +65,7 @@ internal sealed class AudioDrop
         Highlight();
     }
 
-    private async void OnDrop(object sender, DragEventArgs e)
+    private void OnDrop(object sender, DragEventArgs e)
     {
         var path = Over ? _path : null;
         _inside = 0;
@@ -73,7 +74,7 @@ internal sealed class AudioDrop
         // The page may have moved on while the drag was over it
         if (path is not null && _allowed())
         {
-            await _dropped(path);
+            UiEvent.Run(() => _dropped(path));
         }
     }
 

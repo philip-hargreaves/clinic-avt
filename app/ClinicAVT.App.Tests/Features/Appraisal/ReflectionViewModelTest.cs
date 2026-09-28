@@ -250,7 +250,7 @@ public class ReflectionViewModelTest
         engine.SetConnected(false);
 
         Assert.False(reflection.SummaryPending);
-        Assert.Contains("the engine restarted", reflection.SummaryProblem);
+        Assert.Contains("ClinicAVT restarted", reflection.SummaryProblem);
         Assert.Equal("", reflection.SummaryPlaceholder);
     }
 

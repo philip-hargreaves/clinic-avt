@@ -193,8 +193,9 @@ public sealed partial class PrivacySettings : ObservableObject
                 var n => $"{Words.Count(n, "consultation")} aren't backed up.",
             };
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            _status?.Log($"archive/summary failed: {e.Message}");
             return "The last backup could not be checked.";
         }
     }

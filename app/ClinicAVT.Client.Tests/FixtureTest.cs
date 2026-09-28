@@ -401,6 +401,33 @@ public class FixtureTest
     }
 
     [Fact]
+    public async Task AMissingModelIsNamedByReadinessAndRefusesTheStart()
+    {
+        var transport = new ReplayingTransport();
+        var api = new EngineApi(transport);
+
+        transport.Reply = Fixtures.Load("engine-readiness.json").GetProperty("response").GetProperty("result");
+        var readiness = await api.ReadinessAsync();
+        Assert.Equal("engine/readiness", transport.Method);
+        Assert.Equal(["asr", "diarisation", "segmentation"], readiness.Missing);
+        Assert.True(readiness.Ready);
+
+        // An engine from before the field names nothing missing
+        transport.Reply = JsonSerializer.SerializeToElement(new { firstUse = false, ready = true, strayNoteHost = false });
+        Assert.Empty((await api.ReadinessAsync()).Missing);
+
+        var refused = Fixtures.Load("session-start-refused.json");
+        transport.Reply = JsonSerializer.SerializeToElement(new { sessionId = "s1" });
+        await api.StartSessionAsync(true, "");
+        transport.AssertSent("session/start", refused.GetProperty("request").GetProperty("params"));
+        var error = refused.GetProperty("response").GetProperty("error");
+        var thrown = new EngineErrorException(
+            error.GetProperty("code").GetInt32(), error.GetProperty("message").GetString()!,
+            error.GetProperty("data"));
+        Assert.Equal("the speech recognition and speaker recognition models are not installed", thrown.Message);
+    }
+
+    [Fact]
     public void AnEngineErrorCarriesTheReasonFromItsData()
     {
         var error = Fixtures.Load("session-error.json").GetProperty("error");
@@ -424,7 +451,6 @@ public class FixtureTest
     /// </summary>
     private sealed class ReplayingTransport : IEngineTransport
     {
-        private string _method = "";
         private JsonElement _params;
 
         public event Action<string, JsonElement>? NotificationReceived;
@@ -443,10 +469,12 @@ public class FixtureTest
 
         public TimeSpan Timeout { get; private set; }
 
+        public string Method { get; private set; } = "";
+
         public Task<JsonElement> RequestAsync(
             string method, object? parameters, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
-            _method = method;
+            Method = method;
             Timeout = timeout;
             _params = JsonSerializer.SerializeToElement(parameters, Protocol.JsonOptions);
             foreach (var notification in Then)
@@ -460,7 +488,7 @@ public class FixtureTest
 
         public void AssertSent(string method, JsonElement expected)
         {
-            Assert.Equal(method, _method);
+            Assert.Equal(method, Method);
             Assert.True(JsonElement.DeepEquals(expected, _params), $"{method} sent {_params}");
         }
 

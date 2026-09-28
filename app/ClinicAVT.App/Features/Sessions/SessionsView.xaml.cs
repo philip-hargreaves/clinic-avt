@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Sessions;
 using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Features.Documents;
@@ -29,5 +30,5 @@ public sealed partial class SessionsView : UserControl
     public ShellViewModel Shell { get; }
 
     // The box binds on every keystroke, so the view model is current by LostFocus
-    private async void OnTitleCommitted(object sender, RoutedEventArgs e) => await ViewModel.RenameAsync();
+    private void OnTitleCommitted(object sender, RoutedEventArgs e) => UiEvent.Run(ViewModel.RenameAsync);
 }

@@ -1,0 +1,20 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "session/start",
+        "params": {
+            "retain": true,
+            "micId": ""
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "error": {
+            "code": -32001,
+            "message": "Session error",
+            "data": "the speech recognition and speaker recognition models are not installed"
+        }
+    }
+}

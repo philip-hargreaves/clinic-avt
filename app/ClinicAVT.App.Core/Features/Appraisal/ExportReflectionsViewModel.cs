@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Backup;
 using ClinicAVT.App.Core.Ports;
@@ -23,14 +24,16 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
     private readonly IFilePicker _picker;
     private readonly ILauncher _launcher;
     private readonly TimeProvider _clock;
+    private readonly ILogger? _logger;
     private IReadOnlyList<ReflectionListing> _all = [];
     private bool _loaded;
     private string _folder = "";
 
     public ExportReflectionsViewModel(IEngineApi engine, IFilePicker picker, ILauncher launcher,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null, ILogger? logger = null)
     {
         _engine = engine;
+        _logger = logger;
         _picker = picker;
         _launcher = launcher;
         _clock = clock ?? TimeProvider.System;
@@ -131,7 +134,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         }
         catch (Exception e)
         {
-            CountLine = $"The reflections could not be counted: {EngineWords.Reason(e)}.";
+            CountLine = $"The reflections could not be counted: {EngineWords.Reason(e, _logger)}.";
         }
     }
 
@@ -217,7 +220,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         }
         catch (Exception e)
         {
-            Error = $"The reflections could not be read: {EngineWords.Reason(e)}. Nothing was saved.";
+            Error = $"The reflections could not be read: {EngineWords.Reason(e, _logger)}. Nothing was saved.";
             Step = BackupStep.Setup;
             return;
         }

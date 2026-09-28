@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using ClinicAVT.App.Composition;
+using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Platform;
 using ClinicAVT.App.Shell;
@@ -32,6 +34,7 @@ public partial class App : Application
             .AddViews()
             .AddStartupTasks(paths)
             .BuildServiceProvider();
+        UiEvent.Logger = _services.GetRequiredService<ILogger<App>>();
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

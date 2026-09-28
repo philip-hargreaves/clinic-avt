@@ -1,27 +1,23 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Hosting;
 
 namespace ClinicAVT.App.Core.Features.Demo;
 
-/// <summary>A bundled example recording. Display reads "name (m:ss)".</summary>
-public sealed record DemoTrack(string Name, string Path)
+/// <summary>A bundled example recording. Display reads "name (m:ss)", or the name alone.</summary>
+public sealed record DemoTrack(string Name, string Path, double Seconds = 0)
 {
-    public string Display { get; } = Label(Name, Path);
-
-    private static string Label(string name, string path)
-    {
-        var seconds = DemoTracks.DurationSeconds(path);
-        return Math.Round(seconds) <= 0 ? name : $"{name} ({Words.Clock(seconds)})";
-    }
+    public string Display => Math.Round(Seconds) <= 0 ? Name : $"{Name} ({Words.Clock(Seconds)})";
 }
 
 public static class DemoTracks
 {
     /// <summary>
     /// Loads demo/tracks.json, probing upward so packaged and dev layouts
-    /// both resolve. A missing manifest or wav shrinks the list.
+    /// both resolve. A missing manifest or wav shrinks the list, and an unreadable one is logged.
     /// </summary>
-    public static IReadOnlyList<DemoTrack> Load(string? baseDirectory = null)
+    public static IReadOnlyList<DemoTrack> Load(string? baseDirectory = null, ILogger? logger = null)
     {
         // Packaged debug runs sit one level deeper under AppX, so probe generously
         var dir = baseDirectory ?? AppContext.BaseDirectory;
@@ -30,14 +26,14 @@ public static class DemoTracks
             var manifest = System.IO.Path.Combine(dir, "demo", "tracks.json");
             if (File.Exists(manifest))
             {
-                return Parse(manifest);
+                return Parse(manifest, logger);
             }
         }
 
         return [];
     }
 
-    public static IReadOnlyList<DemoTrack> Parse(string manifestPath)
+    public static IReadOnlyList<DemoTrack> Parse(string manifestPath, ILogger? logger = null)
     {
         try
         {
@@ -56,20 +52,21 @@ public static class DemoTracks
                 var path = System.IO.Path.Combine(root, file);
                 if (File.Exists(path))
                 {
-                    tracks.Add(new DemoTrack(name, path));
+                    tracks.Add(new DemoTrack(name, path, DurationSeconds(path, logger)));
                 }
             }
 
             return tracks;
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            logger?.StepFailed("example recordings", e.Message);
             return [];
         }
     }
 
     /// <summary>Duration of a 16 kHz mono wav, from its header alone. 0 when unreadable.</summary>
-    public static double DurationSeconds(string path)
+    public static double DurationSeconds(string path, ILogger? logger = null)
     {
         try
         {
@@ -108,8 +105,9 @@ public static class DemoTracks
 
             return 0;
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            logger?.StepFailed($"example recording {System.IO.Path.GetFileName(path)}", e.Message);
             return 0;
         }
     }

@@ -191,9 +191,11 @@ public sealed partial class SessionRecorder : ObservableObject
             return;
         }
 
-        // An empty mic id means the default, and a missing device falls back to it with a log line
+        // An empty mic id means the default, and a missing device falls back to it with a log line.
+        // A refusal says why, such as a model that is not installed
         var started = await EngineCall.TryAsync(_status, "session/start",
-            () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")).ConfigureAwait(true);
+            () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? ""),
+            refused: "Recording could not start").ConfigureAwait(true);
         if (started is null)
         {
             return;

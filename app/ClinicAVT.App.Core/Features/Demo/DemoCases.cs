@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using ClinicAVT.App.Core.Hosting;
+
 namespace ClinicAVT.App.Core.Features.Demo;
 
 /// <summary>A written case that can stand in as the clinical note on a demo record.</summary>
@@ -8,9 +11,9 @@ public static class DemoCases
     /// <summary>
     /// Loads demo/cases.txt, probing upward like the tracks manifest. Blank lines separate the
     /// cases. Each has a title line, an optional dashed underline, then the text. A missing or
-    /// empty file means no cases.
+    /// empty file means no cases, and an unreadable one is logged.
     /// </summary>
-    public static IReadOnlyList<DemoCase> Load(string? baseDirectory = null)
+    public static IReadOnlyList<DemoCase> Load(string? baseDirectory = null, ILogger? logger = null)
     {
         var dir = baseDirectory ?? AppContext.BaseDirectory;
         for (var i = 0; i < 10 && dir is not null; i++, dir = Directory.GetParent(dir)?.FullName)
@@ -22,8 +25,9 @@ public static class DemoCases
                 {
                     return Parse(File.ReadAllText(file));
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
+                    logger?.StepFailed("example cases", e.Message);
                     return [];
                 }
             }

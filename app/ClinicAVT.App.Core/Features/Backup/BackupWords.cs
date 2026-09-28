@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Settings;
 
@@ -58,10 +59,10 @@ public static class BackupWords
     }
 
     /// <summary>A request the engine refused before the job started, such as during a recording.</summary>
-    public static string Refused(string job, Exception e) =>
+    public static string Refused(string job, Exception e, ILogger? logger = null) =>
         job == "backup"
-            ? $"The backup could not start: {EngineWords.Reason(e)}. Nothing on this computer has changed."
-            : $"The backup could not be opened: {EngineWords.Reason(e)}.";
+            ? $"The backup could not start: {EngineWords.Reason(e, logger)}. Nothing on this computer has changed."
+            : $"The backup could not be opened: {EngineWords.Reason(e, logger)}.";
 
     /// <summary>
     /// The standing line for a folder that syncs to OneDrive, empty for any other. A work

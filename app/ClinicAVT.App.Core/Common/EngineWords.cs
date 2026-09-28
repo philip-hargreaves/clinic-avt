@@ -1,21 +1,26 @@
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Common;
 
 public static partial class EngineWords
 {
-    /// <summary>The engine's reason for a refusal, its internal nouns swapped for the clinician's.</summary>
-    public static string Reason(Exception e)
+    /// <summary>
+    /// The engine's reason for a refusal, its internal nouns swapped for the clinician's. Any other
+    /// failure reads as plain words, and its detail goes to the log instead.
+    /// </summary>
+    public static string Reason(Exception e, ILogger? logger = null)
     {
         if (e is OperationCanceledException)
         {
-            return "the engine did not answer in time";
+            return Reworded("ClinicAVT didn't respond in time", e, logger);
         }
 
         if (e is not EngineErrorException)
         {
-            return e.Message;
+            return Reworded("something went wrong", e, logger);
         }
 
         // A store lookup names the missing id, which means nothing to a clinician
@@ -23,6 +28,12 @@ public static partial class EngineWords
         text = Sessions().Replace(text, "consultations");
         text = Session().Replace(text, "consultation");
         return Archive().Replace(text, "backup");
+    }
+
+    private static string Reworded(string shown, Exception e, ILogger? logger)
+    {
+        logger?.Reworded(shown, $"{e.GetType().Name}: {e.Message}");
+        return shown;
     }
 
     [GeneratedRegex(@"\bno (such )?session\b.*$", RegexOptions.IgnoreCase)]

@@ -5,7 +5,9 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "adapters/archive/archive_lane.hpp"
 #include "adapters/demo/sample_year.hpp"
@@ -414,7 +416,8 @@ std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingRea
 std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
                                               clinicavt::session::SessionController& controller,
                                               clinicavt::translate::ITranslator* translator,
-                                              const Notify& push, const json& params) {
+                                              const Notify& push, const json& params,
+                                              const std::vector<std::string>& missing) {
     const auto path = RecordingPath(params);
     if (!path) return InvalidParams("path must be a file path");
     // Stores order times as text and restore accepts only this form
@@ -429,6 +432,7 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     if (started_at > clinicavt::Iso8601Now()) {
         return SessionError("the recording's date and time are in the future");
     }
+    if (!missing.empty()) return SessionError(MissingModelsReason(missing));
     if (controller.Running()) return SessionError("a session is running");
     // A file that cannot be opened is refused here. Its decode runs on the import's thread
     const auto readable = ReadRecording([&] { return reader.Inspect(*path); });
@@ -471,6 +475,50 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
             "a session or a voice enrolment is running, or the session could not be stored");
     }
     return json{{"sessionId", id}};
+}
+
+std::variant<json, Error> HandleSessionStart(clinicavt::session::SessionController& controller,
+                                             clinicavt::translate::ITranslator* translator,
+                                             const json& params,
+                                             const std::vector<std::string>& missing,
+                                             bool allow_replay) {
+    // An optional replay block plays a file through the same pipeline. Absent means microphone
+    std::optional<clinicavt::session::ReplaySpec> replay;
+    if (params.contains("replay")) {
+        // It reads any file the client names, so only a test or evaluation engine takes it
+        if (!allow_replay) {
+            return InvalidParams("replay needs an engine started with --allow-replay");
+        }
+        const auto& r = params["replay"];
+        if (!r.contains("path") || !r["path"].is_string()) {
+            return InvalidParams("replay.path is required");
+        }
+        replay =
+            clinicavt::session::ReplaySpec{r["path"].get<std::string>(), r.value("speed", 1.0)};
+    }
+    if (!missing.empty()) return SessionError(MissingModelsReason(missing));
+    // micId pins the picker's choice. One that has gone falls back
+    // to the default, logged, and the snapshot records the fallback
+    clinicavt::session::MicSelection mic;
+    if (!replay.has_value()) {
+        const std::string requested = params.value("micId", "");
+        const auto device =
+            clinicavt::audio::ResolveMicrophone(clinicavt::audio::ListCaptureDevices(), requested);
+        if (!requested.empty() && device.id != requested) {
+            std::fprintf(stderr, "clinicavt-engine: chosen microphone gone, using %s\n",
+                         device.name.empty() ? "the default" : device.name.c_str());
+        }
+        mic = {device.id, device.name};
+    }
+    // resume replays the crashed session's stored audio ahead of the live
+    // source. retain false erases on leaving the consultation
+    if (!controller.Start(std::move(replay), params.value("resume", ""),
+                          params.value("retain", true), mic)) {
+        return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
+    }
+    // Capture and the note need the memory
+    if (translator != nullptr) translator->Release();
+    return json{{"sessionId", controller.CurrentSession()}};
 }
 
 void RegisterSessionMethods(PipeServer& server, const EngineServices& services) {
@@ -587,41 +635,9 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
             return json::object();
         });
     server.RegisterMethod(
-        "session/start",
-        [&controller, translator](const json& params) -> std::variant<json, Error> {
-            // An optional replay block plays a file through the same
-            // pipeline. Absent means microphone
-            std::optional<clinicavt::session::ReplaySpec> replay;
-            if (params.contains("replay")) {
-                const auto& r = params["replay"];
-                if (!r.contains("path") || !r["path"].is_string()) {
-                    return Error{kInvalidParams, "replay.path is required", {}};
-                }
-                replay = clinicavt::session::ReplaySpec{r["path"].get<std::string>(),
-                                                        r.value("speed", 1.0)};
-            }
-            // micId pins the picker's choice. One that has gone falls back
-            // to the default, logged, and the snapshot records the fallback
-            clinicavt::session::MicSelection mic;
-            if (!replay.has_value()) {
-                const std::string requested = params.value("micId", "");
-                const auto device = clinicavt::audio::ResolveMicrophone(
-                    clinicavt::audio::ListCaptureDevices(), requested);
-                if (!requested.empty() && device.id != requested) {
-                    std::fprintf(stderr, "clinicavt-engine: chosen microphone gone, using %s\n",
-                                 device.name.empty() ? "the default" : device.name.c_str());
-                }
-                mic = {device.id, device.name};
-            }
-            // resume replays the crashed session's stored audio ahead of the live
-            // source. retain false erases on leaving the consultation
-            if (!controller.Start(std::move(replay), params.value("resume", ""),
-                                  params.value("retain", true), mic)) {
-                return Error{kCaptureFailed, "Capture failed", json(controller.LastEnd().detail)};
-            }
-            // Capture and the note need the memory
-            if (translator != nullptr) translator->Release();
-            return json{{"sessionId", controller.CurrentSession()}};
+        "session/start", [&controller, translator, missing = services.missing_models,
+                          allow_replay = services.allow_replay](const json& params) {
+            return HandleSessionStart(controller, translator, params, missing, allow_replay);
         });
     server.RegisterMethod(
         "note/options", [&controller](const json& params) -> std::variant<json, Error> {
@@ -698,10 +714,12 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         server.RegisterMethod("recording/inspect", [&reader](const json& params) {
             return HandleRecordingInspect(reader, params);
         });
-        server.RegisterMethod(
-            "session/import", [&server, &controller, &reader, translator](const json& params) {
-                return HandleSessionImport(reader, controller, translator, PushTo(server), params);
-            });
+        server.RegisterMethod("session/import",
+                              [&server, &controller, &reader, translator,
+                               missing = services.missing_models](const json& params) {
+                                  return HandleSessionImport(reader, controller, translator,
+                                                             PushTo(server), params, missing);
+                              });
     }
 }
 
