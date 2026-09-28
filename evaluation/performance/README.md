@@ -14,7 +14,8 @@ architecture-efficiency, speculative-decoding, summariser-performance-benchmarks
 
 ## Engine at 1x
 
-Drives the release engine over its pipe with replayed consultations at real time and records
+Drives the release engine over its pipe with replayed consultations at real time (it starts the
+engine with `--allow-replay`, which the app never passes) and records
 per-phase timings, engine memory and every engine death. Working data goes to `build/perf-loop/`
 (`perf_loop` in the config, override `EVAL_PERF_LOOP`; the engine binary with `EVAL_ENGINE`).
 

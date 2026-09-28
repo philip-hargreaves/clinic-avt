@@ -6,7 +6,10 @@ Three `*_main.cpp` files are the executables: the engine, the note worker and th
 ingest host. The corpus builder and indexer (`engine/tools/corpus`) and the units tool
 (`engine/tools`) are development tools the engine never runs. Speech reaches text one diarised turn at a time:
 the diariser finds the turns, the transcriber decodes each turn's own audio, and there is no
-other transcription path. Without models the engine runs on scripted stand-ins (CI).
+other transcription path. With `--scripted` a model that is not installed gets a stand-in (CI and
+tests); without it the engine still starts, `engine/readiness` names the missing roles and
+consultations are refused. `--allow-replay` lets `session/start` play a wav as the microphone,
+for tests and evaluation only.
 
 ```
 core/            a static library, one folder per stage; namespace = folder

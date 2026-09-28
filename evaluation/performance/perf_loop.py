@@ -152,12 +152,13 @@ def note_host_pids():
 # --- Engine process ------------------------------------------------------------
 
 class Engine(PipeEngine):
-    # extra_args: positional arguments after the models root, e.g. a replay wav
+    # extra_args: positional arguments after the models root, e.g. a replay wav. Runs replay
+    # tracks, which the engine takes only with --allow-replay
     def __init__(self, index, extra_args=()):
         self.index = index
         pipe = f"LOCAL\\clinicavt-perf-{os.getpid()}-{index}"
-        super().__init__([ENGINE, *ENGINE_ARGS, pipe, STORE, MODELS, *extra_args], pipe,
-                         os.path.join(LOGS, f"engine-{index:03d}.log"))
+        super().__init__([ENGINE, "--allow-replay", *ENGINE_ARGS, pipe, STORE, MODELS, *extra_args],
+                         pipe, os.path.join(LOGS, f"engine-{index:03d}.log"))
 
 
 def timed(engine, method, params, timeout):
