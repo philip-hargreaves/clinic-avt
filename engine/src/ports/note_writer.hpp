@@ -11,9 +11,9 @@ namespace clinicavt::note {
 // How the note is written: structure and length, each a prompt file so a
 // change needs no rebuild. Values are validated at the RPC boundary.
 struct NoteOptions {
-    std::string style = "prose";      // prose | soap
-    std::string detail = "standard";  // concise | standard | detailed
-    bool confirmed = false;           // the clinician says it is a consultation: no refusal
+    std::string style = "prose";     // prose | soap
+    std::string detail = "concise";  // concise | detailed
+    bool confirmed = false;          // the clinician says it is a consultation: no refusal
 };
 
 // Streams partials, returns the note, throws on failure. Cancel

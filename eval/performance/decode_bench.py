@@ -19,7 +19,7 @@ from common.llm import NoteModel  # noqa: E402
 def prompt_text():
     prompts = config.path("prompts")
     style = (prompts / "note-narrative.md").read_text(encoding="utf-8")
-    detail = (prompts / "detail-standard.md").read_text(encoding="utf-8")
+    detail = (prompts / "detail-concise.md").read_text(encoding="utf-8")
     transcript = config.path("sample_consult").read_text(encoding="utf-8")
     return style + "\n\nTRANSCRIPT:\n" + transcript + "\n" + detail
 

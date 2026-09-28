@@ -21,7 +21,9 @@ from common import config  # noqa: E402
 from common.io import read_jsonl  # noqa: E402
 
 TIERS = ["tier-constrained", "tier-default", "tier-accuracy"]
-LIMITS = {"concise": (60, 5), "standard": (110, 8), "detailed": (220, 15)}
+LIMITS = {"concise": (100, 6), "detailed": (200, 12)}
+# The three lengths of the banked tier baseline
+BASELINE_LIMITS = {"concise": (60, 5), "standard": (110, 8), "detailed": (220, 15)}
 HEADINGS = ["Your appointment today", "Your diagnosis", "Your treatment and next steps", "When to contact us"]
 REASSURANCE = re.compile(r"\b(not serious|nothing to worry|no need to worry|not dangerous|not an emergency|is harmless|reassur)", re.I)
 
@@ -91,6 +93,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tags", default=",".join(TIERS), help="comma list of note tags, one column each")
     ap.add_argument("--timings", help="generation records (default notes/timings.jsonl)")
+    ap.add_argument("--baseline", action="store_true", help="the banked baseline's three lengths")
     args = ap.parse_args()
     tiers = config.section("summarisation")["tiers"]
     columns = [(t, config.label(tiers.get(t.removeprefix("tier-"), t))) for t in args.tags.split(",")]
@@ -100,7 +103,7 @@ def main():
     print(f"Sealed transcripts of the 57 PriMock consultations (perf-loop tag {tag}), "
           "the app's own prompts and composition, greedy decoding.\n")
 
-    for detail, (wlimit, slimit) in LIMITS.items():
+    for detail, (wlimit, slimit) in (BASELINE_LIMITS if args.baseline else LIMITS).items():
         print(f"## Clinical note, {detail} (limit {wlimit} words, {slimit} sentences)\n")
         print("| | " + " | ".join(n for _, n in columns) + " |")
         print("|---|" + "---|" * len(columns))

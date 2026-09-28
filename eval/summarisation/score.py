@@ -12,7 +12,7 @@
 Severity is reported as counts for comparison, not as a pass/fail gate. Intervals are
 percentile bootstraps over consults, 5000 resamples, seed 12345.
 
-    python eval/summarisation/score.py notes tier-default-standard
+    python eval/summarisation/score.py notes tier-default-concise
     python eval/summarisation/score.py screening
 """
 import argparse

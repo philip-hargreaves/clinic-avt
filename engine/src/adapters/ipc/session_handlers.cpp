@@ -343,12 +343,13 @@ bool NoTranscript(clinicavt::store::ISessionStore& sessions, const std::string& 
 }
 
 // Checks style and detail as the shell sends them. confirmed says the
-// clinician insists it was a consultation
+// clinician insists it was a consultation. "standard", the old middle length, is concise
 std::variant<clinicavt::note::NoteOptions, Error> NoteOptionsFrom(const json& params) {
     const std::string style = params.value("style", "prose");
-    const std::string detail = params.value("detail", "standard");
+    std::string detail = params.value("detail", "concise");
+    if (detail == "standard") detail = "concise";
     if (style != "prose" && style != "soap") return InvalidParams("unknown style: " + style);
-    if (detail != "concise" && detail != "standard" && detail != "detailed") {
+    if (detail != "concise" && detail != "detailed") {
         return InvalidParams("unknown detail: " + detail);
     }
     clinicavt::note::NoteOptions options{style, detail};

@@ -1322,7 +1322,7 @@ TEST(SessionController, AReviewedSessionRegeneratesItsNoteSheetAndSummary) {
 
         controller.Close();
         EXPECT_TRUE(controller.LastFinalised().empty()) << "leaving ends the review";
-        EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"})) << "closed";
+        EXPECT_FALSE(controller.RegenerateNote({"prose", "concise"})) << "closed";
         EXPECT_FALSE(controller.RegeneratePatient()) << "closed";
     }  // joins the lane, so the title step has run
 
@@ -1337,7 +1337,7 @@ TEST(SessionController, RegenerateAndOpenAreRefusedWhenTheyCannotRun) {
         rig.store.turns = {{0, 16000, "doctor", "words"}};
         auto controller = rig.Make(Script::kStreamUntilStopped);
         ASSERT_TRUE(controller.Open("past"));
-        EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"}))
+        EXPECT_FALSE(controller.RegenerateNote({"prose", "concise"}))
             << "no writer: refused, not crashed";
     }
 
@@ -1512,12 +1512,12 @@ TEST(SessionController, AReviewedSessionIsNeverRewrittenFromNothingNorErasedByAR
     auto controller = rig.Make(Script::kStreamUntilStopped, {.writer = true});
 
     ASSERT_TRUE(controller.Open("past"));
-    EXPECT_FALSE(controller.RegenerateNote({"prose", "standard"})) << "no transcript to write from";
+    EXPECT_FALSE(controller.RegenerateNote({"prose", "concise"})) << "no transcript to write from";
     EXPECT_TRUE(rig.writer.calls.empty());
 
     rig.store.turns = {
         {0, 16000 * 30, "doctor", "a stored consultation with enough words to note"}};
-    ASSERT_TRUE(controller.RegenerateNote({"prose", "standard"}));
+    ASSERT_TRUE(controller.RegenerateNote({"prose", "concise"}));
     ASSERT_TRUE(rig.events.WaitForNote());
     {
         const std::lock_guard<std::mutex> lock(rig.events.mutex);

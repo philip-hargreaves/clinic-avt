@@ -111,7 +111,7 @@ def main():
                 prefs = json.load(f)
         tier = prefs.get("NoteTier") or "accuracy"
         style = prefs.get("NoteStyle") or "prose"
-        detail = prefs.get("NoteDetail") or "standard"
+        detail = prefs.get("NoteDetail") or "concise"
         loaded = engine.request("note/tier", {"tier": tier}, 60)
         engine.request("note/options", {"style": style, "detail": detail})
         log(f"note tier {tier}: {loaded.get('id')} ({loaded.get('state')}), {style} {detail}")

@@ -1,5 +1,5 @@
 """Anonymisation sweep for the appraisal case summary: prompts/case-summary.md over each tier's
-standard notes (generate.py app), then every summary scanned with the app's identifier
+concise notes (generate.py app; standard for runs banked before the two lengths), then every summary scanned with the app's identifier
 patterns and a few more. Weekday and month names, age-like numbers and clinician mentions
 count; capitalised words mid-sentence that are not common clinical terms are listed to read.
 
@@ -63,7 +63,8 @@ def out_dir(tier):
 
 def notes_for(tier):
     out = []
-    for path in sorted(glob.glob(os.path.join(NOTES, f"tier-{tier}-standard", "*.md"))):
+    paths = sorted(glob.glob(os.path.join(NOTES, f"tier-{tier}-concise", "*.md")))
+    for path in paths or sorted(glob.glob(os.path.join(NOTES, f"tier-{tier}-standard", "*.md"))):
         text = open(path, encoding="utf-8").read().strip()
         if not text or text.startswith("NOT A CONSULTATION"):
             continue
@@ -94,7 +95,7 @@ def run(tier, limit):
 
 def scan():
     lines = ["# Case-summary anonymisation sweep", "",
-             "`prompts/case-summary.md` over the standard clinical notes of each tier (the app's own",
+             "`prompts/case-summary.md` over the concise clinical notes of each tier (the app's own",
              "notes from the sealed 1x transcripts). Scanned with the app's identifier patterns plus",
              "weekday/month, age-like numbers and clinician mentions. Capitalised mid-sentence words",
              "that are not common clinical terms are listed for reading.", ""]

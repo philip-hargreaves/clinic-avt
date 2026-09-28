@@ -3,8 +3,8 @@
   app    the app's own prompts over the sealed transcripts the pipeline produced
          (perf-loop tag [summarisation] transcript_tag), composed exactly as the engine
          composes them: style + one "SPEAKER: text" line per turn + detail file. Per consult,
-         a note at each detail level, the patient sheet and the title from the standard note,
-         and optionally a SOAP note.
+         a note at each length, the patient sheet and the title from the concise note (the
+         app's default), and optionally a SOAP note.
            notes/<tag>-<kind>/<cid>.md, notes/timings.jsonl
            tag: tier-<tier> for a shipped tier, else the model name
 
@@ -13,7 +13,7 @@
            notes/<tag>/<cid>.md and notes/<tag>/_metrics.json
 
     python eval/summarisation/generate.py app --tier default
-    python eval/summarisation/generate.py app --model gemma-4-e4b-it-int4-ov --limit 2 --details standard
+    python eval/summarisation/generate.py app --model gemma-4-e4b-it-int4-ov --limit 2 --details concise
     python eval/summarisation/generate.py study --model qwen3.5-4b-int4-ov --prompt prompt-4b-safety.md --tag qwen3.5-4b-safety
 """
 import argparse
@@ -27,7 +27,7 @@ from common import config  # noqa: E402
 from common.io import append_jsonl, read_json  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DETAILS = ["concise", "standard", "detailed"]
+DETAILS = ["concise", "detailed"]
 REFUSAL = "NOT A CONSULTATION"
 
 
@@ -100,16 +100,16 @@ def run_app(args):
 
     for i, (cid, turns) in enumerate(items, 1):
         block = transcript_block(turns)
-        standard = None
+        concise = None
         for d in details:
             text = run(d, cid, style + block + "\n" + detail[d])
-            if d == "standard":
-                standard = text
-        if standard and standard.strip() and not standard.startswith(REFUSAL):
-            run("sheet", cid, patient + standard + "\n")
-            run("label", cid, label + standard + "\n", 16)
+            if d == "concise":
+                concise = text
+        if concise and concise.strip() and not concise.startswith(REFUSAL):
+            run("sheet", cid, patient + concise + "\n")
+            run("label", cid, label + concise + "\n", 16)
         if i <= args.soap:
-            run("soap", cid, soap + block + "\n" + detail["standard"])
+            run("soap", cid, soap + block + "\n" + detail["concise"])
         print(f"[{tag}] {i}/{len(items)} {cid}", flush=True)
 
 

@@ -108,7 +108,7 @@ inline std::size_t SeedSampleYear(store::ISessionStore& sessions,
         const auto id = sessions.Seed(seed);
         sessions.SaveDocument(id, store::DocumentKind::kLabel, {.text = sample.label});
         sessions.SaveDocument(id, store::DocumentKind::kNote,
-                              {.text = sample.note, .style = "prose", .detail = "standard"});
+                              {.text = sample.note, .style = "prose", .detail = "concise"});
         sessions.SaveDocument(id, store::DocumentKind::kPatient, {.text = sample.patient});
         sessions.SaveDocument(id, store::DocumentKind::kSummary,
                               {.text = note::ScrubSummary(sample.summary)});

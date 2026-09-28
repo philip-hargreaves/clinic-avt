@@ -44,7 +44,7 @@ public sealed partial class NoteViewModel : ObservableObject
     [ObservableProperty]
     public partial string Style { get; set; } = NoteOptions.DefaultStyle.Value;
 
-    /// <summary>"concise", "standard" or "detailed".</summary>
+    /// <summary>"concise" or "detailed".</summary>
     [ObservableProperty]
     public partial string Detail { get; set; } = NoteOptions.DefaultDetail.Value;
 

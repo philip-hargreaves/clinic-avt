@@ -14,10 +14,10 @@ on the task file alone, constrained to judge-schema.json, and save its JSON repl
 judge/out/<tag>/<cid>.json. Then collect. A task with a record is skipped, so an interrupted
 batch loses only the notes in flight.
 
-    python eval/summarisation/judge.py tasks tier-default-standard --transcripts sealed
+    python eval/summarisation/judge.py tasks tier-default-concise --transcripts sealed
     python eval/summarisation/judge.py tasks qwen3.5-4b-safety
-    python eval/summarisation/judge.py pending tier-default-standard
-    python eval/summarisation/judge.py collect tier-default-standard --judge claude-opus-5-5
+    python eval/summarisation/judge.py pending tier-default-concise
+    python eval/summarisation/judge.py collect tier-default-concise --judge claude-opus-5-5
 """
 import argparse
 import json

@@ -91,7 +91,16 @@ public class AppPreferencesTest
         var loaded = AppPreferences.Load(odd);
         Assert.Equal("system", loaded.Theme);
         Assert.Equal("prose", loaded.NoteStyle);
-        Assert.Equal("standard", loaded.NoteDetail);
+        Assert.Equal("concise", loaded.NoteDetail);
         Assert.Equal("auto", loaded.NoteTier);
+    }
+
+    // Two lengths replaced three: a saved middle length becomes the shorter one
+    [Fact]
+    public void ASavedStandardLengthLoadsAsConcise()
+    {
+        var saved = new MemoryPreferencesStore { Json = """{"NoteDetail":"standard"}""" };
+        Assert.Equal("concise", AppPreferences.Load(saved).NoteDetail);
+        Assert.Equal(["concise", "detailed"], NoteOptions.Details.Select(d => d.Value));
     }
 }

@@ -42,11 +42,11 @@ public class NoteOptionsTest
             Path.GetTempPath(), $"clinicavt-test-{Guid.NewGuid():N}", "preferences.json");
         var (_, engine, note) = TestSession.Create(new AppPreferences(path));
 
-        note.Detail = "concise";
+        note.Detail = "detailed";
 
-        Assert.Equal("concise", AppPreferences.Load(path).NoteDetail);
+        Assert.Equal("detailed", AppPreferences.Load(path).NoteDetail);
         Assert.Contains(engine.Requests,
-            r => r.Method == "note/options" && r.Params.Contains("concise"));
+            r => r.Method == "note/options" && r.Params.Contains("detailed"));
         Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
     }
 

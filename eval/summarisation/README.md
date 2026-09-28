@@ -18,7 +18,7 @@ summariser-selection, note-tiers-baseline-2026-09, rigor-pilot, bertscore, case-
 python eval/summarisation/prep.py
 python eval/summarisation/generate.py study --model qwen3.5-4b-int4-ov [--prompt prompt-4b-safety.md --tag qwen3.5-4b-safety]
 python eval/summarisation/generate.py app --tier default                       # app prompts, sealed transcripts
-python eval/summarisation/generate.py app --model gemma-4-31b-it-int4-ov --limit 2 --details standard
+python eval/summarisation/generate.py app --model gemma-4-31b-it-int4-ov --limit 2 --details concise
 python eval/summarisation/judge.py tasks <tag> [--transcripts sealed]
 python eval/summarisation/judge.py pending <tag>
 python eval/summarisation/judge.py collect <tag> --judge <judge model>

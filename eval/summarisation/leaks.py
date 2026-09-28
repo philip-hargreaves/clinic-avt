@@ -53,10 +53,16 @@ def leaks(text, source):
     return found
 
 
+NOTE_KINDS = ("concise", "detailed", "standard", "soap")
+
+
 def main():
     prefixes = sys.argv[1:] or ["tier-constrained", "tier-default", "tier-accuracy"]
     for prefix in prefixes:
-        for kind in ["standard", "soap", "sheet", "label"]:
+        # Sheets and titles are written from this note
+        base = "concise" if os.path.isdir(os.path.join(NOTES, f"{prefix}-concise")) else "standard"
+        # standard: the middle length of runs banked before the two lengths
+        for kind in ["concise", "detailed", "standard", "soap", "sheet", "label"]:
             files = sorted(glob.glob(os.path.join(NOTES, f"{prefix}-{kind}", "*.md")))
             if not files:
                 continue
@@ -71,19 +77,19 @@ def main():
                 if text.startswith("NOT A CONSULTATION"):
                     refused += 1
                     continue
-                note_kind = "soap" if kind == "soap" else "standard"
-                source = transcript(cid) if kind in ("standard", "soap") else (
+                note_kind = "soap" if kind == "soap" else base
+                source = transcript(cid) if kind in NOTE_KINDS else (
                     read(os.path.join(NOTES, f"{prefix}-{note_kind}", f"{cid}.md")) or "")
                 for name in leaks(text, source):
                     counts[name] = counts.get(name, 0) + 1
-                if kind in ("standard", "soap"):
+                if kind in NOTE_KINDS:
                     said = transcript(cid)
                     if re.search(GENDERED, text, re.I) and not re.search(GENDERED, said, re.I):
                         pronoun += 1
                 if kind == "label" and text.strip().lower().strip('"') in LABEL_EXAMPLES \
                         and text.strip().lower().strip('"') not in source.lower():
                     examples += 1
-            extra = f", guessed sex {pronoun}" if kind in ("standard", "soap") else ""
+            extra = f", guessed sex {pronoun}" if kind in NOTE_KINDS else ""
             extra += f", example title {examples}" if kind == "label" else ""
             listed = ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])) or "none"
             print(f"{prefix}-{kind}: n={n} refused={refused} empty={empty}{extra}; leaks: {listed}")
