@@ -359,10 +359,21 @@ int main(int argc, char* argv[]) {
             *transcriber, *vad, *diariser, std::chrono::seconds(10),
             5 * clinicavt::audio::kSampleRate, note_writer.get(), &metrics);
 
-        // Added documents embed between note searches and wait while a consultation runs
+        // Added documents embed between note searches and wait while a consultation runs. A
+        // first run starts the clinician's folder with the guidelines shipped beside the models
+        const auto guidelines = GuidelinesFolder(guidelines_override);
+        if (guidelines_override.empty()) {
+            const auto seeded = clinicavt::guidance::SeedGuidelines(
+                guidelines, models_root.parent_path() / "guidelines");
+            if (seeded > 0) {
+                std::fprintf(stderr,
+                             "clinicavt-engine: guidelines folder started with %zu documents\n",
+                             seeded);
+            }
+        }
         const auto ingest_host = clinicavt::system::ExeDir() / clinicavt::system::kIngestHostExe;
         clinicavt::guidance::DocumentIngest ingest(
-            guidance_retriever, GuidelinesFolder(guidelines_override), store_root / "documents",
+            guidance_retriever, guidelines, store_root / "documents",
             [&controller] { return controller.Running(); },
             std::filesystem::exists(ingest_host) ? ingest_host : std::filesystem::path());
         ingest.SetListener(

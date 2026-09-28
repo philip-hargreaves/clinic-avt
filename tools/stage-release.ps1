@@ -40,6 +40,16 @@ Copy-Item (Join-Path $repo "prompts") (Join-Path $Out "prompts") -Recurse
 Copy-Item (Join-Path $repo "demo") (Join-Path $Out "demo") -Recurse
 Copy-Item (Join-Path $repo "README.md") $Out
 
+# Guidelines a first run copies into the clinician's folder: the client's set without NICE, and
+# the open-licence BSR ones. They stay out of git (rag/sources). The shingles guidance is a scan
+# with no text to search
+$guidelines = Join-Path $Out "guidelines"
+New-Item -ItemType Directory $guidelines | Out-Null
+Get-ChildItem (Join-Path $repo "rag\sources\st-georges\folder") -Filter *.pdf |
+    Where-Object { $_.Name -notmatch '^NICE ' -and $_.Name -notmatch '^Shingles ' } |
+    Copy-Item -Destination $guidelines
+Copy-Item (Join-Path $repo "rag\sources\bsr-open\*.pdf") $guidelines
+
 robocopy (Join-Path $repo "models") (Join-Path $Out "models") /E /XD .cache /NFL /NDL /NJH /NJS | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "model copy failed" }
 $global:LASTEXITCODE = 0
