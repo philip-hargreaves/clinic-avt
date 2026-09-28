@@ -244,6 +244,9 @@ public class BackupDialogsTest
         using var restore = new RestoreViewModel(new EngineApi(engine), picker, preferences,
             new InlineDispatcher(), FakeTimeProvider.London());
 
+        // A backup opens on any install, so the dialog says where it may be restored
+        Assert.Contains("approved for patient information", restore.Caption);
+
         // Restoring onto a computer set to keep nothing would override that choice
         await restore.ChooseFileCommand.ExecuteAsync(null);
         restore.Password = "maple-orbit-fender-quill-harbor";

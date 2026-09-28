@@ -14,7 +14,8 @@ public static class BackupWords
         + "patient information and audio are not included.";
 
     public const string RestoreCaption =
-        "Choose the backup file and enter its password. Nothing is added until you confirm.";
+        "Choose the backup file and enter its password. Nothing is added until you confirm. Restore "
+        + "only on a computer your practice has approved for patient information.";
 
     public const string PasswordNote =
         "Save this password somewhere safe. Without it, this backup can't be opened.";
