@@ -1,19 +1,12 @@
-"""Scores the guidance tab on the St George's cases against the clinician's own folder, through
-the engine the app ships. Every card is checked against the documents the gold names as
-`expected_documents`.
+"""The St George's cases, or every folder_study.py query, through the engine the app ships.
 
-    python tools/retrieval/folder_eval.py [--tag before] [--mode note|query] [study]
+    python folder_eval.py [--tag before] [--mode note|query] [study]
 
-note (default) is what the app does after a note is written: the case becomes the stored note
-of a demo copy and the engine searches it sentence by sentence. query sends the case as one
-typed search. Either writes build/retrieval/folder-<date>-<tag>.jsonl with every card and the
-sentence that found it, and prints hit@1, hit@3 and abstentions.
-
-study runs every query of folder_study.py, in scope and out, and writes its cards in that
-tool's run format to the study working directory as runs-engine-<tag>.jsonl, so that
-`folder_study.py score runs-engine-<tag>.jsonl` judges the engine itself.
-
-Close the app first.
+note (default) stores each case as the note of a demo copy and searches it sentence by sentence,
+as the app does after a note is written; query sends the case as one typed search. Writes
+build/retrieval/folder-<date>-<tag>.jsonl and prints hit@1, hit@3 and abstentions against the
+gold's `expected_documents`. study writes every study query's cards to the study working directory
+as runs-engine-<tag>.jsonl, for `folder_study.py score`. Close the app first.
 """
 
 import json
@@ -23,7 +16,6 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools", "demo"))
-sys.path.insert(0, os.path.join(ROOT, "tools", "retrieval"))
 import record_masters as rm  # noqa: E402
 
 GOLD = os.path.join(ROOT, "rag", "gold", "st-georges-cases", "cases.jsonl")

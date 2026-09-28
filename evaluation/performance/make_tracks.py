@@ -1,5 +1,8 @@
-# Builds the 1x replay tracks from the demo consults: 2/5/10 min slices and
-# 15/20 min concatenations. Output under build/perf-loop/audio, never the repo.
+"""Cut the 1x replay tracks from the demo consultations: 2/5/10-minute slices, 15/20-minute joins
+and whole consultations, into build/perf-loop/audio.
+
+    python evaluation/performance/make_tracks.py
+"""
 import os
 import sys
 import wave
@@ -40,7 +43,7 @@ write("c05m_elbow.wav", elbow[:5 * 60 * SEC])
 write("c10m_weight.wav", weight[:10 * 60 * SEC])
 write("c15m_elbow_chest.wav", elbow + chest[:6 * 60 * SEC])
 write("c20m_weight_allergy.wav", weight + allergy[:int(8.4 * 60 * SEC)])
-# Whole consults, for reading sealed transcripts and notes before/after a change
+# Whole consultations, for reading transcripts and notes before and after a change
 write("cfull_elbow.wav", elbow)
 write("cfull_day1_consultation01.wav", read("day1_consultation01_mixed.wav"))
 write("cfull_day1_consultation09.wav", allergy)

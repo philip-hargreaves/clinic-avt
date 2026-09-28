@@ -5,8 +5,8 @@
     result = engine.request("session/list")
     engine.close()
 
-Importing this module has no side effects. close() asks engine/exit and waits; it never kills,
-because a process stopped mid-GPU can wedge the graphics driver.
+close() asks engine/exit and waits; it never kills, because a process stopped mid-GPU can wedge
+the graphics driver.
 """
 
 import collections
@@ -25,8 +25,8 @@ class EngineDied(RuntimeError):
 
 class Engine:
     # One synchronous pipe handle serialises reads and writes, so a blocking read on another
-    # thread would stall every write. Single-threaded instead: PeekNamedPipe says how much is
-    # waiting and only that much is read.
+    # thread would stall every write. PeekNamedPipe says how much is waiting and only that much
+    # is read.
     def __init__(self, command, pipe_name, log_path, cwd=None):
         self.log_path = log_path
         self.log_offset = 0
@@ -60,7 +60,7 @@ class Engine:
         return avail.value
 
     def _pump(self):
-        # Reads what is waiting and parses whole frames; True if anything arrived
+        # True if anything arrived
         avail = self._available()
         if avail == 0:
             if self.proc.poll() is not None:

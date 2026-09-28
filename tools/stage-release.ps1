@@ -1,15 +1,13 @@
-# Builds the complete release folder: ClinicAVT.exe and the README at the top, and in app\ the
-# app (self-contained, no runtime install), the engine and its runtimes, prompts, example
-# recordings, guidelines and the model weights. Zip the folder and it is the whole release -
-# extract, double-click ClinicAVT.exe, done. Build the release preset first: the launcher and
+# Builds the release folder: ClinicAVT.exe and README.txt at the top; in app\ the self-contained
+# app, the engine and its runtimes, prompts, example recordings, guidelines and model weights.
+# Zip the folder and it is the whole release. Build the release preset first: the launcher and
 # the engine come from build\release.
 #
-# Model .cache dirs stay out: they are compiled blobs specific to this
-# machine's GPU and driver, and every machine rebuilds its own on first use.
-#
-# -SmallNoteModel ships only the smallest note model, for a much smaller download.
+# Model .cache dirs stay out: they are compiled for this machine's GPU and driver, and every
+# machine builds its own on first use.
 #
 #   stage-release.ps1 [-Out <folder>] [-SmallNoteModel]      default build\clinicavt
+#   -SmallNoteModel ships only the constrained-tier note model, for a much smaller download.
 param(
     [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\clinicavt"),
     [switch]$SmallNoteModel
@@ -28,14 +26,12 @@ dotnet publish "$repo\app\ClinicAVT.App\ClinicAVT.App.csproj" -c Release -r win-
     --self-contained -p:Platform=x64 -o $app
 if ($LASTEXITCODE -ne 0) { throw "app publish failed" }
 
-# Anything SatelliteResourceLanguages does not catch: the recipient reads
-# English, the culture folders are noise
+# Culture folders SatelliteResourceLanguages misses; the app is English only
 Get-ChildItem $app -Directory |
     Where-Object { $_.Name -match '^[a-z]{2,3}(-[A-Za-z0-9]{2,12})*$' -and $_.Name -notmatch '^en' } |
     Remove-Item -Recurse -Force
 
-# The engine is native C++; on a machine without the VC++ redistributable it
-# will not start, so the CRT ships beside it
+# Without the VC++ redistributable the engine will not start, so the CRT ships beside it
 $crt = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio" -Recurse `
         -Directory -Filter "Microsoft.VC*.CRT" -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match "\\x64\\" -and $_.FullName -notmatch "onecore|debug" } |
@@ -45,13 +41,12 @@ Copy-Item (Join-Path $crt.FullName "*.dll") $app
 
 # Beside the exe in the dev tree these are junctions; the package carries real copies
 Copy-Item (Join-Path $repo "prompts") (Join-Path $app "prompts") -Recurse
-# The example recordings and cases; the reflections there are evaluation fixtures
+# Example recordings and cases; demo\reflections only seeds the developer sample year
 robocopy (Join-Path $repo "demo") (Join-Path $app "demo") /E /XD reflections /NFL /NDL /NJH /NJS | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "demo copy failed" }
 
-# Guidelines a first run copies into the clinician's folder: the client's set without NICE, and
-# the open-licence BSR ones. They stay out of git (rag/sources). The shingles guidance is a scan
-# with no text to search
+# Guidelines a first run copies into the clinician's folder: the client's set without NICE, plus
+# the open-licence BSR ones (both out of git). The shingles guidance is a scan with no text
 $guidelines = Join-Path $app "guidelines"
 New-Item -ItemType Directory $guidelines | Out-Null
 Get-ChildItem (Join-Path $repo "rag\sources\st-georges\folder") -Filter *.pdf |

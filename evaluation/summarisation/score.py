@@ -49,8 +49,8 @@ def score_note(j):
     }
 
 
-def records(tag, root=None):
-    folder = (root or config.path("summarisation")) / "runs" / tag
+def records(tag):
+    folder = config.path("summarisation") / "runs" / tag
     return {p.stem: read_json(p) for p in sorted(folder.glob("*.json"))}
 
 

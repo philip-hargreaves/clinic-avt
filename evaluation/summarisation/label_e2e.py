@@ -1,5 +1,8 @@
-# End-to-end: one replayed consult through the real engine, then the title
-# must be in session/list. Needs the perf-loop tracks (performance/make_tracks.py). One GPU job.
+"""End to end: one replayed consult through the real engine, then the title must be in
+session/list. Needs the perf-loop tracks (performance/make_tracks.py). One GPU job.
+
+    python evaluation/summarisation/label_e2e.py
+"""
 import os
 import sys
 import time

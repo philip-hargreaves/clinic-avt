@@ -1,7 +1,7 @@
 """Anonymisation sweep for the appraisal case summary: prompts/case-summary.md over each tier's
-concise notes (generate.py app; standard for runs banked before the two lengths), then every summary scanned with the app's identifier
-patterns and a few more. Weekday and month names, age-like numbers and clinician mentions
-count; capitalised words mid-sentence that are not common clinical terms are listed to read.
+concise notes (standard in banked runs), each summary then scanned with the app's identifier
+patterns plus weekdays, months, age-like numbers and clinician mentions. Capitalised mid-sentence
+words that are not common clinical terms are listed to read.
 
   notes/case-summary-<tier>/<cid>.md, notes/case-summary-timings.jsonl
   build/evaluation/summarisation/case-summary-scan.md
@@ -41,8 +41,7 @@ PATTERNS = {
     "bare number that could be an age": re.compile(r"\b(?:age|aged|at)\s+\d{1,3}\b", re.I),
     "clinician mentioned": re.compile(r"\b(?:doctor|clinician|GP|nurse)\b", re.I),
 }
-# Capitalised words mid-sentence that are not the start and not common clinical words are
-# candidate names; listed for reading, not counted as failures
+# Capitalised mid-sentence words outside this set are listed as candidate names to read
 COMMON = set("""The A An On In At No Patient Olecranon Paracetamol Ibuprofen Naproxen NSAID NSAIDs GP
 UTI COPD BP ECG MRI CT NHS Type Covid COVID Amoxicillin Trimethoprim Nitrofurantoin Omeprazole
 Sertraline Citalopram Fluoxetine Salbutamol Metformin Ramipril Amlodipine Atorvastatin Codeine

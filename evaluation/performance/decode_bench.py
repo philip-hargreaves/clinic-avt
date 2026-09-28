@@ -1,8 +1,8 @@
 """Decode rate of one note model on the exact IR, one configuration per process (fresh GPU state).
 
-The prompt is the narrative style, a long rheumatology consultation and the standard detail
-file, in the model's template from evaluation/config.toml; greedy. The first generation warms, the
-rest count. Prints one JSON line.
+The prompt is the narrative style, a long rheumatology consultation and the concise detail file,
+in the model's template from evaluation/config.toml; greedy. Prints one JSON line with every rep (the
+first one warms).
 
     python evaluation/performance/decode_bench.py qwen3.5-9b-int4 [--tokens 300] [--reps 2]
 """

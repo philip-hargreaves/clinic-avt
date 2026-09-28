@@ -30,17 +30,21 @@ def folder():
     return config.out("transcription", "references")
 
 
+def save(consult):
+    path = folder() / f"{consult}.json"
+    path.write_text(json.dumps(build(consult), indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def load(consult):
     path = folder() / f"{consult}.json"
     if not path.exists():
-        path.write_text(json.dumps(build(consult), indent=2, ensure_ascii=False), encoding="utf-8")
+        save(consult)
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def main():
     for consult in primock.consults():
-        (folder() / f"{consult}.json").write_text(json.dumps(build(consult), indent=2, ensure_ascii=False),
-                                                  encoding="utf-8")
+        save(consult)
     leaks = sum(1 for c in primock.consults() for k in ("doctor_ref", "patient_ref", "merged_ref")
                 if "<" in load(c)[k])
     print(f"{len(primock.consults())} references -> {folder()}; residual markup in {leaks} (must be 0)")

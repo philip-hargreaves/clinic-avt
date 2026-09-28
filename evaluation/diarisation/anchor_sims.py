@@ -1,22 +1,26 @@
-# Read the "roles anchor sims" lines a sweep's engines logged at every seal and put them
-# beside the consultation they belong to, so the resemblance between each speaker and the
-# stored print can be compared between the print's own clinician and the others.
-#   python evaluation/diarisation/anchor_sims.py <tag> [own-day-prefix]      e.g. ENR16L day1
-# Engines run several consults each; the sweep log gives the order per engine and the
-# engine's seals are paired with them in that order.
+"""Pair each "roles anchor sims" seal line in a sweep's engine logs with its consultation, to compare
+the stored print's own clinician with the others.
+
+    python evaluation/diarisation/anchor_sims.py <tag> [own-day-prefix]      e.g. ENR16L day1
+"""
 import os
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common import config  # noqa: E402
+
 HERE = str(config.path("out"))
 OK = re.compile(r"(\S+_mixed)\.wav\s+ok")
 SIMS = re.compile(r"roles anchor sims((?: -?[\d.]+)+|\s+none) margin ([\d.]+) -> doctor (-?\d+)")
 
 
 def seals(tag):
-    """(consult, sims, margin, doctor) per seal, in sweep order."""
+    """(consult, sims, margin, doctor) per seal, in sweep order.
+
+    An engine runs several consults; its seals are matched in order to the consults the sweep log
+    lists under it.
+    """
     consults_by_engine = {}
     order = []
     engine = None

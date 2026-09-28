@@ -1,14 +1,11 @@
-"""A note model from the registry in evaluation/config.toml, loaded with OpenVINO GenAI and prompted
-the way its entry says.
+"""A note model from evaluation/config.toml, loaded with OpenVINO GenAI on the GPU only.
 
     model = NoteModel("qwen3.5-9b-int4")
     text, metrics = model.generate(prompt, max_new_tokens=1024)
 
-Templates. "chatml" is the engine's own wrap: one user turn and an empty think block, so the
-model answers without reasoning. "model" is the model's chat template from its tokenizer with
-enable_thinking off; with thinking off Qwen3.8 adds no reasoning-effort block, so both Qwen
-generations see the same prompt. Decoding is greedy unless a temperature is given. No CPU
-fallback: a load failure raises.
+Template "chatml" is the engine's own wrap with an empty think block; "model" is the tokenizer's
+chat template with thinking off, which also drops Qwen3.8's reasoning-effort block. Greedy unless
+a temperature is given.
 """
 
 import re

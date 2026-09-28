@@ -1,6 +1,8 @@
-# Overnight 1x performance loop: drives the release engine over the pipe with
-# replayed consults at real-time speed and records per-phase timings, engine
-# memory and every engine death. Internal evidence tool.
+"""1x performance loop: drives the release engine over its pipe with replayed consultations at real
+time and records per-phase timings, engine memory and every engine death.
+
+    python evaluation/performance/perf_loop.py [hours=8] [track prefix]
+"""
 import ctypes
 import ctypes.wintypes
 import json
@@ -19,7 +21,7 @@ from common.engine_pipe import Engine as PipeEngine, EngineDied  # noqa: E402
 ENGINE = str(config.path("engine"))
 ENGINE_ARGS = os.environ.get("PERF_ENGINE_ARGS", "").split()
 MODELS = str(config.path("app_models"))
-# Working data (tracks, store, logs, results) lives under build/, never in the repo
+# Tracks, store, logs and results live under build/
 HERE = str(config.path("perf_loop"))
 STORE = os.path.join(HERE, "store")
 LOGS = os.path.join(HERE, "logs")
@@ -45,8 +47,7 @@ TRACKS = [
     ("cfull_day3_consultation03.wav", 697),
 ]
 SAVE_DIR = os.path.join(HERE, "transcripts") if os.environ.get("PERF_SAVE") else None
-# Sweeps: replay faster than real time (bit-identical transcript per SpeedParityTest)
-# over every wav in a directory, one engine for the lot
+# Sweeps: every wav in a directory, one engine for the lot, optionally faster than real time
 SPEED = float(os.environ.get("PERF_SPEED", "1.0"))
 AUDIO_DIR = os.environ.get("PERF_AUDIO_DIR")
 if AUDIO_DIR:
@@ -70,6 +71,10 @@ def stamp():
 
 def log(line):
     print(f"{datetime.now().strftime('%H:%M:%S')} {line}", flush=True)
+
+
+def saved_base(track):
+    return os.path.join(SAVE_DIR, f"{TAG.lstrip('-') or 'run'}-{track.rsplit('.', 1)[0]}")
 
 
 def event(kind, **fields):
@@ -287,7 +292,7 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
                 sealed = engine.request("session/transcript", {"id": session_id}, 30)
                 stored_note = engine.request("session/note", {"id": session_id}, 30)
                 stored_patient = engine.request("session/patient", {"id": session_id}, 30)
-                base = os.path.join(SAVE_DIR, f"{TAG.lstrip('-') or 'run'}-{track.rsplit('.', 1)[0]}")
+                base = saved_base(track)
                 with open(base + ".json", "w", encoding="utf-8") as f:
                     json.dump({"turns": sealed.get("turns", []), "note": stored_note.get("text"),
                                "patient": stored_patient.get("text")}, f, indent=1)
@@ -401,16 +406,15 @@ def main():
                 engine.close()
             engine_index += 1
             engine = start_engine(engine_index)
-            # Warm the note model the way the app does: it loads in the
-            # background during the first capture, so the first run is cold
+            # No separate warm-up: as in the app, the note model loads during the first capture,
+            # so each cycle's first run is cold
             log(f"cycle {cycle}")
             for track, duration in tracks:
                 while os.path.exists(PAUSE_FILE) and not os.path.exists(STOP_FILE):
                     time.sleep(5)
                 if now() >= deadline or os.path.exists(STOP_FILE):
                     break
-                if SKIP_DONE and SAVE_DIR and os.path.exists(os.path.join(
-                        SAVE_DIR, f"{TAG.lstrip('-') or 'run'}-{track.rsplit('.', 1)[0]}.json")):
+                if SKIP_DONE and SAVE_DIR and os.path.exists(saved_base(track) + ".json"):
                     log(f"  {track:<24} skipped (transcript saved)")
                     continue
                 run_index += 1

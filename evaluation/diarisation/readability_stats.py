@@ -1,8 +1,8 @@
-# Readability mechanism statistics for two perf-loop sweeps:
-# broken-bigram percentage against the reference, turn shape, duplicated spans, and
-# turn-level identity between the two arms. Paired per consult; prints a markdown table
-# and writes JSON beside the transcripts.
-#   python evaluation/diarisation/readability_stats.py evalS16 evalC16
+"""Readability of two sweeps, paired per consult: broken bigrams against the reference, turn shape,
+duplicated spans and turn-level identity. Prints a markdown table and writes JSON beside the sweep.
+
+    python evaluation/diarisation/readability_stats.py <tagA> <tagB>
+"""
 import json
 import os
 import statistics

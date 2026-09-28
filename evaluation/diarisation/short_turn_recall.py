@@ -1,7 +1,9 @@
-# Short-turn recall: the fraction of reference turns under N words that some hypothesis turn
-# of the right speaker overlaps in time. Turn-weighted and order-aware, so it sees the
-# absorbed-answer error class that word attribution (word-weighted) cannot. Paired per consult.
-#   python evaluation/diarisation/short_turn_recall.py evalS16 evalC16 [max_words=5]
+"""Short-turn recall: the share of reference turns of at most N words that same-speaker hypothesis
+turns cover for at least half their time, paired per consult. Turn-weighted, so it sees absorbed
+answers that word attribution misses.
+
+    python evaluation/diarisation/short_turn_recall.py <tagA> <tagB> [max_words=5]
+"""
 import json
 import os
 import statistics

@@ -1,8 +1,6 @@
-# Stop-to-last-token comparison across note tiers at real time: every track through
-# every arm, interleaved by track so a warming machine lands on each arm alike. Each
-# invocation is a fresh engine, so the per-run record also carries that arm's load.
-# Results: runs-<tag>.jsonl per arm, logs/<tag>-<track>.log per run; summarise with
-# tier_report.py.
+# Stop-to-last-token across note tiers at 1x: every track through every arm, interleaved by
+# track so a warming machine lands on each arm alike. A fresh engine per run, so each record
+# carries that arm's load. Writes runs-<tag>.jsonl and logs/<tag>-<track>.log; see tier_report.py.
 param(
     [string[]]$Tracks = @("c02m", "c05m", "c10m"),
     [string]$Out = (Join-Path $PSScriptRoot "..\..\build\perf-loop")

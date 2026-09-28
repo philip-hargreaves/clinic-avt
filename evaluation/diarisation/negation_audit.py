@@ -1,8 +1,9 @@
-# Negation audit: the raw screen (score_gate.py) lists every negation token lost, added or
-# changed; most are repeats or backchannels. A blinded reader classifies each in context so
-# the write-up can say how many change clinical meaning. Packs per arm; merge reads the JSON back.
-#   python evaluation/diarisation/negation_audit.py pack <arm> [per_pack=40]
-#   python evaluation/diarisation/negation_audit.py merge <arm>
+"""Blinded negation audit: a reader classifies each negation difference from score_gate.py by
+whether it changes clinical meaning. pack writes reading packs per arm; merge tallies the results.
+
+    python evaluation/diarisation/negation_audit.py pack <arm> [per_pack=40]
+    python evaluation/diarisation/negation_audit.py merge <arm>
+"""
 import glob
 import json
 import os
@@ -11,6 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common import config  # noqa: E402
+
 HERE = str(config.path("perf_loop"))
 OUT = os.path.join(HERE, "negation-audit")
 

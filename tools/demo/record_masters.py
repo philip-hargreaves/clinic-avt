@@ -1,11 +1,9 @@
-"""Records the demo masters: every bundled track replayed at 1x into the app's own store, with
-the note tier, style and detail the app is set to, and names each one in masters.json beside the
-app's preferences, so demo mode can play them back from the record button.
+"""Replays each demo track at 1x into the app's store with the app's note settings and names the
+sessions in masters.json. evaluation/retrieval/folder_eval.py copies one of them for its note mode.
 
     python tools/demo/record_masters.py [track name ...]
 
-Runs the engine the app ships (its bin folder: models, corpora and store all resolve as in the
-app), so close the app first; one model-loading job at a time.
+Runs the engine from the app's Debug bin folder, so close the app first.
 """
 
 import glob
@@ -82,7 +80,6 @@ def record(engine, name, path):
 
 
 def remember(name, row):
-    # Demo mode plays the master this file names for the chosen track
     masters = {}
     if os.path.exists(MASTERS):
         with open(MASTERS, encoding="utf-8") as f:
@@ -104,7 +101,6 @@ def main():
     engine = launch()
     try:
         engine.wait_up()
-        # The masters are written the way the app is set up to write
         prefs = {}
         if os.path.exists(PREFERENCES):
             with open(PREFERENCES, encoding="utf-8") as f:

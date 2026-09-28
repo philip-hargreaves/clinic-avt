@@ -1,7 +1,8 @@
-# The voiceprint learning curve: how strongly the doctor cluster matched the stored print
-# at each of one clinician's consultations, from a cold start and from an enrolment.
-#   python evaluation/diarisation/anchor_curve.py <cold tag> <enrolled tag> <day prefix> <out.png>
-# Writes the figure and a CSV beside it.
+"""Voiceprint learning curve: the doctor's similarity to the stored print over one clinician's
+consultations, from a cold start and from an enrolment. Writes the figure and a CSV beside it.
+
+    python evaluation/diarisation/anchor_curve.py <cold tag> <enrolled tag> <day prefix> <out.png>
+"""
 import csv
 import os
 import sys
@@ -43,7 +44,7 @@ ax.axhspan(0.44, 0.745, color="grey", alpha=0.15, lw=0)
 ax.text(15.3, 0.59, "another\nclinician's\nprint", fontsize=8, color="dimgrey", va="center", ha="left")
 ax.axhline(0.80, color="black", ls="--", lw=1)
 ax.text(15.3, 0.825, "floor 0.80", fontsize=8, va="center", ha="left")
-if cold and cold[0][2] != cold[0][2]:  # no print yet: the content named the roles
+if cold and cold[0][2] != cold[0][2]:  # NaN: no print yet, the content named the roles
     ax.annotate("no print yet:\nroles from content", xy=(1, 0.02), xytext=(1.3, 0.2), fontsize=8,
                 arrowprops=dict(arrowstyle="->", color="grey"), color="dimgrey")
 ax.set_xlim(0.5, 17.5)

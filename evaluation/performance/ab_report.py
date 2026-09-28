@@ -1,4 +1,7 @@
-# Summarise the EcoQoS A/B/C test: runs-ab.jsonl joined with ab-post.jsonl
+"""Summarise the EcoQoS A/B/C test (runs-ab.jsonl joined with ab-post.jsonl) into ab-report.md.
+
+    python evaluation/performance/ab_report.py
+"""
 import collections, json, os, statistics, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -35,7 +38,7 @@ out = []
 w = out.append
 w(f"# EcoQoS A/B/C - {len(runs)} runs, {sum(r['outcome'] == 'ok' for r in runs)} clean\n")
 
-# Verification that the state was actually applied
+# Read back from the processes, to show the state was applied
 w("## Throttling state read back from the processes\n")
 w("| condition | n | engine state (control/state) | host state | host found after |")
 w("|---|---|---|---|---|")

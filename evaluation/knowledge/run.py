@@ -1,14 +1,7 @@
-"""The medical knowledge suite (MedQA, MedMCQA, PubMedQA and six MMLU medical subjects), zero-shot
-multiple choice scored by loglikelihood through lm-evaluation-harness, on the iGPU.
-
-Two backends, one scoring rule:
-  optimum  an LLM export (openvino_model.xml) through lm-eval's OpenVINO model; the backend of
-           every banked result
-  split    a VLM split (openvino_language_model.xml with its text embeddings) driven directly on
-           ov.Core: embed the tokens, run the language model once over context + continuation,
-           sum the continuation's log-probabilities. The vision parts are never loaded.
-The backend is chosen from the folder. Models whose tokenizer omits BOS but were trained with
-one (Gemma, Mistral; "bos" in evaluation/config.toml) get it prepended, or scores collapse to chance.
+"""The medical knowledge suite: zero-shot multiple choice scored by loglikelihood through
+lm-evaluation-harness, on the iGPU. LLM exports run through lm-eval's OpenVINO model; VLM exports
+run their text embeddings and language model on ov.Core, without the vision parts. Models trained
+with a BOS their tokenizer omits ("bos" in evaluation/config.toml) get it prepended, or scores fall to chance.
 
     python evaluation/knowledge/run.py qwen3.5-9b-int4-ov
     python evaluation/knowledge/run.py gemma-4-31b-it-int4-ov --limit 5          # smoke: 5 per task

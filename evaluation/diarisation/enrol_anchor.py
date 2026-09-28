@@ -1,7 +1,8 @@
-# Enrol a voiceprint through the real engine from a wav standing in for the microphone,
-# and stage the resulting anchor for a sweep. Validates the enrolment path end to end and
-# gives the 57-consultation gate an enrolled print to compare with the accrued one.
-#   EVAL_ENGINE=<engine exe> python evaluation/diarisation/enrol_anchor.py <doctor wav> <out anchor.bin> [seconds]
+"""Enrol a voiceprint through the real engine from a wav standing in for the microphone, and copy
+the anchor out for a sweep.
+
+    EVAL_ENGINE=<engine exe> python evaluation/diarisation/enrol_anchor.py <doctor wav> <out anchor.bin> [seconds]
+"""
 import os
 import shutil
 import sys

@@ -1,8 +1,8 @@
 """Mix each PriMock57 consultation's two speaker channels into one single-microphone track.
 
-Summed as recorded (no per-channel rebalancing), DC removed, one uniform gain so the peak sits
-at 0.95 of full scale: deterministic and clip-free. Writes <cid>_mixed.wav (16 kHz mono 16-bit)
-and mixed_manifest.csv to EVAL_MIXED_AUDIO (default: the research bench's mixed/ folder).
+Summed as recorded with DC removed, then one uniform gain so the peak sits at 0.95 of full scale.
+Writes <cid>_mixed.wav (16 kHz mono 16-bit) and mixed_manifest.csv to `mixed_audio` in
+evaluation/config.toml.
 
     python evaluation/transcription/mix.py
 """

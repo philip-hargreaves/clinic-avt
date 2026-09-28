@@ -5,8 +5,8 @@
     python score.py integrity              deterministic checks on the patient sheets
     python score.py cost                   seconds per sheet
 
-Reads results/<set>/<system>.jsonl under mt_root and prints tables. Writes the same as
-results/<set>/scores.json.
+Reads results/<set>/<system>.jsonl under mt_root and prints tables. refs and integrity also
+write theirs as JSON beside the results.
 """
 
 import json

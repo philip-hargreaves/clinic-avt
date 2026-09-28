@@ -4,12 +4,11 @@
     python lifecycle_probe.py matrix <out.jsonl> <work dir> [a,b]  variants, compile then import twice
 
 Options: --cache-mode size|speed, --no-mmap, --threads N, --pcore, --dq 0, --no-partials,
---warm ready|sheet, --unload, --tokenizer <dir>. A --tokenizer runs as the engine runs the
-SentencePiece one, with punctuation made plain and the source language and end tokens added.
+--warm ready|sheet, --unload, --tokenizer <dir> (a SentencePiece tokenizer, run as the engine runs it).
 
-Mirrors NllbTranslator: tokenizer and detokenizer on their own Core without a cache, encoder
-and stateful decoder compiled with CACHE_DIR, greedy decoding one sentence at a time, the
-runner-up breaking a triple repeat and, by default, a detokenize per token as the partials do.
+Mirrors NllbTranslator: tokenizers on their own uncached Core, encoder and stateful decoder with
+CACHE_DIR, greedy decoding per sentence, the runner-up breaking a triple repeat, and by default a
+detokenize per token as the partials do.
 """
 
 import json
@@ -20,6 +19,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from common.io import read_json  # noqa: E402
 from study import APP_MODELS, ROOT, SHEETS  # noqa: E402
 
 MODEL = APP_MODELS / "nllb-200-600m-int8"
@@ -95,7 +95,7 @@ def probe(label: str, cache: Path, args: list[str]) -> dict:
     marks["tokenizers_s"] = time.perf_counter() - t
     out["mem_loaded"] = memory()
 
-    spec = json.load(open(MODEL / "languages.json", encoding="utf-8"))
+    spec = read_json(MODEL / "languages.json")
     eos, start_id = spec["special"]["eos"], spec["special"]["decoderStart"]
     partials = "--no-partials" not in args
     beam = ov.Tensor(np.array([0], dtype=np.int32))

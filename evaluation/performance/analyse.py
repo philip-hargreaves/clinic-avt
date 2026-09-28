@@ -1,4 +1,7 @@
-# Summarises runs.jsonl + events.jsonl from perf_loop.py into report.md
+"""Summarise perf_loop.py's runs.jsonl and events.jsonl into report.md.
+
+    python evaluation/performance/analyse.py
+"""
 import collections
 import json
 import os
@@ -29,6 +32,11 @@ def pct(values, p):
     return values[lo] + (values[hi] - values[lo]) * (k - lo)
 
 
+def median(values):
+    values = [v for v in values if v is not None]
+    return statistics.median(values) if values else None
+
+
 def fmt(v, digits=1):
     return "-" if v is None else f"{v:.{digits}f}"
 
@@ -57,7 +65,6 @@ def main():
       + f". {len(runs)} runs, {len(ok)} clean, {len(starts)} engine launches, "
       f"**{len(deaths)} engine deaths**.\n")
 
-    # Outcomes
     counts = collections.Counter(r["outcome"] for r in runs)
     w("## Outcomes\n")
     w("| outcome | runs |\n|---|---|")
@@ -65,7 +72,6 @@ def main():
         w(f"| {k} | {v} |")
     w("")
 
-    # Per track
     w("## Per track (median / p95 / max, seconds)\n")
     w("| track | audio | n | finalise | note first token | note done | sheet done | stop to all done |")
     w("|---|---|---|---|---|---|---|---|")
@@ -81,7 +87,6 @@ def main():
           f"| {stats([r.get('stop_to_all_done_s') for r in rs])} |")
     w("")
 
-    # Finalise stages
     w("## Finalise stage breakdown (engine's own clock, median seconds since stop)\n")
     stage_names = []
     for r in ok:
@@ -91,15 +96,10 @@ def main():
     w("| track | " + " | ".join(stage_names) + " |")
     w("|---|" + "---|" * len(stage_names))
     for track, rs in sorted(by_track.items(), key=lambda kv: kv[1][0]["audio_s"]):
-        cells = []
-        for name in stage_names:
-            cells.append(fmt(statistics.median([r["finalise_stages"][name] for r in rs
-                                                if name in r.get("finalise_stages", {})]) if any(
-                name in r.get("finalise_stages", {}) for r in rs) else None))
+        cells = [fmt(median([r.get("finalise_stages", {}).get(name) for r in rs])) for name in stage_names]
         w(f"| {track} | " + " | ".join(cells) + " |")
     w("")
 
-    # Engine-side metrics
     w("## Engine metrics per run (median)\n")
     w("| track | ASR realtime factor | lost frames | diar ticks | turns | clusters |")
     w("|---|---|---|---|---|---|")
@@ -107,11 +107,11 @@ def main():
         ms = [r["metrics"] for r in rs if r.get("metrics")]
         if not ms:
             continue
-        med = lambda k: fmt(statistics.median([m[k] for m in ms if m.get(k) is not None])) if any(m.get(k) is not None for m in ms) else "-"
-        w(f"| {track} | {med('asrRealtimeFactor')} | {med('lostFrames')} | {med('diarTicks')} | {med('turns')} | {med('clusters')} |")
+        cells = [fmt(median([m.get(k) for m in ms]))
+                 for k in ("asrRealtimeFactor", "lostFrames", "diarTicks", "turns", "clusters")]
+        w(f"| {track} | " + " | ".join(cells) + " |")
     w("")
 
-    # Memory
     w("## Engine memory (working set MB after each run, by cycle)\n")
     by_cycle = collections.defaultdict(list)
     for r in runs:
@@ -126,7 +126,6 @@ def main():
     if sysmem:
         w(f"System commit available: first {sysmem[0]} MB, last {sysmem[-1]} MB, min {min(sysmem)} MB.\n")
 
-    # Cold starts
     w("## Engine launches\n")
     w("| # | echo (s) | ready (s) | ws at ready (MB) |")
     w("|---|---|---|---|")
@@ -134,7 +133,6 @@ def main():
         w(f"| {e['index']} | {fmt(e.get('echo_s'), 2)} | {fmt(e.get('ready_s'))} | {(e.get('mem') or {}).get('ws_mb', '-')} |")
     w("")
 
-    # Deaths and failures
     w("## Engine deaths\n")
     if not deaths:
         w("None.\n")

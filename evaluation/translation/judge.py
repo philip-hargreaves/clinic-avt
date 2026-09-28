@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common.io import read_jsonl  # noqa: E402
+from common.io import read_json, read_jsonl  # noqa: E402
 from common.stats import mean_interval  # noqa: E402
 from study import LANGUAGES, LOW_RESOURCE, REFERENCE, ROOT  # noqa: E402
 
@@ -166,9 +166,9 @@ def plant():
 
 def verdicts(kind: str):
     for path in sorted(folder(kind, "verdicts").glob("*.json")):
-        key = json.load(open(folder(kind, "keys") / path.name, encoding="utf-8"))
+        key = read_json(folder(kind, "keys") / path.name)
         try:
-            verdict = json.load(open(path, encoding="utf-8"))
+            verdict = read_json(path)
         except json.JSONDecodeError:
             print("unreadable verdict:", path.name)
             continue
@@ -267,9 +267,9 @@ def repeat():
     """Ten tasks (seed 11) judged a second time, both passes scored per translation."""
     first, second, crit1, crit2, adq1, adq2, best = [], [], [], [], [], [], 0
     for path in sorted(folder("sheets", "verdicts-repeat").glob("*.json")):
-        item = json.load(open(folder("sheets", "keys") / path.name, encoding="utf-8"))["items"]["1"]
-        a = json.load(open(folder("sheets", "verdicts") / path.name, encoding="utf-8"))["items"]["1"]
-        b = json.load(open(path, encoding="utf-8"))["items"]["1"]
+        item = read_json(folder("sheets", "keys") / path.name)["items"]["1"]
+        a = read_json(folder("sheets", "verdicts") / path.name)["items"]["1"]
+        b = read_json(path)["items"]["1"]
 
         def scored(verdict, letter):
             return penalty(verdict[letter]["errors"], item["words"])

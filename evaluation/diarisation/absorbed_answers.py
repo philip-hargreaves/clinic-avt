@@ -1,9 +1,8 @@
-# Absorbed answers: reference turns of at most N words heard under the OTHER speaker,
-# and missing answers: words absent near their time. This is the error class the blinded
-# attribution judge sees and word attribution does not. Per arm, plus the paired difference.
-#   python evaluation/diarisation/absorbed_answers.py evalS16 evalC16 [max_words=12]
-# ABSORBED_SUBSTANTIVE=1: only answers a professional transcriber would keep (a content
-# word, or a bare yes/no replying to the other speaker's question).
+"""Short reference answers heard under the other speaker (absorbed) or missing near their time,
+per arm and paired. ABSORBED_SUBSTANTIVE=1 counts only answers a transcriber would keep.
+
+    python evaluation/diarisation/absorbed_answers.py <tagA> <tagB> [max_words=12]
+"""
 import json
 import os
 import sys
@@ -29,8 +28,8 @@ FILLER = {"ok", "okay", "yeah", "yep", "yup", "mm", "mhm", "mmhmm", "mmm", "hmm"
           "think", "very", "much", "bit", "little", "ill", "im", "youre", "its", "thats", "in",
           "at", "with", "for", "be", "been", "was", "were", "am", "yours", "one", "two", "sec",
           "second", "moment", "wait", "hang", "hold", "let", "us", "ready", "here", "come",
-          "coming", "fantastic", "excellent", "wonderful", "amazing", "no", "worries", "problem",
-          "understood", "understand", "gotcha", "got"}
+          "coming", "fantastic", "excellent", "wonderful", "amazing", "worries", "problem",
+          "understood", "understand", "gotcha"}
 YES_NO = {"yes", "yeah", "yep", "yup", "no", "nope"}
 
 
@@ -68,8 +67,7 @@ def classify(ref_ivs, hyp):
         dur = max(1e-6, end - start)
         key = " ".join(words[:3]) if len(words) >= 2 else words[0]
         near = [(s, e, hs, hw) for s, e, hs, hw in hyp if e >= start - 3 and s <= start + 6]
-        # Kept means the words are there under the right speaker, not merely that a
-        # same-speaker turn covers the time
+        # Kept: the right speaker covers the time and some of the words are in those turns
         covering = [hw for s, e, hs, hw in hyp if hs == spk and min(end, e) > max(start, s)]
         covered = sum(max(0.0, min(end, e) - max(start, s)) for s, e, hs, _ in hyp if hs == spk)
         heard = set(w for hw in covering for w in hw.split())

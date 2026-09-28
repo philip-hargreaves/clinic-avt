@@ -147,7 +147,7 @@ def severity():
     total = sum(inherited.values())
     print(f"inherited (PriMock c/nc): critical {inherited['critical']} ({100 * inherited['critical'] / total:.0f}%)")
     print(f"recalibrated (taxonomy):  critical {recal['critical']} ({100 * recal['critical'] / total:.0f}%)")
-    print(f"critical omissions per note, inherited / recalibrated:")
+    print("critical omissions per note, inherited / recalibrated:")
     for tag in config.section("summarisation")["bootstrap"]:
         recs = records(tag).values()
         per_note = [[it for it in j.get("checklist", []) if not it.get("present")] for j in recs]

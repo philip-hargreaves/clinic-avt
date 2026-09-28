@@ -1,8 +1,7 @@
 """Normalisation, applied identically to reference and hypothesis.
 
-normalize()      -> Whisper EnglishTextNormalizer + a UK->US medical top-up (headline).
-normalize_raw()  -> lowercase + de-punctuate only (transparency: shows the cosmetic gap).
-The Whisper normalizer covers most British spellings; UK_US_MEDICAL closes the clinical gaps it misses.
+normalize()      Whisper's EnglishTextNormalizer plus the clinical UK-to-US spellings it misses
+normalize_raw()  lowercase and strip punctuation only, to show the cosmetic gap
 """
 import re
 
@@ -10,7 +9,7 @@ from transcription.normalizers import EnglishTextNormalizer
 
 _EN = EnglishTextNormalizer()
 
-# UK -> US clinical spellings the base english.json dict misses (post-normalizer word forms).
+# Clinical spellings english.json misses, keyed by the normaliser's output word forms
 UK_US_MEDICAL = {
     "haematoma": "hematoma", "haemoglobin": "hemoglobin",
     "haemorrhage": "hemorrhage", "haemorrhoids": "hemorrhoids", "haematuria": "hematuria",

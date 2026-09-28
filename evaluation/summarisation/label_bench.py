@@ -1,7 +1,8 @@
-# Runs the label prompt over a sweep's saved notes on one note model, so every title can be
-# read before the prompt ships. Reads the transcripts perf_loop.py saves with PERF_SAVE and
-# writes labels-<tag>.txt beside them. One GPU job.
-#   python evaluation/summarisation/label_bench.py <tag> [model]
+"""Run the label prompt over a sweep's saved notes (perf_loop.py with PERF_SAVE) on one note model
+and write labels-<tag>.txt beside them, so every title can be read before the prompt ships. One GPU job.
+
+    python evaluation/summarisation/label_bench.py <tag> [model]
+"""
 import json
 import os
 import sys

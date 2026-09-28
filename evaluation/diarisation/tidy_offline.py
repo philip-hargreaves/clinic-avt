@@ -1,7 +1,8 @@
-# Offline port of core/diarisation/tidy_transcript.hpp so a tidied copy of an existing sweep
-# can be scored against its untidied self: same decode, same cuts, only the tidy differs.
-# The C++ is the source of truth; this is a hand-kept copy of its three rules and can drift.
-#   python evaluation/diarisation/tidy_offline.py <in_tag> <out_tag>      e.g. F1S16 F1S16T
+"""Offline copy of engine/src/core/diarisation/tidy_transcript.hpp, to score a tidied copy of a sweep
+against the original. The C++ is the source of truth; this copy can drift.
+
+    python evaluation/diarisation/tidy_offline.py <in_tag> <out_tag>      e.g. F1S16 F1S16T
+"""
 import glob
 import json
 import os
@@ -10,6 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common import config  # noqa: E402
+
 HERE = str(config.path("perf_loop") / "transcripts")
 MERGE_GAP = 16000
 DISFLUENCY = {"um", "uh", "er", "erm", "hm", "hmm", "mm", "mmm", "mhm", "ah", "eh", "huh"}

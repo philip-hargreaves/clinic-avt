@@ -15,10 +15,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common.io import read_jsonl  # noqa: E402
+from common.io import read_json, read_jsonl  # noqa: E402
 from study import LANGUAGES, ROOT, SHEETS, option  # noqa: E402
 
-CANDIDATES = json.load(open(Path(__file__).with_name("candidates.json"), encoding="utf-8"))
+CANDIDATES = read_json(Path(__file__).with_name("candidates.json"))
 FLORES = {"Urdu": "urd_Arab", "Punjabi": "pan_Guru", "Bengali": "ben_Beng", "Gujarati": "guj_Gujr",
           "Polish": "pol_Latn", "Romanian": "ron_Latn", "Arabic": "arb_Arab", "Somali": "som_Latn"}
 TICO = {"Urdu": "ur", "Bengali": "bn", "Arabic": "ar", "Somali": "so"}

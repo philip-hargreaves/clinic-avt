@@ -79,9 +79,8 @@ def pdf_chunks(pdf_dir: Path, exe: str):
         buffer, n = [], 0
         for para in paragraphs:
             starts_rec = bool(REC_PATTERN.match(para))
-            words = len(para.split())
-            if buffer and (starts_rec or sum(len(b.split()) for b in buffer) + words > MAX_WORDS
-                           or sum(len(b.split()) for b in buffer) >= TARGET_WORDS):
+            size = sum(len(b.split()) for b in buffer)
+            if buffer and (starts_rec or size + len(para.split()) > MAX_WORDS or size >= TARGET_WORDS):
                 n += 1
                 yield pdf_chunk(pdf, n, buffer)
                 buffer = []

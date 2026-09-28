@@ -332,7 +332,12 @@ def second_stage(args):
         """alpha chosen on the other sets, or in-sample if there is no other set. The report says which."""
         others = [q for s, qs in by_set.items() if s != target_set for q in qs]
         insample = target_set is None or not others
-        train = by_set.get(target_set, []) if insample and target_set else (others if not insample else [q for qs in by_set.values() for q in qs])
+        if not insample:
+            train = others
+        elif target_set:
+            train = by_set.get(target_set, [])
+        else:
+            train = [q for qs in by_set.values() for q in qs]
         best = max(ALPHAS, key=lambda a: sum(full_metrics(interpolate(q["cands"], rk, a)[0], q["expected"])["s3"] for q in train))
         return best, insample
 

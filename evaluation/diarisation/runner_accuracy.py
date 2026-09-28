@@ -1,11 +1,8 @@
-"""Diarisation accuracy of the engine against the research port it was built from.
+"""Diarisation accuracy of the engine (diar_eval_runner) against the research C++ port it was built
+from, over every mixed PriMock track. Passes when the two agree within 0.5 points.
 
-Runs diar_eval_runner over every mixed PriMock track and scores attribution with the selection
-bench's time-weighted rule: a gold segment is right when the slices overlapping it give more time
-to its own role. The engine's clusters are anonymous here (roles come later in the pipeline), so
-both sides go through the same oracle map: each cluster takes the gold role it overlaps most.
-The reference is the research C++ port's per-slice output (reference/research-port-slices.txt,
-96.94% with its own role rule). Passes when the two agree within 0.5 points.
+A gold segment is right when the slices overlapping it give more time to its own role. Clusters
+are anonymous here, so on both sides each cluster takes the gold role it overlaps most.
 
     python evaluation/diarisation/runner_accuracy.py [--reference-only]
 """

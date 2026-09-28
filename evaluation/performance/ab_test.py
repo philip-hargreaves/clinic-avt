@@ -1,7 +1,11 @@
-# Interleaved A/B/C test of Windows power throttling (EcoQoS) on the engine and
-# note host. Fresh engine per run; the throttling state is applied to both
-# processes and read back; CPU clocks are sampled during every finalise.
+"""Interleaved A/B/C test of Windows power throttling (EcoQoS) on the engine and note host. Fresh
+engine per run; the state is applied to both processes and read back, and CPU clocks are sampled
+during every finalise.
+
+    python evaluation/performance/ab_test.py        AB_REPS=3 by default
+"""
 import ctypes, ctypes.wintypes, json, os, re, statistics, sys, time
+# perf_loop reads PERF_TAG at import
 os.environ.setdefault("PERF_TAG", "-ab")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from performance import perf_loop as pl  # noqa: E402
@@ -63,9 +67,8 @@ def cpu_mhz():
 
 
 class ClockSampler:
-    # CallNtPowerInformation's CurrentMhz is static on modern Windows, so the
-    # PDH "% Processor Performance" counter (clock relative to nominal) is
-    # sampled once a second via typeperf until stopped; no pipe access
+    # CallNtPowerInformation's CurrentMhz is static on modern Windows, so typeperf samples the
+    # "% Processor Performance" counter (clock relative to nominal) once a second until stopped
     COUNTER = "\\Processor Information(_Total)\\% Processor Performance"
 
     def __call__(self):

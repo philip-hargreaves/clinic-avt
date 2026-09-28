@@ -17,6 +17,7 @@ import openvino as ov
 import openvino_tokenizers  # noqa: F401  registers the tokenizer ops
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from common.io import read_json  # noqa: E402
 from study import ROOT, SHEETS  # noqa: E402
 
 FLORES = ROOT / "data" / "flores200_dataset" / "devtest" / "eng_Latn.devtest"
@@ -34,7 +35,7 @@ def english() -> list[str]:
 
 def main():
     reference, candidate = Path(sys.argv[1]), Path(sys.argv[2])
-    special = json.load(open(reference / "languages.json", encoding="utf-8"))["special"] \
+    special = read_json(reference / "languages.json")["special"] \
         if (reference / "languages.json").exists() else {"sourceLang": 256047, "eos": 2}
     core = ov.Core()
     requests, first = {}, {}

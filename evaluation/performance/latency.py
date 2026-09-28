@@ -1,10 +1,9 @@
-"""Note model latency on the iGPU: cold and warm load, prefill (time to first token), decode rate,
-time to a 500-token note against the 90 s bar, peak RAM and decode bandwidth efficiency.
+"""Note model latency on the iGPU: cold and warm load, time to first token, decode rate, time to a
+500-token note against the 90 s bar, peak RAM and decode bandwidth efficiency.
 
-Inputs are three PriMock consultations picked by word count (25th percentile, median, longest),
-under the fixed HPI system prompt (hpi-prompt.txt) in each model's own template. Decode runs a
-fixed 500 tokens (EOS ignored) so rates compare; one extra EOS-terminated generation per input
-records the real note. Rows append to build/evaluation/performance/latency.jsonl.
+Inputs are the 25th-percentile, median and longest PriMock consultations by words, under
+hpi-prompt.txt. Decode runs a fixed 500 tokens with EOS ignored so rates compare; one extra
+generation per input keeps the real note. Rows append to build/evaluation/performance/latency.jsonl.
 
     python evaluation/performance/latency.py --prepare-only
     python evaluation/performance/latency.py qwen3.5-4b-int4 qwen3.5-9b-int4 [--reps 3]
@@ -28,7 +27,7 @@ NOTE_BAR_S = 90.0   # time to note after a 15-minute consultation
 
 
 def utterances(consult):
-    # Raw interval text, markup included, as the harness always fed it
+    # Raw interval text with its markup, so the inputs match earlier runs
     out = []
     for speaker in primock.SPEAKERS:
         for start, _, text in primock.intervals(primock.textgrid(consult, speaker)):

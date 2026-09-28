@@ -14,10 +14,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common.io import force_ipv4  # noqa: E402
+from common.io import force_ipv4, read_json  # noqa: E402
 from study import ROOT, option  # noqa: E402
 
-CANDIDATES = json.load(open(Path(__file__).with_name("candidates.json"), encoding="utf-8"))
+CANDIDATES = read_json(Path(__file__).with_name("candidates.json"))
 
 force_ipv4()
 

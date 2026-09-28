@@ -1,10 +1,9 @@
 """Clinical-error lens: medical-concept recall, negation preservation, dose accuracy.
 
-Concepts via scispaCy bc5cdr NER (drugs=CHEMICAL, conditions/symptoms=DISEASE). Matching is on
-lemmas + a UK->US map, so inflection (sweats/sweating) and spelling (haematoma/hematoma) don't count
-as misses. Negation is cue-anchored: a concept is negated iff an explicit cue precedes it within a
-short window, stopping at a clause boundary (avoids ConText's inferred-scope false positives). Doses
-via unit-anchored regex. Needs the scispaCy model en_ner_bc5cdr_md (the [transcription] extra).
+Concepts from scispaCy bc5cdr NER (drugs CHEMICAL, conditions DISEASE), matched on lemmas plus the
+UK-to-US map so inflection and spelling are not misses. A concept is negated when an explicit cue
+precedes it within a short window before any clause boundary; this avoids ConText's inferred-scope
+false positives. Doses by unit-anchored regex. Needs en_ner_bc5cdr_md (the [transcription] extra).
 """
 import re
 from functools import cache, lru_cache
@@ -44,7 +43,7 @@ def _negated(ent, window=5):
 _NOISE = {"um", "uh", "uhh", "hi", "hello", "k", "ok", "okay", "mm", "mhm", "mmhmm", "hmm",
           "bye", "yeah", "yep", "yes", "no", "oh", "er", "erm", "na", "ah", "huh", "mhmm", "so"}
 
-def _is_noise(lemmas):                        # NER misfires: fillers/greetings/1-2 char tokens tagged as concepts
+def _is_noise(lemmas):  # NER tags fillers, greetings and one- or two-letter tokens as concepts
     return all(w in _NOISE or len(w) <= 2 for w in lemmas)
 
 def _run(text):
@@ -62,12 +61,12 @@ def _run(text):
         else:
             c["pos_n"] += 1
     for c in out.values():
-        c["neg"] = c["neg_n"] > 0                      # any negated mention
-        c["denied"] = c["neg_n"] > 0 and c["pos_n"] == 0  # consistently denied (clean finding)
+        c["neg"] = c["neg_n"] > 0  # any negated mention
+        c["denied"] = c["neg_n"] > 0 and c["pos_n"] == 0  # every mention negated
     return out, _lemmas(doc)
 
 @lru_cache(maxsize=256)
-def _run_ref(text):                          # references repeat across all IRs — cache them
+def _run_ref(text):  # each reference is scored against every export
     return _run(text)
 
 def _present(concept_lemmas, hyp_lemmas):
@@ -82,7 +81,7 @@ def _present(concept_lemmas, hyp_lemmas):
 
 def _hyp_negated(ref_lemmas, hyp_c):
     ref_content = {w for w in ref_lemmas if w not in _STOPW}
-    for hc in hyp_c.values():                          # any hyp concept sharing the content words, negated
+    for hc in hyp_c.values():  # any negated hypothesis concept sharing the content words
         hyp_content = {w for w in hc["lemmas"] if w not in _STOPW}
         if hc["neg"] and ref_content and (ref_content <= hyp_content or hyp_content <= ref_content):
             return True
@@ -95,8 +94,8 @@ def analyze(ref_text, hyp_text):
     for key, c in ref_c.items():
         present = _present(c["lemmas"], hyp_lemmas)
         neg_ok = None
-        if present and c["denied"]:                    # only clean, consistently-denied findings
-            neg_ok = _hyp_negated(c["lemmas"], hyp_c)  # any hyp concept sharing its words, negated
+        if present and c["denied"]:  # only consistently denied findings
+            neg_ok = _hyp_negated(c["lemmas"], hyp_c)
         rows.append({**c, "present": present, "neg_ok": neg_ok})
 
     ref_doses = {re.sub(r"\s", "", m.group().lower()) for m in _DOSE.finditer(ref_text)}

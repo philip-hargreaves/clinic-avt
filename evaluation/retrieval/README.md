@@ -20,7 +20,7 @@ py -3.12 -m venv rag\venv
 rag\venv\Scripts\python -m pip install -e "evaluation[retrieval]" --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
-`rag\venv`, `rag\candidates` and `rag\results` may be junctions to another drive. Checkpoints download to `rag\candidates\.src\<org>--<model>` without symlinks, so an exFAT drive works. IPv4 is forced for downloads; `RETRIEVAL_IPV6=1` disables that.
+`rag\venv`, `rag\candidates` and `rag\results` may be junctions to another drive. Checkpoints download to `rag\candidates\.src\<org>--<model>` without symlinks, so an exFAT drive works. IPv4 is forced for downloads; `EVAL_IPV6=1` disables that.
 
 ## Run order
 

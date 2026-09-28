@@ -1,7 +1,7 @@
 """Cross-encoder reranking on ov.Core with explicit query and document pairs.
 
-Replaces GenAI's TextRerankPipeline, which crashes on batched pairs and puts no separator
-between the query and the document.
+GenAI's TextRerankPipeline crashes on batched pairs and puts no separator between the query and
+the document.
 """
 
 import numpy as np

@@ -1,8 +1,8 @@
-"""Stop-to-last-token comparison across note tiers, from tier_campaign.ps1's output.
+"""Stop-to-last-token comparison across note tiers from tier_campaign.ps1's runs-tier-*.jsonl and
+logs: one markdown table per track with the stop path phase by phase, the arm's load at engine
+start, prefill coverage and decode rate.
 
-Reads runs-tier-*.jsonl and logs/tier-*-<track>.log under build/perf-loop and prints one
-markdown table per track: the stop path phase by phase, the load that arm paid at engine
-start, prefill coverage and decode rate from the engine log.
+    python evaluation/performance/tier_report.py [tracks...]
 """
 import json
 import os

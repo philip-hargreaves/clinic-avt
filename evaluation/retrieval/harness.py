@@ -73,6 +73,6 @@ def median_time(fn, repeats: int) -> float:
 
 
 def pdftotext(pdf: Path, exe: str) -> str:
-    # Reading order. -layout interleaves columns
+    # Reading order; -layout would interleave columns
     return subprocess.run([exe, str(pdf), "-"], capture_output=True, text=True,
                           encoding="utf-8", errors="replace").stdout

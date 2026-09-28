@@ -4,9 +4,9 @@
     python plain_punctuation_check.py tasks         two-way judge tasks per language
     python plain_punctuation_check.py score         MQM penalty and critical errors, before and after
 
-Before is the old path, the BPE tokenizer on the raw sentence. After is the engine's, with
-punctuation made plain and the SentencePiece tokenizer. Every other sentence tokenizes to
-identical ids, so only the changed ones run. Decoding mirrors NllbTranslator.
+Before: the BPE tokenizer on the raw sentence. After: the engine's path, punctuation made plain
+and the SentencePiece tokenizer. Other sentences tokenize to identical ids, so only the changed
+ones run. Decoding mirrors NllbTranslator.
 """
 
 import json
@@ -16,11 +16,11 @@ from collections import defaultdict
 
 import numpy as np
 
-import judge
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common.io import read_jsonl  # noqa: E402
+import judge  # noqa: E402
+from common.io import read_json, read_jsonl  # noqa: E402
 from study import APP_MODELS, LANGUAGES, ROOT  # noqa: E402
-from tokenizer_parity import PLAIN, english
+from tokenizer_parity import PLAIN, english  # noqa: E402
 
 MODEL = APP_MODELS / "nllb-200-600m-int8"
 BEFORE = ROOT / "probe" / "tokenizers" / "bpe-shipped"
@@ -32,7 +32,7 @@ def translate():
     import openvino_tokenizers  # noqa: F401  registers the tokenizer ops
 
     changed = sorted({t for t in english() if t.translate(PLAIN) != t})
-    spec = json.load(open(MODEL / "languages.json", encoding="utf-8"))
+    spec = read_json(MODEL / "languages.json")
     special, codes = spec["special"], spec["languages"]
     core = ov.Core()
     config = {"CACHE_DIR": str(ROOT / "probe" / "work" / "cache-plain"), "CACHE_MODE": "OPTIMIZE_SIZE"}

@@ -38,8 +38,7 @@ def words(t):
 
 
 def sentences(t):
-    parts = [s for s in re.split(r"(?<=[.!?])\s+", t.replace("\n", " ").strip()) if s.strip()]
-    return parts
+    return [s for s in re.split(r"(?<=[.!?])\s+", t.replace("\n", " ").strip()) if s.strip()]
 
 
 def paragraphs(t):
@@ -59,7 +58,7 @@ def syllables(word):
 
 def readability(t):
     sents = sentences(t)
-    ws = [w for w in re.findall(r"[A-Za-z][A-Za-z'-]*", t)]
+    ws = re.findall(r"[A-Za-z][A-Za-z'-]*", t)
     if not sents or not ws:
         return None, None
     syl = [syllables(w) for w in ws]
@@ -82,7 +81,7 @@ def fmt(x, unit=""):
 
 
 def timings(path):
-    # Records carry their tag; the first baseline run recorded the tier instead
+    # Banked baseline records carry the tier in place of the tag
     rows = read_jsonl(path) if path.exists() else []
     for r in rows:
         r.setdefault("tag", f"tier-{r.get('tier')}")
@@ -152,8 +151,7 @@ def main():
         assessment_with_dx = 0
         diagnosis_heading = 0
         for t in ts.values():
-            # The second heading is "Your diagnosis", or "Your assessment" only when
-            # the note names no diagnosis; either counts as present here
+            # The second heading is "Your assessment" when the note names no diagnosis; either counts
             second = t.find("Your diagnosis")
             if second >= 0:
                 diagnosis_heading += 1

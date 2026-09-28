@@ -1,7 +1,8 @@
-# Scores the pause-gate sweep transcripts against the PriMock human transcripts:
-# word error rate, negation mismatches (every not/no/n't/never lost, added or
-# flipped), speaker attribution by time overlap, and a file of every negation
-# difference with context, for reading.
+"""Score sweep transcripts against the PriMock reference: WER, negations lost, added or changed, and
+word attribution by time overlap. Writes every negation difference with context to negation-diffs.txt.
+
+    python evaluation/diarisation/score_gate.py <tagA> <tagB>
+"""
 import json
 import os
 import re
@@ -56,19 +57,19 @@ def reference(consult):
     return ivs, words
 
 
-# NEG_SUBSTANTIVE=1: count a reference negation only when its utterance holds a content
-# word (or is a filler-only reply to the other speaker's question) and it is not an
-# immediate repeat ("no no no" counts once). Added negations always count.
+# NEG_SUBSTANTIVE=1 counts a reference negation only when its utterance has a content word (or is a
+# filler-only reply to the other speaker's question) and it is not an immediate repeat ("no no no"
+# counts once). Added negations always count.
 FILLER_NEG = {"ok", "okay", "yeah", "yep", "yup", "mm", "mhm", "hmm", "um", "uh", "er", "erm",
               "sure", "right", "alright", "all", "fine", "good", "thank", "thanks", "you", "bye",
               "hello", "hi", "oh", "ohh", "ah", "yes", "no", "nope", "not", "really", "so", "and",
               "the", "a", "i", "it", "that", "is", "well", "just", "like", "nothing", "none",
               "never", "dont", "cant", "havent", "didnt", "im", "its", "thats", "there", "at",
-              "all", "sorry", "please"}
+              "sorry", "please"}
 
 
 def substantive_flags(ivs):
-    # one flag per reference word, in reference() order
+    # One flag per reference word, in reference() order
     flags = []
     last_text = {"doctor": "", "patient": ""}
     for start, end, speaker, text in ivs:

@@ -1,12 +1,10 @@
-"""Role naming of the engine over the 57 PriMock consultations (diar_eval_runner --roles: ASR,
-diarisation, text assignment, cold-start naming).
+"""Role naming of the engine over the PriMock consultations (diar_eval_runner --roles). Passes on
+zero wrong names on either path: an abstention is fine, a wrong name corrupts a record.
 
-  cold start  named right / abstained / named wrong against gold. The bar is zero wrong: an
-              abstention is the design working, a confident wrong name corrupts a record.
-  anchor      clinicians found by grouping each consult's true-doctor voiceprint (cosine above
-              0.68, the research grouping rule); for each consult of a recurring clinician the
-              anchor is the mean of the other consults' doctor prints, and the nearer of the two
-              dominant clusters must be the true doctor. Leave-one-out.
+  cold start  named right, abstained or named wrong against gold
+  anchor      clinicians grouped by true-doctor voiceprint (cosine above 0.68); leave-one-out, the
+              anchor is the mean of the clinician's other doctor prints and the nearer of the two
+              dominant clusters must be the true doctor
 
     python evaluation/diarisation/runner_roles.py
 """

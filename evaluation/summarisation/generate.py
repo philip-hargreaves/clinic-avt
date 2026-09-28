@@ -115,8 +115,7 @@ def run_app(args):
 
 def run_study(args):
     from common.llm import NoteModel
-    template = (os.path.join(HERE, "prompts", args.prompt))
-    template = open(template, encoding="utf-8").read()
+    template = open(os.path.join(HERE, "prompts", args.prompt), encoding="utf-8").read()
     manifest = read_json(data() / "prep" / "manifest.json")
     if args.consult:
         manifest = [m for m in manifest if m["consult_id"] == args.consult]

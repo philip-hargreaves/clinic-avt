@@ -1,10 +1,9 @@
-# Calibrate the re-split margin (core/diarisation/resplit.hpp) from a dry-run sweep: each logged
-# edge-chunk candidate ("resplit-candidate <a>-<b> s cluster <c> own <x> other <y> ...") is
-# labelled against the reference TextGrids and the rule "other - own >= margin" is scored
-# over a range of margins, with cross-validation.
-#   python evaluation/diarisation/resplit_calibrate.py <engine log> <sweep log> <tag>
-# The engine log is one process for the whole sweep; consults are split at the
-# "session audio" lines and matched in order with the sweep log's "ok" lines.
+"""Calibrate the re-split margin (engine/src/core/diarisation/resplit.hpp) from a dry-run sweep:
+label each logged resplit-candidate against the reference and score "other - own >= margin" over a
+range of margins, with cross-validation.
+
+    python evaluation/diarisation/resplit_calibrate.py <engine log> <sweep log> <tag>
+"""
 import json
 import os
 import re
@@ -33,12 +32,13 @@ def candidates_by_consult(engine_log, order):
         m = CAND.search(line)
         if m:
             blocks[-1].append(m)
-    # The first block precedes the first finalise; candidates arrive in the finalise block
+    # One engine for the whole sweep: split at each "session audio" line and match the blocks in
+    # order with the sweep log's consults. Block 0 precedes the first finalise
     return dict(zip(order, blocks[1:]))
 
 
 def reference_speaker(ref_ivs, a, b):
-    # majority speaker by overlap time in [a, b)
+    # Majority speaker by overlap time in [a, b)
     time = {"doctor": 0.0, "patient": 0.0}
     for start, end, spk, text in ref_ivs:
         if not text.strip():

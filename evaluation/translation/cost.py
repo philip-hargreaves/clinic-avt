@@ -2,9 +2,8 @@
 
     python cost.py [--threads 8] [--sheets 5]
 
-Each model runs in a fresh process. Cold start is load plus the first
-sheet. Warm is the median over the next sheets in Urdu and Polish. Memory is the process peak
-working set after warming. Writes results/cost.json.
+Each model runs in a fresh process. Cold start is load plus the first sheet, warm is the median
+over the next sheets in Urdu and Polish, memory is the peak working set. Writes results/cost.json.
 """
 
 import json
@@ -62,7 +61,6 @@ def main():
         print(json.dumps(measure(name, threads, count)))
         return
     threads, count = option("--threads", "8"), option("--sheets", "5")
-    # Models with sheet results
     names = [p.stem[:-5] for p in sorted((ROOT / "results" / "sheets").glob("*-int8.jsonl"))]
     results = {}
     for name in names:

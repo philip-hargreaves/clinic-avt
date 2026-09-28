@@ -34,9 +34,9 @@ def main():
         done = {(r["id"], r["language"]) for r in read_jsonl(out)}
     if set_name == "sheets":
         # The same 12 sheets the judge saw
-        all_ids = sorted({s["id"] for s in load_set("sheets", 100)})
-        chosen = set(random.Random(7).sample(all_ids, count))
-        items = [s for s in load_set("sheets", 100) if s["id"] in chosen]
+        sheets = load_set("sheets", 100)
+        chosen = set(random.Random(7).sample(sorted({s["id"] for s in sheets}), count))
+        items = [s for s in sheets if s["id"] in chosen]
     else:
         items = load_set(set_name, limit)
     items = [s for s in items if (s["id"], s["language"]) not in done]

@@ -1,9 +1,9 @@
-# Pairwise diff judging: two sweeps that differ by one lever change a few turns per
-# consult. Each differing region is shown with the reference for that window and both
-# arms' text, sides randomised per item; a reader says which is closer (or same) and
-# whether the difference is clinical. Sees filler drops and single-word fixes that WER cannot.
-#   python evaluation/diarisation/diff_pairs.py pack <tagA> <tagB> [per_pack=35]
-#   python evaluation/diarisation/diff_pairs.py merge <tagA> <tagB>
+"""Blinded pairwise judging of the regions where two sweeps differ: each region with its reference
+window and both arms, sides randomised; a reader says which is closer and whether it is clinical.
+
+    python evaluation/diarisation/diff_pairs.py pack <tagA> <tagB> [per_pack=35]
+    python evaluation/diarisation/diff_pairs.py merge <tagA> <tagB>
+"""
 import difflib
 import glob
 import json
@@ -67,10 +67,10 @@ def regions(a, b):
         ta = a[i1:i2]
         tb = b[j1:j2]
         times = [t for t, _, _ in ta + tb]
-        # a pure insertion/deletion still has a window: the neighbours
         if not times:
             continue
         lo, hi = min(times), max(times)
+        # Stretch the window to the next unchanged turn
         ends = [a[i2][0] if i2 < len(a) else lo + 5, b[j2][0] if j2 < len(b) else lo + 5]
         yield lo, max(hi, min(ends)), ta, tb
 
@@ -125,9 +125,9 @@ def merge(tag_a, tag_b):
             if c == "same":
                 counts["same"] += 1
                 continue
-            tag = (tag_b if (c == "A") == it["flip"] else tag_a) if c in ("A", "B") else None
-            if tag is None:
+            if c not in ("A", "B"):
                 continue
+            tag = tag_b if (c == "A") == it["flip"] else tag_a
             counts[tag] += 1
             if r.get("clinical"):
                 clin[tag] += 1

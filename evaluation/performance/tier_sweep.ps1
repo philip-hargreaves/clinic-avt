@@ -1,5 +1,5 @@
-# Sweeps every note tier through the real note host, twice (cold-ish then warm),
-# sampling the host's working set, then the Python bench per model.
+# Every note tier through the real note host, twice (cold-ish then warm), sampling the
+# host's working set, then decode_bench.py per model.
 $ErrorActionPreference = "Continue"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $root
@@ -11,7 +11,7 @@ foreach ($tier in @("constrained", "default", "accuracy")) {
         $csv = Join-Path $env:TEMP "sweep-$tier-$pass.csv"
         if (Test-Path $csv) { Remove-Item $csv }
         $tp = Start-Process typeperf -ArgumentList @('"\Process(clinicavt_note_host*)\Working Set"', '-si', '1', '-o', ('"' + $csv + '"'), '-y') -PassThru -WindowStyle Hidden
-        $lines = & build\release\engine\tests\models_tests.exe --gtest_filter=WorkerNoteWriter.NoteTierSweep 2>&1 | Select-String "note qwen|first token|tok/s|sweep |FAILED|SKIPPED"
+        $lines = & build\release\engine\tests\models_tests.exe --gtest_filter=WorkerNoteWriter.EveryStagedTierWritesANoteAndSheet 2>&1 | Select-String "note qwen|first token|tok/s|tier |FAILED|SKIPPED"
         Stop-Process $tp -Force -ErrorAction SilentlyContinue
         Start-Sleep 1
         $peak = 0
