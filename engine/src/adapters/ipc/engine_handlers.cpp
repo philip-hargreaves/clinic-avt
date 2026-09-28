@@ -80,7 +80,7 @@ std::string MissingModelsReason(const std::vector<std::string>& missing) {
     if (missing.empty()) return {};
     std::vector<std::string> names;
     for (const auto& role : missing) {
-        // Diarisation takes two models, one thing to a clinician
+        // Diarisation's two models are listed once, as speaker recognition
         const std::string name = role == "asr"   ? "speech recognition"
                                  : role == "vad" ? "speech detection"
                                  : role == "diarisation" || role == "segmentation"
@@ -174,7 +174,8 @@ std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool sessio
         return SessionError("finish the consultation before switching transcription device");
     }
     const bool started =
-        switcher && switcher(device, [device, notify](const std::string& error) {
+        switcher &&
+        switcher(device, [device, notify = std::move(notify)](const std::string& error) {
             json state{{"device", device}, {"state", error.empty() ? "ready" : "failed"}};
             if (!error.empty()) state["detail"] = error;
             notify(std::move(state));
@@ -199,9 +200,9 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
     const auto note_tier = [note_lane] {
         return note_lane != nullptr ? note_lane->State().tier : std::string("default");
     };
-    // OpenVINO writes the compile cache exactly when a compile completes, so no
-    // event plumbing is needed. A role not staged has nothing to compile, and
-    // missing says whether a consultation needs it
+    // Ready once every compile cache exists. OpenVINO writes the cache when a compile
+    // completes. An unstaged role has nothing to compile, so it counts as ready here and
+    // missing reports it
     server.RegisterMethod("engine/readiness", [&models, first_use, note_tier, stray_note_host,
                                                missing = services.missing_models](const json&) {
         const auto ready = [&models](const char* role, const std::string& tier) {
@@ -262,8 +263,7 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
         server.RegisterMethod("anchor/clear", [anchors, &controller](const json&) {
             return HandleAnchorClear(*anchors, controller.Running());
         });
-        // Enrolment runs on the controller's microphone path. Progress and the
-        // outcome are notifications
+        // Uses the controller's mic path. Progress and result are sent as notifications
         server.RegisterMethod(
             "anchor/enrol",
             [&controller, missing = MissingModelsReason(services.missing_models)](
@@ -291,8 +291,7 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
             return json::object();
         });
     }
-    // Enumerated fresh per call, so a picker opened after a headset is
-    // plugged in sees it without any notification plumbing
+    // Enumerated per call, so a headset plugged in later appears without a notification
     server.RegisterMethod("audio/inputs", [](const json&) {
         return HandleAudioInputs(clinicavt::audio::ListCaptureDevices());
     });

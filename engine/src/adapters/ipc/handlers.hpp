@@ -37,23 +37,21 @@ std::variant<json, Error> HandleHello(const json& params);
 
 std::variant<json, Error> HandleEcho(const json& params);
 
-// Every staged model. `active` marks the one each role loads, the note
-// role by its configured tier
+// All staged models; `active` marks the one each role loads (note: by configured tier)
 json HandleModels(const clinicavt::models::ModelStore& models,
                   const std::string& note_tier = "default");
 
 json NoteModelJson(const clinicavt::note::NoteModelState& state);
 
-// note/tier: the shell names a tier, the lane resolves and loads it. "auto" is
-// this machine's pick. Refused during a consultation. An unknown or unstaged
-// tier is a parameter error naming what is staged
+// note/tier: resolves and loads the named tier; "auto" is the machine default.
+// Refused during a consultation. Unknown or unstaged tier is an invalid-params
+// error listing what is staged
 std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteLane* lane, bool session_active,
                                          const json& params, const std::string& auto_tier = "");
 
 json HandleAudioInputs(const std::vector<clinicavt::audio::CaptureDevice>& devices);
 
-// The clinician's voiceprint: where it came from and how many consultations
-// refined it. Clearing is refused while a session runs
+// Voiceprint source and consultation count. Clearing is refused during a session
 json HandleAnchorStatus(const clinicavt::diar::AnchorStore& anchors);
 std::variant<json, Error> HandleAnchorClear(clinicavt::diar::AnchorStore& anchors,
                                             bool session_active);
@@ -79,19 +77,19 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore
 json HandleReflectionList(clinicavt::store::ISessionStore& sessions);
 std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
                                               const json& params);
-// One crypto-erase of everything stored, refused while a consultation records or a backup
-// runs. Without deleteReflections a session with an appraisal entry is cleared to it instead
+// Crypto-erases everything; refused while recording or during a backup. Without
+// deleteReflections, a session with an appraisal entry is cleared down to it
 std::variant<json, Error> HandleSessionDeleteAll(clinicavt::store::ISessionStore& sessions,
                                                  const json& params, bool session_active,
                                                  bool archive_busy);
-// session/remove: clears or erases the given sessions as Delete all does, once a backup holds
-// them. An id already gone is not counted
+// session/remove: clears or erases the given sessions like delete-all, once a
+// backup holds them. Ids already gone are not counted
 std::variant<json, Error> HandleSessionRemove(clinicavt::store::ISessionStore& sessions,
                                               const json& params, bool archive_busy);
 
-// archive/summary: what a backup of the period would hold, and how many consultations the last
-// backup (covered) does not. archive/backup and archive/restore start a job on the lane,
-// refused while a consultation records or another job runs
+// archive/summary: contents of a backup of the period, and how many consultations
+// the last backup (covered) misses. archive/backup and archive/restore start a
+// lane job; refused while recording or another job runs
 std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionStore& sessions,
                                                const json& params);
 std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& lane,
@@ -99,12 +97,12 @@ std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& l
 std::variant<json, Error> HandleArchiveRestore(clinicavt::archive::ArchiveLane& lane,
                                                bool session_active, const json& params);
 
-// Seed data from demo_dir, a no-op while present. Clearing leaves real sessions untouched
+// Seeds demo data from demo_dir, a no-op if already seeded. Clearing keeps real sessions
 std::variant<json, Error> HandleDemoSeed(clinicavt::store::ISessionStore& sessions,
                                          const std::filesystem::path& demo_dir);
 json HandleDemoClear(clinicavt::store::ISessionStore& sessions);
 
-// Guidance: the panel shows the top three
+// Guidance panel shows the top three
 inline constexpr int kGuidanceLimit = 3;
 using Notify = std::function<void(const std::string& method, json params)>;
 inline Notify PushTo(PipeServer& server) {
@@ -113,10 +111,10 @@ inline Notify PushTo(PipeServer& server) {
     };
 }
 
-// recording/inspect: a recording's length and date for the import dialog. Nothing is kept
+// recording/inspect: length and date for the import dialog; stores nothing
 std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
                                                  const json& params);
-// The roles a consultation needs that are not installed, in plain words, as session/start,
+// Plain-words message naming the missing roles a consultation needs. session/start,
 // session/import and anchor/enrol refuse with it. Empty when none is missing
 std::string MissingModelsReason(const std::vector<std::string>& missing);
 // engine/readiness: ready once every staged model's compile cache exists. firstUse: the one-off
@@ -124,67 +122,66 @@ std::string MissingModelsReason(const std::vector<std::string>& missing);
 // driver. missing: the roles a consultation needs that are not installed
 json ReadinessJson(bool first_use, bool ready, bool stray_note_host,
                    const std::vector<std::string>& missing);
-// session/start: a microphone session, or with replay a wav played through the same pipeline,
-// refused unless replay is allowed. Refused while a role is missing
+// session/start: starts a microphone session, or with replay plays a wav through the same
+// pipeline if the engine allows replay. Refused while a role is missing
 std::variant<json, Error> HandleSessionStart(clinicavt::session::SessionController& controller,
                                              clinicavt::translate::ITranslator* translator,
                                              const json& params,
                                              const std::vector<std::string>& missing,
                                              bool allow_replay);
-// session/import: answers the new session's id at once, then finalises it on the import's
-// thread, pushing session/importProgress and session/imported or session/importFailed from there.
-// Refused as session/start is, and for a file the reader cannot open. No error carries the path
+// session/import: replies with the new session id, then finalises on the import
+// thread, sending session/importProgress then session/imported or
+// session/importFailed. Refused like session/start and for unreadable files.
+// Errors never include the path
 std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader& reader,
                                               clinicavt::session::SessionController& controller,
                                               clinicavt::translate::ITranslator* translator,
                                               const Notify& push, const json& params,
                                               const std::vector<std::string>& missing = {});
-// session/importProgress: the import's stage and its one percentage across all stages
+// session/importProgress: stage plus one overall percentage
 json ImportProgressJson(const std::string& id, clinicavt::session::ImportStage stage, int percent);
 
-// guidance/corpora: whether the embedder is loading, ready or unavailable, and
-// every corpus directory. guidance/model carries the state alone once loading ends
+// guidance/corpora: embedder state (loading, ready, unavailable) and every corpus
+// dir. guidance/model sends only the state once loading ends
 json GuidanceCorporaJson(const clinicavt::guidance::Readiness& readiness,
                          const std::vector<clinicavt::guidance::Corpus>& corpora);
 json GuidanceModelJson(const clinicavt::guidance::Readiness& readiness);
-// The lane request behind every search: results go out as guidance/ready, a
-// failure as guidance/failed, both naming the session (null for free text).
-// With a session the record is stored first and the payload says whether the
-// note moved. A session erased meanwhile ends the search quietly, any other
-// store error rides on the payload
+// Lane request for a search: results as guidance/ready, failure as
+// guidance/failed, both with the session (null for free text). With a session,
+// the record is stored first and the payload says whether the note changed. If
+// the session was erased meanwhile, nothing is sent; other store errors go in
+// the payload
 clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISessionStore& sessions,
                                                          const std::string& session,
                                                          clinicavt::store::Document note, int limit,
-                                                         Notify notify);
-// session/guidance: the stored record, null when the note was never searched
-// or the record cannot be read, stale when the note has been written since
-// documentsChanged: the added documents the record searched are not the ones ready now
+                                                         const Notify& notify);
+// session/guidance: stored record, null if never searched or unreadable. stale:
+// the note changed since. documentsChanged: the searched added documents differ
+// from those ready now
 std::variant<json, Error> HandleSessionGuidance(
     clinicavt::store::ISessionStore& sessions, const json& params,
     clinicavt::guidance::IDocumentIngest* ingest = nullptr);
-// guidance/search: the stored note of session id, or free text, through the
-// lane. The reply is immediate. The results arrive as a notification
+// guidance/search: searches a session's stored note or free text via the lane.
+// Replies immediately; results come as a notification
 std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::ISessionStore& sessions,
                                                clinicavt::guidance::IGuidanceLane& lane,
                                                const json& params, const Notify& notify);
-// Added documents: the row guidance/documents lists and guidance/document
-// announces, and the progress notification
+// Added-document row used by guidance/documents, guidance/document and progress
 json DocumentJson(const clinicavt::guidance::DocumentInfo& document);
 json ProgressJson(const clinicavt::guidance::IngestProgress& progress);
-// The ready set changes when a document finishes or a finished one goes
+// True when a document became ready or a ready one was removed
 bool ChangesReadySet(const clinicavt::guidance::DocumentInfo& document);
-// guidance/documents: the folder and its documents. guidance/documents/add
-// copies files into the folder and answers with their rows, the rest skipped
-// with a reason. guidance/documents/remove sends a document's files to the
-// Recycle Bin
+// guidance/documents: folder and documents. guidance/documents/add copies files
+// in and returns their rows, with skipped ones and reasons.
+// guidance/documents/remove sends a document's files to the Recycle Bin
 std::variant<json, Error> HandleDocumentsAdd(clinicavt::guidance::IDocumentIngest& ingest,
                                              const json& params);
 std::variant<json, Error> HandleDocumentsList(clinicavt::guidance::IDocumentIngest& ingest);
 std::variant<json, Error> HandleDocumentsRemove(clinicavt::guidance::IDocumentIngest& ingest,
                                                 const json& params);
-// guidance/page: one page of an added PDF drawn to a bitmap under the scratch
-// folder, with the cited chunk's boxes. guidance/documents/open: the file in
-// the guidelines folder, for the shell to hand to a viewer
+// guidance/page: renders one page of an added PDF to a bitmap in the scratch
+// folder, with the cited chunk's boxes. guidance/documents/open: path of the
+// file for the shell to open
 std::variant<json, Error> HandleDocumentsPage(clinicavt::guidance::IDocumentIngest& ingest,
                                               const json& params);
 std::variant<json, Error> HandleDocumentsOpen(clinicavt::guidance::IDocumentIngest& ingest,
@@ -194,21 +191,19 @@ void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::ISessionStore
                              clinicavt::guidance::IGuidanceLane& lane,
                              clinicavt::guidance::IDocumentIngest& ingest);
 
-// Moves speech recognition to another device ("GPU" or "NPU") in place. `done`
-// runs once the load settles, with the error or an empty string. False when it
-// cannot move
+// Reloads speech recognition on "GPU" or "NPU". `done` gets the error or "" once
+// the load settles. Returns false if it cannot switch
 using AsrSwitch =
     std::function<bool(const std::string& device, std::function<void(const std::string&)> done)>;
 
-// asr/device: refused during a session. The reply says loading, and an
-// asr/device notification says ready or failed once the load settles
+// asr/device: refused during a session. Replies "loading"; an asr/device
+// notification reports ready or failed
 std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool session_active,
                                           const json& params, std::function<void(json)> notify);
 
-// Everything the methods reach. The controller, models and store are always
-// present. The rest is wired when its model or feature is staged. first_use:
-// model caches were cold at launch, so the one-off compiles are running and
-// readiness reports them
+// Dependencies for the RPC methods. controller, models and store are always set;
+// the rest only when staged. first_use: model caches were cold at launch, so
+// one-off compiles are running and readiness reports them
 struct EngineServices {
     clinicavt::session::SessionController& controller;
     const clinicavt::models::ModelStore& models;
@@ -221,11 +216,12 @@ struct EngineServices {
     clinicavt::diar::AnchorStore* anchors = nullptr;
     clinicavt::note::INoteLane* note_lane = nullptr;
     std::string auto_note_tier;    // the note tier "auto" stands for on this machine
-    bool stray_note_host = false;  // one from an earlier engine is wedged in the GPU driver
+    bool stray_note_host = false;  // a note host from an earlier engine is stuck in the GPU driver
     std::filesystem::path demo_dir;
     AsrSwitch switch_asr;
-    clinicavt::archive::ArchiveLane* archive_lane = nullptr;   // deletes are refused while it runs
-    clinicavt::audio::IRecordingReader* recordings = nullptr;  // import is absent without it
+    clinicavt::archive::ArchiveLane* archive_lane =
+        nullptr;  // deletes are refused while a job runs
+    clinicavt::audio::IRecordingReader* recordings = nullptr;  // null disables import
     std::vector<std::string> missing_models;  // roles not installed, empty with stand-ins
     bool allow_replay = false;                // session/start may play a file, for tests only
 };

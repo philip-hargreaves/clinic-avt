@@ -21,24 +21,24 @@ namespace clinicavt::guidance {
 
 inline constexpr const char* kReadMe = "Instructions.txt";
 
-// Creates a missing folder with the shipped guidelines in it and returns how many were copied.
-// An existing folder is the clinician's and is never refilled, so their deletions stick
+// Creates a missing folder and copies in the shipped guidelines; returns the
+// count. Never refills an existing folder, so user deletions stay deleted
 std::size_t SeedGuidelines(const std::filesystem::path& folder,
                            const std::filesystem::path& shipped);
 
-// Watches the guidelines folder. A scan every few seconds takes new and
-// changed files by content, drops documents whose files went, and queues the
-// rest for the ingest thread. That thread reads a document through the host,
-// embeds a unit at a time between note searches, and publishes every ready
-// document to the retriever as one snapshot. The index under root is a cache
-// of the folder and needs no embedder to list
+// Watches the guidelines folder. A scan every few seconds picks up new and
+// changed files, drops documents whose files are gone, and queues work for the
+// ingest thread, which reads via the host, embeds one unit at a time between
+// note searches, and publishes ready documents as one snapshot. The index
+// under root is a cache and lists without an embedder
 class DocumentIngest : public IDocumentIngest {
    public:
     using Discard = std::function<void(const std::filesystem::path&)>;
 
-    DocumentIngest(Retriever& retriever, std::filesystem::path folder, std::filesystem::path root,
-                   std::function<bool()> busy, std::filesystem::path host_exe = {},
-                   HostLimits host_limits = {}, Discard discard = system::RecycleFile,
+    DocumentIngest(Retriever& retriever, std::filesystem::path folder,
+                   const std::filesystem::path& root, std::function<bool()> busy,
+                   const std::filesystem::path& host_exe = {}, HostLimits host_limits = {},
+                   Discard discard = system::RecycleFile,
                    std::chrono::milliseconds scan_every = std::chrono::seconds(3));
     ~DocumentIngest() override;
 
@@ -61,7 +61,7 @@ class DocumentIngest : public IDocumentIngest {
         std::string path;
     };
 
-    // The folder against the index. Files named in `fresh` are taken at once
+    // Syncs index to folder. Files in `fresh` skip the settle wait
     void Scan(const std::set<std::string>& fresh = {});
     void Work();
     void Index(const Queued& item);
@@ -88,7 +88,8 @@ class DocumentIngest : public IDocumentIngest {
     DocumentIndex index_;
     bool found_ = true;
     int unsupported_ = 0;
-    std::map<std::string, Seen> pending_;  // new or changed files, taken once they hold still
+    std::map<std::string, Seen>
+        pending_;  // new or changed files, indexed once unchanged for a scan
 
     std::mutex scratch_mutex_;
     std::deque<std::filesystem::path> drawn_;

@@ -16,7 +16,7 @@ ChildProcess Ping(const wchar_t* count) {
         CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_WRITE, &inherit, OPEN_EXISTING, 0, nullptr));
     return ChildProcess::Spawn(std::filesystem::path(folder) / "ping.exe",
                                std::wstring(L"-n ") + count + L" 127.0.0.1",
-                               {.stdout_write = null.get()});
+                               {.stdout_write = null.Get()});
 }
 
 // A child inside a GPU call must never be killed, so End only ever waits

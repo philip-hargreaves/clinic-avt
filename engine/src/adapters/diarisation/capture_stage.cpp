@@ -20,7 +20,7 @@ namespace clinicavt::diar {
 
 namespace {
 
-// One segmenter run over audio starting at `offset`, in absolute frames
+// Shifts a segmenter run starting at `offset` into absolute frames
 void AppendSeg(SegResult& seg, const SegResult& part, std::uint64_t offset) {
     for (const auto c : part.change_points) seg.change_points.push_back(c + offset);
     for (const auto& span : part.overlap_spans) {
@@ -59,6 +59,7 @@ std::vector<LabelledSlice> LabelSlices(const std::vector<Region>& kept,
                                        const std::vector<Region>& overlap_spans,
                                        const EmbedRangeFn& embed_span) {
     std::vector<LabelledSlice> labelled;
+    labelled.reserve(kept.size());
     for (std::size_t i = 0; i < kept.size(); ++i) {
         labelled.push_back({kept[i].first_frame, kept[i].end_frame, clusters.labels[i]});
     }
@@ -112,7 +113,7 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
     const auto settled =
         SegSettledFrontier(s.seg_done, s.vad_probabilities.size() * audio::kVadHopFrames);
     if (settled == 0) return;
-    // Without a budget the pass is finalise's catch-up, which logs its phases
+    // No budget means finalise catch-up; only that pass logs phase timings
     const bool catch_up = budget == std::numeric_limits<int>::max();
     using Clock = std::chrono::steady_clock;
     const auto t_start = Clock::now();
@@ -120,7 +121,7 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
         return std::chrono::duration<double>(b - a).count();
     };
 
-    // Slices behind the frontier, cut as finalise cuts them
+    // Same slicing as finalise, up to the settled frontier
     const auto slices =
         CutSlices(s.vad_probabilities, s.vad_probabilities.size() * audio::kVadHopFrames,
                   s.seg.change_points, s.clip_cuts, settled);
@@ -132,11 +133,11 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
     const auto& kept = embedded.kept;
     if (kept.size() < 2 || stopped()) return;
 
-    // Provisional labels. A span that final clustering changes is never looked up
+    // Provisional labels; spans that final clustering changes are never read
     const auto t_cluster = Clock::now();
     const auto clusters = ClusterSpeakers(embedded.embeddings, embedded.durations);
-    // Overlap embeddings are memoised separately from slice embeddings (same
-    // span, raw audio): this runs every tick over all settled overlaps
+    // Overlap embeddings cached separately from slice embeddings (same span,
+    // raw audio); this runs every tick over all settled overlaps
     const auto labelled = LabelSlices(
         kept, clusters, s.seg.overlap_spans, [&](std::uint64_t first, std::uint64_t end) {
             auto& embedding = overlap_cache_[{first, end}];
@@ -233,8 +234,8 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
     speculation_.turns = SpeculatedTurns(merged, audio.size(), s.turn_texts, &speculation_.texts);
     speculation_.centroids = clusters.centroids;
     speculation_.cluster_count = clusters.count;
-    // The prefill reads this transcript, so it must re-split as the finalise does
-    // or the prompt diverges at the first move
+    // The prefill reads this transcript, so re-split exactly as finalise does or
+    // the prompts diverge
     if (clusters.count >= 2 && !speculation_.turns.empty()) {
         const auto spec_spans = DecodeSpans(speculation_.turns, audio.size());
         std::vector<std::vector<asr::Turn>> chunks(speculation_.turns.size());
@@ -248,7 +249,7 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
             [&](std::uint64_t first, std::uint64_t end) -> std::vector<float> {
                 const auto it = s.chunk_embeddings.find({first, end});
                 if (it != s.chunk_embeddings.end()) return it->second;
-                return {};  // not yet embedded: judged next tick
+                return {};  // not embedded yet, retried next tick
             },
             clusters.centroids);
         speculation_.turns.clear();

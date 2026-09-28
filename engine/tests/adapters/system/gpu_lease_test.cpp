@@ -32,7 +32,7 @@ TEST(GpuLease, TwoHoldersOfOneNameTakeTurns) {
         const auto guard = host.Acquire();
         overlapped = inside.load();
         EXPECT_TRUE(guard.Held());
-        EXPECT_GT(guard.waited(), 0.05);
+        EXPECT_GT(guard.Waited(), 0.05);
     });
     inside = true;
     std::this_thread::sleep_for(milliseconds(200));
@@ -42,7 +42,6 @@ TEST(GpuLease, TwoHoldersOfOneNameTakeTurns) {
     EXPECT_FALSE(overlapped) << "the second holder must wait for the first to release";
 }
 
-// A long legitimate hold is waited out: only the caller decides to stop
 TEST(GpuLease, AWaiterGivesUpOnlyWhenItsCallbackSaysSo) {
     const std::string name = Name("slices");
     GpuLease holder(name, milliseconds(20));
@@ -91,13 +90,13 @@ TEST(GpuLease, AnAbandonedLeaseIsTaken) {
     std::thread([&] { EXPECT_TRUE(next.Acquire().Held()); }).join();
 }
 
-// A prefill is only worth doing at once, and a lease with no name is off
+// Prefill runs only if the GPU is free now; an unnamed lease is off
 TEST(GpuLease, TryAcquireAndAnUnnamedLeaseNeverWait) {
     GpuLease off("");
     EXPECT_FALSE(off.Active());
     const auto inert = off.Acquire();
     EXPECT_FALSE(inert.Held());
-    EXPECT_EQ(inert.waited(), 0.0);
+    EXPECT_EQ(inert.Waited(), 0.0);
 
     const std::string name = Name("try");
     GpuLease holder(name);

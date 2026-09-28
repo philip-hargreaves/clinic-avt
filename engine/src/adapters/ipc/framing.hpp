@@ -8,7 +8,7 @@
 
 namespace clinicavt::ipc {
 
-// The pipe imposes no size limit, so frames are capped against unbounded allocation
+// Named pipes have no size limit, so cap frames to bound allocation
 inline constexpr std::uint32_t kMaxFrameBytes = 4u * 1024 * 1024;
 
 inline constexpr std::size_t kHeaderBytes = 4;
@@ -29,7 +29,6 @@ inline std::string EncodeFrame(std::string_view payload) {
     return frame;
 }
 
-// Reassembles length-prefixed frames from a byte stream fed in arbitrary chunks.
 class FrameDecoder {
    public:
     void Push(std::string_view bytes) {
@@ -54,7 +53,7 @@ class FrameDecoder {
         return payload;
     }
 
-    bool failed() const {
+    bool Failed() const {
         return failed_;
     }
 

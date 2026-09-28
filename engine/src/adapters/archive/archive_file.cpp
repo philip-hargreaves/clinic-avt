@@ -33,12 +33,12 @@ constexpr std::uint16_t kVersion = 1;
 constexpr std::size_t kSaltBytes = 16;
 constexpr std::size_t kHeaderBytes = 8 + 2 + 4 + kSaltBytes;
 constexpr std::size_t kSaltAt = 14;
-// The upper bound stops a crafted header hanging a restore; a lowered count cannot weaken a
-// real file, since its key changes and every record fails
+// Upper bound stops a crafted header hanging a restore. A lowered count can't weaken a real
+// file, since the key changes and every record fails auth
 constexpr std::uint32_t kMinIterations = 1000;
 constexpr std::uint32_t kMaxIterations = 10000000;
 constexpr std::uint32_t kTagBytes = 16;
-// Checked before allocating, as the length is read before anything is authenticated
+// Length is read before authentication, so cap it before allocating
 constexpr std::uint32_t kMaxSealed = 16 * 1024 * 1024 + kTagBytes;
 
 using Header = std::array<std::uint8_t, kHeaderBytes>;
@@ -68,7 +68,7 @@ std::uint32_t Iterations(const Header& header) {
     throw ArchiveError(code);
 }
 
-// Wipes the password once the key exists. Only a writer refuses a short one
+// Wipes the password after key derivation. Only writers refuse short ones
 ChunkCipher Derive(std::string& password, const Header& header, bool refuse_weak) {
     WipeOnExit wipe_password{password};
     std::string input = KdfInput(password);
@@ -94,7 +94,7 @@ struct ArchiveFileSource::Impl {
     std::size_t next = 1;  // record index
     bool broken = false;
 
-    // The plain header, checked before any key is derived
+    // Unencrypted header, validated before key derivation
     explicit Impl(const std::filesystem::path& path) : in(path, std::ios::binary) {
         if (!in) Fail(ArchiveCode::kReadFailed);
         if (!ReadExact(header.data(), header.size())) Fail(ArchiveCode::kNotABackup);
@@ -111,7 +111,7 @@ struct ArchiveFileSource::Impl {
         return static_cast<std::size_t>(in.gcount()) == size;
     }
 
-    // Record 0 failing authentication is what a wrong password looks like
+    // A wrong password shows up as record 0 failing auth
     void ReadManifest() {
         const auto plain = ReadRecord(0, ArchiveCode::kWrongPassword);
         const json j = json::parse(plain.begin(), plain.end(), nullptr, false);
@@ -129,6 +129,7 @@ struct ArchiveFileSource::Impl {
         std::vector<std::uint8_t> sealed(length);
         if (!ReadExact(sealed.data(), sealed.size())) Fail(ArchiveCode::kDamaged);
         try {
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access) set by both constructors
             return cipher->Open(Domain::kArchive, Context(header), index, sealed);
         } catch (const std::exception&) {
             Fail(unauthentic);
@@ -139,7 +140,7 @@ struct ArchiveFileSource::Impl {
         if (broken) Fail(ArchiveCode::kDamaged);
         try {
             if (next > manifest.consultations) {
-                // More than the manifest counted, or any stray byte, is damage
+                // Bytes past the manifest count mean a damaged file
                 if (in.peek() != std::char_traits<char>::eof()) Fail(ArchiveCode::kDamaged);
                 return std::nullopt;
             }
@@ -163,7 +164,7 @@ struct ArchiveFileSource::Impl {
     }
 };
 
-ArchiveFileSource::ArchiveFileSource(std::filesystem::path path, std::string password) {
+ArchiveFileSource::ArchiveFileSource(const std::filesystem::path& path, std::string password) {
     WipeOnExit wipe{password};
     impl_ = std::make_unique<Impl>(path);
     impl_->cipher.emplace(Derive(password, impl_->header, false));
@@ -199,7 +200,7 @@ struct ArchiveFileSink::Impl {
     std::size_t expected = 0;
     std::uint64_t next = 0;  // record index
     std::vector<std::string> ids;
-    bool finished = true;  // nothing on disk to clean up: not yet created, committed or discarded
+    bool finished = true;  // true when there is no partial file to clean up
 
     ~Impl() {
         if (!finished) Discard();
@@ -214,7 +215,7 @@ struct ArchiveFileSink::Impl {
         finished = true;
     }
 
-    // Any failure discards the partial, and the caller sees only a fixed code
+    // Any failure deletes the partial; non-archive errors become kWriteFailed
     template <typename Step>
     void Guarded(Step step) {
         if (finished) Fail(ArchiveCode::kWriteFailed);
@@ -243,6 +244,7 @@ struct ArchiveFileSink::Impl {
 
     void WriteRecord(const json& j) {
         const std::string plain = j.dump(-1, ' ', false, json::error_handler_t::replace);
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access) set by the constructor
         const auto sealed = cipher->Seal(
             Domain::kArchive, Context(header), next,
             std::span(reinterpret_cast<const std::uint8_t*>(plain.data()), plain.size()));
@@ -254,8 +256,8 @@ struct ArchiveFileSink::Impl {
         ++next;
     }
 
-    // Reads every record back before the target is touched. The OS cache may serve the read, so
-    // this checks the format and authentication only
+    // Read back every record before replacing the target. May be served from
+    // the OS cache, so this checks format and auth only
     void Verify() {
         try {
             ArchiveFileSource check(partial, std::move(*cipher));
@@ -284,7 +286,7 @@ ArchiveFileSink::ArchiveFileSink(std::filesystem::path target, std::string passw
     std::memcpy(s.header.data(), kMagic, sizeof kMagic);
     PutLe(s.header.data() + 8, kVersion, 2);
     PutLe(s.header.data() + 10, iterations, 4);
-    // Fresh per sink: a new salt is a new key, which keeps the record-index IVs unique
+    // New salt per sink gives a new key, so record-index IVs never repeat
     if (BCryptGenRandom(nullptr, s.header.data() + kSaltAt, static_cast<ULONG>(kSaltBytes),
                         BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0) {
         Fail(ArchiveCode::kWriteFailed);
@@ -293,8 +295,8 @@ ArchiveFileSink::ArchiveFileSink(std::filesystem::path target, std::string passw
 
     s.target = std::move(target);
     s.partial = PartialOf(s.target);
-    // Beside the target, so the final move is a rename on the same volume; it only ever holds
-    // ciphertext, and a stale one from a killed backup is replaced
+    // Next to the target so the final move is a same-volume rename. Holds
+    // ciphertext only; CREATE_ALWAYS replaces a stale one from a killed backup
     s.file = CreateFileW(s.partial.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                          FILE_ATTRIBUTE_NORMAL, nullptr);
     if (s.file == INVALID_HANDLE_VALUE) Fail(ArchiveCode::kWriteFailed);

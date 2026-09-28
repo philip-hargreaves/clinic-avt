@@ -86,14 +86,14 @@ TEST(PageText, AColumnOrPageBreakClosesUnlessTheSentenceRunsOn) {
                    Line("when allopurinol fails or is", 0.25F, 0.27F, 0.55F, 0.95F)};
     Page second;
     second.lines = {Line("not tolerated.", 0.10F, 0.12F)};
-    const auto runOn = ParagraphsFromPages({first, second});
-    ASSERT_EQ(runOn.size(), 3u);
-    EXPECT_EQ(runOn[0].text, "Offer allopurinol when urate stays high after a flare.");
-    EXPECT_EQ(runOn[1].text, "Rationale");
-    EXPECT_EQ(runOn[2].text,
+    const auto run_on = ParagraphsFromPages({first, second});
+    ASSERT_EQ(run_on.size(), 3u);
+    EXPECT_EQ(run_on[0].text, "Offer allopurinol when urate stays high after a flare.");
+    EXPECT_EQ(run_on[1].text, "Rationale");
+    EXPECT_EQ(run_on[2].text,
               "Febuxostat is an alternative when allopurinol fails or is not tolerated.");
-    EXPECT_EQ(runOn[2].page, 0);
-    EXPECT_EQ(runOn[2].lines.size(), 3u);
+    EXPECT_EQ(run_on[2].page, 0);
+    EXPECT_EQ(run_on[2].lines.size(), 3u);
 
     // A finished sentence closes at a jump back up the page and at a new page
     Page left;

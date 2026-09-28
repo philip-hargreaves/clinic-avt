@@ -40,7 +40,7 @@ Corpus Describe(const CorpusInfo& info) {
     return c;
 }
 
-// A hit's place across the corpora, keyed for the vote
+// Hit position across corpora, used as the vote key
 struct Located {
     std::size_t corpus = 0;
     std::size_t ord = 0;
@@ -101,15 +101,15 @@ void Retriever::Load() {
     }
 }
 
-// Scans the corpora folder against the research setting and swaps in the
-// loaded set. The embedder stays
+// Rescans the corpora folder with the research setting and swaps in the set.
+// Keeps the embedder
 void Retriever::LoadCorpora() {
     std::vector<std::filesystem::path> dirs;
     if (std::filesystem::is_directory(corpora_root_)) {
         for (const auto& entry : std::filesystem::directory_iterator(corpora_root_)) {
             const auto manifest = entry.path() / kManifestFile;
             if (!entry.is_directory() || !std::filesystem::exists(manifest)) continue;
-            // A research corpus is a demo, invisible unless a dev build asks for it
+            // Research corpora are demos, skipped unless a dev build asks
             if (!options_.include_research && IsResearch(manifest)) continue;
             dirs.push_back(entry.path());
         }
@@ -162,7 +162,7 @@ void Retriever::PublishUploads(std::shared_ptr<const UploadSnapshot> uploads) {
 
 namespace {
 
-// A card that says what a shown card already says spends a slot for nothing
+// Near-duplicate of a shown card, so not worth a slot
 bool Restates(const std::vector<Result>& shown, const std::string& text) {
     for (const auto& result : shown) {
         if (NearDuplicate(result.text, text)) return true;
@@ -203,6 +203,7 @@ Results Retriever::Search(const std::string& text, int limit, SearchMode mode) {
 
     // Each sub-query is embedded once and scanned against both groups
     std::vector<std::pair<std::string, Embedding>> embedded;
+    embedded.reserve(queries.size());
     for (const auto& query : queries) embedded.emplace_back(query, embedder_->Embed(query));
 
     struct Source {
@@ -211,9 +212,9 @@ Results Retriever::Search(const std::string& text, int limit, SearchMode mode) {
         int dim;
     };
     const int k = kUnionSize;
-    // One group's sources sort into one list per sub-query before the vote.
-    // A narrow group is strict: silent unless the whole note clears its own
-    // floor, and a sentence votes only at or above the group's floor
+    // Rank each group per sub-query before the vote. A narrow group returns
+    // nothing unless the whole note clears its floor, and a sentence votes only
+    // at or above that floor
     const auto vote = [&](const std::vector<Source>& sources, double floor,
                           std::map<std::string, Located>& where, bool strict) {
         std::vector<SubQueryHits> lists;
@@ -245,7 +246,7 @@ Results Retriever::Search(const std::string& text, int limit, SearchMode mode) {
         return ApplyFloor(RankVote(lists, k, strict ? floor : -1.0), floor);
     };
 
-    // A hit the population guard rules out, or one that restates a shown card, spends no slot
+    // Hits failing the population guard, or restating a shown card, take no slot
     const auto suppressed = [&](const std::string& body, const std::string& title) {
         if (PopulationConflict(text, body, title)) {
             std::fprintf(stderr, "clinicavt-engine: guard suppressed a hit in %s\n", title.c_str());
@@ -288,6 +289,7 @@ Results Retriever::Search(const std::string& text, int limit, SearchMode mode) {
 
     if (!stores.empty()) {
         std::vector<Source> sources;
+        sources.reserve(stores.size());
         for (auto* store : stores)
             sources.push_back({store->Matrix(), store->Size(), store->Dim()});
         std::map<std::string, Located> where;

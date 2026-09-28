@@ -15,7 +15,7 @@ namespace clinicavt::store {
 
 namespace {
 
-// Audio held in memory while the disk refuses commits. Older frames are dropped and counted
+// Max audio buffered in memory while commits fail; older frames are dropped and counted
 constexpr std::chrono::seconds kPendingBound(30);
 constexpr std::int64_t kSqlitePageLimit = 1073741823;  // the default max_page_count
 
@@ -51,8 +51,8 @@ std::string RandomId() {
     return id;
 }
 
-// A new document slot starts at a random sequence below 2^62, so a slot deleted and written
-// again never seals under an IV its earlier content used
+// New slots start at a random sequence below 2^62 so a deleted and rewritten
+// slot never reuses an IV
 std::int64_t FreshSlotSequence() {
     std::random_device device;
     const std::uint64_t high = device();
@@ -83,7 +83,7 @@ SqliteSessionStore::~SqliteSessionStore() {
     }
     cv_.notify_all();
     writer_.join();
-    // Destruction is not finalisation. An open session stays recoverable with what it buffered
+    // Destruction does not finalise; an open session stays recoverable
     if (open_.has_value()) {
         try {
             CommitPending();
@@ -103,8 +103,7 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
     session.cipher.emplace(ChunkCipher::Generate());
     const std::vector<std::uint8_t> wrapped = session.cipher->Wrapped();
 
-    // Row and key land together: a session either exists with its key or
-    // not at all
+    // Session row and key in one transaction
     Db::Transaction txn(db_);
     Db::Stmt insert = db_.Prepare(
         "INSERT INTO sessions(id, started_at, state, sample_rate, device_id, device_name, retain)"
@@ -150,7 +149,7 @@ void SqliteSessionStore::ClosePending() {
     pending_ = {};
 }
 
-// Timing is queryable shape. Speaker and text are content, so encrypted
+// Timing in plaintext for queries; speaker and text encrypted
 void SqliteSessionStore::InsertTurn(const SessionId& id, std::int64_t seq,
                                     const ChunkCipher& cipher, const asr::Turn& turn) {
     const std::string content =
@@ -177,16 +176,15 @@ void SqliteSessionStore::ReplaceTurns(const SessionId& id, std::span<const asr::
     erase.BindText(1, session.id);
     erase.Step();
     for (const asr::Turn& turn : turns) {
-        // Sequence numbers continue rather than restart, so every sealed
-        // payload's AAD stays unique for the session's lifetime
+        // Sequence numbers continue from the last, so each sealed payload's AAD
+        // is unique for the session
         InsertTurn(session.id, session.next_turn_seq, *session.cipher, turn);
         session.next_turn_seq += 1;
     }
     txn.Commit();
 }
 
-// The seal erases the audio. The transcript is the record, and the recording
-// existed only to resume a crash
+// Sealing erases the audio; it was kept only for crash recovery
 void SqliteSessionStore::Finalise(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
@@ -214,7 +212,7 @@ void SqliteSessionStore::Abandon(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     RequireOpen(id);
     CommitPending();
-    // No state change: recording is what marks it recoverable
+    // State stays 'recording', which marks it recoverable
     open_.reset();
     ClosePending();
 }
@@ -235,8 +233,7 @@ void SqliteSessionStore::Delete(const SessionId& id) {
     Erase(id);
 }
 
-// The key row goes with the session (cascade): whatever ciphertext lingers
-// in free pages afterwards is noise without it
+// Key row cascades with the session; leftover ciphertext in free pages is unreadable without it
 void SqliteSessionStore::Erase(const SessionId& id) {
     Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE id = ?");
     erase.BindText(1, id);
@@ -256,24 +253,24 @@ void SqliteSessionStore::EraseUnretained() {
     EraseWhere(erase);
 }
 
-// The label is content, so each row's is opened with its own key. The
-// edit stamp is the latest over the session's documents
+// Labels are encrypted, so each row is opened with its own key. edited_at is the
+// latest across the session's documents
 std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<SessionSummary> sessions;
     Db::Stmt select = db_.Prepare(
         "SELECT s.id, s.started_at, s.ended_at, s.state, s.sample_rate, k.wrapped, l.payload,"
-        // Label, summary, reflection and guidance are not edits to the record
+        // Label, summary, reflection and guidance writes are not record edits
         " (SELECT max(edited_at) FROM documents d WHERE d.session_id = s.id"
         "  AND d.kind NOT IN ('label', 'summary', 'reflection', 'guidance')),"
-        // The audio's length outlives the audio: the turns' end is plaintext.
-        // A session that never sealed still has its chunks
+        // Audio length from the plaintext turns (audio is gone after sealing); unsealed
+        // sessions fall back to chunks
         " COALESCE((SELECT max(first_frame + frame_count) FROM turns t WHERE t.session_id = s.id),"
         "  (SELECT max(first_frame + frame_count) FROM chunks c WHERE c.session_id = s.id)),"
         " EXISTS(SELECT 1 FROM documents r WHERE r.session_id = s.id"
         "  AND r.kind IN ('reflection', 'summary')),"
         " s.demo, l.seq,"
-        // Cleared: only an appraisal entry remains
+        // Cleared: finalised, no turns, no note
         " s.state = 'finalised' AND NOT EXISTS(SELECT 1 FROM turns u WHERE u.session_id = s.id)"
         "  AND NOT EXISTS(SELECT 1 FROM documents n WHERE n.session_id = s.id AND n.kind = 'note'),"
         " (SELECT max(COALESCE(max(w.generated_at), ''), COALESCE(max(w.edited_at), ''))"
@@ -281,8 +278,7 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
         " FROM sessions s"
         " LEFT JOIN session_keys k ON k.session_id = s.id"
         " LEFT JOIN documents l ON l.session_id = s.id AND l.kind = 'label'"
-        // A keep-off session exists only until it is left. History never
-        // shows what is not being kept. Crashed ones stay for recovery
+        // Hide finalised retain-off sessions (erased on leave). Crashed ones stay for recovery
         " WHERE NOT (s.retain = 0 AND s.state = 'finalised')"
         " ORDER BY s.started_at DESC, s.rowid DESC");
     while (select.Step()) {
@@ -296,7 +292,7 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
                     cipher.Open(Domain::kLabel, summary.id,
                                 static_cast<std::uint64_t>(select.ColumnInt64(11)), sealed);
                 summary.label.assign(plain.begin(), plain.end());
-            } catch (const StoreError&) {  // one unreadable label never hides the list
+            } catch (const StoreError&) {  // NOLINT(bugprone-empty-catch) listed without a label
             }
         }
         summary.edited_at = select.ColumnText(7);
@@ -313,7 +309,7 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
     return sessions;
 }
 
-// Row, key and turns land in one transaction, already finalised
+// Row, key and turns in one transaction, already finalised
 SessionId SqliteSessionStore::Seed(const SessionSeed& seed) {
     std::lock_guard<std::mutex> lock(mutex_);
     const SessionId id = RandomId();
@@ -347,7 +343,7 @@ std::size_t SqliteSessionStore::DeleteAll(bool keep_reflections) {
         return EraseWhere(erase);
     }
 
-    // A session already cleared holds nothing more to remove, so it is not counted again
+    // Already-cleared sessions are not counted again
     std::vector<SessionId> to_clear;
     {
         Db::Stmt select = db_.Prepare(
@@ -388,8 +384,8 @@ void SqliteSessionStore::Clear(const SessionId& id) {
     Checkpoint();
 }
 
-// The kept documents are resealed under a fresh key and the old key row goes, so whatever the
-// erased rows leave in free pages is noise, as after Delete
+// Reseal kept documents under a new key and delete the old key row, so erased
+// rows left in free pages are unreadable, as after Delete
 void SqliteSessionStore::ClearLocked(const SessionId& id) {
     const ChunkCipher previous = CipherFor(id);
     {
@@ -423,7 +419,7 @@ void SqliteSessionStore::ClearLocked(const SessionId& id) {
     erase("DELETE FROM session_keys WHERE session_id = ?");
     const ChunkCipher fresh = ChunkCipher::Generate();
     InsertKey(id, fresh.Wrapped());
-    // A fresh key, so each slot keeps its sequence without repeating an IV
+    // New key, so slots keep their sequences without IV reuse
     for (const auto& [kind, document] : kept) {
         WriteDocumentRow(id, kind, fresh, document.revision, document);
     }
@@ -459,7 +455,7 @@ SessionRecord SqliteSessionStore::ReadRecord(const SessionId& id) {
     return record;
 }
 
-// The existence check is the insert itself, inside the transaction
+// The insert is the existence check, inside the transaction
 AddOutcome SqliteSessionStore::AddRecord(const SessionRecord& record) {
     if (!archive::ValidRecord(record)) {
         throw StoreError(StoreCode::kOther, "the record is not one this store could hold");
@@ -491,7 +487,7 @@ AddOutcome SqliteSessionStore::AddRecord(const SessionRecord& record) {
         InsertTurn(record.id, seq, cipher, turn);
         seq += 1;
     }
-    // A fresh key, so the stored revisions serve as sequences without repeating an IV
+    // New key, so stored revisions can be sequences without IV reuse
     for (const RecordDocument& entry : record.documents) {
         WriteDocumentRow(record.id, entry.kind, cipher, entry.document.revision, entry.document);
     }
@@ -499,8 +495,8 @@ AddOutcome SqliteSessionStore::AddRecord(const SessionRecord& record) {
     return AddOutcome::kAdded;
 }
 
-// A cleared session, the same consultation, takes back its transcript and every document it
-// lacks; what it kept stays as it is
+// Restoring onto a cleared copy of the same session adds back the transcript
+// and missing documents. Kept documents are unchanged
 AddOutcome SqliteSessionStore::CompleteLocked(const SessionRecord& record) {
     {
         Db::Stmt cleared = db_.Prepare(
@@ -514,8 +510,8 @@ AddOutcome SqliteSessionStore::CompleteLocked(const SessionRecord& record) {
     }
     const ChunkCipher cipher = CipherFor(record.id);
     bool added = false;
-    // Clear wrote only its kept kinds under this fresh key, so any other kind can seal at the
-    // record's revision. Turns have no revision to keep and start at a random sequence
+    // Clear sealed only the kept kinds under this key, so other kinds can use the
+    // record revision. Turns have no revision and start at a random sequence
     std::int64_t seq = FreshSlotSequence();
     for (const asr::Turn& turn : record.turns) {
         InsertTurn(record.id, seq, cipher, turn);
@@ -527,8 +523,8 @@ AddOutcome SqliteSessionStore::CompleteLocked(const SessionRecord& record) {
         held.BindText(1, record.id);
         held.BindText(2, SpecFor(entry.kind).name);
         if (held.Step()) continue;
-        // A kept kind missing now was deleted after the clear, and its slot may have sealed at
-        // the record's revision under this key: it starts afresh like any new slot
+        // A kept kind now missing was deleted after the clear and may have used the
+        // record revision under this key, so start a fresh sequence
         WriteDocumentRow(record.id, entry.kind, cipher,
                          KeptOnClear(entry.kind) ? FreshSlotSequence() : entry.document.revision,
                          entry.document);
@@ -567,14 +563,14 @@ void SqliteSessionStore::InsertKey(const SessionId& id, std::span<const std::uin
     key.Step();
 }
 
-// Text is content, so sealed. The rest is shape. The options row follows
-// the note row (cascade), so a kind is all or nothing
+// Text is encrypted, metadata is not. The options row cascades from the note
+// row, so a kind is written all or nothing
 void SqliteSessionStore::WriteDocument(const SessionId& id, DocumentKind kind,
                                        const Document& document) {
     const ChunkCipher cipher = CipherFor(id);
 
     Db::Transaction txn(db_);
-    // The slot's next sequence: a rewrite never reseals under a used IV
+    // Slot's next sequence so a rewrite never reuses an IV
     std::int64_t seq = FreshSlotSequence();
     {
         Db::Stmt previous =
@@ -717,7 +713,8 @@ std::vector<float> SqliteSessionStore::ReadAudio(const SessionId& id) {
             cipher.Open(Domain::kAudio, id, static_cast<std::uint64_t>(select.ColumnInt64(0)),
                         select.ColumnBlob(1));
         const auto* frames = reinterpret_cast<const float*>(plain.data());
-        audio.insert(audio.end(), frames, frames + plain.size() / sizeof(float));
+        const std::size_t count = plain.size() / sizeof(float);
+        audio.insert(audio.end(), frames, frames + count);
     }
     return audio;
 }
@@ -734,6 +731,7 @@ bool SqliteSessionStore::CommitPending() {
     TakePending(session);
     if (session.held.empty() && session.held_lost == 0) return false;
     const std::vector<std::uint8_t> sealed =
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access) set when the session opened
         session.cipher->Seal(Domain::kAudio, session.id,
                              static_cast<std::uint64_t>(session.next_seq), AsBytes(session.held));
 
@@ -758,21 +756,22 @@ bool SqliteSessionStore::CommitPending() {
     return true;
 }
 
-// A failed commit keeps its audio for the next tick. Past kPendingBound the oldest frames are
-// dropped as lost and the stored timeline moves with them. The fault is announced once per episode
+// Failed commits keep their audio for the next tick. Past kPendingBound the
+// oldest frames are dropped as lost and the timeline shifts. The fault is
+// reported once per episode
 void SqliteSessionStore::WriterLoop() {
     std::unique_lock<std::mutex> lock(mutex_);
     while (!stopping_) {
         cv_.wait_for(lock, commit_interval_, [this] { return stopping_; });
         if (stopping_) break;
         if (!open_.has_value()) continue;
+        Open& session = *open_;
         try {
-            if (CommitPending() && open_->faulted) {
-                open_->faulted = false;
+            if (CommitPending() && session.faulted) {
+                session.faulted = false;
                 std::fprintf(stderr, "clinicavt-engine: store commits again\n");
             }
         } catch (const StoreError& e) {
-            Open& session = *open_;
             const std::uint64_t bound = kPendingBound.count() * session.sample_rate;
             if (session.held.size() > bound) {
                 const auto dropped = session.held.size() - bound;

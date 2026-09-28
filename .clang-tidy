@@ -1,0 +1,57 @@
+# The engine's static analysis; CI runs it through tools/run-clang-tidy.ps1
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  readability-identifier-naming,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-throwing-static-initialization,
+  -bugprone-unchecked-string-to-number-conversion,
+  -performance-enum-size,
+  -performance-inefficient-string-concatenation
+# Why each is off:
+#   easily-swappable-parameters     flags every pair of same-typed parameters, which is noise
+#   narrowing-conversions           /W4 already rejects lossy integer conversions; the rest are
+#                                   deliberate size_t and float arithmetic in the signal code
+#   throwing-static-initialization  the only throw is bad_alloc before main, which nothing can handle
+#   unchecked-string-to-number      atoi's 0 on bad input is the wanted fallback, range-checked after
+#   enum-size                       a narrower enum saves nothing at these sizes
+#   inefficient-string-concatenation  a + b + c in cold text assembly; clearer than append chains
+HeaderFilterRegex: 'engine[/\\](src|tools|tests)[/\\]'
+FormatStyle: none
+CheckOptions:
+  # Allocation failure ends the process anyway (bad_alloc itself is ignored by default)
+  bugprone-exception-escape.IgnoredExceptions: 'bad_array_new_length'
+  # A throw out of main ends that process loudly, which the hosts and tools want
+  bugprone-exception-escape.CheckMain: false
+  # Google C++ style, as the engine is written
+  readability-identifier-naming.NamespaceCase: lower_case
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.UnionCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.TypeAliasCase: CamelCase
+  # nlohmann's own spelling
+  readability-identifier-naming.TypeAliasIgnoredRegexp: '^json$'
+  readability-identifier-naming.TypedefCase: CamelCase
+  readability-identifier-naming.TemplateParameterCase: CamelCase
+  readability-identifier-naming.ConceptCase: CamelCase
+  readability-identifier-naming.FunctionCase: CamelCase
+  # The CRT's wide entry point
+  readability-identifier-naming.FunctionIgnoredRegexp: '^wmain$'
+  readability-identifier-naming.MethodCase: CamelCase
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case
+  readability-identifier-naming.MemberCase: lower_case
+  readability-identifier-naming.PrivateMemberSuffix: _
+  readability-identifier-naming.ProtectedMemberSuffix: _
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.EnumConstantPrefix: k
+  readability-identifier-naming.ConstexprVariableCase: CamelCase
+  readability-identifier-naming.ConstexprVariablePrefix: k
+  readability-identifier-naming.GlobalConstantCase: CamelCase
+  readability-identifier-naming.GlobalConstantPrefix: k
+  readability-identifier-naming.StaticConstantCase: CamelCase
+  readability-identifier-naming.StaticConstantPrefix: k
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE

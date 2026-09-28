@@ -20,16 +20,16 @@ namespace {
 constexpr const char* kFixtureDir = CLINICAVT_GUIDANCE_FIXTURE_DIR;
 
 const models::ModelStore& Store() {
-    static const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
-    return store;
+    static const models::ModelStore kStore{std::filesystem::path(CLINICAVT_MODELS_DIR)};
+    return kStore;
 }
 
 Embedder& StagedEmbedder() {
-    static const auto embedder = Embedder::Load(Store());
-    return *embedder;
+    static const auto kEmbedder = Embedder::Load(Store());
+    return *kEmbedder;
 }
 
-// The one loaded model, lent to a retriever that expects to own its embedder
+// Non-owning, so an owning retriever can use the one loaded model
 struct Borrowed : IEmbedder {
     IEmbedder& inner;
     explicit Borrowed(IEmbedder& embedder) : inner(embedder) {}

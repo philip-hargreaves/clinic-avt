@@ -42,15 +42,14 @@ Outcome RunHost(const std::filesystem::path& exe, const std::wstring& args,
     system::UniqueHandle in_read, in_write, out_read, out_write;
     Pipe(in_read, in_write);
     Pipe(out_read, out_write);
-    SetHandleInformation(in_write.get(), HANDLE_FLAG_INHERIT, 0);
-    SetHandleInformation(out_read.get(), HANDLE_FLAG_INHERIT, 0);
-    // One process on a memory cap. The document goes in on stdin, the
-    // pages come back on stdout
+    SetHandleInformation(in_write.Get(), HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(out_read.Get(), HANDLE_FLAG_INHERIT, 0);
+    // One process with a memory cap. Document on stdin, pages on stdout
     system::ChildProcess child;
     try {
         child = system::ChildProcess::Spawn(exe, args,
-                                            {.stdin_read = in_read.get(),
-                                             .stdout_write = out_write.get(),
+                                            {.stdin_read = in_read.Get(),
+                                             .stdout_write = out_write.Get(),
                                              .memory_cap = limits.memory_cap,
                                              .single_process = true});
     } catch (const std::exception&) {
@@ -66,7 +65,7 @@ Outcome RunHost(const std::filesystem::path& exe, const std::wstring& args,
             DWORD written = 0;
             const auto count =
                 static_cast<DWORD>(std::min<std::size_t>(input.size() - at, 1 << 16));
-            if (!WriteFile(in_write.get(), input.data() + at, count, &written, nullptr)) break;
+            if (!WriteFile(in_write.Get(), input.data() + at, count, &written, nullptr)) break;
             at += written;
         }
         in_write.Reset();
@@ -74,7 +73,7 @@ Outcome RunHost(const std::filesystem::path& exe, const std::wstring& args,
     std::thread reader([&] {
         char buffer[1 << 16];
         DWORD count = 0;
-        while (ReadFile(out_read.get(), buffer, sizeof buffer, &count, nullptr) && count > 0) {
+        while (ReadFile(out_read.Get(), buffer, sizeof buffer, &count, nullptr) && count > 0) {
             if (outcome.output.size() + count > limits.output_cap) {
                 outcome.bounded = true;
                 child.Kill();
@@ -87,7 +86,7 @@ Outcome RunHost(const std::filesystem::path& exe, const std::wstring& args,
         outcome.timed_out = true;
         child.Kill();
     }
-    // The reader ends when the process is gone and its end of the pipe with it
+    // Reader finishes once the process exits and closes its pipe end
     writer.join();
     reader.join();
     outcome.exit = child.ExitCode();
@@ -99,7 +98,7 @@ float Fraction(const json& value, float whole) {
     return std::clamp(static_cast<float>(value.get<double>() / whole), 0.0F, 1.0F);
 }
 
-// The host's JSON as pages, refused when a count or a size is out of range
+// Host JSON as pages; throws if a count or size is out of range
 std::vector<Page> PagesOf(json root) {
     if (!root.is_object() || !root["pages"].is_array() || root["pages"].size() > kMaxPages) {
         throw HostError("badOutput", "pages missing or too many");
@@ -137,7 +136,7 @@ std::vector<Page> PagesOf(json root) {
     return pages;
 }
 
-// A missing key or a wrong type is bad output like any other
+// Missing keys and wrong types are treated as bad output
 std::vector<Page> PagesFrom(const std::string& text) {
     try {
         return PagesOf(json::parse(text));
@@ -152,7 +151,7 @@ std::uint32_t Read32(const std::string& s, std::size_t at) {
     return v;
 }
 
-// The host's BMP, refused unless its header and its size agree
+// Throws unless the BMP header matches the byte size
 Bitmap BitmapFrom(std::string output) {
     if (output.size() < kBmpHeader || output[0] != 'B' || output[1] != 'M') {
         throw HostError("badOutput", "not a bitmap");

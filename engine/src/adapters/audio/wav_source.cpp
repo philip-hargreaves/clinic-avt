@@ -76,7 +76,7 @@ std::variant<WavHeader, std::string> ParseHeader(std::ifstream& in) {
                 return std::string("malformed fmt chunk");
             }
             have_format = true;
-            in.seekg(static_cast<std::streamoff>(chunk_bytes - 16 + (chunk_bytes & 1)),
+            in.seekg(static_cast<std::streamoff>(chunk_bytes) - 16 + (chunk_bytes & 1),
                      std::ios::cur);
         } else if (TagIs(tag, "data")) {
             if (!have_format) {
@@ -84,7 +84,7 @@ std::variant<WavHeader, std::string> ParseHeader(std::ifstream& in) {
             }
             return WavHeader{format, chunk_bytes};
         } else {
-            in.seekg(static_cast<std::streamoff>(chunk_bytes + (chunk_bytes & 1)), std::ios::cur);
+            in.seekg(static_cast<std::streamoff>(chunk_bytes) + (chunk_bytes & 1), std::ios::cur);
         }
         if (!in) {
             return std::string("truncated chunk list");
@@ -116,7 +116,6 @@ void WavSource::RequestStop() {
     stop_requested_.store(true, std::memory_order_relaxed);
 }
 
-// Every outcome, success or failure, ends with OnEnd
 void WavSource::Run(IAudioSink& sink) {
     sink.OnEnd(RunToEnd(sink));
 }
@@ -172,8 +171,7 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
         }
         sink.OnAudio(std::span<const float>(frames.data(), count), 0);
         remaining -= count;
-        // Sleeps to a deadline from a fixed origin. Per-packet sleeps
-        // drift, and the drift compounds
+        // Sleep to deadlines from a fixed origin; per-packet sleeps accumulate drift
         if (config_.speed > 0) {
             frames_sent += count;
             const auto due = static_cast<std::int64_t>(static_cast<double>(frames_sent) * 1e6 /

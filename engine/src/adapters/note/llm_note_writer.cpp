@@ -42,8 +42,8 @@ double Seconds(std::chrono::steady_clock::time_point since) {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - since).count();
 }
 
-// The template the prompts were tuned with. The prefill must open with exactly
-// these bytes for its KV to be reused
+// Template the prompts were tuned with. The prefill must start with exactly
+// these bytes for KV reuse
 constexpr const char* kUserTurn = "<|im_start|>user\n";
 
 ov::genai::GenerationConfig Greedy(std::size_t max_new_tokens) {
@@ -63,8 +63,8 @@ struct LlmNoteWriter::Impl {
     std::string tier;
     std::mutex swap_mutex;      // guards pipeline
     std::mutex state_mutex;     // guards loader, load_error, loading, on_load
-    std::mutex generate_mutex;  // one generate at a time: a prefill never overlaps a note
-    std::string last_prefill;   // under generate_mutex: the prompt the KV was last extended to
+    std::mutex generate_mutex;  // one generate at a time, so a prefill never overlaps a note
+    std::string last_prefill;   // under generate_mutex: last prompt the KV cache was extended to
     std::shared_ptr<TextPipeline> pipeline;
     std::exception_ptr load_error;
     std::thread loader;
@@ -74,8 +74,8 @@ struct LlmNoteWriter::Impl {
     LoadListener on_load;
     std::function<void(double)> on_gpu_wait;  // under state_mutex
 
-    // Waits its turn on the GPU, telling the engine it is alive meanwhile.
-    // Throws when a stuck host holds the GPU, since the wait could never end
+    // Waits for the GPU lease, reporting liveness meanwhile. Throws if a stuck host
+    // holds it, since the wait would never end
     system::GpuLease::Guard TakeGpu(const char* who) {
         auto& gpu = system::GpuLease::Global();
         auto watch = system::WatchForStuckHosts(who);
@@ -102,8 +102,8 @@ struct LlmNoteWriter::Impl {
         store.Verify(info);
         const double verified = Seconds(t0);
         const std::string device = runtime.ResolveDevice(info.device);
-        // Build and warm hold the GPU lease (nothing runs beside them) and a
-        // power request (no standby mid-load)
+        // Build and warm-up hold the GPU lease (nothing else runs) and a power request
+        // (no standby mid-load)
         const system::AwakeRequest awake(L"ClinicAVT: loading the note model");
         const auto lease = TakeGpu("note load");
         std::shared_ptr<TextPipeline> built = MakeTextPipeline(info, device);
@@ -113,7 +113,7 @@ struct LlmNoteWriter::Impl {
             "clinicavt-note-host: note %s (%s, %s) on %s, checked in %.1f s, loaded in %.1f s, "
             "lease wait %.2f s\n",
             info.id.c_str(), tier.c_str(), info.pipeline.c_str(), device.c_str(), verified,
-            report.seconds, lease.waited());
+            report.seconds, lease.Waited());
         WarmPromptPrefix(*built);
         std::lock_guard<std::mutex> lock(swap_mutex);
         pipeline = std::move(built);
@@ -121,8 +121,8 @@ struct LlmNoteWriter::Impl {
         return report;
     }
 
-    // One discarded token parks the instruction block's KV, so only the transcript
-    // prefills at stop (measured 2.1 -> 1.3 s). Notes are equivalent rather than byte-stable
+    // One discarded token caches the instruction block's KV, so stop prefills only the
+    // transcript (measured 2.1 -> 1.3 s). Notes are equivalent but not byte-identical
     void WarmPromptPrefix(TextPipeline& built) {
         try {
             const auto t0 = std::chrono::steady_clock::now();
@@ -180,8 +180,8 @@ void LlmNoteWriter::SetGpuWaitListener(std::function<void(double)> listener) {
     impl_->on_gpu_wait = std::move(listener);
 }
 
-// Starts the one background load. The ~14 s cost lands during capture, not
-// on the stop path. A failed attempt is retried on the next call.
+// Starts the background load so the ~14 s cost falls during capture instead of
+// at stop. A failed attempt is retried on the next call
 void LlmNoteWriter::Prepare() {
     std::thread finished;
     {
@@ -219,7 +219,7 @@ std::string LlmNoteWriter::Write(const std::vector<asr::Turn>& transcript,
     if (transcript.empty()) {
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
-    // The confirmation sits after everything the capture-phase prefill covered
+    // Confirmation goes after everything the capture-phase prefill covered
     return Generate(LoadPrompt(impl_->prompt_dir / StyleFile(options)) +
                         TranscriptBlock(transcript) + "\n" +
                         LoadPrompt(impl_->prompt_dir / ("detail-" + options.detail + ".md")) +
@@ -258,7 +258,7 @@ void LlmNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Note
                                TranscriptBlock(transcript);
     if (prompt == impl_->last_prefill) return;
     try {
-        // A guess is only worth making now. A busy GPU means no guess this time
+        // No retry. If the GPU is busy, skip this prefill
         auto& gpu = system::GpuLease::Global();
         const auto lease = gpu.TryAcquire();
         if (gpu.Active() && !lease.Held()) return;
@@ -272,7 +272,7 @@ void LlmNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Note
         impl_->last_prefill = prompt;
     } catch (const std::exception& e) {
         impl_->last_prefill.clear();
-        // The host decides whether the process can go on
+        // Rethrown so the host decides whether to exit
         if (PoisonsGpuContext(e.what())) throw;
         std::fprintf(stderr, "clinicavt-note-host: prefill failed (%s)\n", e.what());
     }
@@ -283,10 +283,10 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
     impl_->cancel = impl_->closed.load();
     Prepare();
     impl_->JoinLoader();
-    // Waits behind any prefill still running. The guess is then measured against the prompt
+    // Waits for any running prefill, then compares its prompt with this one
     std::lock_guard<std::mutex> generation(impl_->generate_mutex);
-    // A strong reference for the whole generation: a swap or teardown can
-    // never free the model under an in-flight call
+    // Hold a strong ref for the whole generation so a swap or teardown cannot free
+    // the model mid-call
     const auto pipeline = impl_->Pipeline();
     if (pipeline == nullptr) {
         std::lock_guard<std::mutex> lock(impl_->state_mutex);
@@ -296,7 +296,6 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
         throw std::runtime_error("note model unavailable");
     }
 
-    // The user turn, then an empty think block
     const std::string wrapped =
         kUserTurn + prompt + "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
 
@@ -307,10 +306,10 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
                      wrapped.size(), shared, 100.0 * shared / wrapped.size());
         impl_->last_prefill.clear();
     }
-    // The streamer carries both the partials out and the cancel in. On
-    // cancel the accumulated text is returned as-is
+    // The streamer sends partials out and receives cancel. On cancel the text so
+    // far is returned
     std::string text;
-    const TextPipeline::Streamer streamer = [this, &text, &progress](std::string piece) {
+    const TextPipeline::Streamer streamer = [this, &text, &progress](const std::string& piece) {
         if (impl_->cancel.load()) {
             return ov::genai::StreamingStatus::STOP;
         }
@@ -320,13 +319,12 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
         }
         return ov::genai::StreamingStatus::RUNNING;
     };
-    // Generation holds the GPU lease. A recording started meanwhile decodes
-    // after it ends
+    // Holds the GPU lease; a recording started meanwhile decodes after it finishes
     const system::AwakeRequest awake(L"ClinicAVT: writing the note");
     const auto lease = impl_->TakeGpu("note");
-    if (lease.waited() > 0.25) {
+    if (lease.Waited() > 0.25) {
         std::fprintf(stderr, "clinicavt-note-host: generation waited %.2f s for the GPU lease\n",
-                     lease.waited());
+                     lease.Waited());
     }
     pipeline->Generate(wrapped, Greedy(max_new_tokens), streamer);
     return Trimmed(text);
