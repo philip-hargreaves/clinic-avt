@@ -1,5 +1,6 @@
 #include "core/session/session_controller.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <exception>
 #include <utility>
@@ -91,9 +92,19 @@ bool SessionController::Start(std::optional<ReplaySpec> replay, const store::Ses
     return false;
 }
 
-store::SessionId SessionController::Import(std::function<std::vector<float>()> read,
-                                           const std::string& started_at, bool retain,
-                                           ImportReport report) {
+int ImportPercent(ImportStage stage, double fraction) {
+    struct Band {
+        int from;
+        int to;
+    };
+    static constexpr Band kBands[] = {{0, 5}, {5, 15}, {15, 95}, {95, 100}};
+    const Band band = kBands[static_cast<int>(stage)];
+    const double within = std::clamp(fraction, 0.0, 1.0) * (band.to - band.from);
+    return band.from + static_cast<int>(within);
+}
+
+store::SessionId SessionController::Import(ImportRead read, const std::string& started_at,
+                                           bool retain, ImportReport report) {
     if (Importing()) {
         return {};
     }
@@ -129,13 +140,15 @@ bool SessionController::Importing() const {
 
 // Nothing escapes the thread. The slot is freed before done, so a request answering it is
 // never refused as busy
-void SessionController::RunImport(const std::function<std::vector<float>()>& read,
-                                  const ImportReport& report) {
+void SessionController::RunImport(const ImportRead& read, const ImportReport& report) {
     const store::SessionId id = CurrentSession();
+    const auto progress = [&report, &id](ImportStage stage, double fraction) {
+        if (report.progress) report.progress(id, stage, ImportPercent(stage, fraction));
+    };
     std::string error;
     try {
-        std::vector<float> recording = read();
-        const double total = static_cast<double>(recording.size()) / audio::kSampleRate;
+        std::vector<float> recording =
+            read([&progress](double fraction) { progress(ImportStage::kReading, fraction); });
         {
             std::lock_guard<std::mutex> lock(mutex_);
             session_audio_ = std::move(recording);
@@ -146,11 +159,7 @@ void SessionController::RunImport(const std::function<std::vector<float>()>& rea
         if (note_writer_ != nullptr) {
             note_writer_->Prepare();
         }
-        if (report.progress) {
-            import_progress_ = [&report, &id, total](double seconds) {
-                report.progress(id, seconds, total);
-            };
-        }
+        import_progress_ = progress;
         // Another channel, maybe another clinician: the print must not drift toward it
         if (import_cancel_ || FinishSession(Outcome::kFinalise, false) == Outcome::kCancel) {
             error = kImportCancelled;
@@ -588,18 +597,28 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
     if (outcome == Outcome::kFinalise) {
         events_.OnProgress("transcript");
         try {
+            const auto stop = [this] { return import_cancel_.load(); };
+            // An import finds the speech first, as a pass of its own it can report. A stop's
+            // capture has found it already
+            if (import_progress_) {
+                diariser_.FindSpeech(
+                    session_audio_,
+                    [this](double fraction) { import_progress_(ImportStage::kSpeech, fraction); },
+                    stop);
+            }
             // An import reports how far through the file it is. Spans decode in order
+            const double total = static_cast<double>(session_audio_.size());
             diariser_.Settle(
                 session_audio_,
-                [this](std::span<const float> clip, std::uint64_t first) {
+                [this, total](std::span<const float> clip, std::uint64_t first) {
                     auto chunks = transcriber_.DecodeClipChunks(clip, first);
                     if (import_progress_) {
-                        import_progress_(static_cast<double>(first + clip.size()) /
-                                         audio::kSampleRate);
+                        import_progress_(ImportStage::kTranscribing,
+                                         static_cast<double>(first + clip.size()) / total);
                     }
                     return chunks;
                 },
-                [this] { return import_cancel_.load(); });
+                stop);
             const auto cuts = transcriber_.TakeClipCuts();
             if (!cuts.empty()) diariser_.AddCutPoints(cuts);
         } catch (const std::exception& e) {
@@ -608,7 +627,11 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
             std::fprintf(stderr, "clinicavt-engine: capture settle failed\n");
         }
         stage("capture settled");
-        if (import_cancel_) outcome = Outcome::kCancel;
+        if (import_cancel_) {
+            outcome = Outcome::kCancel;
+        } else if (import_progress_) {
+            import_progress_(ImportStage::kFinalising, 0.0);
+        }
     }
 
     store::SessionId id;
@@ -637,6 +660,7 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
                 note_input = std::move(transcript.turns);
             }
             stage("transcript sealed");
+            if (import_progress_) import_progress_(ImportStage::kFinalising, 1.0);
             // The print learns only from named sessions, and only once the
             // note lane agrees this was a consultation
             if (transcript.doctor_cluster >= 0 && learn && learn_anchor_) {

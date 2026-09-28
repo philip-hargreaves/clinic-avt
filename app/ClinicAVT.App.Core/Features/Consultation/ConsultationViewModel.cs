@@ -148,7 +148,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
 
     public bool Importing => Recorder.Importing;
 
-    public int? ImportPercent => Recorder.ImportPercent;
+    public string? ImportLine => Recorder.ImportLine;
 
     public ReplayRequest? ActiveReplay => Recorder.ActiveReplay;
 

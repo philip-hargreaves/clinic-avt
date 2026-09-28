@@ -19,8 +19,11 @@ public sealed record SessionInterrupted(string? Reason = null, string? Detail = 
 
 public sealed record SessionProgress(string Stage = "") : EngineNotification;
 
-/// <summary>An import's transcription pass: seconds of the recording done out of its total.</summary>
-public sealed record ImportProgress(string SessionId = "", double Seconds = 0, double Total = 0)
+/// <summary>
+/// How far an import has got: its stage (reading, speech, transcribing or finalising) and one
+/// percentage across all of them.
+/// </summary>
+public sealed record ImportProgress(string SessionId = "", string Stage = "", int Percent = 0)
     : EngineNotification;
 
 /// <summary>An import sealed and stored. The note follows as after a stop.</summary>

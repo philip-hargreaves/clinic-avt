@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -52,9 +53,15 @@ TEST(MediaFoundationReader, DecodesEveryImportFormatToMono16k) {
     for (const char* name :
          {"tone.m4a", "tone.mp3", "tone.wma", "tone.flac", "tone.aac", "tone.wav"}) {
         SCOPED_TRACE(name);
-        const auto audio = reader.Decode(Fixture(name));
+        std::vector<double> read;
+        const auto audio =
+            reader.Decode(Fixture(name), [&read](double fraction) { read.push_back(fraction); });
         EXPECT_NEAR(static_cast<double>(audio.size()), 16000.0, 1600.0);
         EXPECT_NEAR(MiddleRms(audio), expected_rms, expected_rms * 0.1);
+        ASSERT_FALSE(read.empty()) << "the read reports how far it has got";
+        EXPECT_TRUE(std::is_sorted(read.begin(), read.end()));
+        EXPECT_GT(read.back(), 0.9);
+        EXPECT_LE(read.back(), 1.0);
     }
 }
 
@@ -82,7 +89,7 @@ TEST(MediaFoundationReader, RefusesWhatIsNotARecording) {
     const TempFile text("letter.mp3");
     std::ofstream(text.path) << "Dear Dr Smith, thank you for seeing this patient.\n";
     try {
-        reader.Decode(text.path);
+        reader.Decode(text.path, {});
         FAIL() << "a text file decoded";
     } catch (const RecordingError& e) {
         const std::string reason = e.what();

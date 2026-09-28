@@ -1181,10 +1181,12 @@ struct FakeReader : clinicavt::audio::IRecordingReader {
         return info;
     }
 
-    std::vector<float> Decode(const std::filesystem::path&) override {
+    std::vector<float> Decode(const std::filesystem::path&,
+                              const clinicavt::audio::ReadProgress& progress) override {
         ++decodes;
         if (fail) fail();
         if (fail_decode) fail_decode();
+        progress(1.0);
         return audio;
     }
 };
@@ -1240,11 +1242,27 @@ struct ImportRig {
             params);
     }
 
+    // Every push but progress
     std::vector<std::string> Methods() {
         const std::lock_guard<std::mutex> lock(mutex);
         std::vector<std::string> methods;
-        for (const auto& [method, body] : pushed) methods.push_back(method);
+        for (const auto& [method, body] : pushed) {
+            if (method != "session/importProgress") methods.push_back(method);
+        }
         return methods;
+    }
+
+    // The progress pushed, as "stage percent"
+    std::vector<std::string> Progress() {
+        const std::lock_guard<std::mutex> lock(mutex);
+        std::vector<std::string> progress;
+        for (const auto& [method, body] : pushed) {
+            if (method == "session/importProgress") {
+                progress.push_back(body["stage"].get<std::string>() + " " +
+                                   std::to_string(body["percent"].get<int>()));
+            }
+        }
+        return progress;
     }
 
     // The import's last word, session/imported or session/importFailed
@@ -1295,6 +1313,9 @@ TEST(Handlers, RecordingInspectAndSessionImportMatchTheFixtures) {
     EXPECT_EQ(rig.Methods(),
               (std::vector<std::string>{"session/imported", "note/ready", "patient/ready"}))
         << "without a writer the stubs keep the contract, after the seal";
+    EXPECT_EQ(rig.Progress(),
+              (std::vector<std::string>{"reading 5", "finalising 95", "finalising 100"}))
+        << "the scripted diariser finds and decodes nothing, so those stages say nothing";
 
     const json list = HandleSessionList(*rig.fixture.store);
     ASSERT_EQ(list["sessions"].size(), 1u);
@@ -1303,9 +1324,9 @@ TEST(Handlers, RecordingInspectAndSessionImportMatchTheFixtures) {
     EXPECT_FALSE(list["sessions"][0]["endedAt"].get<std::string>().empty());
 
     const json progress = LoadFixture("session-importProgress.json");
-    EXPECT_EQ(ImportProgressJson("a1b2c3d4e5f60718293a4b5c6d7e8f90", 304.2371, 760.4049),
-              progress["params"])
-        << "to a tenth of a second";
+    EXPECT_EQ(ImportProgressJson("a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                                 clinicavt::session::ImportStage::kTranscribing, 60),
+              progress["params"]);
 }
 
 TEST(Handlers, ACancelledImportEndsAsAFailureNamedCancelledAndLeavesNothing) {

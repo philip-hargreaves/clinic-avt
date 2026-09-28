@@ -400,10 +400,10 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
         }
     }
 
-    /// <summary>The import's pass has reached seconds of total.</summary>
-    public void ImportProgress(double seconds, double total) =>
+    /// <summary>The import has reached percent of the whole, in stage.</summary>
+    public void ImportProgress(string stage, int percent) =>
         RaiseNotification("session/importProgress",
-            JsonSerializer.SerializeToElement(new { sessionId = "s1", seconds, total }));
+            JsonSerializer.SerializeToElement(new { sessionId = "s1", stage, percent }));
 
     /// <summary>Served by guidance/documents, empty by default.</summary>
     public List<object> GuidanceDocuments { get; } = [];

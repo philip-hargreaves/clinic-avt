@@ -128,7 +128,7 @@ public class ImportRecordingTest
     }
 
     [Fact]
-    public async Task AnImportShowsHowFarItsTranscriptionHasGotUntilTheEngineSealsIt()
+    public async Task AnImportShowsOneFigureAcrossItsStagesUntilTheEngineSealsIt()
     {
         var dialogs = new FakeDialogService { Import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4) };
         var (session, engine, _) = TestSession.Create(dialogs: dialogs);
@@ -137,22 +137,28 @@ public class ImportRecordingTest
         engine.ImportStages.Clear();
 
         var importing = controls.ImportRecordingCommand.ExecuteAsync(null);
-        Assert.Equal("Transcribing", controls.FinalisingLabel);
+        Assert.Equal("Preparing", controls.FinalisingLabel);
         Assert.True(controls.ImportCancelVisible);
         Assert.True(controls.CancelImportCommand.CanExecute(null));
 
+        // Reading the file and finding the speech both prepare
+        engine.ImportProgress("reading", 3);
+        Assert.Equal("Preparing · 3%", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
-        engine.ImportProgress(304.2, 760.4);
-        Assert.Equal("Transcribing · 40%", controls.FinalisingLabel);
-        Assert.Equal("Transcribing · 40%", session.Status.LatestActivity);
-        engine.ImportProgress(744.9, 760.4);
-        Assert.Equal("Transcribing · 97%", controls.FinalisingLabel);
+        engine.ImportProgress("speech", 12);
+        Assert.Equal("Preparing · 12%", controls.FinalisingLabel);
+        Assert.Equal("Preparing · 12%", session.Status.LatestActivity);
+        engine.ImportProgress("transcribing", 60);
+        Assert.Equal("Transcribing · 60%", controls.FinalisingLabel);
+        Assert.Equal("Transcribing · 60%", session.Status.LatestActivity);
 
-        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
-        Assert.Equal("Labelling speakers", controls.FinalisingLabel);
+        // The figure's last five points are the finalise, which names no percentage
+        engine.ImportProgress("finalising", 95);
+        Assert.Equal("Finalising", controls.FinalisingLabel);
         Assert.Equal("Finalising", session.Status.LatestActivity);
-        // A late figure is ignored
-        engine.ImportProgress(760.4, 760.4);
+        engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
+        Assert.Equal("Finalising", controls.FinalisingLabel);
+        engine.ImportProgress("finalising", 100);
         Assert.Equal("Finalising", session.Status.LatestActivity);
 
         engine.FinishImport();
@@ -173,7 +179,7 @@ public class ImportRecordingTest
         engine.HoldImport = true;
 
         var importing = controls.ImportRecordingCommand.ExecuteAsync(null);
-        engine.ImportProgress(380.2, 760.4);
+        engine.ImportProgress("transcribing", 55);
         await controls.CancelImportCommand.ExecuteAsync(null);
         await importing;
 

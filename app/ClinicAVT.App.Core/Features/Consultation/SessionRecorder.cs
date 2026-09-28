@@ -69,9 +69,9 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial bool Importing { get; private set; }
 
-    /// <summary>How far the import's transcription has got, null until the engine says.</summary>
+    /// <summary>How far the import has got, in words and one percentage, null until the engine says.</summary>
     [ObservableProperty]
-    public partial int? ImportPercent { get; private set; }
+    public partial string? ImportLine { get; private set; }
 
     /// <summary>The active session's replay request, null for a microphone.</summary>
     [ObservableProperty]
@@ -396,7 +396,7 @@ public sealed partial class SessionRecorder : ObservableObject
         AudioSeconds = import.Seconds;
         ResetForNewConsultation();
         ImportStarted?.Invoke(import);
-        ImportPercent = null;
+        ImportLine = null;
         Importing = true;
         try
         {
@@ -410,22 +410,27 @@ public sealed partial class SessionRecorder : ObservableObject
         }
     }
 
-    /// <summary>The import's pass through the file, shown as a percentage.</summary>
+    /// <summary>The import's stage, with the one percentage across all of them until it finalises.</summary>
     public void OnImportProgress(ImportProgress progress)
     {
-        if (!Importing || Phase > FinalisePhase.Transcript || progress.Total <= 0)
+        if (!Importing || Phase >= FinalisePhase.Note)
         {
             return;
         }
 
-        var percent = (int)Math.Clamp(100 * progress.Seconds / progress.Total, 0, 100);
-        if (percent == ImportPercent)
+        var line = progress.Stage switch
+        {
+            "reading" or "speech" => $"Preparing · {progress.Percent}%",
+            "transcribing" => $"Transcribing · {progress.Percent}%",
+            _ => "Finalising",
+        };
+        if (line == ImportLine)
         {
             return;
         }
 
-        ImportPercent = percent;
-        _status.Show($"Transcribing · {percent}%", busy: true);
+        ImportLine = line;
+        _status.Show(line, busy: true);
     }
 
     /// <summary>Stops an import. The engine erases what it began and the page goes back to idle.</summary>
@@ -435,15 +440,6 @@ public sealed partial class SessionRecorder : ObservableObject
         {
             await EngineCall.TryAsync(_status, "session/cancel", () => _engine.CancelSessionAsync())
                 .ConfigureAwait(true);
-        }
-    }
-
-    // Past transcription the status line drops the percentage
-    partial void OnPhaseChanged(FinalisePhase value)
-    {
-        if (Importing && value is FinalisePhase.Speakers)
-        {
-            _status.Append("Finalising", busy: true);
         }
     }
 

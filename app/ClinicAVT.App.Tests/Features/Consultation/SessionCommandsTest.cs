@@ -194,7 +194,7 @@ public class SessionCommandsTest
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         // A note that waits on the model's load says so
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "loading" }));
-        Assert.Equal("Waiting for the note model to load · 0:00", controls.FinalisingLabel);
+        Assert.Equal("Waiting for the note model · 0:00", controls.FinalisingLabel);
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "ready" }));
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));

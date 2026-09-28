@@ -1,11 +1,12 @@
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 
 #include "adapters/archive/archive_lane.hpp"
 #include "adapters/demo/sample_year.hpp"
@@ -387,9 +388,13 @@ auto ReadRecording(Read read) -> std::variant<decltype(read()), Error> {
 
 }  // namespace
 
-json ImportProgressJson(const std::string& id, double seconds, double total) {
-    const auto tenths = [](double value) { return std::round(value * 10.0) / 10.0; };
-    return json{{"sessionId", id}, {"seconds", tenths(seconds)}, {"total", tenths(total)}};
+json ImportProgressJson(const std::string& id, clinicavt::session::ImportStage stage, int percent) {
+    using clinicavt::session::ImportStage;
+    const char* name = stage == ImportStage::kReading        ? "reading"
+                       : stage == ImportStage::kSpeech       ? "speech"
+                       : stage == ImportStage::kTranscribing ? "transcribing"
+                                                             : "finalising";
+    return json{{"sessionId", id}, {"stage", name}, {"percent", percent}};
 }
 
 std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
@@ -429,9 +434,9 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     if (std::holds_alternative<Error>(readable)) return std::get<Error>(readable);
     // The whole recording and its finalise need the memory
     if (translator != nullptr) translator->Release();
-    const auto read = [&reader, file = *path] {
+    const auto read = [&reader, file = *path](const std::function<void(double)>& progress) {
         try {
-            return reader.Decode(file);
+            return reader.Decode(file, progress);
         } catch (const clinicavt::audio::RecordingError&) {
             throw;
         } catch (const std::exception&) {
@@ -441,13 +446,14 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     const bool stubs = !controller.HasNoteWriter();
     clinicavt::session::ImportReport report{
         .progress =
-            [push, percent = std::make_shared<int>(-1)](const std::string& id, double seconds,
-                                                        double total) {
-                // One notification per whole percent, so a long file never floods the pipe
-                const int now = total > 0 ? static_cast<int>(100.0 * seconds / total) : 0;
-                if (now <= *percent) return;
-                *percent = now;
-                push("session/importProgress", ImportProgressJson(id, seconds, total));
+            [push, last = std::make_shared<std::pair<int, int>>(-1, -1)](
+                const std::string& id, clinicavt::session::ImportStage stage, int percent) {
+                // One notification per whole percent or new stage, so a long file never floods
+                // the pipe
+                const int now = static_cast<int>(stage);
+                if (now == last->first && percent <= last->second) return;
+                *last = {now, percent};
+                push("session/importProgress", ImportProgressJson(id, stage, percent));
             },
         .done =
             [push, stubs](const std::string& id, const std::string& error) {

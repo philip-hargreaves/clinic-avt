@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <set>
+#include <string>
 #include <vector>
 
 #include "adapters/diarisation/anchor_store.hpp"
@@ -129,6 +130,50 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
     EXPECT_EQ(got.cluster_count, want.cluster_count);
     EXPECT_FALSE(fed.TakeTurnTexts().empty()) << "capture speculated turn texts";
     EXPECT_TRUE(batch.TakeTurnTexts().empty()) << "nothing accumulates without Advance";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+// An import finds the speech in a pass of its own so it can report it. The settle after
+// it must decode and diarise exactly as a settle alone does
+TEST(DiariserPipeline, FindingSpeechFirstChangesNothingTheSettleDoes) {
+    if (!std::filesystem::exists(kWav)) {
+        GTEST_SKIP() << "research corpus not mounted";
+    }
+    const auto audio = LoadDevWav(kWav);
+    const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
+    models::OvRuntime runtime;
+    const auto root = std::filesystem::temp_directory_path() / "clinicavt-diar-speech-test";
+    std::filesystem::create_directories(root);
+    AnchorStore alone_anchors(root / "a");
+    SpeakerDiariser alone(store, runtime, alone_anchors);
+    AnchorStore first_anchors(root / "b");
+    SpeakerDiariser first(store, runtime, first_anchors);
+
+    const DecodeClipFn decode = [](std::span<const float> clip, std::uint64_t at) {
+        asr::Turn chunk;
+        chunk.first_frame = at;
+        chunk.frame_count = clip.size();
+        chunk.text = "decoded at " + std::to_string(at);
+        return std::vector<asr::Turn>{chunk};
+    };
+    alone.Settle(audio, decode, {});
+    std::vector<double> reported;
+    first.FindSpeech(audio, [&](double fraction) { reported.push_back(fraction); }, {});
+    first.Settle(audio, decode, {});
+
+    const auto want = alone.Diarise(audio);
+    const auto got = first.Diarise(audio);
+    ASSERT_EQ(got.slices.size(), want.slices.size());
+    for (std::size_t i = 0; i < got.slices.size(); ++i) {
+        EXPECT_EQ(got.slices[i].first_frame, want.slices[i].first_frame);
+        EXPECT_EQ(got.slices[i].end_frame, want.slices[i].end_frame);
+        EXPECT_EQ(got.slices[i].cluster, want.slices[i].cluster);
+    }
+    EXPECT_EQ(got.cluster_count, want.cluster_count);
+    EXPECT_EQ(first.TakeTurnTexts(), alone.TakeTurnTexts()) << "the same spans decoded";
+    ASSERT_EQ(reported.size(), 10u);
+    EXPECT_DOUBLE_EQ(reported.back(), 1.0);
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
 }

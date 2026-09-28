@@ -23,7 +23,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 or nameof(ConsultationViewModel.Phase)
                 or nameof(ConsultationViewModel.ModelsReady)
                 or nameof(ConsultationViewModel.Importing)
-                or nameof(ConsultationViewModel.ImportPercent))
+                or nameof(ConsultationViewModel.ImportLine))
             {
                 OnPropertyChanged(nameof(IdleVisible));
                 OnPropertyChanged(nameof(RecordingVisible));
@@ -67,17 +67,17 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     /// <summary>Microphone level, 0 to 1, for the ring around the disc.</summary>
     public double Level => _session.Status.MicLevel;
 
-    /// <summary>The centre-stage caption for the current finalise phase, with an import's
-    /// percentage. A note that waits on the note model's load says so, with the time.</summary>
+    /// <summary>The centre-stage caption for the current finalise phase. An import shows its own
+    /// stage and percentage until it is sealed. A note that waits on the note model's load says
+    /// so, with the time.</summary>
     public string FinalisingLabel => _session.Phase switch
     {
-        FinalisePhase.Sealing or FinalisePhase.Transcript when _session.Importing =>
-            _session.ImportPercent is { } percent ? $"Transcribing · {percent}%" : "Transcribing",
+        < FinalisePhase.Note when _session.Importing => _session.ImportLine ?? "Preparing",
         FinalisePhase.Transcript => "Writing transcript",
         FinalisePhase.Speakers => "Labelling speakers",
         FinalisePhase.Turns => "Writing transcript",
         FinalisePhase.Note when _session.Status.ModelLoading =>
-            $"Waiting for the note model to load · {_session.Status.ModelLoadElapsed}",
+            $"Waiting for the note model · {_session.Status.ModelLoadElapsed}",
         FinalisePhase.Note => "Preparing note",
         _ => "Finalising",
     };

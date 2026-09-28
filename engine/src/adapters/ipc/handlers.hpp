@@ -124,8 +124,8 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
                                               bool playback_active,
                                               clinicavt::translate::ITranslator* translator,
                                               const Notify& push, const json& params);
-// session/importProgress: seconds of the recording transcribed, of total, to a tenth
-json ImportProgressJson(const std::string& id, double seconds, double total);
+// session/importProgress: the import's stage and its one percentage across all stages
+json ImportProgressJson(const std::string& id, clinicavt::session::ImportStage stage, int percent);
 
 // guidance/corpora: whether the embedder is loading, ready or unavailable, and
 // every corpus directory. guidance/model carries the state alone once loading ends
