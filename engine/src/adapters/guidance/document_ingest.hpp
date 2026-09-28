@@ -21,9 +21,8 @@ namespace clinicavt::guidance {
 
 inline constexpr const char* kReadMe = "Instructions.txt";
 
-// A first run, with no guidelines folder yet, starts it with the documents shipped with the
-// app. A folder that exists is the clinician's, so it is never refilled and what they deleted
-// stays deleted. Answers how many were copied
+// Creates a missing folder with the shipped guidelines in it and returns how many were copied.
+// An existing folder is the clinician's and is never refilled, so their deletions stick
 std::size_t SeedGuidelines(const std::filesystem::path& folder,
                            const std::filesystem::path& shipped);
 

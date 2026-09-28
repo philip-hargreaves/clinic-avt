@@ -116,7 +116,7 @@ Manifest ManifestFromJson(const json& j) {
     m.to = Str(j, "to");
     m.consultations = static_cast<std::size_t>(Unsigned(j, "consultations"));
     m.transcripts = Bool(j, "transcripts");
-    // Absent from backups made before reflections-only ones existed
+    // Older backups lack the field
     m.reflections_only = j.contains("reflectionsOnly") && Bool(j, "reflectionsOnly");
     m.app_version = Str(j, "appVersion");
     return m;

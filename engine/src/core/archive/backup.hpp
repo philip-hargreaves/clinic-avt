@@ -40,11 +40,10 @@ struct BackupResult {
 };
 
 // Writes every finalised real consultation in the period, cleared ones included since their
-// appraisal entry is a record, then commits the sink, which checks the whole file. Reflections
-// only writes just the consultations with an appraisal entry, each as a cleared session would
-// keep it, so the file holds nothing from the consultation itself
+// appraisal entry is a record, then commits the sink, which checks the whole file. With
+// reflections_only, only those with an appraisal entry go, each stripped as a clear would
 BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveSink& sink,
-                    const Progress& progress, bool reflections_only = false);
+                    const Progress& progress, bool reflections_only);
 
 struct RestoreResult {
     std::size_t added = 0;

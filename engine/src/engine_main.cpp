@@ -172,8 +172,8 @@ std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
             std::fputs("clinicavt-engine: no note model staged\n", stderr);
             return nullptr;
         }
-        // The shell's tier, so the one-off compile is of the model it will ask for. Automatic,
-        // or a tier not staged here, starts on this machine's pick
+        // Start on the tier the shell will ask for; auto or an unstaged one gets this machine's
+        // pick
         std::string tier = auto_tier;
         if (!requested_tier.empty() && requested_tier != clinicavt::models::kAutoNoteTier) {
             try {
@@ -193,7 +193,7 @@ std::unique_ptr<clinicavt::note::WorkerNoteWriter> BuildNoteWriter(
         }
         auto worker = std::make_unique<clinicavt::note::WorkerNoteWriter>(
             host, models_root, models_root.parent_path() / "prompts", &store, tier);
-        // The shell configures the tier again on connect, which is then no change
+        // The shell sends its tier again on connect, a no-op by then
         worker->SetListener([&server](const clinicavt::note::NoteModelState& state) {
             server.PushNotification("note/model", clinicavt::ipc::NoteModelJson(state));
         });
@@ -359,8 +359,7 @@ int main(int argc, char* argv[]) {
             *transcriber, *vad, *diariser, std::chrono::seconds(10),
             5 * clinicavt::audio::kSampleRate, note_writer.get(), &metrics);
 
-        // Added documents embed between note searches and wait while a consultation runs. A
-        // first run starts the clinician's folder with the guidelines shipped beside the models
+        // Added documents embed between note searches and wait while a consultation runs
         const auto guidelines = GuidelinesFolder(guidelines_override);
         if (guidelines_override.empty()) {
             const auto seeded = clinicavt::guidance::SeedGuidelines(
@@ -399,29 +398,29 @@ int main(int argc, char* argv[]) {
                      if (!note.text.empty()) events.OnNoteSaved(id, note);
                  }});
         clinicavt::audio::MediaFoundationReader recordings;
+        auto* const whisper = dynamic_cast<clinicavt::asr::WhisperTranscriber*>(transcriber.get());
+        const clinicavt::ipc::AsrSwitch switch_asr =
+            [whisper](const std::string& device, std::function<void(const std::string&)> done) {
+                return whisper != nullptr && whisper->SwitchDevice(device, std::move(done));
+            };
         clinicavt::ipc::RegisterMethods(
-            server,
-            {.controller = controller,
-             .models = model_store,
-             .sessions = session_store,
-             .metrics = &metrics,
-             .runtime = &ov_runtime,
-             .translator = translator.get(),
-             .translate_lane = translate_lane.get(),
-             .first_use = first_use,
-             .anchors = &anchors,
-             .note_lane = note_writer.get(),
-             .auto_note_tier = auto_tier,
-             .stray_note_host = stray_note_host,
-             .demo_dir = models_root.parent_path() / "demo" / "reflections",
-             .playback = &playback,
-             .switch_asr =
-                 [whisper = dynamic_cast<clinicavt::asr::WhisperTranscriber*>(transcriber.get())](
-                     const std::string& device, std::function<void(const std::string&)> done) {
-                     return whisper != nullptr && whisper->SwitchDevice(device, std::move(done));
-                 },
-             .archive_lane = &archive_lane,
-             .recordings = &recordings});
+            server, {.controller = controller,
+                     .models = model_store,
+                     .sessions = session_store,
+                     .metrics = &metrics,
+                     .runtime = &ov_runtime,
+                     .translator = translator.get(),
+                     .translate_lane = translate_lane.get(),
+                     .first_use = first_use,
+                     .anchors = &anchors,
+                     .note_lane = note_writer.get(),
+                     .auto_note_tier = auto_tier,
+                     .stray_note_host = stray_note_host,
+                     .demo_dir = models_root.parent_path() / "demo" / "reflections",
+                     .playback = &playback,
+                     .switch_asr = switch_asr,
+                     .archive_lane = &archive_lane,
+                     .recordings = &recordings});
         clinicavt::ipc::RegisterGuidanceMethods(server, session_store, guidance_retriever,
                                                 guidance_lane, ingest);
         // A shell that closes ends its capture, and a reopened one picks this
@@ -434,14 +433,12 @@ int main(int argc, char* argv[]) {
             asked_now = true;
             return nlohmann::json::object();
         });
-        const auto busy =
-            [&note_writer,
-             whisper = dynamic_cast<clinicavt::asr::WhisperTranscriber*>(transcriber.get())] {
-                return (note_writer != nullptr &&
-                        note_writer->State().phase ==
-                            clinicavt::note::NoteModelState::Phase::kLoading) ||
-                       (whisper != nullptr && whisper->Moving());
-            };
+        const auto busy = [&note_writer, whisper] {
+            return (note_writer != nullptr &&
+                    note_writer->State().phase ==
+                        clinicavt::note::NoteModelState::Phase::kLoading) ||
+                   (whisper != nullptr && whisper->Moving());
+        };
         while (server.AwaitClient(exit_asked ? std::chrono::seconds(0) : kIdleExit, busy) ==
                clinicavt::ipc::PipeServer::Accept::kClient) {
             asked_now = false;

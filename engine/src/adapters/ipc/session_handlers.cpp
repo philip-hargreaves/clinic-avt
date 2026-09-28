@@ -2,7 +2,6 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -83,7 +82,7 @@ std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& 
         using clinicavt::store::DocumentKind;
         const auto patient = sessions.ReadDocument(id, DocumentKind::kPatient);
         const auto translation = sessions.ReadDocument(id, DocumentKind::kTranslation);
-        // Both times, so a reopened sheet edited after its translation can say so
+        // Both times, so the shell can flag a sheet edited after its translation
         json result{{"text", patient.text},
                     {"generatedAt", NullWhenEmpty(patient.generated_at)},
                     {"editedAt", NullWhenEmpty(patient.edited_at)},
@@ -342,8 +341,8 @@ bool NoTranscript(clinicavt::store::ISessionStore& sessions, const std::string& 
     }
 }
 
-// Checks style and detail as the shell sends them. confirmed says the
-// clinician insists it was a consultation. "standard", the old middle length, is concise
+// confirmed: the clinician insists it was a consultation. "standard", the retired middle
+// length, reads as concise
 std::variant<clinicavt::note::NoteOptions, Error> NoteOptionsFrom(const json& params) {
     const std::string style = params.value("style", "prose");
     std::string detail = params.value("detail", "concise");
@@ -438,7 +437,7 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     if (std::holds_alternative<Error>(readable)) return std::get<Error>(readable);
     // The whole recording and its finalise need the memory
     if (translator != nullptr) translator->Release();
-    const auto read = [&reader, file = *path](const std::function<void(double)>& progress) {
+    const auto read = [&reader, file = *path](const clinicavt::audio::ReadProgress& progress) {
         try {
             return reader.Decode(file, progress);
         } catch (const clinicavt::audio::RecordingError&) {
@@ -452,8 +451,7 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
         .progress =
             [push, last = std::make_shared<std::pair<int, int>>(-1, -1)](
                 const std::string& id, clinicavt::session::ImportStage stage, int percent) {
-                // One notification per whole percent or new stage, so a long file never floods
-                // the pipe
+                // At most one push per percent or stage, so a long file never floods the pipe
                 const int now = static_cast<int>(stage);
                 if (now == last->first && percent <= last->second) return;
                 *last = {now, percent};

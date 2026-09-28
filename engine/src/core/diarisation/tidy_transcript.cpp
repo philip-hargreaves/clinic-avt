@@ -64,7 +64,7 @@ std::string Capitalised(std::string text) {
     return text;
 }
 
-// Letters or digits, counting any non-ASCII byte as a letter
+// Any non-ASCII byte counts as a letter
 bool HasWordCharacter(const std::string& text) {
     return std::any_of(text.begin(), text.end(), [](char c) {
         const auto u = static_cast<unsigned char>(c);
@@ -88,20 +88,17 @@ std::string Terminated(std::string text) {
 
 bool NoContent(const std::string& text) {
     std::size_t function_words = 0;
-    std::size_t words = 0;
     for (const auto raw : strings::Words(text)) {
         const auto w = NormalisedWord(raw);
-        if (w.empty()) continue;
-        ++words;
-        if (IsDisfluency(w)) continue;
+        if (w.empty() || IsDisfluency(w)) continue;
         if (IsFunctionWord(w)) {
             ++function_words;
             continue;
         }
         return false;
     }
-    // No words at all is punctuation left from a clipped decode
-    return words == 0 || function_words <= 2;
+    // Also true with no words at all: punctuation left by a clipped decode
+    return function_words <= 2;
 }
 
 std::vector<asr::Turn> TidyTranscript(std::vector<asr::Turn> turns) {

@@ -111,7 +111,7 @@ const ModelInfo& ModelStore::Resolve(std::string_view task, std::string_view tie
 }
 
 void ModelStore::Verify(const ModelInfo& model) const {
-    // A drive that dropped out loses every file at once, which is not one file missing
+    // A drive that dropped out takes the whole folder, so say that before naming any file
     std::error_code error;
     if (!std::filesystem::is_directory(model.dir, error)) {
         throw std::runtime_error(model.id + ": the models folder cannot be read (" +

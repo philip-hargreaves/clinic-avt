@@ -251,7 +251,7 @@ std::vector<float> MediaFoundationReader::Decode(const std::filesystem::path& pa
         const auto* first = reinterpret_cast<const float*>(bytes);
         audio.insert(audio.end(), first, first + length / sizeof(float));
         buffer->Unlock();
-        // A sample is a few milliseconds, so the fraction goes out in hundredths
+        // Samples are a few milliseconds each, so report in steps of a hundredth
         const double done = static_cast<double>(audio.size()) / kSampleRate / seconds;
         if (progress && seconds > 0 && done - reported >= 0.01) {
             reported = done;

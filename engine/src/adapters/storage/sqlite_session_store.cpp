@@ -1,7 +1,5 @@
 #include "adapters/storage/sqlite_session_store.hpp"
 
-#include <algorithm>
-#include <array>
 #include <cstdio>
 #include <format>
 #include <nlohmann/json.hpp>
@@ -531,9 +529,9 @@ AddOutcome SqliteSessionStore::CompleteLocked(const SessionRecord& record) {
         if (held.Step()) continue;
         // A kept kind missing now was deleted after the clear, and its slot may have sealed at
         // the record's revision under this key: it starts afresh like any new slot
-        const bool kept = std::ranges::find(kKeptOnClear, entry.kind) != kKeptOnClear.end();
         WriteDocumentRow(record.id, entry.kind, cipher,
-                         kept ? FreshSlotSequence() : entry.document.revision, entry.document);
+                         KeptOnClear(entry.kind) ? FreshSlotSequence() : entry.document.revision,
+                         entry.document);
         added = true;
     }
     return added ? AddOutcome::kCompleted : AddOutcome::kSkipped;

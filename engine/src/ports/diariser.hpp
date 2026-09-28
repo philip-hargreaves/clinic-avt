@@ -67,8 +67,8 @@ class IDiariser {
     // decoded and cut before Diarise, however far capture lagged. A stop leaves it part done
     virtual void Settle(std::span<const float>, const DecodeClipFn&, const StopFn&) {}
 
-    // An import's first pass: Settle's speech finding alone, over the whole recording in steps,
-    // reporting the fraction done. Settle then finds it done and only decodes
+    // Settle's speech finding alone, in steps with progress, so an import can report it.
+    // Settle then only decodes
     virtual void FindSpeech(std::span<const float>, const std::function<void(double)>&,
                             const StopFn&) {}
 

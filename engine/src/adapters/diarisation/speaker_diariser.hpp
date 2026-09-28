@@ -43,8 +43,8 @@ class SpeakerDiariser : public IDiariser {
         worker_.Advance(audio, decode, std::numeric_limits<int>::max(), stop);
     }
 
-    // Capture's own pass over growing tenths of the recording, decoding nothing. The
-    // results are keyed on their spans, so Settle's are the same as without it
+    // Capture's pass over growing tenths of the recording, decoding nothing. Its results are
+    // keyed on spans, so the Settle after it matches one run alone
     void FindSpeech(std::span<const float> audio, const std::function<void(double)>& progress,
                     const StopFn& stop) override {
         const DecodeClipFn none = [](std::span<const float>, std::uint64_t) {

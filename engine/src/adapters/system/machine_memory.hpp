@@ -17,8 +17,8 @@ inline std::optional<std::uint64_t> InstalledMemoryBytes() {
     return static_cast<std::uint64_t>(kilobytes) * 1024;
 }
 
-// What the Intel GPU may use, as Windows reports it: its own memory plus its
-// share of RAM. Shared memory overrides in the driver show here
+// Dedicated plus shared memory of the Intel GPU as Windows reports it, so a driver override
+// of the shared limit shows here
 inline std::optional<std::uint64_t> IntelGpuMemoryBytes() {
     constexpr UINT kIntel = 0x8086;
     Microsoft::WRL::ComPtr<IDXGIFactory1> factory;

@@ -598,15 +598,15 @@ SessionController::Outcome SessionController::FinishSession(Outcome outcome, boo
         events_.OnProgress("transcript");
         try {
             const auto stop = [this] { return import_cancel_.load(); };
-            // An import finds the speech first, as a pass of its own it can report. A stop's
-            // capture has found it already
+            // An import finds the speech in its own pass so it can report it. A live stop's
+            // capture has already done so
             if (import_progress_) {
                 diariser_.FindSpeech(
                     session_audio_,
                     [this](double fraction) { import_progress_(ImportStage::kSpeech, fraction); },
                     stop);
             }
-            // An import reports how far through the file it is. Spans decode in order
+            // Spans decode in order, so each one's end is the import's progress
             const double total = static_cast<double>(session_audio_.size());
             diariser_.Settle(
                 session_audio_,

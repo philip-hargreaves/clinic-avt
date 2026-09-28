@@ -37,25 +37,23 @@ bool HasContent(const store::SessionRecord& record) {
            });
 }
 
-bool Kept(store::DocumentKind kind) {
-    return std::ranges::find(store::kKeptOnClear, kind) != store::kKeptOnClear.end();
-}
-
 // The record as a cleared session holds it: no transcript, no device, only the kept documents
 store::SessionRecord Stripped(store::SessionRecord record) {
     record.device_id.clear();
     record.device_name.clear();
     record.lost_frames = 0;
     record.turns.clear();
-    std::erase_if(record.documents,
-                  [](const store::RecordDocument& entry) { return !Kept(entry.kind); });
+    std::erase_if(record.documents, [](const store::RecordDocument& entry) {
+        return !store::KeptOnClear(entry.kind);
+    });
     return record;
 }
 
 bool OnlyKept(const store::SessionRecord& record) {
     return record.turns.empty() &&
-           std::ranges::all_of(record.documents,
-                               [](const store::RecordDocument& entry) { return Kept(entry.kind); });
+           std::ranges::all_of(record.documents, [](const store::RecordDocument& entry) {
+               return store::KeptOnClear(entry.kind);
+           });
 }
 
 void Report(const Progress& progress, Phase phase, std::size_t done, std::size_t total) {
@@ -115,7 +113,7 @@ BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveS
         if (reflections_only) record = Stripped(std::move(record));
         sink.Add(record);
         if (HasAppraisal(record)) result.reflections += 1;
-        // A reflections-only file holds no consultation, so it backs none up
+        // A reflections-only file backs up no consultation
         if (!reflections_only) result.ids.push_back(id);
         Report(progress, Phase::kWriting, ++written, selected.size());
     }
