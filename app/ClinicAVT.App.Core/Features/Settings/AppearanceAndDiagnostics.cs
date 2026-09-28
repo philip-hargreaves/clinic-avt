@@ -45,7 +45,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         DemoTrayEnabled = preferences?.DemoTrayEnabled ?? false;
         NpuTranscription = preferences?.NpuTranscription ?? false;
         CollectPerformanceData = preferences?.CollectPerformanceData ?? false;
-        ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? false;
+        ShowPerformanceMetrics = preferences?.ShowPerformanceMetrics ?? true;
         Theme = preferences?.Theme ?? "system";
         _initialising = false;
     }

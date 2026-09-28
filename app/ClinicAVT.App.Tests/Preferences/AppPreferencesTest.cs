@@ -17,7 +17,7 @@ public class AppPreferencesTest
             NpuTranscription = true,
             CollectPerformanceData = true,
             KeepConsultations = true,
-            ShowPerformanceMetrics = true,
+            ShowPerformanceMetrics = false,  // on by default, so off is what round-trips
             IncludeResearchGuidance = true,
             MicId = "{mic-7}",
             Theme = "dark",
@@ -36,7 +36,7 @@ public class AppPreferencesTest
         Assert.True(loaded.NpuTranscription);
         Assert.True(loaded.CollectPerformanceData);
         Assert.True(loaded.KeepConsultations);
-        Assert.True(loaded.ShowPerformanceMetrics);
+        Assert.False(loaded.ShowPerformanceMetrics);
         Assert.True(loaded.IncludeResearchGuidance);
         Assert.Equal("{mic-7}", loaded.MicId);
         Assert.Equal("dark", loaded.Theme);

@@ -502,25 +502,25 @@ public class SettingsViewModelTest
     }
 
     [Fact]
-    public void MetricsChipsDefaultOffAndPersistWhileDeveloperToolsCloseOnEveryLaunch()
+    public void MetricsChipsDefaultOnAndPersistWhileDeveloperToolsCloseOnEveryLaunch()
     {
         var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         var preferences = new AppPreferences(path);
         var bar = TestSession.Status();
         var settings = new SettingsViewModel(preferences, status: bar);
-        Assert.False(settings.Appearance.ShowPerformanceMetrics, "chips are for testing, not GPs");
-        Assert.False(bar.MetricsVisible);
+        Assert.True(settings.Appearance.ShowPerformanceMetrics, "evaluators see the timings from the first run");
         Assert.False(settings.Appearance.DeveloperToolsExpanded);
 
-        settings.Appearance.ShowPerformanceMetrics = true;
+        settings.Appearance.ShowPerformanceMetrics = false;
         settings.Appearance.DeveloperToolsExpanded = true;
 
-        Assert.True(bar.MetricsVisible);
-        Assert.True(preferences.ShowPerformanceMetrics);
+        Assert.False(bar.MetricsVisible);
+        Assert.False(preferences.ShowPerformanceMetrics);
 
         var relaunched = new SettingsViewModel(AppPreferences.Load(path));
-        Assert.True(relaunched.Appearance.ShowPerformanceMetrics);
+        Assert.False(relaunched.Appearance.ShowPerformanceMetrics);
         Assert.False(relaunched.Appearance.DeveloperToolsExpanded);
+        Assert.True(AppPreferences.Load(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())).ShowPerformanceMetrics);
     }
 
     [Fact]

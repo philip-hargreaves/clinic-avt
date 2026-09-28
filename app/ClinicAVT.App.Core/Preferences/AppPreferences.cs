@@ -28,7 +28,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
         public bool KeepConsultations { get; init; }
 
-        public bool ShowPerformanceMetrics { get; init; }
+        public bool ShowPerformanceMetrics { get; init; } = true;
 
         public bool IncludeResearchGuidance { get; init; }
 
@@ -80,8 +80,8 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// </summary>
     public bool KeepConsultations { get; set; }
 
-    /// <summary>Off by default because the status-bar chips are for testing.</summary>
-    public bool ShowPerformanceMetrics { get; set; }
+    /// <summary>On by default, so evaluators see the status-bar timings from the first run.</summary>
+    public bool ShowPerformanceMetrics { get; set; } = true;
 
     /// <summary>
     /// Searches corpora marked research, such as the local NICE demo. Only a debug build shows
