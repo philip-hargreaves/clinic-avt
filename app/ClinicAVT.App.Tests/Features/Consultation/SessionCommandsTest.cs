@@ -37,8 +37,7 @@ public class SessionCommandsTest
         Assert.False(controls.IdleVisible);
         Assert.True(controls.RecordingVisible);
         Assert.True(controls.CentreStageVisible);
-        Assert.True(controls.MicPickerVisible, "shown while recording, read-only");
-        Assert.False(controls.MicPickerEnabled, "pinned: changes apply next time");
+        Assert.False(controls.MicPickerVisible, "gone from Record until Finish consultation");
 
         // The clock and the ring follow delivered audio
         for (var i = 0; i < 754; i++)
@@ -55,11 +54,13 @@ public class SessionCommandsTest
         Assert.True(controls.FinalisingVisible);
         Assert.False(controls.PanesVisible);
         Assert.Equal("Preparing note", controls.FinalisingLabel);
+        Assert.False(controls.MicPickerVisible);
 
         // The first token opens the panes, with the note already filling
         engine.RaiseNotification("note/partial", Params(new { text = "The" }));
         Assert.True(controls.PanesVisible);
         Assert.False(controls.FinalisingVisible);
+        Assert.False(controls.MicPickerVisible, "not while the note streams");
         engine.RaiseNotification("note/ready");
         Assert.True(controls.ReviewVisible);
         Assert.False(controls.RecordingVisible);
@@ -70,6 +71,7 @@ public class SessionCommandsTest
         controls.FinishConsultationCommand.Execute(null);
         Assert.Equal(SessionState.Idle, session.State);
         Assert.True(controls.IdleVisible);
+        Assert.True(controls.MicPickerVisible, "back for the next consultation");
     }
 
     [Fact]

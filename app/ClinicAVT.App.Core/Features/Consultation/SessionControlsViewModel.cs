@@ -94,8 +94,9 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     /// <summary>The refusal card reads its reason and override from here.</summary>
     public NoteViewModel Note => _session.Note;
 
-    // Derived from ReviewVisible, so the picker and New consultation never show together
-    public bool MicPickerVisible => !ReviewVisible;
+    // Only before recording: from Record until Finish consultation the device is pinned, and the
+    // cell is Finish consultation's once the note is written
+    public bool MicPickerVisible => _session.State == SessionState.Idle;
 
     /// <summary>
     /// The device is pinned once recording starts. A change applies to the next consultation.
