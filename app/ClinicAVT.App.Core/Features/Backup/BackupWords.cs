@@ -22,9 +22,7 @@ public static class BackupWords
 
     public const string ReflectionsTick = "Delete associated reflections";
 
-    /// <summary>
-    /// "Saved as b in Documents.", naming the drive for a root such as a USB stick.
-    /// </summary>
+    /// <summary>"Saved as b in Documents.", naming the drive for a root such as a USB stick.</summary>
     public static string SavedLine(string path)
     {
         var folder = Path.GetDirectoryName(path) ?? "";

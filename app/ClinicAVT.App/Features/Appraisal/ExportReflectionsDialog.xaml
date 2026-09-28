@@ -54,9 +54,10 @@
                     Text="{x:Bind ViewModel.DoneLine, Mode=OneWay}" />
                 <TextBlock Text="{x:Bind ViewModel.SavedLine, Mode=OneWay}" TextWrapping="Wrap" />
                 <TextBlock Text="{x:Bind ViewModel.CheckLine}" TextWrapping="Wrap" />
-                <StackPanel Margin="0,8,0,0" Spacing="8">
-                    <Button Command="{x:Bind ViewModel.ShowInFolderCommand}" Content="Show in folder" />
-                </StackPanel>
+                <Button
+                    Margin="0,8,0,0"
+                    Command="{x:Bind ViewModel.ShowInFolderCommand}"
+                    Content="Show in folder" />
             </StackPanel>
 
             <controls:WarningLine Text="{x:Bind ViewModel.Error, Mode=OneWay}" />

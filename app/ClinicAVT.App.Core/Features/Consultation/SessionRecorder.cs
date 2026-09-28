@@ -75,7 +75,7 @@ public sealed partial class SessionRecorder : ObservableObject
     [ObservableProperty]
     public partial ReplayRequest? ActiveReplay { get; private set; }
 
-    /// <summary>True for a demo record until the next idle. The badge shows for it.</summary>
+    /// <summary>True while a seeded sample is under review. The Demo badge shows for it.</summary>
     public bool DemoRecord { get; private set; }
 
     /// <summary>The session the engine is recording into, for a resume after a restart.</summary>
@@ -187,7 +187,6 @@ public sealed partial class SessionRecorder : ObservableObject
         _status.SetMicVisible(false);
     }
 
-    /// <summary>A level reading.</summary>
     public void OnAudioLevel(AudioLevel level)
     {
         _status.SetMicLevel(level.Level);
@@ -215,23 +214,10 @@ public sealed partial class SessionRecorder : ObservableObject
         var start = replay is null
             ? () => _engine.StartSessionAsync(Retain, _preferences?.MicId ?? "")
             : (Func<Task<string>>)(() => _engine.StartReplayAsync(Retain, replay));
-        if (!await BeginAsync(start, replay).ConfigureAwait(true))
-        {
-            return;
-        }
-
-        _status.Append(replay is null ? "Recording" : "Replaying");
-        _metrics?.SessionStarted(
-            replay is null ? "mic" : "replay", replay?.Speed ?? 0,
-            replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
-    }
-
-    private async Task<bool> BeginAsync(Func<Task<string>> start, ReplayRequest? replay)
-    {
         var started = await EngineCall.TryAsync(_status, "session/start", start).ConfigureAwait(true);
         if (started is null)
         {
-            return false;
+            return;
         }
 
         RecordingSessionId = started.Length > 0 ? started : null;
@@ -243,7 +229,10 @@ public sealed partial class SessionRecorder : ObservableObject
         State = SessionState.Recording;
         ResetForNewConsultation();
         _status.SetMicVisible(true);
-        return true;
+        _status.Append(replay is null ? "Recording" : "Replaying");
+        _metrics?.SessionStarted(
+            replay is null ? "mic" : "replay", replay?.Speed ?? 0,
+            replay is null ? null : Path.GetFileNameWithoutExtension(replay.Path));
     }
 
     private void ResetForNewConsultation()

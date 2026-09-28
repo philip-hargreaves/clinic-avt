@@ -29,8 +29,6 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(RecordingVisible));
                 OnPropertyChanged(nameof(ReviewVisible));
                 OnPropertyChanged(nameof(MicPickerVisible));
-                OnPropertyChanged(nameof(MicPickerEnabled));
-                OnPropertyChanged(nameof(MicTip));
                 OnPropertyChanged(nameof(CentreStageVisible));
                 OnPropertyChanged(nameof(PanesVisible));
                 OnPropertyChanged(nameof(FinalisingVisible));
@@ -67,9 +65,8 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     /// <summary>Microphone level, 0 to 1, for the ring around the disc.</summary>
     public double Level => _session.Status.MicLevel;
 
-    /// <summary>The centre-stage caption for the current finalise phase. An import shows its own
-    /// stage and percentage until it is sealed. A note that waits on the note model's load says
-    /// so, with the time.</summary>
+    /// <summary>The centre-stage caption for the finalise phase. An import shows its own progress
+    /// until it is sealed.</summary>
     public string FinalisingLabel => _session.Phase switch
     {
         < FinalisePhase.Note when _session.Importing => _session.ImportLine ?? "Preparing",
@@ -94,18 +91,10 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     /// <summary>The refusal card reads its reason and override from here.</summary>
     public NoteViewModel Note => _session.Note;
 
-    // Only before recording: from Record until Finish consultation the device is pinned, and the
-    // cell is Finish consultation's once the note is written
+    // Idle only: the device is pinned from Record, and Finish consultation takes the cell in review
     public bool MicPickerVisible => _session.State == SessionState.Idle;
 
-    /// <summary>
-    /// The device is pinned once recording starts. A change applies to the next consultation.
-    /// </summary>
-    public bool MicPickerEnabled => _session.State == SessionState.Idle;
-
-    public string MicTip => MicPickerEnabled
-        ? _mic.FullName
-        : "In use - changes apply to the next consultation";
+    public string MicTip => _mic.FullName;
 
     // The centre holds until the note streams. Panes and centre never show together
     public bool CentreStageVisible =>

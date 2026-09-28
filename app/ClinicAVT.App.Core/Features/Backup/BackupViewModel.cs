@@ -17,10 +17,7 @@ public enum BackupStep
     Removed,
 }
 
-/// <summary>
-/// The Back up dialog. A checked backup offers to remove exactly what it holds; a
-/// reflections-only one holds no consultation, so it offers nothing.
-/// </summary>
+/// <summary>The Back up dialog. A checked backup offers to remove the consultations it holds.</summary>
 public sealed partial class BackupViewModel : ObservableObject, IDisposable
 {
     private readonly IEngineApi _engine;
@@ -140,7 +137,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         ChosenFrom is { } from ? DateOnly.FromDateTime(from.Date) : null,
         ChosenTo is { } to ? DateOnly.FromDateTime(to.Date) : null);
 
-    /// <summary>How many finished consultations the period holds, and its dates.</summary>
+    /// <summary>How many the period holds, and its dates.</summary>
     [ObservableProperty]
     public partial string CountLine { get; private set; } = "";
 
@@ -294,8 +291,8 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         Step = BackupStep.Working;
         try
         {
-            await _engine.BackUpAsync(_sentFrom, _sentTo, path, Password,
-                reflectionsOnly).ConfigureAwait(true);
+            await _engine.BackUpAsync(_sentFrom, _sentTo, path, Password, reflectionsOnly)
+                .ConfigureAwait(true);
         }
         catch (Exception e)
         {

@@ -15,9 +15,10 @@ public sealed class EngineSupervisor(
     /// <summary>The engine's exit code when another engine already serves the pipe.</summary>
     public const int AlreadyServing = 3;
 
-    /// <summary>The retry interval while another engine holds the pipe, and how long to wait.</summary>
+    /// <summary>The retry interval while another engine holds the pipe.</summary>
     public static readonly TimeSpan ServerWait = TimeSpan.FromSeconds(2);
 
+    /// <summary>How long to wait for that engine before its exits count as crashes.</summary>
     public static readonly TimeSpan ServerWaitLimit = TimeSpan.FromMinutes(10);
 
     private readonly object _gate = new();
@@ -181,6 +182,7 @@ public sealed class EngineSupervisor(
         // cancel, such as a first NPU compile, and accepts again once done. Waiting is not a crash
         if (exitCode == AlreadyServing)
         {
+            // A gap well past one retry starts a fresh wait
             if (_waitingSince is null || now - _lastWait > ServerWait + TimeSpan.FromSeconds(30))
             {
                 _waitingSince = now;

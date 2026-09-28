@@ -22,7 +22,6 @@
                     <!-- The microphone is set once, so it sits with the page commands -->
                     <DropDownButton
                         AutomationProperties.Name="{x:Bind Mic.Label, Mode=OneWay}"
-                        IsEnabled="{x:Bind Controls.MicPickerEnabled, Mode=OneWay}"
                         Style="{StaticResource TrayButton}"
                         ToolTipService.ToolTip="{x:Bind Controls.MicTip, Mode=OneWay}"
                         Visibility="{x:Bind Controls.MicPickerVisible, Mode=OneWay}">

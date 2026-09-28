@@ -61,9 +61,6 @@ public sealed class EngineApi : IEngineApi
     public Task<string> StartReplayAsync(bool retain, ReplayRequest replay) =>
         StartAsync(new { retain, replay }, StartTimeout);
 
-    public Task<string> StartPlaybackAsync(string sessionId) =>
-        StartAsync(new { playback = new { id = sessionId } }, StartTimeout);
-
     public Task<string> ResumeSessionAsync(string sessionId, bool retain, ReplayRequest? replay) =>
         StartAsync(
             replay is null

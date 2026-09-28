@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Composition;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;

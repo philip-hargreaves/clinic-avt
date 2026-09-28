@@ -27,7 +27,6 @@ public class SessionCommandsTest
         Assert.False(controls.PanesVisible);
         Assert.False(controls.ReviewVisible);
         Assert.True(controls.MicPickerVisible);
-        Assert.True(controls.MicPickerEnabled);
 
         await controls.StartRecordingCommand.ExecuteAsync(null);
         Assert.Equal(SessionState.Recording, session.State);

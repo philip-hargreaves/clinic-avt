@@ -187,7 +187,8 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     // "33 consultations to restore, 1 Jul to 30 Sep 2026." Only what would be added counts
     private void Summarise(ArchiveDone done)
     {
-        // A reflections-only backup restores each as a consultation removed keeping its reflection
+        // A reflections-only backup restores each reflection with a removed consultation, so the
+        // counts are reflections
         _things = done.ReflectionsOnly ? "reflection" : "consultation";
         ToAdd = done.Consultations;
         if (done.Consultations + done.Skipped == 0)

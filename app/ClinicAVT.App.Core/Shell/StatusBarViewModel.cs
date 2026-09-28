@@ -40,8 +40,9 @@ public sealed partial class StatusBarViewModel : ObservableObject
     // First-time setup holds recording while the models compile for this computer
     private bool _settingUp;
     private DateTimeOffset _setupSince;
-    private string? _moveLine;
-    private DateTimeOffset _moveSince;
+    // A switch in progress: its status line, with {time} standing for the elapsed clock
+    private string? _switchLine;
+    private DateTimeOffset _switchSince;
     private ITimer? _tick;
     // The store stopped taking writes. It stays on the line until the next consultation starts
     private string _storageFault = "";
@@ -124,9 +125,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [ObservableProperty]
     public partial string LatestActivity { get; private set; } = "";
 
-    /// <summary>
-    /// True when demo mode is on or a demo record is on screen. It shows beside the app name.
-    /// </summary>
+    /// <summary>True while a seeded sample is on screen. It shows beside the app name.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DemoLabel))]
     public partial bool Demo { get; set; }
@@ -156,7 +155,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     [ObservableProperty]
     public partial bool DecodeActive { get; private set; }
 
-    /// <summary>The chips are for testing and stay off unless opted in.</summary>
+    /// <summary>The chips are for testing, and Settings can hide them.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AsrChipVisible), nameof(NoteChipVisible), nameof(MemoryChipVisible))]
     public partial bool MetricsVisible { get; set; }
@@ -199,8 +198,8 @@ public sealed partial class StatusBarViewModel : ObservableObject
     public partial string SetupElapsed { get; private set; } = "";
 
     /// <summary>The consent reminder, shown only while a recording could start.</summary>
-    public bool ConsentVisible =>
-        _status == EngineStatus.Running && _ready && _sessionIdle && !_settingUp && _moveLine is null;
+    public bool ConsentVisible => _status == EngineStatus.Running && _ready && _sessionIdle
+        && !_settingUp && _switchLine is null;
 
     public string SetupLine =>
         $"First-time setup · {SetupElapsed} · optimising for your PC";
@@ -262,26 +261,27 @@ public sealed partial class StatusBarViewModel : ObservableObject
     /// </summary>
     public void BeginSwitch(string line)
     {
-        _moveLine = line;
-        _moveSince = _time.GetUtcNow();
-        Append(MoveLine(0), busy: true);
+        _switchLine = line;
+        _switchSince = _time.GetUtcNow();
+        Append(SwitchLine(0), busy: true);
         Tick();
         OnPropertyChanged(nameof(ConsentVisible));
     }
 
     public void EndSwitch()
     {
-        if (_moveLine is null)
+        if (_switchLine is null)
         {
             return;
         }
 
-        _moveLine = null;
+        _switchLine = null;
         Tick();
         OnPropertyChanged(nameof(ConsentVisible));
     }
 
-    private string MoveLine(double seconds) => _moveLine!.Replace("{time}", Words.Clock(seconds), StringComparison.Ordinal);
+    private string SwitchLine(double seconds) =>
+        _switchLine!.Replace("{time}", Words.Clock(seconds), StringComparison.Ordinal);
 
     /// <summary>Recording is held while the models compile for this computer.</summary>
     public void SetSettingUp(bool settingUp)
@@ -309,7 +309,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
     // One clock for every counter, running only while one of them counts
     private void Tick()
     {
-        if (ModelLoading || _settingUp || _moveLine is not null)
+        if (ModelLoading || _settingUp || _switchLine is not null)
         {
             _tick ??= _time.CreateTimer(
                 _ => _dispatcher.Post(OnTick), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
@@ -334,9 +334,9 @@ public sealed partial class StatusBarViewModel : ObservableObject
             SetupElapsed = Words.Clock((now - _setupSince).TotalSeconds);
         }
 
-        if (_moveLine is not null)
+        if (_switchLine is not null)
         {
-            Show(MoveLine((now - _moveSince).TotalSeconds), busy: true);
+            Show(SwitchLine((now - _switchSince).TotalSeconds), busy: true);
         }
     }
 

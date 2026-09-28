@@ -29,8 +29,6 @@ public interface IEngineApi
 
     Task<string> StartReplayAsync(bool retain, ReplayRequest replay);
 
-    Task<string> StartPlaybackAsync(string sessionId);
-
     Task<string> ResumeSessionAsync(string sessionId, bool retain, ReplayRequest? replay);
 
     Task<string> StopSessionAsync();

@@ -79,15 +79,13 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
         $"{string.Join(", ", Extensions.SkipLast(1).Select(TypeName))} or {TypeName(Extensions[^1])}";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(NoFile), nameof(ShowFile), nameof(ShowDropArea),
+    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(ShowFile), nameof(ShowDropArea),
         nameof(CanImport))]
     public partial string Path { get; private set; } = "";
 
     public string FileName => System.IO.Path.GetFileName(Path);
 
     public bool HasFile => Path.Length > 0;
-
-    public bool NoFile => !HasFile;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LengthText))]

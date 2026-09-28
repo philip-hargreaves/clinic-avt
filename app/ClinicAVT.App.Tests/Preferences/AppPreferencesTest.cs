@@ -91,7 +91,6 @@ public class AppPreferencesTest
         Assert.Equal("auto", loaded.NoteTier);
     }
 
-    // Two lengths replaced three: a saved middle length becomes the shorter one
     [Fact]
     public void ASavedStandardLengthLoadsAsConcise()
     {

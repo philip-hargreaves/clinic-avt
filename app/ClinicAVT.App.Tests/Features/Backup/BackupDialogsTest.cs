@@ -16,7 +16,7 @@ public class BackupDialogsTest
         new(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
 
     [Fact]
-    public async Task AFirstBackupOffersAPasswordThenRemovesExactlyWhatItHolds()
+    public async Task ABackupNeedsAPasswordThenRemovesExactlyWhatItHolds()
     {
         var engine = new FakeEngineClient();
         engine.Responses["archive/summary"] = new { consultations = 38, reflections = 12, unfinished = 1, uncovered = 0 };
@@ -82,7 +82,6 @@ public class BackupDialogsTest
         var engine = new FakeEngineClient();
         engine.Responses["archive/summary"] = new { consultations = 4, reflections = 0, unfinished = 0, uncovered = 4 };
         var preferences = TempPreferences();
-        preferences.LastBackup = new LastBackup("", "", "2026-08-31T17:00:00Z", 40);
         using var backup = new BackupViewModel(new EngineApi(engine), new FakeFilePicker(),
             new FakeLauncher(), preferences, new InlineDispatcher(), FakeTimeProvider.London());
         backup.PeriodIndex = 1;
@@ -121,8 +120,7 @@ public class BackupDialogsTest
     {
         var engine = new FakeEngineClient();
         engine.Responses["archive/summary"] = new { consultations = 38, reflections = 12, unfinished = 0, uncovered = 38 };
-        var picker = new FakeFilePicker { SavePath = @"E:
-.clinicavt" };
+        var picker = new FakeFilePicker { SavePath = @"E:\r.clinicavt" };
         var preferences = TempPreferences();
         using var backup = new BackupViewModel(new EngineApi(engine), picker,
             new FakeLauncher(), preferences, new InlineDispatcher(), FakeTimeProvider.London())
@@ -160,8 +158,7 @@ public class BackupDialogsTest
 
         preferences.KeepConsultations = true;
         using var restore = new RestoreViewModel(new EngineApi(engine),
-            new FakeFilePicker { OpenPath = @"E:
-.clinicavt" }, preferences, new InlineDispatcher(),
+            new FakeFilePicker { OpenPath = @"E:\r.clinicavt" }, preferences, new InlineDispatcher(),
             FakeTimeProvider.London());
         await restore.ChooseFileCommand.ExecuteAsync(null);
         restore.Password = "maple-orbit-fender-quill-harbor";

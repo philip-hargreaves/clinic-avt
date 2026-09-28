@@ -226,8 +226,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         NoteModelEnabled = _tiers.Count > 1;
     }
 
-    // A refused or failed switch reverts to the previous tier, once, and the
-    // engine is told
+    // A failed load reverts to the previous tier, once, and the engine is told
     private void RevertTier(string reason)
     {
         var back = _revertTier;
@@ -250,21 +249,20 @@ public sealed partial class NoteModelSettings : ObservableObject
 
     private void ApplyNoteModel(string state, string tier, string detail)
     {
-        if (Automatic && state is "loading" or "ready")
-        {
-            _residentTier = tier;
-        }
-
         switch (state)
         {
             case "loading":
+                if (Automatic)
+                {
+                    _residentTier = tier;
+                }
+
                 // The caption shows the load's own line while it runs
                 NoteModelEnabled = false;
                 NoteModelStatus = "";
                 break;
             case "ready":
                 _status?.EndSwitch();
-                // A switch in flight puts a busy line on the status bar. The ready state ends it.
                 // A revert lands on the model still resident, whose ready must not wipe the
                 // reason the switch failed
                 if (_revertTier is not null)

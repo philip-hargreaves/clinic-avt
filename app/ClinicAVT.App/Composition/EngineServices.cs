@@ -36,8 +36,8 @@ internal static class EngineServices
         return services;
     }
 
-    // Read per launch, so a restart picks up a changed preference. The tier makes a first
-    // launch compile the note model the shell will ask for, automatic until one is chosen
+    // Read per launch, so a restart picks up a changed preference. The tier lets a first launch
+    // compile the note model the shell will ask for
     private static IEnumerable<string> EngineArguments(AppPreferences prefs)
     {
         yield return "--note-tier";

@@ -11,8 +11,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
-/// The theme, the transcription device and the developer tools. The tools are the demo
-/// controls, the metrics chips, the performance log and its report.
+/// The theme, the transcription device and the developer tools. The tools are the replay
+/// tray, the metrics chips, the performance log and its report.
 /// </summary>
 public sealed partial class AppearanceAndDiagnostics : ObservableObject
 {
@@ -150,7 +150,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     [ObservableProperty]
     public partial bool DeveloperToolsExpanded { get; set; }
 
-    /// <summary>Shows the replay tray. A developer control, in debug builds only.</summary>
+    /// <summary>Only a debug build offers the replay tray.</summary>
     public bool DemoTrayAvailable { get; } = BuildFlags.Debug;
 
     /// <summary>Shows the replay tray. A developer control.</summary>

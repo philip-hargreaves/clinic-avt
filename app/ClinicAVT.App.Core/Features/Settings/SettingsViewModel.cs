@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;

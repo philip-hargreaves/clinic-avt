@@ -32,7 +32,7 @@ public class ImportRecordingTest
         var engine = new FakeEngineClient();
         var picker = new FakeFilePicker { OpenPath = FixturePath };
         var import = Dialog(engine, picker);
-        Assert.True(import.NoFile);
+        Assert.False(import.HasFile);
         Assert.False(import.CanImport);
 
         await import.ChooseCommand.ExecuteAsync(null);

@@ -39,12 +39,8 @@ public sealed class ProcessMetrics : IProcessMetrics
     {
         try
         {
-            long bytes;
-            using (var self = Process.GetCurrentProcess())
-            {
-                bytes = self.PrivateMemorySize64;
-            }
-
+            using var self = Process.GetCurrentProcess();
+            var bytes = self.PrivateMemorySize64;
             foreach (var name in processNames)
             {
                 foreach (var process in Process.GetProcessesByName(name))
