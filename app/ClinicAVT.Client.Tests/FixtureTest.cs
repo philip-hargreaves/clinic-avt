@@ -326,7 +326,8 @@ public class FixtureTest
         var backupParams = backup.GetProperty("params");
         await api.BackUpAsync(backupParams.GetProperty("from").GetString()!,
             backupParams.GetProperty("to").GetString()!, backupParams.GetProperty("path").GetString()!,
-            backupParams.GetProperty("password").GetString()!);
+            backupParams.GetProperty("password").GetString()!,
+            backupParams.GetProperty("reflectionsOnly").GetBoolean());
         transport.AssertSent("archive/backup", backupParams);
 
         var restore = Fixtures.Load("archive-restore.json").GetProperty("request").GetProperty("params");

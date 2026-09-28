@@ -104,11 +104,13 @@ public sealed record ArchiveProgress(string Job = "", string Phase = "", int Don
 
 /// <summary>
 /// A finished backup or restore. A backup lists the ids it wrote and checked. A restore counts
-/// what it added, or would add on a dry run, and what was already here.
+/// what it added, or would add on a dry run, and what was already here. ReflectionsOnly marks a
+/// file holding only appraisal entries.
 /// </summary>
 public sealed record ArchiveDone(
     string Job = "", bool DryRun = false, int Consultations = 0, int Reflections = 0,
-    int Skipped = 0, string? From = null, string? To = null, string? CreatedAt = null)
+    int Skipped = 0, string? From = null, string? To = null, string? CreatedAt = null,
+    bool ReflectionsOnly = false)
     : EngineNotification
 {
     public IReadOnlyList<string> Ids { get; init; } = [];

@@ -7,7 +7,8 @@
             "from": "2026-07-01T00:00:00Z",
             "to": "2026-10-01T00:00:00Z",
             "path": "C:\\Users\\clinician\\Documents\\ClinicAVT backup 1 Jul - 30 Sep 2026.clinicavt",
-            "password": "maple-orbit-fender-quill-harbor"
+            "password": "maple-orbit-fender-quill-harbor",
+            "reflectionsOnly": false
         }
     },
     "response": {

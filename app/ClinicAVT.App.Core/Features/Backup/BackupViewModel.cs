@@ -17,7 +17,10 @@ public enum BackupStep
     Removed,
 }
 
-/// <summary>The Back up dialog. A checked backup offers to remove exactly what it holds.</summary>
+/// <summary>
+/// The Back up dialog. A checked backup offers to remove exactly what it holds; a
+/// reflections-only one holds no consultation, so it offers nothing.
+/// </summary>
 public sealed partial class BackupViewModel : ObservableObject, IDisposable
 {
     private readonly IEngineApi _engine;
@@ -51,11 +54,24 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         _engine.NotificationReceived += OnNotification;
     }
 
-    public string Caption { get; } = BackupWords.Caption;
-
     public string PasswordNote { get; } = BackupWords.PasswordNote;
 
-    public string Includes { get; } = BackupWords.Includes;
+    public string Includes => ReflectionsOnly ? BackupWords.ReflectionsIncludes : BackupWords.Includes;
+
+    public string PeriodHeader => ReflectionsOnly ? "Which reflections" : "Which consultations";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Whole), nameof(Includes), nameof(PeriodHeader))]
+    public partial bool ReflectionsOnly { get; set; }
+
+    partial void OnReflectionsOnlyChanged(bool value) => _ = CountAsync();
+
+    /// <summary>The other choice, for the first radio button.</summary>
+    public bool Whole
+    {
+        get => !ReflectionsOnly;
+        set => ReflectionsOnly = !value;
+    }
 
     public string ReflectionsTickText { get; } = BackupWords.ReflectionsTick;
 
@@ -212,7 +228,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
             return;
         }
 
-        CountLine = "Counting consultations…";
+        CountLine = $"Counting {Things(ReflectionsOnly)}s…";
         try
         {
             var summary = await _engine.ArchiveSummaryAsync(period.From(Zone), period.To(Zone))
@@ -222,29 +238,32 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            Count = summary.Consultations;
-            CountLine = CountText(period, summary);
+            Count = ReflectionsOnly ? summary.Reflections : summary.Consultations;
+            CountLine = CountText(period, Count, ReflectionsOnly);
         }
         catch (Exception e)
         {
             if (version == _countVersion)
             {
-                CountLine = $"The consultations could not be counted: {EngineWords.Reason(e)}.";
+                CountLine = $"The {Things(ReflectionsOnly)}s could not be counted: {EngineWords.Reason(e)}.";
             }
         }
     }
 
-    private static string CountText(BackupPeriod period, ArchiveSummary summary)
+    private static string Things(bool reflectionsOnly) => reflectionsOnly ? "reflection" : "consultation";
+
+    private static string CountText(BackupPeriod period, int count, bool reflectionsOnly)
     {
-        if (summary.Consultations == 0)
+        if (count == 0)
         {
+            var none = reflectionsOnly ? "no reflections" : "no finished consultations";
             return period == BackupPeriod.Everything
-                ? "There are no finished consultations to back up."
-                : "There are no finished consultations in this period.";
+                ? $"There are {none} to back up."
+                : $"There are {none} in this period.";
         }
 
-        var count = Words.Count(summary.Consultations, "consultation");
-        return period == BackupPeriod.Everything ? $"{count} on this computer." : $"{count}, {period.Span()}.";
+        var counted = Words.Count(count, Things(reflectionsOnly));
+        return period == BackupPeriod.Everything ? $"{counted} on this computer." : $"{counted}, {period.Span()}.";
     }
 
     private async Task StartAsync()
@@ -256,7 +275,9 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
         Error = "";
         var period = Period;
-        var path = await _picker.PickSaveAsync(period.FileName(Today), "ClinicAVT backup", ".clinicavt")
+        var reflectionsOnly = ReflectionsOnly;
+        var name = period.FileName(Today, reflectionsOnly ? "reflections backup" : "backup");
+        var path = await _picker.PickSaveAsync(name, "ClinicAVT backup", ".clinicavt")
             .ConfigureAwait(true);
         if (path is null)
         {
@@ -273,8 +294,8 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         Step = BackupStep.Working;
         try
         {
-            await _engine.BackUpAsync(_sentFrom, _sentTo, path, Password)
-                .ConfigureAwait(true);
+            await _engine.BackUpAsync(_sentFrom, _sentTo, path, Password,
+                reflectionsOnly).ConfigureAwait(true);
         }
         catch (Exception e)
         {
@@ -321,7 +342,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
             case ArchiveProgress { Job: "backup" } progress:
                 Progress = progress.Total > 0 ? (double)progress.Done / progress.Total : 0;
                 ProgressText = progress.Phase == "writing"
-                    ? $"Backing up {progress.Done} of {Words.Count(progress.Total, "consultation")}…"
+                    ? $"Backing up {progress.Done} of {Words.Count(progress.Total, Things(ReflectionsOnly))}…"
                     : "Checking the backup…";
                 break;
             case ArchiveDone { Job: "backup" } done:
@@ -340,12 +361,18 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         _ids = done.Ids;
         OnPropertyChanged(nameof(CanRemove));
         Progress = 1;
-        DoneLine = $"{Words.Count(done.Consultations, "consultation")} backed up and checked.";
+        DoneLine = $"{Words.Count(done.Consultations, Things(done.ReflectionsOnly))} backed up and checked.";
+        Step = BackupStep.Done;
+        // A reflections-only file backs up no consultation, so the reminder still counts them all
+        if (done.ReflectionsOnly)
+        {
+            return;
+        }
+
         var createdAt = string.IsNullOrEmpty(done.CreatedAt)
             ? _clock.GetUtcNow().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
             : done.CreatedAt;
         _preferences.Update(p => p.LastBackup = new LastBackup(_sentFrom, _sentTo, createdAt, done.Consultations));
-        Step = BackupStep.Done;
     }
 
     public void Dispose() => _engine.NotificationReceived -= OnNotification;

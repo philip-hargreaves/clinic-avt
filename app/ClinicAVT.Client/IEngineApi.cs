@@ -85,8 +85,12 @@ public interface IEngineApi
     Task<ArchiveSummary> ArchiveSummaryAsync(
         string periodStart, string periodEnd, ArchiveCoverage? covered = null);
 
-    /// <summary>Starts a backup. archive/progress, then archive/done or archive/failed follow.</summary>
-    Task BackUpAsync(string periodStart, string periodEnd, string path, string password);
+    /// <summary>
+    /// Starts a backup. archive/progress, then archive/done or archive/failed follow. Reflections
+    /// only writes just the appraisal entries, and backs up no consultation.
+    /// </summary>
+    Task BackUpAsync(
+        string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false);
 
     /// <summary>Starts a restore, or on a dry run only reads the file and counts.</summary>
     Task RestoreAsync(string path, string password, bool dryRun);

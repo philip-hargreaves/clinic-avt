@@ -114,6 +114,86 @@ public class BackupDialogsTest
         Assert.Equal("", saving.OneDriveLine);
     }
 
+    // Appraisal entries alone: counted, named and worded as reflections, with nothing to remove and
+    // no change to when consultations were last backed up
+    [Fact]
+    public async Task AReflectionsOnlyBackupHoldsNoConsultationAndRestoresAsReflections()
+    {
+        var engine = new FakeEngineClient();
+        engine.Responses["archive/summary"] = new { consultations = 38, reflections = 12, unfinished = 0, uncovered = 38 };
+        var picker = new FakeFilePicker { SavePath = @"E:
+.clinicavt" };
+        var preferences = TempPreferences();
+        using var backup = new BackupViewModel(new EngineApi(engine), picker,
+            new FakeLauncher(), preferences, new InlineDispatcher(), FakeTimeProvider.London())
+        { Password = "harbour lights", PasswordAgain = "harbour lights" };
+        await backup.LoadAsync();
+        Assert.True(backup.Whole);
+
+        backup.ReflectionsOnly = true;
+        Assert.False(backup.Whole);
+        Assert.Equal("12 reflections on this computer.", backup.CountLine);
+        Assert.Equal("Which reflections", backup.PeriodHeader);
+        Assert.Contains("Transcripts, notes", backup.Includes);
+
+        await backup.PrimaryCommand.ExecuteAsync(null);
+        Assert.Equal(["ClinicAVT reflections backup 27 Sep 2026"], picker.SuggestedNames);
+        Assert.True(engine.Sent("archive/backup").GetProperty("reflectionsOnly").GetBoolean());
+        engine.RaiseNotification("archive/progress", Params(new { job = "backup", phase = "writing", done = 3, total = 12 }));
+        Assert.Equal("Backing up 3 of 12 reflections…", backup.ProgressText);
+        engine.RaiseNotification("archive/done", Params(new
+        {
+            job = "backup",
+            dryRun = false,
+            consultations = 12,
+            reflections = 12,
+            skipped = 0,
+            from = "",
+            to = "",
+            createdAt = "2026-09-27T09:05:00Z",
+            reflectionsOnly = true,
+            ids = Array.Empty<string>(),
+        }));
+        Assert.Equal("12 reflections backed up and checked.", backup.DoneLine);
+        Assert.False(backup.CanRemove);
+        Assert.Null(preferences.LastBackup);
+
+        preferences.KeepConsultations = true;
+        using var restore = new RestoreViewModel(new EngineApi(engine),
+            new FakeFilePicker { OpenPath = @"E:
+.clinicavt" }, preferences, new InlineDispatcher(),
+            FakeTimeProvider.London());
+        await restore.ChooseFileCommand.ExecuteAsync(null);
+        restore.Password = "maple-orbit-fender-quill-harbor";
+        await restore.PrimaryCommand.ExecuteAsync(null);
+        engine.RaiseNotification("archive/done", Params(new
+        {
+            job = "restore",
+            dryRun = true,
+            consultations = 12,
+            reflections = 12,
+            skipped = 0,
+            from = "",
+            to = "",
+            createdAt = "2026-09-27T09:05:00Z",
+            reflectionsOnly = true,
+            ids = Array.Empty<string>(),
+        }));
+        Assert.Equal("12 reflections to restore, backed up on 27 Sep 2026.", restore.SummaryLine);
+        await restore.PrimaryCommand.ExecuteAsync(null);
+        engine.RaiseNotification("archive/done", Params(new
+        {
+            job = "restore",
+            dryRun = false,
+            consultations = 12,
+            reflections = 12,
+            skipped = 0,
+            reflectionsOnly = true,
+            ids = Array.Empty<string>(),
+        }));
+        Assert.Equal("12 reflections restored.", restore.DoneLine);
+    }
+
     [Fact]
     public async Task FailuresComeBackInPlainWordsAndLeaveTheDialogReadyToTryAgain()
     {

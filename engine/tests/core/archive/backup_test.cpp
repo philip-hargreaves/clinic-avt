@@ -82,9 +82,10 @@ std::vector<SessionId> Sorted(std::vector<SessionId> ids) {
 }
 
 BackupResult BackUpTo(const std::filesystem::path& path, SqliteSessionStore& store,
-                      const Period& period, const Progress& progress = {}) {
+                      const Period& period, const Progress& progress = {},
+                      bool reflections_only = false) {
     ArchiveFileSink sink(path, kPassword, kLowIterations);
-    return BackUp(store, period, sink, progress);
+    return BackUp(store, period, sink, progress, reflections_only);
 }
 
 RestoreResult RestoreFrom(const std::filesystem::path& path, SqliteSessionStore& store,
@@ -199,6 +200,73 @@ TEST(Backup, ARecordTheStoreWouldRefuseStopsRestoreBeforeAnyWrite) {
     try {
         RestoreFrom(path, store);
         ADD_FAILURE() << "restored a record the store would refuse";
+    } catch (const ArchiveError& e) {
+        EXPECT_EQ(e.Code(), ArchiveCode::kDamaged);
+    }
+    EXPECT_TRUE(store.ListSessions().empty());
+}
+
+// Only consultations with an appraisal entry go, each as a cleared one keeps it: no transcript,
+// note, sheet or device. Restored elsewhere they arrive cleared, and a full backup later
+// completes them
+TEST(Backup, ReflectionsOnlyHoldsNothingOfTheConsultationAndAFullRestoreCompletesIt) {
+    TempDir dir;
+    SqliteSessionStore here(dir.path / "here", kNever);
+    const SessionId reflected = Consultation(here, true);
+    Consultation(here, false);
+
+    const auto path = dir.path / "reflections.clinicavt";
+    const BackupResult backed = BackUpTo(path, here, {}, {}, true);
+    EXPECT_TRUE(backed.ids.empty()) << "it backs up no consultation";
+    EXPECT_EQ(backed.manifest.consultations, 1u);
+    EXPECT_EQ(backed.reflections, 1u);
+    EXPECT_TRUE(backed.manifest.reflections_only);
+
+    {
+        ArchiveFileSource source(path, kPassword);
+        EXPECT_TRUE(source.GetManifest().reflections_only);
+        const auto record = source.Next();
+        ASSERT_TRUE(record.has_value());
+        EXPECT_EQ(record->id, reflected);
+        EXPECT_TRUE(record->turns.empty());
+        EXPECT_TRUE(record->device_name.empty());
+        std::vector<DocumentKind> kinds;
+        for (const auto& entry : record->documents) kinds.push_back(entry.kind);
+        EXPECT_EQ(kinds, (std::vector<DocumentKind>{DocumentKind::kLabel, DocumentKind::kSummary,
+                                                    DocumentKind::kReflection}));
+    }
+
+    SqliteSessionStore there(dir.path / "there", kNever);
+    const RestoreResult restored = RestoreFrom(path, there);
+    EXPECT_EQ(restored.added, 1u);
+    EXPECT_EQ(restored.reflections, 1u);
+    ASSERT_EQ(there.ListSessions().size(), 1u);
+    EXPECT_TRUE(there.ListSessions()[0].cleared);
+    EXPECT_TRUE(there.ReadTurns(reflected).empty());
+
+    const auto full = dir.path / "full.clinicavt";
+    BackUpTo(full, here, {});
+    const RestoreResult completed = RestoreFrom(full, there);
+    EXPECT_EQ(completed.completed, 1u);
+    EXPECT_EQ(completed.added, 1u) << "the consultation without a reflection";
+    EXPECT_EQ(there.ReadTurns(reflected).size(), 2u);
+    EXPECT_EQ(there.ReadDocument(reflected, DocumentKind::kNote).text, "Swollen left elbow.");
+}
+
+// A file that says it holds reflections only but carries a transcript is not one we wrote
+TEST(Backup, AReflectionsOnlyFileWithAConsultationInItIsDamaged) {
+    TempDir dir;
+    const auto path = dir.path / "backup.clinicavt";
+    {
+        ArchiveFileSink sink(path, kPassword, kLowIterations);
+        sink.Begin({.consultations = 1, .reflections_only = true});
+        sink.Add(Dated(std::string(32, 'a'), "2026-03-09T14:20:00Z"));
+        sink.Commit();
+    }
+    SqliteSessionStore store(dir.path / "store", kNever);
+    try {
+        RestoreFrom(path, store, true);
+        ADD_FAILURE() << "accepted a consultation in a reflections-only file";
     } catch (const ArchiveError& e) {
         EXPECT_EQ(e.Code(), ArchiveCode::kDamaged);
     }

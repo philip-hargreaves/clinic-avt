@@ -6,11 +6,12 @@ namespace ClinicAVT.App.Core.Features.Backup;
 /// <summary>The backup and restore dialogs' wording.</summary>
 public static class BackupWords
 {
-    public const string Caption =
-        "This backup contains patient records. Store in accordance with your practice's data policy.";
-
     public const string Includes =
         "Includes transcripts, notes, patient information, translations and reflections. Audio is not included.";
+
+    public const string ReflectionsIncludes =
+        "Includes reflections, with each consultation's title and summary. Transcripts, notes, "
+        + "patient information and audio are not included.";
 
     public const string RestoreCaption =
         "Choose the backup file and enter its password. Nothing is added until you confirm.";

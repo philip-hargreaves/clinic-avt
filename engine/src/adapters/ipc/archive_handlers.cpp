@@ -83,11 +83,15 @@ std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& l
         return InvalidParams("path must be a file path");
     }
     if (!StringParam(params, "password")) return InvalidParams("password must be a string");
+    if (params.contains("reflectionsOnly") && !params["reflectionsOnly"].is_boolean()) {
+        return InvalidParams("reflectionsOnly must be true or false");
+    }
     if (const auto refused = Refusal(session_active, lane)) return *refused;
     std::string password = params["password"].get<std::string>();
     clinicavt::archive::WipeOnExit wipe{password};
     if (!lane.BackUp(std::get<clinicavt::archive::Period>(period),
-                     clinicavt::utf8::ToPath(params["path"].get<std::string>()), password)) {
+                     clinicavt::utf8::ToPath(params["path"].get<std::string>()), password,
+                     params.value("reflectionsOnly", false))) {
         return SessionError("a backup or restore is already running");
     }
     return json::object();

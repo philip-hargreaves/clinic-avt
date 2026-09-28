@@ -147,9 +147,10 @@ public sealed class EngineApi : IEngineApi
             LongTimeout);
 
     // The job runs on the engine's own thread, so these return once it has started
-    public Task BackUpAsync(string periodStart, string periodEnd, string path, string password) =>
+    public Task BackUpAsync(
+        string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false) =>
         CallAsync("archive/backup",
-            new { from = periodStart, to = periodEnd, path, password }, LongTimeout);
+            new { from = periodStart, to = periodEnd, path, password, reflectionsOnly }, LongTimeout);
 
     public Task RestoreAsync(string path, string password, bool dryRun) =>
         CallAsync("archive/restore", new { path, password, dryRun }, LongTimeout);

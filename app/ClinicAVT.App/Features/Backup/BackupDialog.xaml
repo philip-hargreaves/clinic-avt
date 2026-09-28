@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:ClinicAVT.App.Controls"
     xmlns:local="using:ClinicAVT.App.Features.Backup"
-    Title="Back up consultations"
+    Title="Back up"
     CloseButtonText="{x:Bind ViewModel.CloseText, Mode=OneWay}"
     DefaultButton="None"
     IsPrimaryButtonEnabled="{x:Bind ViewModel.PrimaryEnabled, Mode=OneWay}"
@@ -21,11 +21,22 @@
     <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,12,0" Spacing="16">
             <StackPanel Spacing="16" Visibility="{x:Bind ViewModel.InSetup, Mode=OneWay}">
-                <TextBlock Text="{x:Bind ViewModel.Caption}" TextWrapping="Wrap" />
+                <TextBlock Text="{x:Bind ViewModel.Includes, Mode=OneWay}" TextWrapping="Wrap" />
+                <StackPanel Spacing="4">
+                    <TextBlock Style="{ThemeResource BodyStrongTextBlockStyle}" Text="What to back up" />
+                    <RadioButton
+                        Content="Consultations and reflections"
+                        GroupName="BackupContent"
+                        IsChecked="{x:Bind ViewModel.Whole, Mode=TwoWay}" />
+                    <RadioButton
+                        Content="Reflections only"
+                        GroupName="BackupContent"
+                        IsChecked="{x:Bind ViewModel.ReflectionsOnly, Mode=TwoWay}" />
+                </StackPanel>
                 <StackPanel Spacing="8">
                     <ComboBox
                         MinWidth="280"
-                        Header="Which consultations"
+                        Header="{x:Bind ViewModel.PeriodHeader, Mode=OneWay}"
                         ItemsSource="{x:Bind ViewModel.PeriodOptions}"
                         SelectedIndex="{x:Bind ViewModel.PeriodIndex, Mode=TwoWay}" />
                     <StackPanel
@@ -39,7 +50,6 @@
                         AutomationProperties.LiveSetting="Polite"
                         Text="{x:Bind ViewModel.CountLine, Mode=OneWay}"
                         TextWrapping="Wrap" />
-                    <TextBlock Text="{x:Bind ViewModel.Includes}" TextWrapping="Wrap" />
                 </StackPanel>
 
                 <StackPanel Spacing="8">

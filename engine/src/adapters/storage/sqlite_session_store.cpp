@@ -46,10 +46,6 @@ KindSpec SpecFor(DocumentKind kind) {
     throw std::invalid_argument("unknown document kind");
 }
 
-// What a cleared session keeps: the appraisal entry and the line that names it
-constexpr std::array kKeptOnClear{DocumentKind::kLabel, DocumentKind::kSummary,
-                                  DocumentKind::kReflection};
-
 std::string RandomId() {
     std::random_device device;
     std::string id;

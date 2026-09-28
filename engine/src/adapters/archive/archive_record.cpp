@@ -104,6 +104,7 @@ json ToJson(const Manifest& m) {
                 {"to", m.to},
                 {"consultations", m.consultations},
                 {"transcripts", m.transcripts},
+                {"reflectionsOnly", m.reflections_only},
                 {"appVersion", m.app_version}};
 }
 
@@ -115,6 +116,8 @@ Manifest ManifestFromJson(const json& j) {
     m.to = Str(j, "to");
     m.consultations = static_cast<std::size_t>(Unsigned(j, "consultations"));
     m.transcripts = Bool(j, "transcripts");
+    // Absent from backups made before reflections-only ones existed
+    m.reflections_only = j.contains("reflectionsOnly") && Bool(j, "reflectionsOnly");
     m.app_version = Str(j, "appVersion");
     return m;
 }

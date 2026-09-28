@@ -17,6 +17,7 @@ struct Manifest {
     std::string to;
     std::size_t consultations = 0;
     bool transcripts = true;
+    bool reflections_only = false;  // each record holds only what a cleared session keeps
     std::string app_version;
 };
 
