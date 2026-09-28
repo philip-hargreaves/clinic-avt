@@ -5,8 +5,11 @@ namespace ClinicAVT.App.Composition;
 /// <summary>Where the app keeps its files. One per-user folder, because unpackaged runs have no ApplicationData.</summary>
 public sealed record AppPaths(string LocalState)
 {
+    // LOCALAPPDATA first, as the engine reads it, so both keep to one folder when it is redirected
     public static AppPaths Default { get; } = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } local
+            ? local
+            : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         EngineLayout.LocalStateFolder));
 
     public static string EngineExe => Path.Combine(AppContext.BaseDirectory, EngineLayout.EngineExe);
