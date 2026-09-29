@@ -144,7 +144,7 @@ public sealed class EngineApi : IEngineApi
     public Task<NoteTierState> SetNoteTierAsync(string tier) =>
         ReplyAsync<NoteTierState>("note/tier", new { tier }, LongTimeout);
 
-    public Task<AsrDeviceState> SetAsrDeviceAsync(string device) =>
+    public Task<AsrDeviceState> SetAsrDeviceAsync(AsrDevice device) =>
         ReplyAsync<AsrDeviceState>("asr/device", new { device });
 
     public Task SetNoteOptionsAsync(string style, string detail) =>
@@ -221,10 +221,10 @@ public sealed class EngineApi : IEngineApi
 
     public Task DeleteReflectionAsync(string id) => CallAsync("reflection/delete", new { id });
 
-    public async Task<int> SeedDemoAsync() =>
+    public async Task<int> SeedSamplesAsync() =>
         Int(await CallAsync("demo/seed", null, LongTimeout).ConfigureAwait(false), "added");
 
-    public async Task<int> ClearDemoAsync() =>
+    public async Task<int> ClearSamplesAsync() =>
         Int(await CallAsync("demo/clear", null, LongTimeout).ConfigureAwait(false), "removed");
 
     private async Task<string> StartAsync(object parameters, TimeSpan timeout) =>

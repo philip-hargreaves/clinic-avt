@@ -17,13 +17,14 @@ public sealed record AudioLevel(double Level = 0, bool Clipped = false)
 public sealed record SessionInterrupted(string? Reason = null, string? Detail = null)
     : EngineNotification;
 
-public sealed record SessionProgress(string Stage = "") : EngineNotification;
+public sealed record SessionProgress(FinaliseStage Stage = FinaliseStage.Unknown) : EngineNotification;
 
 /// <summary>
 /// How far an import has got: its stage (reading, speech, transcribing or finalising) and one
 /// percentage across all of them.
 /// </summary>
-public sealed record ImportProgress(string SessionId = "", string Stage = "", int Percent = 0)
+public sealed record ImportProgress(
+    string SessionId = "", ImportStage Stage = ImportStage.Unknown, int Percent = 0)
     : EngineNotification;
 
 /// <summary>An import sealed and stored. The note follows as after a stop.</summary>
@@ -39,12 +40,13 @@ public sealed record EnrolmentProgress(
 public sealed record EnrolmentDone(bool Ok = false, string? Detail = null) : EngineNotification;
 
 /// <summary>Speech recognition moving to another device: loading, then ready or failed.</summary>
-public sealed record AsrDeviceState(string Device = "", string State = "", string? Detail = null)
+public sealed record AsrDeviceState(
+    AsrDevice Device = AsrDevice.Unknown, ModelState State = ModelState.Unknown, string? Detail = null)
     : EngineNotification;
 
 /// <summary>Whether the note lane's model is loading, ready or failed, and the tier it serves.</summary>
 public sealed record NoteModelState(
-    string State = "", string Tier = "", string Id = "", string? Name = null, bool FirstUse = false,
+    ModelState State = ModelState.Unknown, string Tier = "", string Id = "", string? Name = null, bool FirstUse = false,
     double? Seconds = null, string? Detail = null)
     : EngineNotification;
 
@@ -75,7 +77,7 @@ public sealed record TranslationReady(
 
 public sealed record TranslationFailed(string? Detail = null) : EngineNotification;
 
-public sealed record GuidanceModelChanged(string State = "", string? Detail = null)
+public sealed record GuidanceModelChanged(CorporaState State = CorporaState.Unknown, string? Detail = null)
     : EngineNotification;
 
 /// <summary>A finished search. The record has an id for the note's search and none for a typed query.</summary>
@@ -87,7 +89,8 @@ public sealed record GuidanceDocumentsChanged : EngineNotification;
 
 public sealed record GuidanceDocumentChanged(DocumentInfo Document) : EngineNotification;
 
-public sealed record GuidanceProgress(long Id = 0, string Phase = "", int Done = 0, int Total = 0)
+public sealed record GuidanceProgress(
+    long Id = 0, IngestPhase Phase = IngestPhase.Unknown, int Done = 0, int Total = 0)
     : EngineNotification;
 
 public sealed record ReflectionSummaryReady(string Id = "", string Text = "") : EngineNotification;
@@ -99,7 +102,9 @@ public sealed record ReflectionSummaryFailed(string Id = "", string Detail = "")
 public sealed record StorageFault(string Detail = "") : EngineNotification;
 
 /// <summary>A backup or restore under way. Job is "backup" or "restore".</summary>
-public sealed record ArchiveProgress(string Job = "", string Phase = "", int Done = 0, int Total = 0)
+public sealed record ArchiveProgress(
+    ArchiveJob Job = ArchiveJob.Unknown, ArchivePhase Phase = ArchivePhase.Unknown, int Done = 0,
+    int Total = 0)
     : EngineNotification;
 
 /// <summary>
@@ -108,16 +113,18 @@ public sealed record ArchiveProgress(string Job = "", string Phase = "", int Don
 /// file holding only appraisal entries.
 /// </summary>
 public sealed record ArchiveDone(
-    string Job = "", bool DryRun = false, int Consultations = 0, int Reflections = 0,
-    int Skipped = 0, string? From = null, string? To = null, string? CreatedAt = null,
-    bool ReflectionsOnly = false)
+    ArchiveJob Job = ArchiveJob.Unknown, bool DryRun = false, int Consultations = 0,
+    int Reflections = 0, int Skipped = 0, string? From = null, string? To = null,
+    string? CreatedAt = null, bool ReflectionsOnly = false)
     : EngineNotification
 {
     public IReadOnlyList<string> Ids { get; init; } = [];
 }
 
 /// <summary>A backup or restore that stopped. Code is one of a fixed set, never file content.</summary>
-public sealed record ArchiveFailed(string Job = "", string Code = "") : EngineNotification;
+public sealed record ArchiveFailed(
+    ArchiveJob Job = ArchiveJob.Unknown, ArchiveError Code = ArchiveError.Unknown)
+    : EngineNotification;
 
 public static class EngineNotifications
 {

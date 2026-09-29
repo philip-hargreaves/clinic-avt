@@ -341,18 +341,18 @@ public class FixtureTest
         transport.AssertSent("session/deleteAll", deleteAll.GetProperty("request").GetProperty("params"));
 
         var progress = Parse("archive-progress.json");
-        Assert.Equal(new ArchiveProgress("backup", "writing", 12, 38), progress);
+        Assert.Equal(new ArchiveProgress(ArchiveJob.Backup, ArchivePhase.Writing, 12, 38), progress);
 
         var backedUp = Assert.IsType<ArchiveDone>(Parse("archive-done-backup.json"));
-        Assert.Equal(("backup", false, 38, 12), (backedUp.Job, backedUp.DryRun, backedUp.Consultations, backedUp.Reflections));
+        Assert.Equal((ArchiveJob.Backup, false, 38, 12), (backedUp.Job, backedUp.DryRun, backedUp.Consultations, backedUp.Reflections));
         Assert.Equal(2, backedUp.Ids.Count);
         Assert.True(DateTimeOffset.TryParse(backedUp.CreatedAt, out _));
 
         var dryRun = Assert.IsType<ArchiveDone>(Parse("archive-done-restore.json"));
-        Assert.Equal(("restore", true, 33, 5), (dryRun.Job, dryRun.DryRun, dryRun.Consultations, dryRun.Skipped));
+        Assert.Equal((ArchiveJob.Restore, true, 33, 5), (dryRun.Job, dryRun.DryRun, dryRun.Consultations, dryRun.Skipped));
         Assert.Empty(dryRun.Ids);
 
-        Assert.Equal(new ArchiveFailed("restore", "wrong-password"), Parse("archive-failed.json"));
+        Assert.Equal(new ArchiveFailed(ArchiveJob.Restore, ArchiveError.WrongPassword), Parse("archive-failed.json"));
     }
 
     [Fact]
@@ -368,7 +368,7 @@ public class FixtureTest
         transport.AssertSent("recording/inspect", inspectParams);
         Assert.Equal(new RecordingInfo(760.4, "2026-09-26T13:05:00Z"), info);
 
-        Assert.Equal(new ImportProgress("a1b2c3d4e5f60718293a4b5c6d7e8f90", "transcribing", 60),
+        Assert.Equal(new ImportProgress("a1b2c3d4e5f60718293a4b5c6d7e8f90", ImportStage.Transcribing, 60),
             Parse("session-importProgress.json"));
         Assert.Equal(new ImportDone("a1b2c3d4e5f60718293a4b5c6d7e8f90"), Parse("session-imported.json"));
         Assert.Equal(new ImportFailed("a1b2c3d4e5f60718293a4b5c6d7e8f90", "cancelled"),
