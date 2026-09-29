@@ -1,0 +1,10 @@
+{
+    "jsonrpc": "2.0",
+    "method": "anchor/progress",
+    "params": {
+        "elapsed": 12.4,
+        "speech": 9.1,
+        "level": 0.5,
+        "clipped": false
+    }
+}

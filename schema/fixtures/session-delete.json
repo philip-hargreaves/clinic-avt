@@ -1,0 +1,15 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 60,
+        "method": "session/delete",
+        "params": {
+            "id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 60,
+        "result": {}
+    }
+}

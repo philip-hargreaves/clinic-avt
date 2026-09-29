@@ -1,0 +1,8 @@
+{
+    "jsonrpc": "2.0",
+    "method": "patient/partial",
+    "params": {
+        "text": "Rest the elbow",
+        "tokensPerSecond": 17.2
+    }
+}

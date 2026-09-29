@@ -1,0 +1,29 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 45,
+        "method": "audio/inputs"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 45,
+        "result": {
+            "devices": [
+                {
+                    "id": "{0.0.1}.{aa}",
+                    "name": "Microphone Array (Realtek(R) Audio)",
+                    "shortName": "Microphone Array",
+                    "isDefault": true,
+                    "bluetooth": false
+                },
+                {
+                    "id": "{0.0.1}.{bb}",
+                    "name": "Headset (H800 Hands-Free)",
+                    "shortName": "Headset",
+                    "isDefault": false,
+                    "bluetooth": true
+                }
+            ]
+        }
+    }
+}

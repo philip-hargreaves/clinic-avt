@@ -1,0 +1,8 @@
+{
+    "jsonrpc": "2.0",
+    "method": "note/ready",
+    "params": {
+        "text": "Swollen left elbow for a week. No injury.",
+        "tokensPerSecond": 16.8
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 49,
+        "method": "guidance/documents/removeAll"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 49,
+        "result": {
+            "removed": 3
+        }
+    }
+}

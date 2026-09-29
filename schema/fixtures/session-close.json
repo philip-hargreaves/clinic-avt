@@ -1,6 +1,5 @@
 {
     "jsonrpc": "2.0",
     "id": 13,
-    "method": "session/close",
-    "params": null
+    "method": "session/close"
 }

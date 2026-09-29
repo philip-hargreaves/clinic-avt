@@ -1,0 +1,7 @@
+{
+    "jsonrpc": "2.0",
+    "method": "translate/failed",
+    "params": {
+        "detail": "translation failed"
+    }
+}

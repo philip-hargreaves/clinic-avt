@@ -1,0 +1,12 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 46,
+        "method": "engine/exit"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 46,
+        "result": {}
+    }
+}

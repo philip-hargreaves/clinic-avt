@@ -1,0 +1,18 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 63,
+        "method": "translate/languages"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 63,
+        "result": {
+            "languages": [
+                "French",
+                "Polish",
+                "Romanian"
+            ]
+        }
+    }
+}
