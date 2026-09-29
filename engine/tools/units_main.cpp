@@ -10,9 +10,11 @@
 #include <vector>
 
 #include "adapters/guidance/ingest_host.hpp"
+#include "adapters/system/stderr_log.hpp"
 #include "core/guidance/document_units.hpp"
 
 int main(int argc, char* argv[]) {
+    clinicavt::system::LogToStderr();
     if (argc != 2) {
         std::fprintf(stderr, "usage: clinicavt_units <document.pdf>\n");
         return 1;

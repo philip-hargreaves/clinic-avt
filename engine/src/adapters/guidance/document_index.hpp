@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "adapters/guidance/embedder.hpp"
+#include "adapters/interfaces/document_ingest.hpp"
 #include "adapters/storage/db.hpp"
-#include "ports/document_ingest.hpp"
 
 namespace clinicavt::guidance {
 
@@ -32,15 +32,13 @@ struct IndexChunk {
     std::string boxes;          // line boxes as page fractions, JSON
 };
 
-// What the app derived from the files in the guidelines folder: documents by
-// content, the paths holding each, and their passages with vectors. A cache:
-// a file of another format or embedder is deleted and made again. One thread
-// at a time
+// Cache of the guidelines folder: documents by content, their paths, and passage
+// vectors. Deleted and rebuilt on a format or embedder mismatch. Single-threaded
 class DocumentIndex {
    public:
     explicit DocumentIndex(const std::filesystem::path& file);
 
-    // The embedder the passages come from. Another one empties the index
+    // A different embedder empties the index
     void Adopt(const EmbedderIdentity& embedder);
     bool Adopted() const {
         return adopted_;
@@ -54,20 +52,18 @@ class DocumentIndex {
     std::vector<IndexedFile> Files();
     std::vector<std::string> PathsOf(std::int64_t id);
 
-    // The path now holds the content. A new document starts indexing and
-    // `added` says so. The document the path held before, if nothing holds it
-    // now, goes and its id comes back in `released`
+    // Maps the path to this content. added is set for a new document; released is
+    // the id of the path's previous document if no path holds it any more
     struct Held {
         std::int64_t document = 0;
         bool added = false;
         std::int64_t released = 0;
     };
     Held Hold(const IndexedFile& file, const std::string& sha256, const std::string& mime);
-    // The path holds nothing. A document left without a file goes, its id
-    // returned, else 0
+    // Unmaps the path. Returns the id of a document left with no path, else 0
     std::int64_t Release(const std::string& path);
 
-    // The passages land in one transaction and the document turns ready
+    // Writes passages in one transaction and marks the document ready
     void Finish(std::int64_t id, const std::vector<IndexChunk>& chunks, int pages,
                 int pages_without_text);
     void Fail(std::int64_t id, const std::string& error, int pages = 0, int pages_without_text = 0);
@@ -81,7 +77,7 @@ class DocumentIndex {
    private:
     void Clear();
     void ClearChunks(std::int64_t id);
-    // Drops the document when no file holds it, returning its id, else 0
+    // Returns the dropped id, else 0
     std::int64_t DropUnheld(std::int64_t document);
 
     store::Db db_;

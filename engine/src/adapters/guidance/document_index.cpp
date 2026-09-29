@@ -16,8 +16,7 @@ using store::Db;
 using store::StoreCode;
 using store::StoreError;
 
-// Opens the file, or deletes what is there and starts again when it is not
-// an index of this format
+// Opens the index, or deletes and recreates it if the file is another format
 Db OpenIndex(const std::filesystem::path& file) {
     for (int attempt = 0; attempt < 2; ++attempt) {
         try {
@@ -58,7 +57,8 @@ DocumentInfo Row(Db::Stmt& select) {
     info.id = select.ColumnInt64(0);
     info.sha256 = select.ColumnText(1);
     info.mime = select.ColumnText(2);
-    info.state = select.ColumnText(3);
+    // The schema's CHECK allows only indexing, ready and failed
+    info.state = DocumentStateFrom(select.ColumnText(3)).value_or(DocumentState::kFailed);
     info.error = select.ColumnText(4);
     info.added_at = select.ColumnText(5);
     info.indexed_at = select.ColumnText(6);

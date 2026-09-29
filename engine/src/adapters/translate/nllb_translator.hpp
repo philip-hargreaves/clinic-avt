@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "ports/translator.hpp"
+#include "adapters/interfaces/translator.hpp"
 
 namespace clinicavt::models {
 class ModelStore;
@@ -13,9 +13,8 @@ class OvRuntime;
 
 namespace clinicavt::translate {
 
-// NLLB-200 on the manifest CPU: encoder once, greedy stateful decode.
-// Loads on Prepare or first use and frees itself on Release or after ten
-// idle minutes
+// NLLB-200 on CPU: encoder once, greedy stateful decode. Loads on Prepare or
+// first use; unloads on Release or after 10 idle minutes
 class NllbTranslator : public ITranslator {
    public:
     NllbTranslator(const models::ModelStore& store, models::OvRuntime& runtime);

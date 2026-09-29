@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <cstdio>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -14,6 +13,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/models/residency.hpp"
+#include "core/common/log.hpp"
 #include "core/common/strings.hpp"
 #include "core/translate/plain_punctuation.hpp"
 
@@ -62,7 +62,7 @@ struct NllbTranslator::Impl {
     // Last, so its thread stops first
     std::unique_ptr<models::Residency> residency;
 
-    // Called by the residency while no translation runs
+    // Called by Residency while no translation runs
     void Load() {
         try {
             LoadAndWarm();
@@ -85,15 +85,15 @@ struct NllbTranslator::Impl {
                         .create_infer_request();
         detokenizer = core.compile_model((info.dir / "openvino_detokenizer.xml").string(), "CPU")
                           .create_infer_request();
-        // Primes the CPU kernels for the first real sentence
+        // Warms CPU kernels before the first real sentence
         const auto& first = languages.at("languages").begin().value();
         TranslateSentences("Ready.", first.at("id").get<std::int64_t>());
-        std::fprintf(stderr, "clinicavt-engine: translator warmed in %.1f s\n", SecondsSince(t0));
+        log::Printf("clinicavt-engine: translator warmed in %.1f s\n", SecondsSince(t0));
     }
 
     void Unload() {
         Reset();
-        std::fprintf(stderr, "clinicavt-engine: translator released\n");
+        log::Printf("clinicavt-engine: translator released\n");
     }
 
     void Reset() {
@@ -103,7 +103,7 @@ struct NllbTranslator::Impl {
         decoder = ov::InferRequest();
     }
 
-    // NLLB reads the ids between the source language and end tokens
+    // NLLB input: source language token, ids, end token
     std::vector<std::int64_t> Tokenize(const std::string& sentence) {
         ov::Tensor input(ov::element::string, ov::Shape{1});
         input.data<std::string>()[0] = PlainPunctuation(sentence);
@@ -123,7 +123,7 @@ struct NllbTranslator::Impl {
         detokenizer.set_input_tensor(input);
         detokenizer.infer();
         std::string text = detokenizer.get_output_tensor().data<std::string>()[0];
-        // The sentencepiece word marker survives the detokenizer
+        // The detokenizer leaves the sentencepiece marker in
         const std::string marker = "\xE2\x96\x81";
         std::size_t at = 0;
         while ((at = text.find(marker, at)) != std::string::npos) {
@@ -135,8 +135,7 @@ struct NllbTranslator::Impl {
         return text;
     }
 
-    // NLLB is a sentence-level model: one line at a time keeps the sheet's
-    // structure and its quality
+    // NLLB is sentence-level; translate line by line to keep structure and quality
     std::string TranslateLine(const std::string& line, std::int64_t target,
                               const std::function<void(const std::string&)>& partial = {}) {
         const auto source = Tokenize(line);
@@ -153,8 +152,7 @@ struct NllbTranslator::Impl {
         decoder.reset_state();
         ov::Tensor beam(ov::element::i32, {1});
         beam.data<std::int32_t>()[0] = 0;
-        // The first step carries the decoder start token and the forced
-        // target language. The state carries everything after
+        // First step feeds decoder start + forced target language; state holds the rest
         std::vector<std::int64_t> step = {decoder_start, target};
         std::vector<std::int64_t> generated;
         while (generated.size() < kMaxTokens && !cancel.load()) {
@@ -172,8 +170,7 @@ struct NllbTranslator::Impl {
             const float* last = logits.data<float>() + (shape[1] - 1) * vocab;
             auto token = static_cast<std::int64_t>(
                 std::distance(last, std::max_element(last, last + vocab)));
-            // Greedy decoding can lock onto one token. The runner-up breaks
-            // the loop
+            // Greedy decoding can loop on one token; the runner-up breaks the loop
             const auto size = generated.size();
             if (size >= 2 && token == generated[size - 1] && token == generated[size - 2]) {
                 std::vector<float> copy(last, last + vocab);
@@ -193,8 +190,7 @@ struct NllbTranslator::Impl {
         return Detokenize(generated);
     }
 
-    // NLLB is trained on single sentences and stops early on longer input,
-    // so a line is translated one sentence at a time
+    // NLLB stops early on multi-sentence input, so translate one sentence at a time
     std::string TranslateSentences(const std::string& line, std::int64_t target,
                                    const std::function<void(const std::string&)>& partial = {}) {
         std::string out;
@@ -255,7 +251,7 @@ std::vector<std::string> NllbTranslator::Languages() {
 
 std::string NllbTranslator::Translate(const std::string& sheet, const std::string& language,
                                       const Progress& progress) {
-    // Sheets edited before line endings were normalised on save still hold CR
+    // Sheets saved before line-ending normalisation may contain CR
     const std::string text = strings::UnixLines(sheet);
     if (text.empty()) {
         throw std::runtime_error("nothing to translate");
@@ -295,8 +291,8 @@ std::string NllbTranslator::Translate(const std::string& sheet, const std::strin
             from = end + 1;
         }
 
-        std::fprintf(stderr, "clinicavt-engine: translated to %s in %.1f s\n", language.c_str(),
-                     SecondsSince(t0));
+        log::Printf("clinicavt-engine: translated to %s in %.1f s\n", language.c_str(),
+                    SecondsSince(t0));
         return translated;
     });
 }

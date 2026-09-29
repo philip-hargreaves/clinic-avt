@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstring>
 #include <span>
 #include <string>
@@ -23,6 +22,7 @@
 #include "adapters/audio/capture_errors.hpp"
 #include "adapters/audio/capture_timeline.hpp"
 #include "adapters/system/com_apartment.hpp"
+#include "core/common/log.hpp"
 
 namespace clinicavt::audio {
 
@@ -98,7 +98,6 @@ void WasapiCapture::RequestStop() {
     }
 }
 
-// Every outcome, success or failure, ends with OnEnd
 void WasapiCapture::Run(IAudioSink& sink) {
     sink.OnEnd(RunToEnd(sink));
 }
@@ -170,11 +169,11 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     if (FAILED(hr)) {
         return Fail("Initialize", hr);
     }
-    // One line per stream: device rate and open time make a dead or slow
-    // microphone (a Bluetooth link waking is seconds) diagnosable from the log
-    std::fprintf(stderr, "clinicavt-engine: capture open, native %lu Hz, %.2f s\n",
-                 static_cast<unsigned long>(native_rate),
-                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t_init).count());
+    // Logs native rate and open time so a dead or slow mic (Bluetooth can take
+    // seconds to wake) shows in the log
+    log::Printf("clinicavt-engine: capture open, native %lu Hz, %.2f s\n",
+                static_cast<unsigned long>(native_rate),
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - t_init).count());
 
     OwnedHandle audio_event{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
     if (audio_event.handle == nullptr) {
@@ -211,19 +210,17 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     for (;;) {
         const DWORD wake = WaitForMultipleObjects(2, waits, FALSE, 2000);
         if (wake == WAIT_OBJECT_0) {
-            // peak 0.0000 with packets flowing is the LE Audio failure
-            // signature: a healthy-looking stream of unflagged zeros
-            std::fprintf(stderr,
-                         "clinicavt-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
-                         static_cast<unsigned long long>(stream_packets),
-                         static_cast<unsigned long long>(stream_silent), stream_peak);
+            // peak 0.0000 with packets flowing is the LE Audio failure (unflagged zeros)
+            log::Printf("clinicavt-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
+                        static_cast<unsigned long long>(stream_packets),
+                        static_cast<unsigned long long>(stream_silent), stream_peak);
             return {SourceEndReason::kStopped, ""};
         }
         if (wake == WAIT_FAILED) {
             return Fail("WaitForMultipleObjects", HRESULT_FROM_WIN32(GetLastError()));
         }
-        // On a timeout fall through to the drain: a dead device stops
-        // signalling, and only a capture call reports what happened to it
+        // On timeout, still drain: a dead device stops signalling and only a capture
+        // call returns its error
 
         for (;;) {
             UINT32 next = 0;
@@ -260,7 +257,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
                 stream_peak = std::max(stream_peak, std::abs(packet[i]));
             }
 
-            // Release inside the buffer period. The sink runs after, on the copy
+            // Release within the buffer period; the sink gets the copy after
             hr = capture->ReleaseBuffer(frames);
             if (FAILED(hr)) {
                 return Fail("ReleaseBuffer", hr);

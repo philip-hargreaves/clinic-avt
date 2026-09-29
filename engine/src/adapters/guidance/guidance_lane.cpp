@@ -1,9 +1,10 @@
 #include "adapters/guidance/guidance_lane.hpp"
 
 #include <algorithm>
-#include <cstdio>
 #include <exception>
 #include <utility>
+
+#include "core/common/log.hpp"
 
 namespace clinicavt::guidance {
 
@@ -53,13 +54,13 @@ void GuidanceLane::Start() {
     if (!worker_.joinable()) worker_ = std::thread([this] { Work(); });
 }
 
-// A callback that throws must not take the worker or the RPC thread with it
+// Catches callback exceptions so they cannot kill the worker or RPC thread
 void GuidanceLane::Fail(const SearchRequest& request, const char* detail) {
     if (!request.on_failed) return;
     try {
         request.on_failed(detail);
     } catch (...) {
-        std::fprintf(stderr, "clinicavt-engine: guidance failure not delivered: %s\n", detail);
+        log::Printf("clinicavt-engine: guidance failure not delivered: %s\n", detail);
     }
 }
 
@@ -78,11 +79,10 @@ void GuidanceLane::Work() {
                 for (const auto& corpus : retriever_.Corpora()) {
                     ++(corpus.unavailable.empty() ? available : unavailable);
                 }
-                std::fprintf(stderr,
-                             "clinicavt-engine: guidance ready, %d corpora, %d unavailable\n",
-                             available, unavailable);
+                log::Printf("clinicavt-engine: guidance ready, %d corpora, %d unavailable\n",
+                            available, unavailable);
             } catch (const std::exception& e) {
-                std::fprintf(stderr, "clinicavt-engine: guidance unavailable: %s\n", e.what());
+                log::Printf("clinicavt-engine: guidance unavailable: %s\n", e.what());
             }
             if (on_readiness_) on_readiness_(retriever_.Status());
             lock.lock();

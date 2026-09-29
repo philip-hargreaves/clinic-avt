@@ -14,8 +14,8 @@
 #include "adapters/guidance/document_index.hpp"
 #include "adapters/guidance/ingest_host.hpp"
 #include "adapters/guidance/retriever.hpp"
+#include "adapters/interfaces/document_ingest.hpp"
 #include "adapters/system/recycle_bin.hpp"
-#include "ports/document_ingest.hpp"
 
 namespace clinicavt::guidance {
 

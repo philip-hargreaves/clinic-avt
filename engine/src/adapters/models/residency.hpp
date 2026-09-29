@@ -2,19 +2,19 @@
 
 #include <chrono>
 #include <condition_variable>
-#include <cstdio>
 #include <exception>
 #include <functional>
 #include <mutex>
 #include <thread>
 #include <utility>
 
+#include "core/common/log.hpp"
+
 namespace clinicavt::models {
 
-// Keeps a model loaded while it is wanted. Want loads it in the background
-// and Use loads it inline if needed, which also retries a failed background
-// load. Release or an idle spell unloads it once no work is running. Want
-// and Release never block
+// Keeps a model loaded while wanted. Want loads in the background; Use loads
+// inline if needed and retries a failed background load. Release or idle
+// timeout unloads once no work runs. Want and Release never block
 class Residency {
    public:
     using Clock = std::chrono::steady_clock;
@@ -111,8 +111,7 @@ class Residency {
                 try {
                     load_();
                 } catch (const std::exception& e) {
-                    std::fprintf(stderr, "clinicavt-engine: background load failed (%s)\n",
-                                 e.what());
+                    log::Printf("clinicavt-engine: background load failed (%s)\n", e.what());
                     ok = false;
                 } catch (...) {
                     ok = false;
