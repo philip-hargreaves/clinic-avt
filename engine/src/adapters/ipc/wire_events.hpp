@@ -5,25 +5,24 @@
 #include <mutex>
 #include <string>
 
+#include "adapters/interfaces/guidance_lane.hpp"
+#include "adapters/interfaces/translator.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "core/metrics/throughput.hpp"
-#include "core/session/session_events.hpp"
-#include "ports/guidance_lane.hpp"
+#include "ports/session_events.hpp"
 #include "ports/session_store.hpp"
-#include "ports/translator.hpp"
 
 namespace clinicavt::ipc {
 
-// Session events as pipe notifications. Streamed text is metered at the
-// source and capped at ~12 Hz on the wire
+// Session events as pipe notifications. Streamed text is metered at source and
+// capped at ~12 Hz
 class WireEvents : public session::ISessionEvents {
    public:
-    WireEvents(PipeServer& server, store::ISessionStore& sessions);
-
-    // The translator warms after the note. The note's guidance search starts
-    // once the note is stored
-    void SetTranslator(translate::ITranslator* translator);
-    void SetGuidance(guidance::IGuidanceLane* lane);
+    // Translator warms up after the note; guidance search starts once the note is stored.
+    // Either may be null
+    WireEvents(PipeServer& server, store::ISessionStore& sessions,
+               translate::ITranslator* translator = nullptr,
+               guidance::IGuidanceLane* guidance = nullptr);
 
     void OnLevel(const audio::LevelReading& reading) override;
     void OnInterrupted(audio::SourceEndReason reason, const std::string& detail) override;
@@ -42,7 +41,7 @@ class WireEvents : public session::ISessionEvents {
     void OnSummaryReady(const std::string& session, const std::string& text) override;
     void OnSummaryFailed(const std::string& session, const std::string& detail) override;
 
-    // Translation streams through the same meter as the note
+    // Uses the same meter as the note
     void OnTranslation(const std::string& method, const nlohmann::json& params);
 
    private:
@@ -53,8 +52,8 @@ class WireEvents : public session::ISessionEvents {
 
     PipeServer& server_;
     store::ISessionStore& sessions_;
-    translate::ITranslator* translator_ = nullptr;
-    guidance::IGuidanceLane* guidance_ = nullptr;
+    translate::ITranslator* translator_;
+    guidance::IGuidanceLane* guidance_;
     std::mutex throttle_mutex_;
     std::map<std::string, std::chrono::steady_clock::time_point> last_partial_;
     std::map<std::string, metrics::ThroughputMeter> meters_;

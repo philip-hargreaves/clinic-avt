@@ -9,6 +9,7 @@
 #include <windows.h>
 
 #include "adapters/ipc/framing.hpp"
+#include "core/common/log.hpp"
 
 namespace clinicavt::ipc {
 
@@ -66,11 +67,11 @@ void PipeServer::PushNotification(const std::string& method, json params) {
     constexpr unsigned kNotifyTimeoutMs = 2000;
     const std::string payload = Serialize(MakeNotification(method, std::move(params)));
     if (payload.size() > kMaxFrameBytes) {
-        std::fputs("clinicavt-engine: pushed notification exceeded frame cap, dropped\n", stderr);
+        log::Printf("clinicavt-engine: pushed notification exceeded frame cap, dropped\n");
         return;
     }
     if (!WriteFrame(payload, kNotifyTimeoutMs)) {
-        std::fputs("clinicavt-engine: notification push failed, client gone\n", stderr);
+        log::Printf("clinicavt-engine: notification push failed, client gone\n");
     }
 }
 
@@ -160,13 +161,13 @@ void PipeServer::HandleFrame(const std::string& payload) {
         message = json::parse(payload);
     } catch (const json::parse_error&) {
         // No id to reply to, so log and drop
-        std::fputs("clinicavt-engine: dropped unparseable frame\n", stderr);
+        log::Printf("clinicavt-engine: dropped unparseable frame\n");
         return;
     }
 
     auto parsed = ParseRequest(std::move(message));
     if (std::holds_alternative<Error>(parsed)) {
-        std::fputs("clinicavt-engine: dropped invalid request\n", stderr);
+        log::Printf("clinicavt-engine: dropped invalid request\n");
         return;
     }
     const auto& request = std::get<Request>(parsed);
@@ -185,7 +186,7 @@ void PipeServer::HandleFrame(const std::string& payload) {
             Reply(request.id, MakeResult(request.id, std::get<json>(outcome)));
         }
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: handler failed: %s\n", e.what());
+        log::Printf("clinicavt-engine: handler failed: %s\n", e.what());
         Reply(request.id, MakeError(request.id, Error{kInternalError, "Internal error"}));
     }
     FlushNotifications();
@@ -195,11 +196,11 @@ void PipeServer::FlushNotifications() {
     for (const auto& notification : notifications_) {
         const std::string payload = Serialize(notification);
         if (payload.size() > kMaxFrameBytes) {
-            std::fputs("clinicavt-engine: notification exceeded frame cap, dropped\n", stderr);
+            log::Printf("clinicavt-engine: notification exceeded frame cap, dropped\n");
             continue;
         }
         if (!WriteFrame(payload)) {
-            std::fputs("clinicavt-engine: notification write failed, client gone\n", stderr);
+            log::Printf("clinicavt-engine: notification write failed, client gone\n");
             break;
         }
     }
@@ -209,11 +210,11 @@ void PipeServer::FlushNotifications() {
 void PipeServer::Reply(const Id& id, const json& envelope) {
     std::string payload = Serialize(envelope);
     if (payload.size() > kMaxFrameBytes) {
-        std::fputs("clinicavt-engine: reply exceeded frame cap, sent internal error\n", stderr);
+        log::Printf("clinicavt-engine: reply exceeded frame cap, sent internal error\n");
         payload = Serialize(MakeError(id, Error{kInternalError, "Internal error"}));
     }
     if (!WriteFrame(payload)) {
-        std::fputs("clinicavt-engine: reply write failed, client gone\n", stderr);
+        log::Printf("clinicavt-engine: reply write failed, client gone\n");
     }
 }
 

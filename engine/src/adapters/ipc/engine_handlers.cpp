@@ -7,6 +7,14 @@
 #include <string>
 #include <vector>
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
 #include "adapters/ipc/handlers.hpp"
 #include "adapters/models/note_tier.hpp"
 #include "adapters/models/ov_runtime.hpp"
@@ -138,7 +146,7 @@ json NoteModelJson(const clinicavt::note::NoteModelState& state) {
     return result;
 }
 
-std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteLane* lane, bool session_active,
+std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteTiers* lane, bool session_active,
                                          const json& params, const std::string& auto_tier) {
     if (!params.contains("tier") || !params["tier"].is_string()) {
         return InvalidParams("tier must be a string");
@@ -193,12 +201,12 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
     auto* const runtime = services.runtime;
     const bool first_use = services.first_use;
     auto* const anchors = services.anchors;
-    auto* const note_lane = services.note_lane;
+    auto* const note_tiers = services.note_tiers;
     const bool stray_note_host = services.stray_note_host;
     server.RegisterMethod("engine/hello", HandleHello);
     server.RegisterMethod("engine/echo", HandleEcho);
-    const auto note_tier = [note_lane] {
-        return note_lane != nullptr ? note_lane->State().tier : std::string("default");
+    const auto note_tier = [note_tiers] {
+        return note_tiers != nullptr ? note_tiers->State().tier : std::string("default");
     };
     // Ready once every compile cache exists. OpenVINO writes the cache when a compile
     // completes. An unstaged role has nothing to compile, so it counts as ready here and
@@ -218,9 +226,9 @@ void RegisterEngineMethods(PipeServer& server, const EngineServices& services) {
                                  ready("translation", "default"),
                              stray_note_host, missing);
     });
-    server.RegisterMethod("note/tier", [note_lane, &controller,
+    server.RegisterMethod("note/tier", [note_tiers, &controller,
                                         auto_tier = services.auto_note_tier](const json& params) {
-        return HandleNoteTier(note_lane, controller.Busy(), params, auto_tier);
+        return HandleNoteTier(note_tiers, controller.Busy(), params, auto_tier);
     });
     server.RegisterMethod(
         "asr/device", [switcher = services.switch_asr, &controller, &server](const json& params) {

@@ -9,14 +9,17 @@
 
 #include "adapters/audio/capture_devices.hpp"
 #include "adapters/diarisation/anchor_store.hpp"
+#include "adapters/interfaces/document_ingest.hpp"
+#include "adapters/interfaces/guidance_lane.hpp"
+#include "adapters/interfaces/note_tiers.hpp"
+#include "adapters/interfaces/recording_reader.hpp"
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_server.hpp"
 #include "adapters/models/model_store.hpp"
+#include "core/demo/sample_year.hpp"
+#include "core/records/reflections.hpp"
+#include "core/records/session_records.hpp"
 #include "core/session/session_controller.hpp"
-#include "ports/document_ingest.hpp"
-#include "ports/guidance_lane.hpp"
-#include "ports/note_lane.hpp"
-#include "ports/recording_reader.hpp"
 
 namespace clinicavt::models {
 class OvRuntime;
@@ -46,7 +49,7 @@ json NoteModelJson(const clinicavt::note::NoteModelState& state);
 // note/tier: resolves and loads the named tier; "auto" is the machine default.
 // Refused during a consultation. Unknown or unstaged tier is an invalid-params
 // error listing what is staged
-std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteLane* lane, bool session_active,
+std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteTiers* lane, bool session_active,
                                          const json& params, const std::string& auto_tier = "");
 
 json HandleAudioInputs(const std::vector<clinicavt::audio::CaptureDevice>& devices);
@@ -56,7 +59,7 @@ json HandleAnchorStatus(const clinicavt::diar::AnchorStore& anchors);
 std::variant<json, Error> HandleAnchorClear(clinicavt::diar::AnchorStore& anchors,
                                             bool session_active);
 
-json HandleSessionList(clinicavt::store::ISessionStore& sessions);
+json HandleSessionList(clinicavt::records::SessionRecords& records);
 
 std::variant<json, Error> HandleSessionNote(clinicavt::store::ISessionStore& sessions,
                                             const json& params);
@@ -68,23 +71,23 @@ std::variant<json, Error> HandleSessionTranscript(clinicavt::store::ISessionStor
                                                   const json& params);
 
 // Appraisal reflections on a stored session
-std::variant<json, Error> HandleReflectionGet(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleReflectionGet(clinicavt::records::Reflections& reflections,
                                               const json& params);
-std::variant<json, Error> HandleReflectionUpdate(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleReflectionUpdate(clinicavt::records::Reflections& reflections,
                                                  const json& params);
-std::variant<json, Error> HandleReflectionDelete(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleReflectionDelete(clinicavt::records::Reflections& reflections,
                                                  const json& params);
-json HandleReflectionList(clinicavt::store::ISessionStore& sessions);
+json HandleReflectionList(clinicavt::records::Reflections& reflections);
 std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
                                               const json& params);
 // Crypto-erases everything; refused while recording or during a backup. Without
 // deleteReflections, a session with an appraisal entry is cleared down to it
-std::variant<json, Error> HandleSessionDeleteAll(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionDeleteAll(clinicavt::records::SessionRecords& records,
                                                  const json& params, bool session_active,
                                                  bool archive_busy);
 // session/remove: clears or erases the given sessions like delete-all, once a
 // backup holds them. Ids already gone are not counted
-std::variant<json, Error> HandleSessionRemove(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionRemove(clinicavt::records::SessionRecords& records,
                                               const json& params, bool archive_busy);
 
 // archive/summary: contents of a backup of the period, and how many consultations
@@ -97,10 +100,9 @@ std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& l
 std::variant<json, Error> HandleArchiveRestore(clinicavt::archive::ArchiveLane& lane,
                                                bool session_active, const json& params);
 
-// Seeds demo data from demo_dir, a no-op if already seeded. Clearing keeps real sessions
-std::variant<json, Error> HandleDemoSeed(clinicavt::store::ISessionStore& sessions,
-                                         const std::filesystem::path& demo_dir);
-json HandleDemoClear(clinicavt::store::ISessionStore& sessions);
+// Seeds demo data, a no-op if already seeded. Clearing keeps real sessions
+std::variant<json, Error> HandleDemoSeed(clinicavt::demo::DemoSamples& demo);
+json HandleDemoClear(clinicavt::demo::DemoSamples& demo);
 
 // Guidance panel shows the top three
 inline constexpr int kGuidanceLimit = 3;
@@ -201,23 +203,25 @@ using AsrSwitch =
 std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool session_active,
                                           const json& params, std::function<void(json)> notify);
 
-// Dependencies for the RPC methods. controller, models and store are always set;
-// the rest only when staged. first_use: model caches were cold at launch, so
+// Dependencies for the RPC methods. The references are always set; the rest only when
+// staged. first_use: model caches were cold at launch, so
 // one-off compiles are running and readiness reports them
 struct EngineServices {
     clinicavt::session::SessionController& controller;
     const clinicavt::models::ModelStore& models;
     clinicavt::store::ISessionStore& sessions;
+    clinicavt::records::SessionRecords& records;
+    clinicavt::records::Reflections& reflections;
+    clinicavt::demo::DemoSamples& demo;
     clinicavt::metrics::Registry* metrics = nullptr;
     clinicavt::models::OvRuntime* runtime = nullptr;
     clinicavt::translate::ITranslator* translator = nullptr;
     clinicavt::translate::TranslateLane* translate_lane = nullptr;
     bool first_use = false;
     clinicavt::diar::AnchorStore* anchors = nullptr;
-    clinicavt::note::INoteLane* note_lane = nullptr;
+    clinicavt::note::INoteTiers* note_tiers = nullptr;
     std::string auto_note_tier;    // the note tier "auto" stands for on this machine
     bool stray_note_host = false;  // a note host from an earlier engine is stuck in the GPU driver
-    std::filesystem::path demo_dir;
     AsrSwitch switch_asr;
     clinicavt::archive::ArchiveLane* archive_lane =
         nullptr;  // deletes are refused while a job runs
@@ -228,14 +232,23 @@ struct EngineServices {
 
 // engine/*, note/tier, anchor/* and audio/inputs
 void RegisterEngineMethods(PipeServer& server, const EngineServices& services);
-// session/*, note/*, patient/*, reflection/*, demo/* and translate/*
+// session/*, note/* and patient/* edits and regeneration
 void RegisterSessionMethods(PipeServer& server, const EngineServices& services);
+// translate/languages and patient/translate, with a translator present
+void RegisterTranslateMethods(PipeServer& server, const EngineServices& services);
+// reflection/* and demo/*
+void RegisterReflectionMethods(PipeServer& server, const EngineServices& services);
+// recording/inspect and session/import, with a recording reader present
+void RegisterImportMethods(PipeServer& server, const EngineServices& services);
 // archive/*, with the archive lane present
 void RegisterArchiveMethods(PipeServer& server, const EngineServices& services);
 
 inline void RegisterMethods(PipeServer& server, const EngineServices& services) {
     RegisterEngineMethods(server, services);
     RegisterSessionMethods(server, services);
+    RegisterTranslateMethods(server, services);
+    RegisterReflectionMethods(server, services);
+    RegisterImportMethods(server, services);
     if (services.archive_lane != nullptr) RegisterArchiveMethods(server, services);
 }
 
