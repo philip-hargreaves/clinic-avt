@@ -3,6 +3,7 @@ namespace ClinicAVT.App.Tests.TestDoubles;
 /// <summary>A clock the test moves. Timers fire when it passes their due time.</summary>
 internal sealed class FakeTimeProvider : TimeProvider
 {
+    private readonly object _gate = new();
     private readonly List<FakeTimer> _timers = [];
 
     /// <summary>9:00 UTC on 27 September 2026, read in London time.</summary>
@@ -26,7 +27,11 @@ internal sealed class FakeTimeProvider : TimeProvider
     {
         var timer = new FakeTimer(this, callback, state);
         timer.Change(dueTime, period);
-        _timers.Add(timer);
+        lock (_gate)
+        {
+            _timers.Add(timer);
+        }
+
         return timer;
     }
 
@@ -34,7 +39,13 @@ internal sealed class FakeTimeProvider : TimeProvider
     public void Advance(TimeSpan by)
     {
         Now += by;
-        foreach (var timer in _timers.ToList())
+        List<FakeTimer> timers;
+        lock (_gate)
+        {
+            timers = [.. _timers];
+        }
+
+        foreach (var timer in timers)
         {
             if (timer.Due is { } due && due <= Now)
             {
@@ -56,7 +67,13 @@ internal sealed class FakeTimeProvider : TimeProvider
 
         public void Fire() => callback(state);
 
-        public void Dispose() => clock._timers.Remove(this);
+        public void Dispose()
+        {
+            lock (clock._gate)
+            {
+                clock._timers.Remove(this);
+            }
+        }
 
         public ValueTask DisposeAsync()
         {

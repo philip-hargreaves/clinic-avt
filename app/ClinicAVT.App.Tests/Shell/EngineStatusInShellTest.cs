@@ -11,52 +11,55 @@ public class EngineStatusInShellTest
     public void TheStatusBarThroughAnEngineLifetime()
     {
         var log = new ListLogger();
-        var bar = TestSession.Status(log: log);
+        using var shell = TestSession.Offline(log);
+        var bar = shell.Status;
+        var line = shell.Line;
+        var state = shell.Get<EngineState>();
 
-        bar.SetEngineState(EngineStatus.Running);
-        Assert.Equal("Starting up", bar.EngineStateLabel);
-        Assert.True(bar.EngineStarting);
+        shell.Host.RaiseStatus(EngineStatus.Running);
+        Assert.Equal("Starting up", state.EngineStateLabel);
+        Assert.True(state.EngineStarting);
 
-        bar.SetEngineReady(true);
-        Assert.Equal("Ready", bar.EngineStateLabel);
-        Assert.False(bar.EngineStarting);
+        shell.Engine.SetConnected(true);
+        Assert.Equal("Ready", state.EngineStateLabel);
+        Assert.False(state.EngineStarting);
 
-        bar.SetEngineReady(false);
-        bar.SetEngineState(EngineStatus.Restarting);
-        Assert.Equal("Recovering", bar.EngineStateLabel);
+        shell.Engine.SetConnected(false);
+        shell.Host.RaiseStatus(EngineStatus.Restarting);
+        Assert.Equal("Recovering", state.EngineStateLabel);
 
-        bar.SetEngineState(EngineStatus.Stopped);
-        Assert.Equal("Not running", bar.EngineStateLabel);
+        shell.Host.RaiseStatus(EngineStatus.Stopped);
+        Assert.Equal("Not running", state.EngineStateLabel);
         Assert.Empty(log.Lines);  // only faults reach the log
 
         // Once back up, activity replaces the status and the ring means work in progress
-        bar.SetEngineState(EngineStatus.Running);
-        bar.SetEngineReady(true);
+        shell.Host.RaiseStatus(EngineStatus.Running);
+        shell.Engine.SetConnected(true);
         Assert.Equal("Ready", bar.DisplayLabel);
         Assert.False(bar.Busy);
 
-        bar.Append("Finalising", busy: true);
+        line.Append("Finalising", busy: true);
         Assert.Equal("Finalising", bar.DisplayLabel);
         Assert.True(bar.Busy);
 
-        bar.Append("Ready for review");
+        line.Append("Ready for review");
         Assert.Equal("Ready for review", bar.DisplayLabel);
         Assert.False(bar.Busy);
 
         // Abnormal readiness outranks whatever activity was showing
-        bar.SetEngineReady(false);
-        bar.SetEngineState(EngineStatus.Restarting);
+        shell.Engine.SetConnected(false);
+        shell.Host.RaiseStatus(EngineStatus.Restarting);
         Assert.Equal("Recovering", bar.DisplayLabel);
         Assert.True(bar.Busy);
 
         // Every fault is logged
         var logged = log.Lines.Count;
-        bar.SetEngineState(EngineStatus.Faulted);
-        Assert.Equal("Recording is unavailable - please restart the app", bar.EngineStateLabel);
-        Assert.Equal("Recording is unavailable - please restart the app", bar.LatestActivity);
+        shell.Host.RaiseStatus(EngineStatus.Faulted);
+        Assert.Equal("Recording is unavailable - please restart the app", state.EngineStateLabel);
+        Assert.Equal("Recording is unavailable - please restart the app", line.LatestActivity);
 
-        bar.SetEngineState(EngineStatus.Faulted);
-        Assert.Equal("Recording is unavailable - please restart the app", bar.EngineStateLabel);
+        shell.Host.RaiseStatus(EngineStatus.Faulted);
+        Assert.Equal("Recording is unavailable - please restart the app", state.EngineStateLabel);
         Assert.Equal(logged + 2, log.Lines.Count);
     }
 
@@ -66,10 +69,10 @@ public class EngineStatusInShellTest
     public async Task AStorageFaultHoldsTheLineUntilTheNextConsultation()
     {
         var log = new ListLogger();
-        var (session, engine, _) = TestSession.Create(log: log);
-        var bar = session.Status;
-        bar.SetEngineState(EngineStatus.Running);
-        bar.SetEngineReady(true);
+        var shell = TestSession.Create(log: log);
+        var (session, engine, _) = shell;
+        var bar = shell.Status;
+        shell.Host.RaiseStatus(EngineStatus.Running);
 
         engine.RaiseNotification("storage/fault", Fixtures.Load("storage-fault.json").GetProperty("params"));
         const string Line =
@@ -77,7 +80,7 @@ public class EngineStatusInShellTest
         Assert.Equal(Line, bar.DisplayLabel);
         Assert.Contains(log.Lines, line => line.EndsWith(Line, StringComparison.Ordinal));
 
-        bar.Append("Ready for review");
+        shell.Line.Append("Ready for review");
         Assert.Equal(Line, bar.DisplayLabel);
 
         await session.StartRecordingAsync();
@@ -89,17 +92,19 @@ public class EngineStatusInShellTest
     [Fact]
     public async Task TheConsentReminderShowsWhileARecordingCouldStartAndInProgressLastsUntilTheNote()
     {
-        var (session, engine, _) = TestSession.Create();
-        var bar = session.Status;
-        bar.SetEngineState(EngineStatus.Running);
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
+        var bar = shell.Status;
+        engine.SetConnected(false);
+        shell.Host.RaiseStatus(EngineStatus.Running);
         Assert.False(bar.ConsentVisible);
-        bar.SetEngineReady(true);
+        engine.SetConnected(true);
         Assert.True(bar.ConsentVisible);
         Assert.False(session.ConsultationInProgress);
 
-        bar.SetSettingUp(true);
+        shell.Models.SetSettingUp(true);
         Assert.False(bar.ConsentVisible);
-        bar.SetSettingUp(false);
+        shell.Models.SetSettingUp(false);
 
         await session.StartRecordingAsync();
         Assert.False(bar.ConsentVisible);

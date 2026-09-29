@@ -3,8 +3,9 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Windows.UI;
 using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Core.Preferences;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 // ElementTheme.Default follows Windows live. The shell draws the caption buttons from the app
 // window's colours, so they are repainted whenever the effective theme changes
@@ -12,7 +13,7 @@ public sealed class WinUiThemeService(WindowAccessor window) : IThemeService
 {
     private FrameworkElement? _root;
 
-    public void Apply(string theme)
+    public void Apply(AppTheme theme)
     {
         if (window.Window?.Content is not FrameworkElement root)
         {
@@ -29,8 +30,8 @@ public sealed class WinUiThemeService(WindowAccessor window) : IThemeService
         }
         root.RequestedTheme = theme switch
         {
-            "light" => ElementTheme.Light,
-            "dark" => ElementTheme.Dark,
+            AppTheme.Light => ElementTheme.Light,
+            AppTheme.Dark => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
         PaintCaptionButtons(root.ActualTheme);

@@ -1,6 +1,6 @@
 using ClinicAVT.App.Core.Ports;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 /// <summary>The shell assembly's version as major.minor.build.</summary>
 public sealed class AppInfo : IAppInfo

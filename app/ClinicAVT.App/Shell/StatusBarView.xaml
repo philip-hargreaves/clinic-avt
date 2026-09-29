@@ -50,7 +50,7 @@
                 <Border
                     Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                     Style="{StaticResource ChipBorder}"
-                    Visibility="{x:Bind ViewModel.AsrChipVisible, Mode=OneWay}">
+                    Visibility="{x:Bind ViewModel.Chips.AsrChipVisible, Mode=OneWay}">
                     <!-- Colour pairs swap by visibility because a brush set in code would not
                          follow a live theme change -->
                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -59,39 +59,39 @@
                             Height="6"
                             VerticalAlignment="Center"
                             Fill="{ThemeResource SystemFillColorSuccessBrush}"
-                            Visibility="{x:Bind ViewModel.AsrActive, Mode=OneWay}" />
+                            Visibility="{x:Bind ViewModel.Chips.AsrActive, Mode=OneWay}" />
                         <Ellipse
                             Width="6"
                             Height="6"
                             VerticalAlignment="Center"
                             Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
-                            Visibility="{x:Bind ViewModel.AsrResting, Mode=OneWay}" />
+                            Visibility="{x:Bind ViewModel.Chips.AsrResting, Mode=OneWay}" />
                         <TextBlock
                             Style="{StaticResource CaptionText}"
-                            Text="{x:Bind ViewModel.AsrChip, Mode=OneWay}"
+                            Text="{x:Bind ViewModel.Chips.AsrChip, Mode=OneWay}"
                             Typography.NumeralAlignment="Tabular" />
                     </StackPanel>
                 </Border>
                 <Border
                     Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                     Style="{StaticResource ChipBorder}"
-                    Visibility="{x:Bind ViewModel.NoteChipVisible, Mode=OneWay}">
+                    Visibility="{x:Bind ViewModel.Chips.NoteChipVisible, Mode=OneWay}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Ellipse
                             Width="6"
                             Height="6"
                             VerticalAlignment="Center"
                             Fill="{ThemeResource SystemFillColorSuccessBrush}"
-                            Visibility="{x:Bind ViewModel.NoteActive, Mode=OneWay}" />
+                            Visibility="{x:Bind ViewModel.Chips.NoteActive, Mode=OneWay}" />
                         <Ellipse
                             Width="6"
                             Height="6"
                             VerticalAlignment="Center"
                             Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
-                            Visibility="{x:Bind ViewModel.NoteResting, Mode=OneWay}" />
+                            Visibility="{x:Bind ViewModel.Chips.NoteResting, Mode=OneWay}" />
                         <TextBlock
                             Style="{StaticResource CaptionText}"
-                            Text="{x:Bind ViewModel.NoteChip, Mode=OneWay}"
+                            Text="{x:Bind ViewModel.Chips.NoteChip, Mode=OneWay}"
                             Typography.NumeralAlignment="Tabular" />
                     </StackPanel>
                 </Border>
@@ -99,10 +99,10 @@
                 <Border
                     Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                     Style="{StaticResource ChipBorder}"
-                    Visibility="{x:Bind ViewModel.MemoryChipVisible, Mode=OneWay}">
+                    Visibility="{x:Bind ViewModel.Chips.MemoryChipVisible, Mode=OneWay}">
                     <TextBlock
                         Style="{StaticResource CaptionText}"
-                        Text="{x:Bind ViewModel.MemoryChip, Mode=OneWay}"
+                        Text="{x:Bind ViewModel.Chips.MemoryChip, Mode=OneWay}"
                         Typography.NumeralAlignment="Tabular" />
                 </Border>
             </StackPanel>

@@ -25,11 +25,11 @@
                     <TextBlock Style="{StaticResource MicroText}" VerticalAlignment="Center" Text="Anonymised case study" />
                     <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
                         <controls:BusyCaption
-                            IsActive="{x:Bind ViewModel.SummaryPending, Mode=OneWay}"
-                            Visibility="{x:Bind ViewModel.SummaryPending, Mode=OneWay}" />
+                            IsActive="{x:Bind ViewModel.CaseStudy.SummaryPending, Mode=OneWay}"
+                            Visibility="{x:Bind ViewModel.CaseStudy.SummaryPending, Mode=OneWay}" />
                         <Button
                             AutomationProperties.Name="Rewrite"
-                            Command="{x:Bind ViewModel.RewriteSummaryCommand}"
+                            Command="{x:Bind ViewModel.CaseStudy.RewriteSummaryCommand}"
                             Style="{StaticResource TrayButton}"
                             ToolTipService.ToolTip="Write the case study again from the clinical note">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -45,13 +45,13 @@
                     BorderThickness="0"
                     Background="Transparent"
                     LostFocus="OnSummaryCommitted"
-                    PlaceholderText="{x:Bind ViewModel.SummaryPlaceholder, Mode=OneWay}"
-                    Text="{x:Bind ViewModel.Summary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    PlaceholderText="{x:Bind ViewModel.CaseStudy.SummaryPlaceholder, Mode=OneWay}"
+                    Text="{x:Bind ViewModel.CaseStudy.Summary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     TextWrapping="Wrap" />
                 <TextBlock
                     Style="{StaticResource CaptionText}"
-                    Text="{x:Bind ViewModel.SummaryProblem, Mode=OneWay}"
-                    Visibility="{x:Bind ViewModel.HasSummaryProblem, Mode=OneWay}" />
+                    Text="{x:Bind ViewModel.CaseStudy.SummaryProblem, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.CaseStudy.HasSummaryProblem, Mode=OneWay}" />
                 <TextBlock
                     Style="{StaticResource CaptionText}"
                     Foreground="{ThemeResource CautionBrush}"
@@ -66,8 +66,8 @@
             <TextBlock
                 Style="{StaticResource CaptionText}"
                 Text="Found for this consultation"
-                Visibility="{x:Bind ViewModel.HasReferences, Mode=OneWay}" />
-            <ItemsControl ItemsSource="{x:Bind ViewModel.References}">
+                Visibility="{x:Bind ViewModel.Guidance.HasReferences, Mode=OneWay}" />
+            <ItemsControl ItemsSource="{x:Bind ViewModel.Guidance.References}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="appraisal:ReflectionReferenceRow">
                         <CheckBox
@@ -92,8 +92,8 @@
                 Margin="0,4,0,0"
                 Style="{StaticResource CaptionText}"
                 Text="Added by you"
-                Visibility="{x:Bind ViewModel.HasAdded, Mode=OneWay}" />
-            <ItemsControl ItemsSource="{x:Bind ViewModel.Added}" Visibility="{x:Bind ViewModel.HasAdded, Mode=OneWay}">
+                Visibility="{x:Bind ViewModel.Guidance.HasAdded, Mode=OneWay}" />
+            <ItemsControl ItemsSource="{x:Bind ViewModel.Guidance.Added}" Visibility="{x:Bind ViewModel.Guidance.HasAdded, Mode=OneWay}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="appraisal:AddedGuidanceRow">
                         <Grid ColumnSpacing="8" Padding="8,0,0,0">
@@ -119,7 +119,7 @@
                 KeyDown="OnDraftKeyDown"
                 LostFocus="OnDraftLeft"
                 PlaceholderText="Add guidance"
-                Text="{x:Bind ViewModel.Draft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                Text="{x:Bind ViewModel.Guidance.Draft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
         </StackPanel>
 
         <!-- Only the clinician writes these three answers. Nothing here is generated -->

@@ -18,13 +18,19 @@ public sealed partial class StatusBarView : UserControl
         Loaded += (_, _) => FitChips();
         // A change of words changes widths, so the fit is checked again once the bindings
         // have shown them
+        ViewModel.Chips.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ModelChips.AsrChip)
+                or nameof(ModelChips.NoteChip)
+                or nameof(ModelChips.MemoryChip)
+                or nameof(ModelChips.MetricsVisible))
+            {
+                DispatcherQueue.TryEnqueue(FitChips);
+            }
+        };
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(StatusBarViewModel.AsrChip)
-                or nameof(StatusBarViewModel.NoteChip)
-                or nameof(StatusBarViewModel.MemoryChip)
-                or nameof(StatusBarViewModel.MetricsVisible)
-                or nameof(StatusBarViewModel.DisplayLabel))
+            if (e.PropertyName is nameof(StatusBarViewModel.DisplayLabel))
             {
                 DispatcherQueue.TryEnqueue(FitChips);
             }

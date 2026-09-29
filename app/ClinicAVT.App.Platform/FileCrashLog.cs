@@ -1,8 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
 
-namespace ClinicAVT.App.Core.Hosting;
+namespace ClinicAVT.App.Platform;
 
 /// <summary>
 /// Appends one JSON line per crash. The file holds only what CrashReport

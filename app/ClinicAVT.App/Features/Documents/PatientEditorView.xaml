@@ -29,7 +29,7 @@
                     Visibility="{x:Bind ViewModel.PatientCaptionVisible, Mode=OneWay}" />
                 <controls:StaleNotice
                     ActionText="Regenerate from note"
-                    Command="{x:Bind ViewModel.RegeneratePatientCommand}"
+                    Command="{x:Bind Commands.RegeneratePatientCommand}"
                     Text="This patient information was written before your note edits."
                     Visibility="{x:Bind ViewModel.PatientStale, Mode=OneWay}" />
             </StackPanel>
@@ -44,7 +44,7 @@
                     PlaceholderText="Language"
                     SelectedItem="{x:Bind ViewModel.SelectedLanguage, Mode=TwoWay}" />
                 <Button
-                    Command="{x:Bind ViewModel.TranslateCommand}"
+                    Command="{x:Bind Commands.TranslateCommand}"
                     Content="Translate" />
                 <controls:BusyCaption
                     VerticalAlignment="Center"
@@ -95,7 +95,7 @@
                     Visibility="{x:Bind ViewModel.PatientEditing, Mode=OneWay}" />
                 <Button
                     AutomationProperties.Name="Save"
-                    Command="{x:Bind ViewModel.SavePatientCommand}"
+                    Command="{x:Bind Commands.SavePatientCommand}"
                     Style="{StaticResource AccentButtonStyle}"
                     Visibility="{x:Bind ViewModel.PatientEditing, Mode=OneWay}">
                     <controls:IconLabel Glyph="&#xE74E;" Text="Save" />
@@ -117,7 +117,7 @@
                     Text="{x:Bind ViewModel.TranslationCaption, Mode=OneWay}" />
                 <controls:StaleNotice
                     ActionText="Translate again"
-                    Command="{x:Bind ViewModel.TranslateAgainCommand}"
+                    Command="{x:Bind Commands.TranslateAgainCommand}"
                     Text="The information changed since it was translated."
                     Visibility="{x:Bind ViewModel.TranslationStale, Mode=OneWay}" />
             </StackPanel>

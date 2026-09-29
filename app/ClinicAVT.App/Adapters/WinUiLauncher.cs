@@ -2,7 +2,7 @@ using System.Diagnostics;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Ports;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 public sealed class WinUiLauncher : ILauncher
 {

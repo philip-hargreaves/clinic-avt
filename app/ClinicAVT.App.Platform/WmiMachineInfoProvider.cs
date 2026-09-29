@@ -11,6 +11,8 @@ public sealed class WmiMachineInfoProvider : IMachineInfoProvider
 
     public MachineInfo Describe() => _cached ??= Query();
 
+    public string MachineName => Environment.MachineName;
+
     private static MachineInfo Query()
     {
         var cpu = Registry.GetValue(

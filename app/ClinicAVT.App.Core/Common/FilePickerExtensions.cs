@@ -8,7 +8,8 @@ public static class FilePickerExtensions
     /// Asks where to save and writes the text there. The path, or null when cancelled.
     /// </summary>
     public static async Task<string?> SaveTextAsync(
-        this IFilePicker picker, string suggestedName, string typeLabel, string extension, string text)
+        this IFilePicker picker, ITextFiles files, string suggestedName, string typeLabel, string extension,
+        string text)
     {
         var path = await picker.PickSaveAsync(suggestedName, typeLabel, extension).ConfigureAwait(true);
         if (path is null)
@@ -16,7 +17,7 @@ public static class FilePickerExtensions
             return null;
         }
 
-        await File.WriteAllTextAsync(path, text).ConfigureAwait(true);
+        await files.WriteAsync(path, text).ConfigureAwait(true);
         return path;
     }
 }

@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 /// <summary>The main window, once launched, for adapters that need its handle or XAML root.</summary>
 public sealed class WindowAccessor

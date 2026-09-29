@@ -1,6 +1,8 @@
+using ClinicAVT.App.Core.Hosting;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 using static ClinicAVT.App.Tests.Support.Waits;
 using static ClinicAVT.App.Tests.Support.Wire;
 
@@ -9,10 +11,11 @@ namespace ClinicAVT.App.Tests.Shell;
 /// <summary>The live numbers behind the status bar's model chips.</summary>
 public class StatusBarMetricsTest
 {
-    private static (StatusBarViewModel Status, FakeEngineClient Engine) Create(Func<double>? memoryGb = null)
+    private static (TestShell Shell, ModelChips Status, FakeEngineClient Engine) Create()
     {
         var engine = new FakeEngineClient(autoNotify: false);
-        return (new StatusBarViewModel(new EngineApi(engine), new InlineDispatcher(), memoryGb: memoryGb), engine);
+        var shell = new TestShell(engine);
+        return (shell, shell.Chips, engine);
     }
 
     // A load behind a ready app stays off the status line: nothing waits on it. The time is
@@ -23,9 +26,10 @@ public class StatusBarMetricsTest
     {
         var engine = new FakeEngineClient(autoNotify: false);
         var clock = new FakeTimeProvider();
-        var status = new StatusBarViewModel(new EngineApi(engine), new InlineDispatcher(), clock);
-        status.SetEngineState(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
-        status.SetEngineReady(true);
+        using var shell = new TestShell(engine, time: clock);
+        var status = shell.Status;
+        var models = shell.Models;
+        shell.Host.RaiseStatus(EngineStatus.Running);
 
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "loading" }));
         // A switch announces idle between the old model and the new: no flash of Ready
@@ -33,25 +37,25 @@ public class StatusBarMetricsTest
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "loading" }));
         clock.Advance(TimeSpan.FromSeconds(48));
 
-        Assert.True(status.ModelLoading);
-        Assert.Equal("Loading the note model · 0:48 · this can take a few minutes", status.ModelLoadLine);
+        Assert.True(models.ModelLoading);
+        Assert.Equal("Loading the note model · 0:48 · this can take a few minutes", models.ModelLoadLine);
         Assert.Equal("Ready", status.DisplayLabel);
         Assert.False(status.ShowsSetup);
 
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "ready" }));
-        Assert.False(status.ModelLoading);
+        Assert.False(models.ModelLoading);
         Assert.Equal("Ready", status.DisplayLabel);
 
-        status.BeginSwitch("Switching to the NPU · {time} · first time may take longer");
+        models.BeginSwitch("Switching to the NPU · {time} · first time may take longer");
         Assert.Equal("Switching to the NPU · 0:00 · first time may take longer", status.DisplayLabel);
         Assert.False(status.ConsentVisible, "no consent reminder over a wait");
         clock.Advance(TimeSpan.FromSeconds(72));
         Assert.Equal("Switching to the NPU · 1:12 · first time may take longer", status.DisplayLabel);
         Assert.True(status.Busy);
 
-        status.EndSwitch();
+        models.EndSwitch();
         Assert.True(status.ConsentVisible);
-        status.Append("Ready");
+        shell.Line.Append("Ready");
         clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal("Ready", status.DisplayLabel);
     }
@@ -59,7 +63,7 @@ public class StatusBarMetricsTest
     [Fact]
     public async Task TheNoteChipThroughAGenerationAndAModelLoad()
     {
-        var (status, engine) = Create();
+        var (shell, status, engine) = Create();
         await WaitUntilAsync(() => status.NoteChip.Length > 0);
         Assert.Equal("Qwen3.5 9B · GPU", status.NoteChip);
         Assert.False(status.TokensStreaming);
@@ -97,7 +101,7 @@ public class StatusBarMetricsTest
         Assert.False(status.TokensStreaming);
 
         // A new consultation clears the frozen value
-        status.ResetThroughput();
+        shell.Activity.Start();
         Assert.Equal("Qwen3.5 9B · GPU", status.NoteChip);
         Assert.False(status.TokensStreaming);
         Assert.Equal(0, status.TokensPerSecond);
@@ -128,8 +132,9 @@ public class StatusBarMetricsTest
     [Fact]
     public async Task TheAsrAndMemoryChipsThroughAConsultation()
     {
-        var reading = 5.06;
-        var (status, engine) = Create(memoryGb: () => reading);
+        var (shell, status, engine) = Create();
+        var memory = (FakeProcessMetrics)shell.Get<IProcessMetrics>();
+        memory.Committed = 5.06;
         await WaitUntilAsync(() => status.AsrChip.Length > 0);  // the connect-time model fetch
         Assert.Equal("Whisper Large v3 Turbo · GPU", status.AsrChip);
         Assert.Equal("Qwen3.5 9B · GPU", status.NoteChip);
@@ -141,7 +146,7 @@ public class StatusBarMetricsTest
         Assert.Equal("Memory · 5.1 GB", status.MemoryChip);
 
         // While recording the realtime factor joins Whisper's chip and the dot lights
-        status.SetMicVisible(true);
+        shell.Activity.Listening = true;
         Assert.True(status.AsrActive);
         await status.PollMetricsOnceAsync();
         Assert.Equal("Whisper Large v3 Turbo · GPU · 33× RT", status.AsrChip);
@@ -153,20 +158,20 @@ public class StatusBarMetricsTest
 
         // After stop the tail still decodes, the NPU's longest stage, so the
         // figure and the dot stay until the transcript seals
-        status.SetMicVisible(false);
-        status.SetDecodeActive(true);
+        shell.Activity.StopListening();
+        shell.Activity.Decoding = true;
         Assert.True(status.AsrActive);
         Assert.Equal("Whisper Large v3 Turbo · GPU · 1.4× RT", status.AsrChip);
 
         // Once sealed the session's average holds, labelled as an average
-        status.SetDecodeActive(false);
+        shell.Activity.Decoding = false;
         Assert.False(status.AsrActive, "sealed: the dot rests while Averaged shows");
         Assert.Equal("Whisper Large v3 Turbo · GPU · Averaged 1.4× RT", status.AsrChip);
 
-        status.ResetThroughput();  // the next consultation starts clean
+        shell.Activity.Start();  // the next consultation starts clean
         Assert.Equal("Whisper Large v3 Turbo · GPU", status.AsrChip);
 
-        reading = 0;  // the memory provider failed, so no figure shows
+        memory.Committed = 0;  // the memory provider failed, so no figure shows
         await status.PollMetricsOnceAsync();
         Assert.Equal("", status.MemoryChip);
     }

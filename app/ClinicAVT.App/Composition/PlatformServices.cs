@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ClinicAVT.App.Adapters;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Platform;
 
@@ -23,6 +24,15 @@ internal static class PlatformServices
         services.AddSingleton<IMachineInfoProvider, WmiMachineInfoProvider>();
         services.AddSingleton<IAppInfo, AppInfo>();
         services.AddSingleton<IProcessMetrics, ProcessMetrics>();
+        services.AddSingleton<IPowerStateReader, PowerStateReader>();
+        services.AddSingleton<IOneDriveFolders, OneDriveFolders>();
+        services.AddSingleton<ITextFiles, TextFiles>();
+        services.AddSingleton<IPreferencesStore>(_ => new FilePreferencesStore(paths.Preferences));
+        services.AddSingleton<IMetricsLog>(_ => new FileMetricsLog(paths.Metrics));
+        services.AddSingleton<IExampleLibrary>(sp => new ExampleLibrary(
+            AppContext.BaseDirectory, sp.GetRequiredService<ILogger<ExampleLibrary>>()));
+        services.AddSingleton<ICreditsSource>(_ => new CreditsFile(
+            Path.Combine(AppContext.BaseDirectory, "Assets", "logos")));
         return services;
     }
 }

@@ -20,11 +20,12 @@ public class ReadinessAndGuardsTest
         };
 
         var log = new ListLogger();
-        var (session, _, note) = TestSession.Create(engine: engine, log: log);
+        var shell = TestSession.Create(engine: engine, log: log);
+        var (session, _, note) = shell;
 
-        Assert.Contains("stuck in the graphics driver", session.Status.LatestActivity);
+        Assert.Contains("stuck in the graphics driver", shell.Line.LatestActivity);
         Assert.Contains(log.Lines, line => line.Contains("stray note host"));
-        Assert.Empty(note.Languages);
+        Assert.Empty(shell.Patient.Languages);
         Assert.Contains(log.Lines, line => line.Contains("translate/languages failed"));
     }
 
@@ -34,11 +35,12 @@ public class ReadinessAndGuardsTest
     {
         var engine = new FakeEngineClient(autoNotify: false) { MissingModels = { "asr", "diarisation", "segmentation" } };
         var log = new ListLogger();
-        var (session, _, _) = TestSession.Create(engine: engine, log: log);
+        var shell = TestSession.Create(engine: engine, log: log);
+        var (session, _, _) = shell;
 
         Assert.Equal(
             "Recording unavailable: the speech recognition and speaker recognition models are not installed",
-            session.Status.LatestActivity);
+            shell.Line.LatestActivity);
 
         engine.FailNext = method => method == "session/start"
             ? new EngineErrorException(Protocol.SessionErrorCode, "Session error",
@@ -48,7 +50,7 @@ public class ReadinessAndGuardsTest
 
         Assert.Equal(SessionState.Idle, session.State);
         Assert.Equal("Recording could not start: the speech recognition model is not installed",
-            session.Status.LatestActivity);
+            shell.Line.LatestActivity);
         Assert.Contains(log.Lines, line => line.Contains("session/start failed"));
     }
 }

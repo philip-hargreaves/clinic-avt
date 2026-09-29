@@ -11,7 +11,7 @@ namespace ClinicAVT.App.Shell;
 /// finishing any note model load, so nothing is killed mid-GPU.
 /// </summary>
 internal sealed class AppShutdown(
-    ConsultationViewModel session, IDialogService dialogs, EngineConnection connection,
+    IConsultation session, IDialogService dialogs, EngineConnection connection,
     IEngineHost host, ILogger<AppShutdown> logger)
 {
     /// <summary>False when the clinician chose to keep recording.</summary>

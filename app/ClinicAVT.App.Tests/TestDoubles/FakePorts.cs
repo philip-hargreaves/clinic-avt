@@ -1,4 +1,12 @@
+using ClinicAVT.App.Core.Features.Appraisal;
+using ClinicAVT.App.Core.Features.Backup;
+using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Features.Examples;
+using ClinicAVT.App.Core.Features.Settings;
+using ClinicAVT.App.Core.Metrics;
 using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Core.Preferences;
+using ClinicAVT.App.Core.Shell;
 
 namespace ClinicAVT.App.Tests.TestDoubles;
 
@@ -30,43 +38,51 @@ public sealed class FakeDialogService : IDialogService
         return Task.FromResult<bool?>(Answer ? Ticked : null);
     }
 
-    public int BackupsRun { get; private set; }
+    /// <summary>Every dialog shown, by its view model.</summary>
+    public List<object> Shown { get; } = [];
 
-    public Task<bool> RunBackupAsync()
-    {
-        BackupsRun++;
-        return Task.FromResult(false);
-    }
+    /// <summary>
+    /// Runs while a dialog is open, as the clinician would use it. The answer is whether the primary
+    /// button closed it, false when unset.
+    /// </summary>
+    public Func<object, Task<bool>>? OnShow { get; set; }
 
-    public Task<bool> RunRestoreAsync() => Task.FromResult(false);
+    public int BackupsRun => Shown.Count(d => d is BackupViewModel);
 
-    public int ExportsRun { get; private set; }
+    public int ExportsRun => Shown.Count(d => d is ExportReflectionsViewModel);
 
-    public Task RunExportReflectionsAsync()
-    {
-        ExportsRun++;
-        return Task.CompletedTask;
-    }
-
-    /// <summary>What the import dialog hands back, null for a cancel.</summary>
+    /// <summary>The recording the import dialog hands back, null for a cancel.</summary>
     public RecordingImport? Import { get; set; }
 
     /// <summary>Each import dialog shown, with the dropped file it opened on.</summary>
     public List<string?> ImportsShown { get; } = [];
 
-    public Task<RecordingImport?> RunImportAsync(string? path = null)
+    public async Task<bool> ShowAsync(object viewModel)
     {
-        ImportsShown.Add(path);
-        return Task.FromResult(Import);
-    }
+        Shown.Add(viewModel);
+        switch (viewModel)
+        {
+            case ImportRecordingViewModel import:
+                ImportsShown.Add(import.Path.Length > 0 ? import.Path : null);
+                if (Import is null)
+                {
+                    return false;
+                }
 
-    public Task<bool> RunEnrolmentAsync()
-    {
-        OnEnrolment?.Invoke();
-        return Task.FromResult(true);
-    }
+                if (import.Path != Import.Path)
+                {
+                    await import.UseFileAsync(Import.Path);
+                }
 
-    public Task ShowReflectionAsync(string sessionId, string startedAt) => Task.CompletedTask;
+                return import.Result is not null;
+            case EnrolmentViewModel enrolment:
+                OnEnrolment?.Invoke();
+                enrolment.Dismiss();
+                return false;
+        }
+
+        return OnShow is not null && await OnShow(viewModel);
+    }
 }
 
 public sealed class FakeFilePicker : IFilePicker
@@ -122,7 +138,93 @@ public sealed class FakeClipboard : IClipboard
 
 public sealed class FakeThemeService : IThemeService
 {
-    public List<string> Applied { get; } = [];
+    public List<AppTheme> Applied { get; } = [];
 
-    public void Apply(string theme) => Applied.Add(theme);
+    public void Apply(AppTheme theme) => Applied.Add(theme);
+}
+
+public sealed class FakeTextFiles : ITextFiles
+{
+    /// <summary>Every file written, by path.</summary>
+    public Dictionary<string, string> Written { get; } = [];
+
+    /// <summary>Thrown by the next write, once.</summary>
+    public Exception? FailNext { get; set; }
+
+    public Task WriteAsync(string path, string text)
+    {
+        if (FailNext is { } failure)
+        {
+            FailNext = null;
+            return Task.FromException(failure);
+        }
+
+        Written[path] = text;
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class FakeMetricsLog : IMetricsLog
+{
+    public List<string> Lines { get; } = [];
+
+    public void Append(string line) => Lines.Add(line);
+
+    public IReadOnlyList<string>? ReadAll() => Lines.Count == 0 ? null : Lines;
+}
+
+public sealed class FakeOneDriveFolders : IOneDriveFolders
+{
+    public string? Work { get; set; }
+
+    public string? Personal { get; set; }
+
+    public string? Primary { get; set; }
+}
+
+public sealed class FakeExampleLibrary : IExampleLibrary
+{
+    public List<ExampleCase> Cases { get; } = [];
+
+    public List<ExampleRecording> Recordings { get; } = [];
+
+    public IReadOnlyList<ExampleCase> LoadCases() => Cases;
+
+    public IReadOnlyList<ExampleRecording> LoadRecordings() => Recordings;
+}
+
+public sealed class FakeProcessMetrics : IProcessMetrics
+{
+    /// <summary>What CommittedGb reports. 0 means the reader found nothing.</summary>
+    public double Committed { get; set; }
+
+    public long? PeakWorkingSetMb(int pid) => null;
+
+    public long? PeakCommitMb(int pid) => null;
+
+    public long? PeakWorkingSetMbOf(string processName) => null;
+
+    public double CommittedGb(params string[] processNames) => Committed;
+}
+
+public sealed class FixedPowerState : IPowerStateReader
+{
+    public PowerState Read() => PowerState.Unknown;
+}
+
+public sealed class FixedMachine : IMachineInfoProvider
+{
+    public MachineInfo Describe() => new("cpu", 32, "os", [], null);
+
+    public string MachineName => "TESTPC";
+}
+
+public sealed class FixedAppInfo : IAppInfo
+{
+    public string Version => "0.0.0";
+}
+
+public sealed class NoCredits : ICreditsSource
+{
+    public IReadOnlyList<CreditMark> LoadMarks() => [];
 }

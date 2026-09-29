@@ -1,5 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Features.Appraisal;
 using ClinicAVT.App.Core.Features.Backup;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
@@ -20,13 +22,19 @@ public class ExportReflectionsTest
         engine.Reflections.Add(("b", "2026-08-31T23:30:00Z", "Cough", "ask about smoking", ""));  // 1 Sep in London
         engine.Reflections.Add(("c", "2026-08-10T10:00:00Z", "", "listen longer", ""));
         engine.Reflections.Add(("s", "2026-09-10T10:00:00Z", "Sample", "a seeded sample", ""));
-        engine.DemoReflections.Add("s");
+        engine.SampleReflections.Add("s");
         engine.ReflectionReferences.Add(Nice);
         return engine;
     }
 
-    private static ExportReflectionsViewModel Dialog(FakeEngineClient engine, FakeFilePicker picker, FakeLauncher? launcher = null) =>
-        new(new EngineApi(engine), picker, launcher ?? new FakeLauncher(), FakeTimeProvider.London());
+    private static ExportReflectionsViewModel Dialog(
+        FakeEngineClient engine, FakeFilePicker picker, FakeLauncher? launcher = null, FakeTextFiles? files = null) =>
+        new TestShell(engine, time: FakeTimeProvider.London(), configure: services =>
+        {
+            services.AddSingleton<IFilePicker>(picker);
+            services.AddSingleton<ILauncher>(launcher ?? new FakeLauncher());
+            services.AddSingleton<ITextFiles>(files ?? new FakeTextFiles());
+        }).Create<ExportReflectionsViewModel>();
 
     private static string TempFile() => Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".txt");
 
@@ -77,8 +85,9 @@ public class ExportReflectionsTest
         var path = TempFile();
         var picker = new FakeFilePicker();
         var launcher = new FakeLauncher();
+        var files = new FakeTextFiles();
         var engine = Engine();
-        var export = Dialog(engine, picker, launcher);
+        var export = Dialog(engine, picker, launcher, files);
         await export.LoadAsync();
         export.PeriodIndex = 1;
 
@@ -107,7 +116,7 @@ public class ExportReflectionsTest
                 + "\n"
                 + "What did I learn?\n"
                 + "listen longer\n",
-                await File.ReadAllTextAsync(path));
+                files.Written[path]);
             Assert.Equal(BackupStep.Done, export.Step);
             Assert.Equal("1 reflection saved.", export.DoneLine);
             Assert.Equal($"Saved as {Path.GetFileNameWithoutExtension(path)} in {Path.GetFileName(Path.GetTempPath().TrimEnd('\\'))}.", export.SavedLine);
@@ -123,14 +132,14 @@ public class ExportReflectionsTest
         }
 
         // Everything, newest first, one rule between each
-        var all = Dialog(engine, picker);
+        var all = Dialog(engine, picker, files: files);
         await all.LoadAsync();
         try
         {
             await all.PrimaryCommand.ExecuteAsync(null);
 
             Assert.Equal("ClinicAVT reflections 27 Sep 2026", picker.SuggestedNames[^1]);
-            var text = await File.ReadAllTextAsync(path);
+            var text = files.Written[path];
             Assert.StartsWith("Check each summary for identifying details before sharing.\n\n", text);
             var rule = "\n----------------------------------------\n\n";
             Assert.Equal(
@@ -154,10 +163,10 @@ public class ExportReflectionsTest
     {
         var engine = new FakeEngineClient();
         engine.Reflections.Add(("s", "2026-09-10T10:00:00Z", "Sample", "a seeded sample", ""));
-        engine.DemoReflections.Add("s");
+        engine.SampleReflections.Add("s");
         var dialogs = new FakeDialogService();
-        var page = new AppraisalsViewModel(new EngineApi(engine), new InlineDispatcher(), TestSession.Status(engine),
-            new FakeClipboard(), new FakeFilePicker(), dialogs);
+        var page = new TestShell(engine, configure: services => services.AddSingleton<IDialogService>(dialogs))
+            .Get<AppraisalsViewModel>();
 
         Assert.False(page.ExportReflectionsCommand.CanExecute(null));
         await page.RefreshAsync();

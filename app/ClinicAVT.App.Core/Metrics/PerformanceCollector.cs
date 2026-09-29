@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Metrics;
@@ -14,11 +14,9 @@ namespace ClinicAVT.App.Core.Metrics;
 /// Nothing is written unless enabled.
 /// </summary>
 public sealed class PerformanceCollector(
-    IEngineApi engine, Func<bool> enabled, Func<int?> enginePid, string path,
-    IProcessMetrics? processes = null, Func<PowerState>? power = null, ILogger? logger = null)
+    IEngineControl engine, AppPreferences preferences, IEngineHost host, IMetricsLog log,
+    IProcessMetrics processes, IPowerStateReader power, TimeProvider time, ILogger<PerformanceCollector> logger)
 {
-    private readonly IProcessMetrics _processes = processes ?? new NoProcessMetrics();
-    private readonly Func<PowerState> _power = power ?? (() => PowerState.Unknown);
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -27,7 +25,8 @@ public sealed class PerformanceCollector(
 
     private DateTimeOffset _start;
     private long? _availableAtStartMb;
-    private Stopwatch? _stopClock;
+    // When the stop was requested, null outside a measured session
+    private long? _stopped;
     private double? _noteFirstPartial;
     private double? _noteReady;
     private double? _noteRate;
@@ -36,8 +35,6 @@ public sealed class PerformanceCollector(
     private string? _modelName;
     private string? _modelTier;
     private double? _modelLoadSeconds;
-
-    public string Path { get; } = path;
 
     /// <summary>The note model the engine reports resident, remembered across sessions.</summary>
     public void NoteModel(string? name, string? tier, double? loadSeconds)
@@ -49,29 +46,29 @@ public sealed class PerformanceCollector(
 
     public void SessionStarted()
     {
-        if (!enabled())
+        if (!preferences.CollectPerformanceData)
         {
-            _stopClock = null;
+            _stopped = null;
             return;
         }
 
-        _start = DateTimeOffset.UtcNow;
+        _start = time.GetUtcNow();
         _availableAtStartMb = AvailableMemoryMb();
-        _stopClock = null;
+        _stopped = null;
         _noteFirstPartial = _noteReady = _noteRate = null;
         _patientFirstPartial = _patientRate = null;
     }
 
     public void StopRequested()
     {
-        _stopClock ??= Stopwatch.StartNew();
+        _stopped ??= time.GetTimestamp();
     }
 
     public void NotePartial(double? tokensPerSecond = null)
     {
-        if (_stopClock is not null)
+        if (SinceStop() is { } now)
         {
-            _noteFirstPartial ??= _stopClock.Elapsed.TotalSeconds;
+            _noteFirstPartial ??= now;
             _noteRate = tokensPerSecond ?? _noteRate;
         }
     }
@@ -79,18 +76,18 @@ public sealed class PerformanceCollector(
     /// <summary>The clinical note is complete. The patient note's clock starts here.</summary>
     public void NoteReady(double? tokensPerSecond = null)
     {
-        if (_stopClock is not null)
+        if (SinceStop() is { } now)
         {
-            _noteReady ??= _stopClock.Elapsed.TotalSeconds;
+            _noteReady ??= now;
             _noteRate = tokensPerSecond ?? _noteRate;
         }
     }
 
     public void PatientPartial(double? tokensPerSecond = null)
     {
-        if (_stopClock is not null)
+        if (SinceStop() is { } now)
         {
-            _patientFirstPartial ??= _stopClock.Elapsed.TotalSeconds;
+            _patientFirstPartial ??= now;
             _patientRate = tokensPerSecond ?? _patientRate;
         }
     }
@@ -102,14 +99,12 @@ public sealed class PerformanceCollector(
     public async Task SessionFinishedAsync(string? noteFailure, int noteChars,
         string? patientFailure = null, double? patientTokensPerSecond = null)
     {
-        if (!enabled() || _stopClock is null)
+        if (!preferences.CollectPerformanceData || SinceStop() is not { } now)
         {
             return;
         }
 
-        var stopClock = _stopClock;
-        _stopClock = null;
-        var now = stopClock.Elapsed.TotalSeconds;
+        _stopped = null;
         JsonElement? engineMetrics = null;
         try
         {
@@ -117,7 +112,7 @@ public sealed class PerformanceCollector(
         }
         catch (Exception e)
         {
-            logger?.StepFailed("engine/metrics at session end", e.Message);
+            logger.StepFailed("engine/metrics at session end", e.Message);
         }
 
         double? noteReady = noteFailure is null ? _noteReady ?? now : null;
@@ -152,26 +147,27 @@ public sealed class PerformanceCollector(
                 }
                 : null,
             // The power state at stop, which decides the finalise floor
-            power = _power(),
+            power = power.Read(),
             memory = new
             {
                 availableAtStartMb = _availableAtStartMb,
-                peakWorkingSetMb = EngineMemoryMb(_processes.PeakWorkingSetMb),
-                peakCommitMb = EngineMemoryMb(_processes.PeakCommitMb),
+                peakWorkingSetMb = EngineMemoryMb(processes.PeakWorkingSetMb),
+                peakCommitMb = EngineMemoryMb(processes.PeakCommitMb),
                 noteHostPeakWorkingSetMb = NoteHostPeakMb(),
             },
         };
 
         try
         {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
-            File.AppendAllText(Path, JsonSerializer.Serialize(record, Json) + Environment.NewLine);
+            log.Append(JsonSerializer.Serialize(record, Json));
         }
         catch (IOException e)
         {
-            logger?.StepFailed("metrics line write", e.Message);
+            logger.StepFailed("metrics line write", e.Message);
         }
     }
+
+    private double? SinceStop() => _stopped is { } stopped ? time.GetElapsedTime(stopped).TotalSeconds : null;
 
     private static double? Since(double? from, double? at) =>
         from is null || at is null ? null : Math.Max(0, at.Value - from.Value);
@@ -180,11 +176,11 @@ public sealed class PerformanceCollector(
         seconds is null ? null : Math.Round(seconds.Value, 2);
 
     private long? EngineMemoryMb(Func<int, long?> metric) =>
-        enginePid() is { } pid ? metric(pid) : null;
+        host.EnginePid is { } pid ? metric(pid) : null;
 
     // The note model lives in its own process beside the engine
     private long? NoteHostPeakMb() =>
-        enginePid() is null ? null : _processes.PeakWorkingSetMbOf(EngineLayout.NoteHostProcess);
+        host.EnginePid is null ? null : processes.PeakWorkingSetMbOf(EngineLayout.NoteHostProcess);
 
     private static long? AvailableMemoryMb()
     {

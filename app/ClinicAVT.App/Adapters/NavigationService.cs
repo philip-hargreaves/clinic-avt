@@ -2,7 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using ClinicAVT.App.Core.Ports;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 /// <summary>
 /// Swaps the host's content between pages. Pages are singletons, so each keeps its state

@@ -1,4 +1,4 @@
-namespace ClinicAVT.App.Core.Hosting;
+namespace ClinicAVT.App.Platform;
 
 /// <summary>Shifts engine.log to engine-1.log and so on, keeping the last
 /// <c>keep</c>. Runs are appended until the file passes <c>atBytes</c>, so a burst of launches

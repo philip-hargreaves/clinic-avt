@@ -1,7 +1,7 @@
 using ClinicAVT.App.Core.Ports;
 using Windows.Storage.Pickers;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 public sealed class WinUiFilePicker(WindowAccessor window) : IFilePicker
 {

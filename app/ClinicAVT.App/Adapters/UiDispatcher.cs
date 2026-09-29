@@ -1,7 +1,7 @@
 using Microsoft.UI.Dispatching;
 using ClinicAVT.App.Core.Ports;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 /// <summary>
 /// Captures the queue of the thread that first resolves it. That is the UI thread during launch.

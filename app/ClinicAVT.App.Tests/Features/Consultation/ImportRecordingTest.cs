@@ -1,8 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Consultation;
-using ClinicAVT.App.Core.Features.Demo;
+using ClinicAVT.App.Core.Features.Examples;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
@@ -23,8 +24,15 @@ public class ImportRecordingTest
 
     private static string FixtureStartedAt => ImportSent.GetProperty("startedAt").GetString()!;
 
-    private static ImportRecordingViewModel Dialog(FakeEngineClient engine, FakeFilePicker picker) =>
-        new(new EngineApi(engine), picker, FakeTimeProvider.London());
+    private static ImportRecordingViewModel Dialog(
+        FakeEngineClient engine, FakeFilePicker picker, params ExampleRecording[] examples) =>
+        new TestShell(engine, time: FakeTimeProvider.London(), configure: services =>
+        {
+            var library = new FakeExampleLibrary();
+            library.Recordings.AddRange(examples);
+            services.AddSingleton<IFilePicker>(picker);
+            services.AddSingleton<IExampleLibrary>(library);
+        }).Create<ImportRecordingViewModel>();
 
     [Fact]
     public async Task AChosenRecordingIsReadThenImportedAtTheChosenTimeInUtc()
@@ -81,8 +89,8 @@ public class ImportRecordingTest
     {
         var engine = new FakeEngineClient();
         var picker = new FakeFilePicker { OpenPath = FixturePath };
-        var import = new ImportRecordingViewModel(new EngineApi(engine), picker, FakeTimeProvider.London(),
-            [new DemoTrack("Elbow swelling", @"C:\demo\elbow.wav"), new DemoTrack("Chest pain", @"C:\demo\chest.wav")]);
+        var import = Dialog(engine, picker,
+            new ExampleRecording("Elbow swelling", @"C:\demo\elbow.wav"), new ExampleRecording("Chest pain", @"C:\demo\chest.wav"));
         Assert.Equal(["Elbow swelling", "Chest pain"], import.ExampleNames);
         Assert.True(import.ExamplesVisible);
         Assert.Equal(-1, import.ExampleIndex);
@@ -103,7 +111,7 @@ public class ImportRecordingTest
         Assert.True(import.ShowFile);
         Assert.True(import.ShowWhen);
 
-        var none = new ImportRecordingViewModel(new EngineApi(engine), picker, FakeTimeProvider.London(), []);
+        var none = Dialog(engine, picker);
         Assert.False(none.ExamplesVisible);
     }
 
@@ -111,13 +119,16 @@ public class ImportRecordingTest
     public async Task AnImportEndsTheOpenReviewThenWalksTheFinaliseStagesIntoReviewHeadedWithItsOwnTime()
     {
         var dialogs = new FakeDialogService();
-        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create(dialogs: dialogs);
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
         var recordedAt = new DateTimeOffset(2026, 9, 25, 9, 31, 0, TimeSpan.Zero);
-        var header = new ConsultationHeaderViewModel(session, () => recordedAt);
+        shell.Clock.Now = recordedAt;
+        var header = shell.Get<ConsultationHeaderViewModel>();
         Assert.Equal("", header.Title);
         await session.StartRecordingAsync();
         Assert.Equal(SessionText.Heading(recordedAt), header.Title);  // a recording is headed with its start
+        shell.Clock.Now = DateTimeOffset.UtcNow;
         await session.StopRecordingAsync();
         engine.RaiseNotification("note/ready", Params(new { text = "note" }));
         Assert.Equal(SessionState.Review, session.State);
@@ -167,8 +178,9 @@ public class ImportRecordingTest
     public async Task AnImportShowsOneFigureAcrossItsStagesUntilTheEngineSealsIt()
     {
         var dialogs = new FakeDialogService { Import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4) };
-        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create(dialogs: dialogs);
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
         engine.HoldImport = true;
         engine.ImportStages.Clear();
 
@@ -183,19 +195,19 @@ public class ImportRecordingTest
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
         engine.ImportProgress("speech", 12);
         Assert.Equal("Preparing · 12%", controls.FinalisingLabel);
-        Assert.Equal("Preparing · 12%", session.Status.LatestActivity);
+        Assert.Equal("Preparing · 12%", shell.Line.LatestActivity);
         engine.ImportProgress("transcribing", 60);
         Assert.Equal("Transcribing · 60%", controls.FinalisingLabel);
-        Assert.Equal("Transcribing · 60%", session.Status.LatestActivity);
+        Assert.Equal("Transcribing · 60%", shell.Line.LatestActivity);
 
         // The figure's last five points are the finalise, which names no percentage
         engine.ImportProgress("finalising", 95);
         Assert.Equal("Finalising", controls.FinalisingLabel);
-        Assert.Equal("Finalising", session.Status.LatestActivity);
+        Assert.Equal("Finalising", shell.Line.LatestActivity);
         engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
         Assert.Equal("Finalising", controls.FinalisingLabel);
         engine.ImportProgress("finalising", 100);
-        Assert.Equal("Finalising", session.Status.LatestActivity);
+        Assert.Equal("Finalising", shell.Line.LatestActivity);
 
         engine.FinishImport();
         await importing;
@@ -210,8 +222,9 @@ public class ImportRecordingTest
     public async Task CancellingAnImportReturnsToReadyToStartWithoutAnError()
     {
         var dialogs = new FakeDialogService { Import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4) };
-        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create(dialogs: dialogs);
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
         engine.HoldImport = true;
 
         var importing = controls.ImportRecordingCommand.ExecuteAsync(null);
@@ -224,8 +237,8 @@ public class ImportRecordingTest
         Assert.True(controls.IdleVisible);
         Assert.Equal("Ready to start", controls.StartLabel);
         Assert.False(controls.ImportCancelVisible);
-        Assert.Equal("Cancelled", session.Status.LatestActivity);
-        Assert.Equal("", session.Note.ClinicalNoteText);
+        Assert.Equal("Cancelled", shell.Line.LatestActivity);
+        Assert.Equal("", shell.Note.ClinicalNoteText);
         Assert.True(controls.ImportRecordingCommand.CanExecute(null), "another import can start");
     }
 
@@ -234,12 +247,13 @@ public class ImportRecordingTest
     {
         var import = new RecordingImport(FixturePath, FixtureStartedAt, 760.4);
         var dialogs = new FakeDialogService { Import = import };
-        var (session, engine, _) = TestSession.Create(dialogs: dialogs);
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create(dialogs: dialogs);
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
 
         await session.StartRecordingAsync();
         Assert.False(controls.ImportRecordingCommand.CanExecute(null));
-        await session.Recorder.ImportRecordingAsync(import);
+        await shell.Get<SessionImport>().ImportRecordingAsync(import);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "session/import");
         Assert.Equal(SessionState.Recording, session.State);
 
@@ -249,6 +263,6 @@ public class ImportRecordingTest
             : null;
         await controls.ImportRecordingCommand.ExecuteAsync(null);
         Assert.Equal(SessionState.Idle, session.State);
-        Assert.Equal("Could not import the recording: recording too short", session.Status.LatestActivity);
+        Assert.Equal("Could not import the recording: recording too short", shell.Line.LatestActivity);
     }
 }

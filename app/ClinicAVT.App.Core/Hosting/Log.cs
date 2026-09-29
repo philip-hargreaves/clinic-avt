@@ -29,6 +29,9 @@ public static partial class Log
     [LoggerMessage(Level = LogLevel.Error, Message = "{Handler} failed")]
     public static partial void HandlerFailed(this ILogger logger, Exception exception, string handler);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Notification} handler failed: {Message}")]
+    public static partial void NotificationHandlerFailed(this ILogger logger, string notification, string message);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "shown as \"{Shown}\": {Detail}")]
     public static partial void Reworded(this ILogger logger, string shown, string detail);
 }

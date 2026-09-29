@@ -1,7 +1,8 @@
+using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Features.Guidance;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Tests.Features.Guidance;
 
@@ -23,7 +24,11 @@ public class PageViewModelTest
         object? reply, FakeLauncher launcher, FakeClipboard clipboard)
     {
         var engine = new FakeEngineClient { PageReply = reply };
-        var view = new PageViewModel(new EngineApi(engine), launcher, clipboard, TestSession.Status(engine));
+        var view = new TestShell(engine, configure: services =>
+        {
+            services.AddSingleton<ILauncher>(launcher);
+            services.AddSingleton<IClipboard>(clipboard);
+        }).Get<PageViewModel>();
         return (view, engine);
     }
 

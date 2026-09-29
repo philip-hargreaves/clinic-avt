@@ -1,7 +1,7 @@
 using ClinicAVT.App.Core.Ports;
 using Windows.ApplicationModel.DataTransfer;
 
-namespace ClinicAVT.App.Platform;
+namespace ClinicAVT.App.Adapters;
 
 public sealed class WinUiClipboard : IClipboard
 {

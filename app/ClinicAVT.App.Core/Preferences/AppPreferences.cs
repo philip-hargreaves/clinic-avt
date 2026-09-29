@@ -45,19 +45,14 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
     public const int CurrentSchema = 1;
 
-    /// <summary>The themes the shell can render, the default first.</summary>
-    public static readonly IReadOnlyList<string> Themes = ["system", "light", "dark"];
+    // The file's names for each theme, in AppTheme order
+    private static readonly IReadOnlyList<string> ThemeNames = ["system", "light", "dark"];
 
     /// <summary>The note model tiers the engine's store can resolve, in ladder order.</summary>
     public static readonly IReadOnlyList<string> NoteTiers = ["constrained", "default", "accuracy"];
 
     /// <summary>A note model never chosen: the engine picks one for the machine.</summary>
     public const string AutoNoteTier = "auto";
-
-    public AppPreferences(string path, ILogger? logger = null)
-        : this(new FilePreferencesStore(path), logger)
-    {
-    }
 
     /// <summary>
     /// Raised after every save, so a page can follow a preference it does not own.
@@ -88,8 +83,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// <summary>The chosen microphone's endpoint id. Empty means the default.</summary>
     public string MicId { get; set; } = "";
 
-    /// <summary>"system" follows the OS, while "light" and "dark" override it.</summary>
-    public string Theme { get; set; } = Themes[0];
+    public AppTheme Theme { get; set; } = AppTheme.System;
 
     public string NoteStyle { get; set; } = NoteOptions.DefaultStyle.Value;
 
@@ -103,9 +97,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
     /// <summary>The last checked backup, null before the first.</summary>
     public LastBackup? LastBackup { get; set; }
-
-    public static AppPreferences Load(string path, ILogger? logger = null) =>
-        Load(new FilePreferencesStore(path), logger);
 
     public static AppPreferences Load(IPreferencesStore store, ILogger? logger = null)
     {
@@ -141,7 +132,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         preferences.ShowPerformanceMetrics = stored.ShowPerformanceMetrics;
         preferences.IncludeResearchGuidance = stored.IncludeResearchGuidance;
         preferences.MicId = stored.MicId ?? "";
-        preferences.Theme = Known(stored.Theme, Themes, Themes[0]);
+        preferences.Theme = (AppTheme)Math.Max(0, ThemeNames.ToList().IndexOf(stored.Theme ?? ""));
         preferences.NoteStyle = NoteOptions.Style(stored.NoteStyle).Value;
         preferences.NoteDetail = NoteOptions.Detail(stored.NoteDetail).Value;
         preferences.NoteTier = Known(stored.NoteTier, [.. NoteTiers, AutoNoteTier], AutoNoteTier);
@@ -150,6 +141,13 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
                 ? last
                 : null;
         return preferences;
+    }
+
+    /// <summary>Applies a change and saves.</summary>
+    public void Update(Action<AppPreferences> change)
+    {
+        change(this);
+        Save();
     }
 
     public void Save()
@@ -165,7 +163,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
                 ShowPerformanceMetrics = ShowPerformanceMetrics,
                 IncludeResearchGuidance = IncludeResearchGuidance,
                 MicId = MicId,
-                Theme = Theme,
+                Theme = ThemeNames[(int)Theme],
                 NoteStyle = NoteStyle,
                 NoteDetail = NoteDetail,
                 NoteTier = NoteTier,

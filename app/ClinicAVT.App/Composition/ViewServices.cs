@@ -9,7 +9,7 @@ using ClinicAVT.App.Features.Guidance;
 using ClinicAVT.App.Features.Help;
 using ClinicAVT.App.Features.Sessions;
 using ClinicAVT.App.Features.Settings;
-using ClinicAVT.App.Platform;
+using ClinicAVT.App.Adapters;
 using ClinicAVT.App.Shell;
 
 namespace ClinicAVT.App.Composition;

@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Animation;
 using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Core.Shell;
-using ClinicAVT.App.Platform;
+using ClinicAVT.App.Adapters;
 
 namespace ClinicAVT.App.Features.Guidance;
 
@@ -16,9 +16,11 @@ public sealed partial class GuidanceSectionView : UserControl
     private readonly DispatcherQueueTimer _timingTimer;
     private Storyboard? _fade;
 
-    public GuidanceSectionView(GuidanceViewModel viewModel, ShellViewModel shell, FocusReturn focus)
+    public GuidanceSectionView(
+        GuidanceViewModel viewModel, GuidanceSearchViewModel search, ShellViewModel shell, FocusReturn focus)
     {
         ViewModel = viewModel;
+        Search = search;
         Shell = shell;
         _focus = focus;
         InitializeComponent();
@@ -39,13 +41,15 @@ public sealed partial class GuidanceSectionView : UserControl
 
     public GuidanceViewModel ViewModel { get; }
 
+    public GuidanceSearchViewModel Search { get; }
+
     public ShellViewModel Shell { get; }
 
     private void OnQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs e)
     {
-        if (ViewModel.SearchQueryCommand.CanExecute(null))
+        if (Search.SearchQueryCommand.CanExecute(null))
         {
-            ViewModel.SearchQueryCommand.Execute(null);
+            Search.SearchQueryCommand.Execute(null);
         }
     }
 
@@ -56,12 +60,12 @@ public sealed partial class GuidanceSectionView : UserControl
             return;
         }
 
-        if (ViewModel.ClearQueryCommand.CanExecute(null))
+        if (Search.ClearQueryCommand.CanExecute(null))
         {
-            ViewModel.ClearQueryCommand.Execute(null);
+            Search.ClearQueryCommand.Execute(null);
         }
 
-        ViewModel.Query = "";
+        Search.Query = "";
         e.Handled = true;
     }
 

@@ -19,7 +19,7 @@ public class AppPreferencesTest
             ShowPerformanceMetrics = false,  // on by default, so off is what round-trips
             IncludeResearchGuidance = true,
             MicId = "{mic-7}",
-            Theme = "dark",
+            Theme = AppTheme.Dark,
             NoteStyle = "soap",
             NoteDetail = "detailed",
             NoteTier = "accuracy",
@@ -37,7 +37,8 @@ public class AppPreferencesTest
         Assert.False(loaded.ShowPerformanceMetrics);
         Assert.True(loaded.IncludeResearchGuidance);
         Assert.Equal("{mic-7}", loaded.MicId);
-        Assert.Equal("dark", loaded.Theme);
+        Assert.Equal(AppTheme.Dark, loaded.Theme);
+        Assert.Contains("\"Theme\":\"dark\"", store.Json);
         Assert.Equal("soap", loaded.NoteStyle);
         Assert.Equal("detailed", loaded.NoteDetail);
         Assert.Equal("accuracy", loaded.NoteTier);
@@ -55,7 +56,7 @@ public class AppPreferencesTest
         var log = new ListLogger();
         loaded = AppPreferences.Load(corrupt, log);
         Assert.False(loaded.KeepConsultations);
-        Assert.Equal("system", loaded.Theme);
+        Assert.Equal(AppTheme.System, loaded.Theme);
         Assert.Contains(log.Lines, line => line.Contains("preferences unreadable"));
     }
 
@@ -74,7 +75,7 @@ public class AppPreferencesTest
             Json = """{"Theme":"solarized","NoteStyle":"haiku","NoteDetail":"verbose","NoteTier":"premium"}""",
         };
         var loaded = AppPreferences.Load(odd);
-        Assert.Equal("system", loaded.Theme);
+        Assert.Equal(AppTheme.System, loaded.Theme);
         Assert.Equal("prose", loaded.NoteStyle);
         Assert.Equal("concise", loaded.NoteDetail);
         Assert.Equal("auto", loaded.NoteTier);

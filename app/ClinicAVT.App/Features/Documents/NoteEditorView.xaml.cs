@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using ClinicAVT.App.Controls;
 using ClinicAVT.App.Core.Features.Documents;
+using ClinicAVT.App.Core.Features.Examples;
 using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Core.Preferences;
 
@@ -12,9 +13,12 @@ public sealed partial class NoteEditorView : UserControl
     private readonly TabFit _fit;
 
     public NoteEditorView(
-        NoteViewModel viewModel, DocumentExportViewModel export, GuidanceViewModel guidance)
+        NoteViewModel viewModel, ReviewCommandsViewModel commands, ExampleCasesViewModel examples,
+        DocumentExportViewModel export, GuidanceViewModel guidance)
     {
         ViewModel = viewModel;
+        Commands = commands;
+        Examples = examples;
         Export = export;
         InitializeComponent();
         _fit = new TabFit(NoteHost, 0.5);
@@ -40,6 +44,10 @@ public sealed partial class NoteEditorView : UserControl
     }
 
     public NoteViewModel ViewModel { get; }
+
+    public ReviewCommandsViewModel Commands { get; }
+
+    public ExampleCasesViewModel Examples { get; }
 
     public DocumentExportViewModel Export { get; }
 

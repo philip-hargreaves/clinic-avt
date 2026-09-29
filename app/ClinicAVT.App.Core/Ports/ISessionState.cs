@@ -6,11 +6,11 @@ public interface ISessionState
     bool ConsultationInProgress { get; }
 
     /// <summary>The consultation whose review is on screen, or null.</summary>
-    string? ReviewedSessionId => null;
+    string? ReviewedSessionId { get; }
 
     /// <summary>Closes the review on screen, saving edits. Nothing when none is open.</summary>
-    Task EndReviewAsync() => Task.CompletedTask;
+    Task EndReviewAsync();
 
     /// <summary>Where the session was, for the crash log. Empty when unknown.</summary>
-    string SessionPhase => "";
+    string SessionPhase { get; }
 }

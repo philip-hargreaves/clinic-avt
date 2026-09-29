@@ -103,12 +103,12 @@
 
                 <TextBlock Style="{StaticResource SettingsGroupHeader}" Text="Guideline documents" />
                 <!-- Guidance installed with the app, if any -->
-                <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.Guidance.GuidanceInstalledVisible, Mode=OneWay}">
+                <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.Corpora.GuidanceInstalledVisible, Mode=OneWay}">
                     <toolkit:SettingsCard
-                        Description="{x:Bind ViewModel.Guidance.GuidanceCaption, Mode=OneWay}"
+                        Description="{x:Bind ViewModel.Corpora.GuidanceCaption, Mode=OneWay}"
                         Header="Installed guidance"
-                        Visibility="{x:Bind ViewModel.Guidance.GuidanceCaptionVisible, Mode=OneWay}" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.Guidance.GuidanceCorpora}">
+                        Visibility="{x:Bind ViewModel.Corpora.GuidanceCaptionVisible, Mode=OneWay}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Corpora.GuidanceCorpora}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:CorpusRow">
                                 <toolkit:SettingsCard Margin="0,0,0,4" Header="{x:Bind Name}">
@@ -134,30 +134,30 @@
                 <!-- The view model opens the list once when a document fails -->
                 <toolkit:SettingsExpander
                     Header="Your guideline documents"
-                    IsExpanded="{x:Bind ViewModel.Guidance.DocumentsExpanded, Mode=TwoWay}"
-                    ItemsSource="{x:Bind ViewModel.Guidance.Documents}">
+                    IsExpanded="{x:Bind ViewModel.Documents.DocumentsExpanded, Mode=TwoWay}"
+                    ItemsSource="{x:Bind ViewModel.Documents.Documents}">
                     <toolkit:SettingsExpander.Description>
                         <StackPanel Spacing="2">
                             <TextBlock
-                                Text="{x:Bind ViewModel.Guidance.DocumentsSummary, Mode=OneWay}"
-                                Visibility="{x:Bind ViewModel.Guidance.DocumentsPresent, Mode=OneWay}" />
+                                Text="{x:Bind ViewModel.Documents.DocumentsSummary, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.Documents.DocumentsPresent, Mode=OneWay}" />
                             <TextBlock
-                                Text="{x:Bind ViewModel.Guidance.DocumentsCaption, Mode=OneWay}"
+                                Text="{x:Bind ViewModel.Documents.DocumentsCaption, Mode=OneWay}"
                                 TextWrapping="Wrap"
-                                Visibility="{x:Bind ViewModel.Guidance.DocumentsCaptionVisible, Mode=OneWay}" />
+                                Visibility="{x:Bind ViewModel.Documents.DocumentsCaptionVisible, Mode=OneWay}" />
                             <TextBlock
                                 Foreground="{ThemeResource CautionBrush}"
                                 Text="The folder could not be reached. Nothing has been removed."
-                                Visibility="{x:Bind ViewModel.Guidance.FolderMissing, Mode=OneWay}" />
+                                Visibility="{x:Bind ViewModel.Documents.FolderMissing, Mode=OneWay}" />
                             <TextBlock
                                 Text="This folder is inside OneDrive, so these documents sync to the cloud."
                                 TextWrapping="Wrap"
-                                Visibility="{x:Bind ViewModel.Guidance.FolderInOneDrive, Mode=OneWay}" />
+                                Visibility="{x:Bind ViewModel.Documents.FolderInOneDrive, Mode=OneWay}" />
                         </StackPanel>
                     </toolkit:SettingsExpander.Description>
                     <Button
                         MinWidth="160"
-                        Command="{x:Bind ViewModel.Guidance.AddDocumentsCommand}"
+                        Command="{x:Bind ViewModel.Documents.AddDocumentsCommand}"
                         Content="Add documents"
                         Style="{StaticResource AccentButtonStyle}" />
                     <toolkit:SettingsExpander.ItemsHeader>
@@ -165,15 +165,15 @@
                             <StackPanel Orientation="Horizontal" Spacing="12">
                                 <HyperlinkButton
                                     Padding="0"
-                                    Command="{x:Bind ViewModel.Guidance.OpenFolderCommand}"
+                                    Command="{x:Bind ViewModel.Documents.OpenFolderCommand}"
                                     Content="Open folder"
                                     Style="{StaticResource CaptionLink}" />
                                 <HyperlinkButton
                                     Padding="0"
-                                    Command="{x:Bind ViewModel.Guidance.RemoveAllDocumentsCommand}"
+                                    Command="{x:Bind ViewModel.Documents.RemoveAllDocumentsCommand}"
                                     Content="Remove all"
                                     Style="{StaticResource CaptionLink}"
-                                    Visibility="{x:Bind ViewModel.Guidance.DocumentsPresent, Mode=OneWay}" />
+                                    Visibility="{x:Bind ViewModel.Documents.DocumentsPresent, Mode=OneWay}" />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.ItemsHeader>
@@ -226,11 +226,11 @@
                         <toolkit:SettingsCard
                             Description="Search the local research corpus, the NICE demo. Never ships"
                             Header="Include research guidance"
-                            Visibility="{x:Bind ViewModel.Guidance.ResearchToggleVisible}">
+                            Visibility="{x:Bind ViewModel.Corpora.ResearchToggleVisible}">
                             <ToggleSwitch
                                 MinWidth="0"
                                 AutomationProperties.Name="Include research guidance"
-                                IsOn="{x:Bind ViewModel.Guidance.IncludeResearchGuidance, Mode=TwoWay}" />
+                                IsOn="{x:Bind ViewModel.Corpora.IncludeResearchGuidance, Mode=TwoWay}" />
                         </toolkit:SettingsCard>
                         <toolkit:SettingsCard Description="Model and speed figures in the status bar" Header="Performance metrics">
                             <ToggleSwitch

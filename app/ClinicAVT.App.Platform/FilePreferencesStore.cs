@@ -1,6 +1,6 @@
 using ClinicAVT.App.Core.Ports;
 
-namespace ClinicAVT.App.Core.Preferences;
+namespace ClinicAVT.App.Platform;
 
 public sealed class FilePreferencesStore(string path) : IPreferencesStore
 {

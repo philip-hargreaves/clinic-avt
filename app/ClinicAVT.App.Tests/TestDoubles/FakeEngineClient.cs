@@ -225,7 +225,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
                     summary = r.Summary,
                     createdAt = r.StartedAt,
                     editedAt = (string?)null,
-                    demo = DemoReflections.Contains(r.Id),
+                    demo = SampleReflections.Contains(r.Id),
                 }).ToArray(),
             }));
         }
@@ -504,7 +504,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
     public List<(string Id, string StartedAt, string Label, string Learned, string Summary)> Reflections { get; } = [];
 
     /// <summary>Which of Reflections are seeded samples.</summary>
-    public HashSet<string> DemoReflections { get; } = [];
+    public HashSet<string> SampleReflections { get; } = [];
 
     /// <summary>Whether demo/seed has run. demo/clear resets it.</summary>
     public bool SamplesSeeded { get; set; }

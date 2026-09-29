@@ -3,7 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics;
 using ClinicAVT.App.Core.Shell;
-using ClinicAVT.App.Platform;
+using ClinicAVT.App.Adapters;
 
 namespace ClinicAVT.App.Shell;
 
