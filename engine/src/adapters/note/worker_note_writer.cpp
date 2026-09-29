@@ -23,6 +23,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/system/child_process.hpp"
 #include "adapters/system/gpu_lease.hpp"
+#include "core/common/log.hpp"
 #include "core/note/model_failure.hpp"
 
 namespace clinicavt::note {
@@ -81,8 +82,7 @@ struct WorkerNoteWriter::Impl {
         pipe.Close();
         prefill_pending = 0;
         if (host.End(kExitGraceMs)) return true;
-        std::fprintf(stderr, "clinicavt-engine: note host %lu did not exit; leaving it\n",
-                     host.Pid());
+        log::Printf("clinicavt-engine: note host %lu did not exit; leaving it\n", host.Pid());
         stuck.push_back(std::move(host));
         host = {};
         system::GpuLease::Global().MarkWedged();
@@ -214,8 +214,8 @@ struct WorkerNoteWriter::Impl {
         } else if (event == "loadFailed") {
             const std::string raw = params.value("detail", "note model failed to load");
             const LoadFailure failure = ClassifyLoadFailure(raw);
-            std::fprintf(stderr, "clinicavt-engine: note load failed (%.300s)%s\n", raw.c_str(),
-                         failure == LoadFailure::kMemory ? Headroom().c_str() : "");
+            log::Printf("clinicavt-engine: note load failed (%.300s)%s\n", raw.c_str(),
+                        failure == LoadFailure::kMemory ? Headroom().c_str() : "");
             Transition([&](NoteModelState& s) {
                 s.phase = NoteModelState::Phase::kFailed;
                 s.detail = failure == LoadFailure::kOther ? raw : PlainLoadMessage(failure, s.name);
@@ -278,7 +278,7 @@ struct WorkerNoteWriter::Impl {
             const auto cache = models::CacheDir(store->Resolve("note", Tier()));
             std::error_code ignored;
             std::filesystem::remove_all(cache, ignored);
-            std::fprintf(stderr, "clinicavt-engine: rebuilding the note model cache\n");
+            log::Printf("clinicavt-engine: rebuilding the note model cache\n");
         }
         return true;
     }
@@ -338,8 +338,7 @@ struct WorkerNoteWriter::Impl {
                         last_failure = LoadFailure::kOther;
                         crashed_loading = true;
                     });
-                    std::fprintf(
-                        stderr, "clinicavt-engine: note host exited while loading (0x%lx)\n", code);
+                    log::Printf("clinicavt-engine: note host exited while loading (0x%lx)\n", code);
                     break;
                 }
             }
@@ -446,7 +445,7 @@ struct WorkerNoteWriter::Impl {
             Send("prepare", json::object());
             if (starting) StartWatcher();
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "clinicavt-engine: note worker prepare failed (%s)\n", e.what());
+            log::Printf("clinicavt-engine: note worker prepare failed (%s)\n", e.what());
             Transition([&e](NoteModelState& s) {
                 s.phase = NoteModelState::Phase::kFailed;
                 s.detail = e.what();
@@ -502,8 +501,8 @@ struct WorkerNoteWriter::Impl {
             {
                 std::lock_guard<std::mutex> lock(state_mutex);
                 if (closing) throw;
-                std::fprintf(stderr, "clinicavt-engine: note worker failed (%.100s); respawning\n",
-                             e.what());
+                log::Printf("clinicavt-engine: note worker failed (%.100s); respawning\n",
+                            e.what());
                 respawning = true;
                 if (!CloseWorker()) {
                     respawning = false;
@@ -534,8 +533,10 @@ struct WorkerNoteWriter::Impl {
 WorkerNoteWriter::WorkerNoteWriter(std::filesystem::path host_exe,
                                    std::filesystem::path models_root,
                                    std::filesystem::path prompt_path,
-                                   const models::ModelStore* store, std::string tier)
+                                   const models::ModelStore* store, std::string tier,
+                                   Listener listener)
     : impl_(new Impl{std::move(host_exe), std::move(models_root), std::move(prompt_path), store}) {
+    impl_->listener = std::move(listener);
     impl_->state.tier = std::move(tier);
     try {
         impl_->Describe(impl_->state.tier, impl_->state);
@@ -600,11 +601,6 @@ NoteModelState WorkerNoteWriter::State() const {
     return impl_->state;
 }
 
-void WorkerNoteWriter::SetListener(Listener listener) {
-    std::lock_guard<std::mutex> lock(impl_->lane_mutex);
-    impl_->listener = std::move(listener);
-}
-
 void WorkerNoteWriter::Prefill(const std::vector<asr::Turn>& transcript,
                                const NoteOptions& options) {
     if (transcript.empty() || impl_->attempt_active.load() || impl_->Wedged()) return;
@@ -612,10 +608,12 @@ void WorkerNoteWriter::Prefill(const std::vector<asr::Turn>& transcript,
         impl_->EnsureWorker();
         impl_->DrainAcks();
         if (impl_->prefill_pending.load() != 0) return;  // the previous prefill is still running
-        impl_->Send("prefill", {{"turns", ipc::TurnsJson(transcript)}, {"style", options.style}},
-                    &impl_->prefill_pending);
+        impl_->Send(
+            "prefill",
+            {{"turns", ipc::TurnsJson(transcript)}, {"style", NoteStyleName(options.style)}},
+            &impl_->prefill_pending);
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: note prefill not sent (%.100s)\n", e.what());
+        log::Printf("clinicavt-engine: note prefill not sent (%.100s)\n", e.what());
     }
 }
 
@@ -626,8 +624,8 @@ std::string WorkerNoteWriter::Write(const std::vector<asr::Turn>& transcript,
     }
     return impl_->Run("write",
                       {{"turns", ipc::TurnsJson(transcript)},
-                       {"style", options.style},
-                       {"detail", options.detail},
+                       {"style", NoteStyleName(options.style)},
+                       {"detail", NoteDetailName(options.detail)},
                        {"confirmed", options.confirmed}},
                       progress);
 }
@@ -654,7 +652,7 @@ std::string WorkerNoteWriter::WriteLabel(const std::string& note) {
     try {
         return impl_->Attempt("label", {{"note", note}}, nullptr);
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: no label (%.100s)\n", e.what());
+        log::Printf("clinicavt-engine: no label (%.100s)\n", e.what());
         return {};
     }
 }

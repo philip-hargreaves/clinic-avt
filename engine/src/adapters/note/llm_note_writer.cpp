@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <cstdio>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -16,6 +15,7 @@
 #include "adapters/note/text_pipeline.hpp"
 #include "adapters/system/awake_request.hpp"
 #include "adapters/system/gpu_lease.hpp"
+#include "core/common/log.hpp"
 #include "core/note/model_failure.hpp"
 
 namespace clinicavt::note {
@@ -35,7 +35,7 @@ std::size_t SharedPrefix(const std::string& a, const std::string& b) {
 }
 
 const char* StyleFile(const NoteOptions& options) {
-    return options.style == "soap" ? "note-soap.md" : "note-narrative.md";
+    return options.style == NoteStyle::kSoap ? "note-soap.md" : "note-narrative.md";
 }
 
 double Seconds(std::chrono::steady_clock::time_point since) {
@@ -108,8 +108,7 @@ struct LlmNoteWriter::Impl {
         const auto lease = TakeGpu("note load");
         std::shared_ptr<TextPipeline> built = MakeTextPipeline(info, device);
         report.seconds = Seconds(t0);
-        std::fprintf(
-            stderr,
+        log::Printf(
             "clinicavt-note-host: note %s (%s, %s) on %s, checked in %.1f s, loaded in %.1f s, "
             "lease wait %.2f s\n",
             info.id.c_str(), tier.c_str(), info.pipeline.c_str(), device.c_str(), verified,
@@ -128,11 +127,10 @@ struct LlmNoteWriter::Impl {
             const auto t0 = std::chrono::steady_clock::now();
             built.Generate(kUserTurn + LoadPrompt(prompt_dir / "note-narrative.md"), Greedy(1),
                            nullptr);
-            std::fprintf(stderr, "clinicavt-note-host: note prefix warmed in %.1f s\n",
-                         Seconds(t0));
+            log::Printf("clinicavt-note-host: note prefix warmed in %.1f s\n", Seconds(t0));
         } catch (const std::exception& e) {
             if (PoisonsGpuContext(e.what())) throw;
-            std::fprintf(stderr, "clinicavt-note-host: note prefix warm failed (%s)\n", e.what());
+            log::Printf("clinicavt-note-host: note prefix warm failed (%s)\n", e.what());
         }
     }
 
@@ -163,21 +161,15 @@ struct LlmNoteWriter::Impl {
 };
 
 LlmNoteWriter::LlmNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                             std::filesystem::path prompt_dir, std::string tier)
-    : impl_(new Impl{store, runtime, std::move(prompt_dir), std::move(tier)}) {}
+                             std::filesystem::path prompt_dir, std::string tier,
+                             LoadListener on_load, std::function<void(double)> on_gpu_wait)
+    : impl_(new Impl{store, runtime, std::move(prompt_dir), std::move(tier)}) {
+    impl_->on_load = std::move(on_load);
+    impl_->on_gpu_wait = std::move(on_gpu_wait);
+}
 
 LlmNoteWriter::~LlmNoteWriter() {
     impl_->JoinLoader();
-}
-
-void LlmNoteWriter::SetLoadListener(LoadListener listener) {
-    std::lock_guard<std::mutex> lock(impl_->state_mutex);
-    impl_->on_load = std::move(listener);
-}
-
-void LlmNoteWriter::SetGpuWaitListener(std::function<void(double)> listener) {
-    std::lock_guard<std::mutex> lock(impl_->state_mutex);
-    impl_->on_gpu_wait = std::move(listener);
 }
 
 // Starts the background load so the ~14 s cost falls during capture instead of
@@ -203,7 +195,7 @@ void LlmNoteWriter::Prepare() {
                 }
                 report.ok = false;
                 report.detail = e.what();
-                std::fprintf(stderr, "clinicavt-note-host: note load failed (%s)\n", e.what());
+                log::Printf("clinicavt-note-host: note load failed (%s)\n", e.what());
             }
             impl->loading = false;
             impl->Report(report);
@@ -220,11 +212,12 @@ std::string LlmNoteWriter::Write(const std::vector<asr::Turn>& transcript,
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
     // Confirmation goes after everything the capture-phase prefill covered
-    return Generate(LoadPrompt(impl_->prompt_dir / StyleFile(options)) +
-                        TranscriptBlock(transcript) + "\n" +
-                        LoadPrompt(impl_->prompt_dir / ("detail-" + options.detail + ".md")) +
-                        (options.confirmed ? LoadPrompt(impl_->prompt_dir / "confirmed.md") : ""),
-                    progress);
+    return Generate(
+        LoadPrompt(impl_->prompt_dir / StyleFile(options)) + TranscriptBlock(transcript) + "\n" +
+            LoadPrompt(impl_->prompt_dir /
+                       (std::string("detail-") + NoteDetailName(options.detail) + ".md")) +
+            (options.confirmed ? LoadPrompt(impl_->prompt_dir / "confirmed.md") : ""),
+        progress);
 }
 
 std::string LlmNoteWriter::WritePatient(const std::string& note, const Progress& progress) {
@@ -264,8 +257,7 @@ void LlmNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Note
         if (gpu.Active() && !lease.Held()) return;
         const auto t0 = std::chrono::steady_clock::now();
         const TextPipeline::Result result = pipeline->Generate(prompt, Greedy(1), nullptr);
-        std::fprintf(
-            stderr,
+        log::Printf(
             "clinicavt-note-host: prefill %zu turns, %zu tokens, %zu shared chars, %.2f s\n",
             transcript.size(), result.input_tokens, SharedPrefix(prompt, impl_->last_prefill),
             Seconds(t0));
@@ -274,7 +266,7 @@ void LlmNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Note
         impl_->last_prefill.clear();
         // Rethrown so the host decides whether to exit
         if (PoisonsGpuContext(e.what())) throw;
-        std::fprintf(stderr, "clinicavt-note-host: prefill failed (%s)\n", e.what());
+        log::Printf("clinicavt-note-host: prefill failed (%s)\n", e.what());
     }
 }
 
@@ -301,9 +293,8 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
 
     if (!impl_->last_prefill.empty()) {
         const std::size_t shared = SharedPrefix(wrapped, impl_->last_prefill);
-        std::fprintf(stderr,
-                     "clinicavt-note-host: prompt %zu chars, prefill covered %zu (%.0f%%)\n",
-                     wrapped.size(), shared, 100.0 * shared / wrapped.size());
+        log::Printf("clinicavt-note-host: prompt %zu chars, prefill covered %zu (%.0f%%)\n",
+                    wrapped.size(), shared, 100.0 * shared / wrapped.size());
         impl_->last_prefill.clear();
     }
     // The streamer sends partials out and receives cancel. On cancel the text so
@@ -323,8 +314,8 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
     const system::AwakeRequest awake(L"ClinicAVT: writing the note");
     const auto lease = impl_->TakeGpu("note");
     if (lease.Waited() > 0.25) {
-        std::fprintf(stderr, "clinicavt-note-host: generation waited %.2f s for the GPU lease\n",
-                     lease.Waited());
+        log::Printf("clinicavt-note-host: generation waited %.2f s for the GPU lease\n",
+                    lease.Waited());
     }
     pipeline->Generate(wrapped, Greedy(max_new_tokens), streamer);
     return Trimmed(text);
