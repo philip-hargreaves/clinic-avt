@@ -16,7 +16,6 @@ inline constexpr std::uint32_t kResourcesInvalidated = 0x88890026;
 inline constexpr std::uint32_t kAccessDenied = 0x80070005;
 }  // namespace hresults
 
-// Maps a failed call to the port's end reason
 inline SourceEnd EndForCaptureError(const char* call, std::uint32_t hr) {
     char code[16];
     std::snprintf(code, sizeof(code), "0x%08X", hr);

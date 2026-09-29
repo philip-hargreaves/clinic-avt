@@ -89,8 +89,8 @@ void AmortiseProbe(const clinicavt::models::ModelStore& store,
     }
     const std::size_t capture_decodes = decodes;
 
-    // Stop: time the full production finalise, including the pair's voiceprints for anchor ranking
-    // and accrual
+    // On stop, time the full production finalise, including the pair's voiceprints for anchor
+    // ranking and accrual
     const auto stop_start = Clock::now();
     const auto result = fed.Diarise(audio);
     const auto cache = fed.TakeTurnTexts();

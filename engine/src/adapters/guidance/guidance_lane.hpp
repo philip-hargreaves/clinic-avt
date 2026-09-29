@@ -14,9 +14,9 @@ namespace clinicavt::guidance {
 
 using ReadinessListener = std::function<void(const Readiness&)>;
 
-// One worker over the retriever. Loads in the background and runs request
-// callbacks on the worker, except the superseded failure, which runs on the
-// caller thread. The listener is told how loading ended
+// Runs the retriever on one worker thread. Loads in the background and runs request callbacks on
+// the worker, except the superseded failure, which runs on the caller thread. The listener is told
+// how loading ended
 class GuidanceLane : public IGuidanceLane {
    public:
     explicit GuidanceLane(IGuidanceRetriever& retriever, ReadinessListener on_readiness = {});

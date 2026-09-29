@@ -114,7 +114,7 @@ TEST(Handlers, GuidanceReadyMatchesTheFixture) {
     one.score = 0.8971234;
     one.trigger = "Examination shows synovitis of several MCP joints.";
     results.shown.push_back(one);
-    clinicavt::guidance::Result two;  // plain text with no section, date or tag, a whole-note hit
+    clinicavt::guidance::Result two;  // a whole-note hit in plain text with no section, date or tag
     two.corpus = "fixture";
     two.chunk_id = "gout-1";
     two.code = "gout";
@@ -142,7 +142,7 @@ TEST(Handlers, GuidanceReadyMatchesTheFixture) {
     request.on_ready(results);
     json expected = LoadFixture("guidance-ready.json");
     expected["params"]["id"] = id;
-    // Revision is opaque, so take it from the stored note instead of the fixture
+    // Revision is opaque, so take it from the stored note
     expected["params"]["noteRevision"] = note.revision;
     ASSERT_EQ(sent.all.size(), 1u);
     EXPECT_EQ(expected["method"], sent.all[0].first);
@@ -160,7 +160,7 @@ TEST(Handlers, GuidanceReadyIsStaleDroppedOrCarriesTheStoreError) {
     using clinicavt::store::DocumentKind;
     SessionStoreFixture fixture;
 
-    // The note moved while the search ran: the results arrive marked stale
+    // If the note moved while the search ran, the results arrive marked stale
     const auto moved = fixture.AddFinalisedSession();
     fixture.store->SaveDocument(moved, DocumentKind::kNote, {.text = "note"});
     Sent stale;
@@ -172,7 +172,7 @@ TEST(Handlers, GuidanceReadyIsStaleDroppedOrCarriesTheStoreError) {
     ASSERT_EQ(stale.all.size(), 1u);
     EXPECT_TRUE(stale.all[0].second["stale"]);
 
-    // The session was erased meanwhile: nothing is sent and nothing is stored
+    // If the session was erased meanwhile, nothing is sent or stored
     const auto erased = fixture.AddFinalisedSession();
     fixture.store->SaveDocument(erased, DocumentKind::kNote, {.text = "note"});
     Sent dropped;
@@ -183,7 +183,7 @@ TEST(Handlers, GuidanceReadyIsStaleDroppedOrCarriesTheStoreError) {
     request.on_ready(clinicavt::guidance::Results{});
     EXPECT_TRUE(dropped.all.empty());
 
-    // The store refuses a session still recording: the results still arrive, with the reason
+    // The store refuses a session still recording, but the results still arrive with the reason
     const auto recording = fixture.store->Begin({16000, "", ""});
     Sent refused;
     request = GuidanceSearchRequest(*fixture.store, recording, {.text = "note"}, 3, refused.Sink());
@@ -418,7 +418,7 @@ TEST(Handlers, GuidanceSearchRunsAStoredNoteOrFreeText) {
     Sent sent;
     clinicavt::guidance::GuidanceLane lane(retriever);
 
-    // A stored note: the reply is immediate, the results name the session
+    // For a stored note the reply is immediate and the results name the session
     const auto outcome = HandleGuidanceSearch(*fixture.store, lane, json{{"id", id}}, sent.Sink());
     ASSERT_TRUE(std::holds_alternative<json>(outcome));
     EXPECT_EQ(ResultOf(outcome), json::object());

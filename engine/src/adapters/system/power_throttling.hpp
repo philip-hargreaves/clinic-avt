@@ -12,10 +12,10 @@ struct ThrottlingState {
     bool defaulted = true;   // no explicit policy: Windows decides
 };
 
-// process: a process HANDLE
+// process is a process HANDLE
 ThrottlingState ReadThrottling(void* process);
 
-// Disables execution-speed throttling; returns the state read back afterwards
+// Disables execution-speed throttling and returns the state read back afterwards
 ThrottlingState DisableThrottling(void* process);
 
 ThrottlingState DisableThrottlingOnSelf();

@@ -6,14 +6,14 @@
 
 namespace clinicavt::composition {
 
-// The engine's command line: flags first, then the positional pipe name, store root, models
+// The engine's command line takes flags first, then the positional pipe name, store root, models
 // root and replay wav
 struct EngineConfig {
     std::wstring pipe_name;
     std::filesystem::path store_root;
     std::filesystem::path models_root;
     std::filesystem::path corpora_root;
-    std::string guidelines_override;  // empty: the Documents folder
+    std::string guidelines_override;  // empty means the Documents folder
     std::string asr_device;
     std::string note_tier;
     std::string replay_wav;  // forces every session to replay it

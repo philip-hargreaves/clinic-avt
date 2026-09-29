@@ -18,7 +18,7 @@ namespace clinicavt::ipc {
 // capped at ~12 Hz
 class WireEvents : public session::ISessionEvents {
    public:
-    // Translator warms up after the note; guidance search starts once the note is stored.
+    // The translator warms up after the note, and guidance search starts once the note is stored.
     // Either may be null
     WireEvents(PipeServer& server, store::ISessionStore& sessions,
                translate::ITranslator* translator = nullptr,

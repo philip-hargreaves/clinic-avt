@@ -24,13 +24,13 @@ inline std::string JoinedText(std::span<const Turn> chunks) {
     return text;
 }
 
-// Speech to text, one clip at a time: the diariser passes each turn's audio and gets chunks back
+// Transcribes one clip per call. The diariser passes each turn's audio and gets the chunks back
 class ITranscriber {
    public:
     virtual ~ITranscriber() = default;
 
-    // Whisper chunks for the clip, absolute frames. Safe mid-session; empty when
-    // unsupported (a re-split then keeps the original turn)
+    // Whisper chunks for the clip, in absolute frames. Safe mid-session. Empty when unsupported,
+    // and a re-split then keeps the original turn
     virtual std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
                                                std::uint64_t first_frame) = 0;
 

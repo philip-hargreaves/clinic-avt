@@ -32,13 +32,13 @@ struct IndexChunk {
     std::string boxes;          // line boxes as page fractions, JSON
 };
 
-// Cache of the guidelines folder: documents by content, their paths, and passage
-// vectors. Deleted and rebuilt on a format or embedder mismatch. Single-threaded
+// Cache of the guidelines folder. It holds documents by content, their paths and passage vectors.
+// Deleted and rebuilt on a format or embedder mismatch. Single-threaded
 class DocumentIndex {
    public:
     explicit DocumentIndex(const std::filesystem::path& file);
 
-    // A different embedder empties the index
+    // Adopting a different embedder empties the index
     void Adopt(const EmbedderIdentity& embedder);
     bool Adopted() const {
         return adopted_;
@@ -52,8 +52,8 @@ class DocumentIndex {
     std::vector<IndexedFile> Files();
     std::vector<std::string> PathsOf(std::int64_t id);
 
-    // Maps the path to this content. added is set for a new document; released is
-    // the id of the path's previous document if no path holds it any more
+    // Maps the path to this content. added is set for a new document. released is the id of the
+    // path's previous document if no path holds it any more
     struct Held {
         std::int64_t document = 0;
         bool added = false;

@@ -7,8 +7,8 @@
 
 namespace clinicavt::demo {
 
-// A seeded consultation from demo/reflections: the app's transcript of a real recording, notes
-// from its best model and hand-written answers. Dated relative to seed time
+// A seeded consultation from demo/reflections. It holds the app's transcript of a real recording,
+// notes from its best model and hand-written answers. Dates are relative to the seed time
 struct Sample {
     std::string source;
     int months_back = 0;
@@ -26,7 +26,6 @@ struct Sample {
     std::string next;
 };
 
-// The sample consultations shipped for demonstrations
 class ISampleSource {
    public:
     virtual ~ISampleSource() = default;

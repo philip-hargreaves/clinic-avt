@@ -130,7 +130,7 @@ void WireEvents::PushPartial(const std::string& method, nlohmann::json params) {
     server_.PushNotification(method, std::move(params));
 }
 
-// End event carries the whole-generation average and resets the meter
+// The end event carries the whole-generation average and resets the meter
 void WireEvents::PushStreamEnd(const char* partial_method, const char* method,
                                nlohmann::json params) {
     double average = 0;

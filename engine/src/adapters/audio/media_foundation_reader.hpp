@@ -7,7 +7,6 @@
 
 namespace clinicavt::audio {
 
-// Decodes a recording with Media Foundation into the pipeline format.
 // Delay-loaded, so a missing Media Foundation only breaks this reader
 class MediaFoundationReader : public IRecordingReader {
    public:

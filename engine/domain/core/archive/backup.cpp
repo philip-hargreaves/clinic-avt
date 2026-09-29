@@ -112,7 +112,7 @@ BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveS
         if (reflections_only) record = Stripped(std::move(record));
         sink.Add(record);
         if (HasAppraisal(record)) result.reflections += 1;
-        // Reflections-only: no consultation is backed up
+        // A reflections-only backup holds no consultations
         if (!reflections_only) result.ids.push_back(id);
         Report(progress, Phase::kWriting, ++written, selected.size());
     }

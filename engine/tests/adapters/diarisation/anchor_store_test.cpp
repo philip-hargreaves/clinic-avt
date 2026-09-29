@@ -102,7 +102,6 @@ TEST(AnchorStore, ACorruptFileResetsToEmpty) {
     EXPECT_EQ(store.Status().sessions, 1u);
 }
 
-// A print from another build's layout starts fresh rather than being misread
 TEST(AnchorRecord, AnotherVersionOrAShortRecordStartsFresh) {
     auto plain = detail::SerializeAnchor({{0.6f, 0.8f}, 5, 42});
     ASSERT_TRUE(detail::ParseAnchor(plain).has_value());

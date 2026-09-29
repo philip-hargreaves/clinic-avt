@@ -68,7 +68,6 @@ TEST(DiariserPipeline, AConsultDiarisesToTwoSpeakersAndTheTaughtAnchorRanksItsCl
     std::printf("diarised %zu slices, %zu clusters in %.1f s\n", slices.size(), clusters.size(),
                 took.count());
 
-    // Teach the anchor from cluster 0
     diariser.AccrueVoiceprint(diariser.DoctorVoiceprint(audio, first.slices, 0));
 
     // Session two: similarities equal the reference voiceprint against the anchor

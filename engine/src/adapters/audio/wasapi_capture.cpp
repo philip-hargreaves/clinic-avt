@@ -210,7 +210,8 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
     for (;;) {
         const DWORD wake = WaitForMultipleObjects(2, waits, FALSE, 2000);
         if (wake == WAIT_OBJECT_0) {
-            // peak 0.0000 with packets flowing is the LE Audio failure (unflagged zeros)
+            // A peak of 0.0000 while packets flow is the LE Audio failure, which delivers unflagged
+            // zeros
             log::Printf("clinicavt-engine: capture end: %llu packets, %llu silent, peak %.4f\n",
                         static_cast<unsigned long long>(stream_packets),
                         static_cast<unsigned long long>(stream_silent), stream_peak);
@@ -219,8 +220,8 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
         if (wake == WAIT_FAILED) {
             return Fail("WaitForMultipleObjects", HRESULT_FROM_WIN32(GetLastError()));
         }
-        // On timeout, still drain: a dead device stops signalling and only a capture
-        // call returns its error
+        // Drain even on timeout, because a dead device stops signalling and only a capture call
+        // returns its error
 
         for (;;) {
             UINT32 next = 0;
@@ -257,7 +258,7 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
                 stream_peak = std::max(stream_peak, std::abs(packet[i]));
             }
 
-            // Release within the buffer period; the sink gets the copy after
+            // Release within the buffer period. The sink gets the copy afterwards
             hr = capture->ReleaseBuffer(frames);
             if (FAILED(hr)) {
                 return Fail("ReleaseBuffer", hr);

@@ -14,8 +14,8 @@
 
 namespace clinicavt::translate {
 
-// One translation at a time off the RPC thread; sends translate/partial,
-// translate/ready and translate/failed
+// Runs one translation at a time off the RPC thread and sends translate/partial, translate/ready
+// and translate/failed
 class TranslateLane {
    public:
     using Emit = std::function<void(const std::string& method, const nlohmann::json& params)>;

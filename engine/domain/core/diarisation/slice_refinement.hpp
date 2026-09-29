@@ -8,7 +8,7 @@
 namespace clinicavt::diar {
 
 inline constexpr std::uint64_t kSplitEdgeMarginFrames =
-    800;                                                // 50 ms: cuts closer to an edge are ignored
+    800;                                                // 50 ms. Cuts closer to an edge are ignored
 inline constexpr std::uint64_t kMinSliceFrames = 3200;  // 0.2 s
 inline constexpr std::uint64_t kMinCleanFrames = 8000;  // 0.5 s to prefer overlap-free audio
 

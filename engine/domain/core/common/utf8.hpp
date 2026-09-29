@@ -54,7 +54,6 @@ inline void Encode(std::string& out, char32_t cp) {
     }
 }
 
-// A path as UTF-8 text, and back
 inline std::string FromPath(const std::filesystem::path& path) {
     const auto u8 = path.u8string();
     return std::string(u8.begin(), u8.end());

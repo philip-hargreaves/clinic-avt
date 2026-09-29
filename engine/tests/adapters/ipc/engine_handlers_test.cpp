@@ -121,7 +121,7 @@ TEST(Handlers, NoteTierLoadsATierAndRefusesWhatItCannotServe) {
     EXPECT_EQ(std::get<Error>(outcome).code, kInvalidParams);
     EXPECT_NE(std::get<Error>(outcome).data->dump().find("qwen3.5-9b-int4"), std::string::npos);
 
-    // No note lane: nothing staged, or no note host next to the engine
+    // There is no note lane when nothing is staged or no note host sits next to the engine
     outcome = HandleNoteTier(nullptr, false, json{{"tier", "default"}});
     ASSERT_TRUE(std::holds_alternative<Error>(outcome));
     EXPECT_EQ(std::get<Error>(outcome).code, kSessionError);
@@ -235,7 +235,6 @@ TEST(Handlers, AudioInputsCarryThePickerFields) {
     EXPECT_EQ(result["devices"][0]["bluetooth"], false);
     EXPECT_EQ(result["devices"][1]["bluetooth"], true);
 
-    // No microphones is an empty list, not an error
     const json none = HandleAudioInputs({});
     EXPECT_TRUE(none["devices"].is_array());
     EXPECT_TRUE(none["devices"].empty());

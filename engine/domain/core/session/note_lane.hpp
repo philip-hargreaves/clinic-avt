@@ -17,12 +17,12 @@
 
 namespace clinicavt::session {
 
-// Writes the note, patient sheet and title on a background thread after finalise. One write
-// at a time; a new write cancels the running one
+// Writes the note, patient sheet and title on a background thread after finalise. It runs one write
+// at a time, and a new write cancels the running one
 class NoteLane {
    public:
-    // Below this the model writes from its prompt, not the transcript (seen on a 14 s recording),
-    // so the note is refused
+    // Below this the model writes from its prompt and ignores the transcript, as seen on a 14 s
+    // recording, so the note is refused
     static constexpr std::size_t kMinNoteWords = 25;
 
     NoteLane(note::INoteWriter* writer, store::ISessionStore& store, ISessionEvents& events,
@@ -33,9 +33,9 @@ class NoteLane {
 
     bool Available() const;
     bool WritesPatient() const;
-    // True while a document is being written; never blocks
+    // True while a document is being written. Never blocks
     bool Busy() const;
-    // Last note was refused (too short, or not a consultation) and not saved
+    // True when the last note was refused as too short or not a consultation, and so was not saved
     bool Refused() const;
     void ClearRefusal();
 
@@ -43,8 +43,8 @@ class NoteLane {
     void SetOptions(note::NoteOptions options);
     note::NoteOptions Options() const;
 
-    // Writes the note, then sheet and title. Too-short transcripts are refused without calling
-    // the model; a model refusal can be overridden. `accepted` runs after the note is stored
+    // Writes the note, then the sheet and title. Too-short transcripts are refused without calling
+    // the model. A model refusal can be overridden. `accepted` runs after the note is stored
     void WriteNote(store::SessionId id, std::vector<asr::Turn> transcript,
                    std::function<void()> accepted = {});
     // Rewrites the sheet from the stored note, edits included, so it matches an edited note

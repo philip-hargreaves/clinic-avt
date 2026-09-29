@@ -39,7 +39,7 @@ struct TempRoot {
     }
 };
 
-// Crash helper with stdout piped back; killed hard, never asked to exit
+// Crash helper with stdout piped back. It is killed hard and never asked to exit
 class HelperProcess {
    public:
     HelperProcess(const std::filesystem::path& root, const char* mode) {
@@ -135,7 +135,6 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
     }
     ASSERT_FALSE(session_id.empty());
 
-    // The catalog finds the crashed session
     SqliteSessionStore reopened(root.path, std::chrono::hours(1));
     const auto listed = reopened.ListSessions();
     ASSERT_EQ(listed.size(), 1u);

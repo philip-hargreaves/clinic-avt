@@ -14,13 +14,12 @@ class ModelStore;
 
 namespace clinicavt::note {
 
-// Note model in a supervised child process so a GPU driver fault cannot corrupt
-// or hang the engine. A tier change starts a new host, so one model is resident
+// Runs the note model in a supervised child process so a GPU driver fault cannot corrupt or hang
+// the engine. A tier change starts a new host, so one model is resident
 class WorkerNoteWriter : public INoteWriter, public INoteTiers {
    public:
-    // store resolves tiers for Configure and names the model. Null (tests) keeps the
-    // tier with no names
-    // listener: called on every state transition, off the caller's thread
+    // store resolves tiers for Configure and names the model. Null, as in tests, keeps the tier
+    // with no names. listener is called on every state transition, off the caller's thread
     WorkerNoteWriter(std::filesystem::path host_exe, std::filesystem::path models_root,
                      std::filesystem::path prompt_path, const models::ModelStore* store = nullptr,
                      std::string tier = "default", Listener listener = {});
@@ -28,7 +27,7 @@ class WorkerNoteWriter : public INoteWriter, public INoteTiers {
 
     void Prepare() override;
 
-    // Fire-and-forget; dropped while a generation is streaming
+    // Fire-and-forget. Dropped while a generation is streaming
     void Prefill(const std::vector<asr::Turn>& transcript, const NoteOptions& options) override;
 
     bool WritesPatient() const override {

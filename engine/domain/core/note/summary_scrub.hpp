@@ -7,8 +7,9 @@
 
 namespace clinicavt::note {
 
-// Removes direct identifiers from a case summary: ages to a decade, dates to "recently", NHS
-// numbers, postcodes and phones removed. Contextual identifiers are left to the clinician
+// Removes direct identifiers from a case summary. Ages become a decade and dates become "recently".
+// NHS numbers, postcodes and phone numbers are removed. Contextual identifiers are left to the
+// clinician
 namespace scrub_detail {
 
 inline std::string Decade(int age) {

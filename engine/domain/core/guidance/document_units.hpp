@@ -10,8 +10,8 @@
 
 namespace clinicavt::guidance {
 
-// Searchable chunk of an added document: a paragraph or run of short ones, with its heading
-// and line boxes
+// A searchable chunk of an added document. It is a paragraph or a run of short ones, with its
+// heading and line boxes
 struct Unit {
     int page = 0;
     std::string number;   // recommendation number, if any
@@ -68,9 +68,9 @@ inline constexpr std::string_view kFrontMatter[] = {"key words",
 // "R33, R39" in an amendments list isn't counted
 Scheme DetectScheme(const std::vector<Paragraph>& paragraphs);
 
-// Groups paragraphs into units. A heading or bare mark labels the next unit. A marked
-// paragraph takes its bullets, or runs to its closing token if the document uses them.
-// Unmarked paragraphs merge up to kMinUnitWords; ones over kMaxUnitWords are split
+// Groups paragraphs into units. A heading or bare mark labels the next unit. A marked paragraph
+// takes its bullets, or runs to its closing token if the document uses them. Unmarked paragraphs
+// merge up to kMinUnitWords, and ones over kMaxUnitWords are split
 std::vector<Unit> UnitsFromParagraphs(const std::vector<Paragraph>& paragraphs);
 
 // Strips a proof's line numbers, then drops the units that are not guidance

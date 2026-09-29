@@ -19,7 +19,7 @@ namespace clinicavt::guidance {
 
 namespace {
 
-// Control code, private-use character or U+FFFD
+// True for a control code, a private-use character or U+FFFD
 bool Unmapped(char32_t cp) {
     return (cp < 0x20 && cp != '\t') || (cp >= 0x7F && cp < 0xA0) ||
            (cp >= 0xE000 && cp <= 0xF8FF) || cp == 0xFFFD;
@@ -57,7 +57,7 @@ std::string_view Ligature(char32_t cp) {
     }
 }
 
-// Digits as '#' so running heads with page numbers compare equal
+// Replaces digits with '#' so running heads with page numbers compare equal
 std::string Form(std::string_view text) {
     std::string out;
     for (const char c : strings::Trim(text)) {

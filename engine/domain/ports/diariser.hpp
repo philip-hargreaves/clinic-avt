@@ -12,10 +12,10 @@
 
 namespace clinicavt::diar {
 
-// (clip, absolute first frame) -> Whisper chunks with absolute frames; text is
-// their concatenation
+// Takes a clip and its absolute first frame and returns Whisper chunks in absolute frames. The text
+// is their concatenation
 using DecodeClipFn = std::function<std::vector<asr::Turn>(std::span<const float>, std::uint64_t)>;
-// Returns true to abort a catch-up; checked between steps
+// Returns true to abort a catch-up. It is checked between steps
 using StopFn = std::function<bool()>;
 
 // Exact decode span -> speculated text
@@ -45,27 +45,27 @@ struct DiariseResult {
     DiariseTiming timing;
 };
 
-// Returns slices with anonymous labels plus anchor similarities; the caller assigns roles
+// Returns slices with anonymous labels plus anchor similarities. The caller assigns roles
 class IDiariser {
    public:
     virtual ~IDiariser() = default;
 
     virtual DiariseResult Diarise(std::span<const float> audio) = 0;
 
-    // Separate from Diarise so voiceprint embeds can overlap other work;
-    // DoctorVoiceprint reuses them, so the doctor's is embedded once
+    // Separate from Diarise so voiceprint embeds can overlap other work. DoctorVoiceprint reuses
+    // them, so the doctor's print is embedded once
     virtual std::vector<double> AnchorSimilarities(std::span<const float> audio,
                                                    const std::vector<LabelledSlice>& slices,
                                                    int cluster_count) = 0;
 
-    // Optional capture-phase work; without it Diarise processes the whole recording
+    // Optional capture-phase work. Without it Diarise processes the whole recording
     virtual void Advance(std::span<const float>, const DecodeClipFn&) {}
 
-    // Finalise catch-up: Advance with no budget, so every settled span is decoded
-    // and cut before Diarise. A stop can leave it partial
+    // The finalise catch-up. It runs Advance with no budget, so every settled span is decoded and
+    // cut before Diarise. A stop can leave it partial
     virtual void Settle(std::span<const float>, const DecodeClipFn&, const StopFn&) {}
 
-    // Settle's speech-finding step alone, with progress, for imports. Settle then only decodes
+    // Runs only Settle's speech-finding step, with progress, for imports. Settle then only decodes
     virtual void FindSpeech(std::span<const float>, const std::function<void(double)>&,
                             const StopFn&) {}
 
@@ -92,25 +92,25 @@ class IDiariser {
         return {};
     }
 
-    // Provisional opening of the sealed transcript: settled turns with cached text
-    // and provisional roles. Valid after Advance, on its thread. Empty if nothing settled
+    // The provisional opening of the sealed transcript, made of settled turns with cached text and
+    // provisional roles. Valid after Advance, on its thread. Empty if nothing settled
     virtual std::vector<asr::Turn> SpeculativeTranscript() {
         return {};
     }
 
-    // Extra cut points (absolute frames) for the next Advance and Diarise, from
-    // Whisper chunk edges
+    // Adds cut points from Whisper chunk edges, in absolute frames, for the next Advance and
+    // Diarise
     virtual void AddCutPoints(std::span<const std::uint64_t>) {}
 
-    // Voiceprint of the speech (unit norm); empty if too short or no embedder.
-    // ReplaceAnchor turns an enrolment into the anchor
+    // Voiceprint of the speech (unit norm). Empty if the speech is too short or there is no
+    // embedder. ReplaceAnchor turns an enrolment into the anchor
     virtual std::vector<float> EmbedVoice(std::span<const float>) {
         return {};
     }
     virtual void ReplaceAnchor(std::span<const float>, std::uint64_t) {}
 
-    // Doctor cluster voiceprint, and anchor update from it. Split so the update can
-    // wait until the note lane confirms it was a consultation
+    // The doctor cluster's voiceprint and the anchor update from it are separate calls, so the
+    // update can wait until the note lane confirms it was a consultation
     virtual std::vector<float> DoctorVoiceprint(std::span<const float>,
                                                 const std::vector<LabelledSlice>&, int) {
         return {};

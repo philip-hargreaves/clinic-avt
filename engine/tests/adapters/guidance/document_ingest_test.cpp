@@ -62,7 +62,7 @@ void Delete(const std::filesystem::path& path) {
     std::filesystem::remove(path);
 }
 
-// DocumentIngest over root; folder defaults to root/guidelines
+// DocumentIngest over root. The folder defaults to root/guidelines
 struct Harness {
     std::filesystem::path root;
     Retriever retriever;
@@ -127,7 +127,7 @@ struct Harness {
         return false;
     }
 
-    // Waits for the scan to list the file; returns its id
+    // Waits for the scan to list the file and returns its id
     std::int64_t IdOf(const char* path, int seconds = 10) {
         std::int64_t id = 0;
         WaitUntil(
@@ -238,20 +238,18 @@ TEST(DocumentIngest, AFileIsIndexedSearchedCitedAndRemovedEveryWay) {
     const auto ord = std::stoll(hit.chunk_id.substr(hit.chunk_id.rfind('-') + 1));
     EXPECT_EQ(DocumentIndex(h.root / "index" / kIndexFile).ReadChunk(pmr, ord).text, hit.text);
 
-    // Deleting the file removes its document
     Delete(gout_file);
     ASSERT_TRUE(h.WaitForState(gout, DocumentState::kRemoved));
     EXPECT_EQ(h.ingest.List().documents.size(), 1u);
     EXPECT_FALSE(Shows(h.retriever.Search(flare, 3, SearchMode::kQuery), gout));
 
-    // Remove sends the file to the bin
     h.ingest.Remove(pmr);
     EXPECT_EQ(h.binned, std::vector<std::filesystem::path>{pmr_file});
     EXPECT_FALSE(std::filesystem::exists(pmr_file));
     ASSERT_TRUE(h.WaitForState(pmr, DocumentState::kRemoved));
     EXPECT_THROW(h.ingest.Remove(pmr), store::StoreError);
 
-    // Restoring the file restores the document; RemoveAll bins every file
+    // Restoring the file restores the document. RemoveAll bins every file
     h.Write("Gout local guideline.md", kGuideline);
     ASSERT_TRUE(h.WaitListed(1, DocumentState::kReady));
     EXPECT_EQ(h.ingest.RemoveAll(), 1u);

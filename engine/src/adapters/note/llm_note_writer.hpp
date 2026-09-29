@@ -15,8 +15,8 @@ class OvRuntime;
 
 namespace clinicavt::note {
 
-// Qwen note writer: one background load, resident pipeline, prompts re-read per
-// note. The tier is resolved by the model store; the manifest picks the pipeline
+// Qwen note writer. It loads once in the background, keeps the pipeline resident and re-reads the
+// prompts for each note. The model store resolves the tier and the manifest picks the pipeline
 class LlmNoteWriter : public INoteWriter {
    public:
     struct LoadReport {
@@ -51,17 +51,17 @@ class LlmNoteWriter : public INoteWriter {
     std::string WriteLabel(const std::string& note) override;
     std::string WriteSummary(const std::string& note) override;
 
-    // Loads the pipeline in the background. Idempotent, retried on failure
+    // Retried on failure
     void Prepare() override;
 
-    // Generates one discarded token over the guessed prompt prefix. Skipped while
-    // generating, loading, the GPU is busy, or the pipeline cannot extend the KV.
-    // Throws only on a driver fault
+    // Generates one discarded token over the guessed prompt prefix. Skipped while generating or
+    // loading, when the GPU is busy, or when the pipeline cannot extend the KV. Throws only on a
+    // driver fault
     void Prefill(const std::vector<asr::Turn>& transcript, const NoteOptions& options) override;
 
     void Cancel() override;
 
-    // Cancels the running and all later generations; for when the engine is gone
+    // Cancels the running generation and all later ones. Used when the engine is gone
     void Close();
 
    private:

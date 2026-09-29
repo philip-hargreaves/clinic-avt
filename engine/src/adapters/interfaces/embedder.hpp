@@ -6,7 +6,7 @@
 
 namespace clinicavt::guidance {
 
-// Staged embedder identity; a corpus must match it
+// Staged embedder identity. A corpus must match it
 struct EmbedderIdentity {
     std::string id;
     std::string rev;  // sha256 of the weights

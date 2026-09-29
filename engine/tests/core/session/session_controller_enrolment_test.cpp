@@ -21,8 +21,6 @@ namespace {
 
 using namespace test_harness;
 
-// Enrolment
-
 TEST(SessionController, EnrolmentFinishedEarlyReplacesTheAnchorAndStoresNothing) {
     Rig rig;
     auto controller = rig.Make(Script::kStreamUntilStopped);

@@ -25,7 +25,7 @@ std::optional<std::filesystem::path> RecordingPath(const json& params) {
     return clinicavt::utf8::ToPath(params["path"].get_ref<const std::string&>());
 }
 
-// RecordingError text is plain; other errors may name the file
+// RecordingError text is safe to show. Other errors may name the file, so they get a fixed message
 template <class Read>
 auto ReadRecording(Read read) -> std::variant<decltype(read()), Error> {
     try {
@@ -80,7 +80,7 @@ std::variant<json, Error> HandleSessionImport(clinicavt::audio::IRecordingReader
     }
     if (!missing.empty()) return SessionError(MissingModelsReason(missing));
     if (controller.Running()) return SessionError("a session is running");
-    // Reject unopenable files here; decoding runs on the import thread
+    // Reject unopenable files here, since decoding runs on the import thread
     const auto readable = ReadRecording([&] { return reader.Inspect(*path); });
     if (std::holds_alternative<Error>(readable)) return std::get<Error>(readable);
     // The whole recording and its finalise need the memory

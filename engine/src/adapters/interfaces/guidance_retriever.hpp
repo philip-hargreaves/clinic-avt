@@ -60,11 +60,11 @@ struct Readiness {
     std::string detail;  // the loader's reason when unavailable
 };
 
-// kNote: split into sentences (negated ones dropped), each searched, plus the
-// whole note. kQuery: one query of any length. Floor and population guard apply to both
+// kNote splits the note into sentences, drops negated ones and searches each, plus the whole note.
+// kQuery searches one query of any length. The floor and population guard apply to both
 enum class SearchMode { kNote, kQuery };
 
-// Guidelines retrieval: note in, filtered, ranked and thresholded recommendations out.
+// Retrieves guidelines for a note and returns filtered, ranked and thresholded recommendations.
 // Retrieved text never goes into a generated document
 class IGuidanceRetriever {
    public:

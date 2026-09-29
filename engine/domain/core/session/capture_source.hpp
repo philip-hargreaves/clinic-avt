@@ -10,15 +10,15 @@
 
 namespace clinicavt::session {
 
-// A replay request, carried into the source factory. Absent means microphone
+// A replay request passed to the source factory. Without one the source is the microphone
 struct ReplaySpec {
     std::string path;
     double speed = 1.0;
-    std::uint64_t start_frame = 0;  // resume: skip audio already captured
+    std::uint64_t start_frame = 0;  // on resume, skips audio already captured
 };
 
-// Resolved by the caller: the id pins the endpoint (empty = default), the
-// name goes into the session snapshot
+// Resolved by the caller. The id pins the endpoint (empty means the default) and the name goes into
+// the session snapshot
 struct MicSelection {
     std::string id;
     std::string name;

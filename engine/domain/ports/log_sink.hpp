@@ -4,7 +4,7 @@
 
 namespace clinicavt::log {
 
-// Destination for diagnostic lines; each executable installs one at startup
+// Destination for diagnostic lines. Each executable installs one at startup
 class ILogSink {
    public:
     virtual ~ILogSink() = default;

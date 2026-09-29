@@ -15,7 +15,7 @@ namespace clinicavt::guidance {
 
 // What to index and how to describe it, read from a build spec json
 struct BuildSpec {
-    CorpusSpec corpus;               // id, name, licence, attribution, source
+    CorpusSpec corpus;
     std::filesystem::path nice_dir;  // source "nice": the extracted corpus, json/ and manifest.json
     std::filesystem::path codes;     // source "nice": the requested guideline codes, one per line
     std::filesystem::path text_dir;  // source "text": a folder of .md and .txt files

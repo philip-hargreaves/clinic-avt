@@ -14,7 +14,7 @@ namespace clinicavt::log {
 // The sink must outlive every thread that logs. Null, the default, drops lines
 void SetSink(ILogSink* sink);
 
-// printf-style. The format includes the process prefix and the trailing newline, and sinks
+// Formats printf-style. The format includes the process prefix and the trailing newline, and sinks
 // write the line as given
 void Printf(const char* format, ...) CLINICAVT_PRINTF_FORMAT(1, 2);
 

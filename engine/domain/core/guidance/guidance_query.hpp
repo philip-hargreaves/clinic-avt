@@ -15,14 +15,14 @@ inline constexpr int kMinSentenceWords = 3;
 // kMinSentenceWords are dropped
 std::vector<std::string> SplitSentences(std::string_view note);
 
-// Negated findings, family history and hypotheticals: guidance for them would target a
-// condition the patient doesn't have. Only openings and unambiguous phrases match
+// True for negated findings, family history and hypotheticals, since guidance for them would target
+// a condition the patient doesn't have. Only openings and unambiguous phrases match
 bool IsExcluded(std::string_view sentence);
 
 // The sentences that pass the filter, then the whole note as one more query
 std::vector<std::string> SubQueries(std::string_view note);
 
-// Capital, digit, quote or bracket
+// True for a capital, digit, quote or bracket
 bool OpensSentence(unsigned char c);
 
 }  // namespace clinicavt::guidance

@@ -19,7 +19,6 @@
 #include "adapters/vad/passthrough_vad.hpp"
 #include "core/session/session_controller.hpp"
 
-// The session controller's collaborators as fakes, shared by its tests
 namespace clinicavt::session::test_harness {
 
 using audio::EnrolProgress;
@@ -35,7 +34,7 @@ constexpr auto kTestSettle = std::chrono::milliseconds(200);
 // Enough audio that each of two merged turns clears the 0.3 s decode floor
 constexpr std::size_t kTwoTurnFrames = 12800;
 
-// Sleeps are coarse on Windows, so conditions are polled rather than timed
+// Sleeps are coarse on Windows, so conditions are polled
 template <typename Pred>
 bool WaitFor(Pred done) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -547,8 +546,8 @@ struct FakeNoteWriter : note::INoteWriter {
     }
 };
 
-// One cluster or two split at half the audio. Counters the tests poll are
-// atomic, the rest is read after the controller joins the thread writing it
+// Returns one cluster, or two split at half the audio. Counters the tests poll are atomic. The rest
+// is read after the controller joins the thread writing it
 struct FakeDiariser : diar::IDiariser {
     int clusters = 1;
     std::vector<double> similarities;
@@ -689,7 +688,7 @@ struct RigOptions {
     std::uint64_t advance_frames = 5 * kSampleRate;
     bool writer = false;
     bool metrics = false;
-    std::size_t min_note_words = 0;  // most scenarios test the lane, not the thin gate
+    std::size_t min_note_words = 0;  // most scenarios test the lane, so the thin gate is off
 };
 
 // The controller's collaborators. A controller made here is declared after

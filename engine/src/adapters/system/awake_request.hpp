@@ -2,8 +2,8 @@
 
 namespace clinicavt::system {
 
-// Blocks standby while alive: sleeping mid-load or mid-generation can leave GPU
-// work the driver never finishes. Best effort
+// Blocks standby while alive, because sleeping mid-load or mid-generation can leave GPU work the
+// driver never finishes. Best effort
 class AwakeRequest {
    public:
     explicit AwakeRequest(const wchar_t* reason);

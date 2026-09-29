@@ -21,7 +21,7 @@ struct EnrolCapture {
     SourceEnd end;
 };
 
-// Minimum speech for an enrolment; less gives a poor voice print
+// Minimum speech for an enrolment. Less gives a poor voice print
 inline constexpr double kEnrolMinSpeechSeconds = 20.0;
 
 // Meters level, keeps VAD speech hops, calls stop once the window has elapsed

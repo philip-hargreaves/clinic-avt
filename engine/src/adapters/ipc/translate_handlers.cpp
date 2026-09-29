@@ -14,7 +14,7 @@ void RegisterTranslateMethods(PipeServer& server, const EngineServices& services
     server.RegisterMethod("translate/languages", [translator](const json&) {
         return json{{"languages", translator->Languages()}};
     });
-    // Off the RPC thread; results as translate/partial then translate/ready
+    // Runs off the RPC thread and sends results as translate/partial, then translate/ready
     server.RegisterMethod("patient/translate", [&sessions, translate_lane](const json& params) {
         return WithSession(params, [&](const std::string& session_id) -> std::variant<json, Error> {
             if (!params.contains("language") || !params["language"].is_string()) {

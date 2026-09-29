@@ -184,7 +184,7 @@ def units():
 
 
 def pipeline():
-    # Shipped model, loaded as the app does: mean pooling, no instruction
+    # Shipped model, loaded as the app loads it with mean pooling and no instruction
     return make_pipeline({"pooling": "mean", "max_length": 512}, MODEL)
 
 
@@ -225,7 +225,7 @@ def rank(variant: dict, lists: list[dict], unit_rows: list[dict], background=Non
     whole = next((e for e in lists if e["whole"]), lists[-1])
     best = {"note_best": round(float(whole["cos"].max()), 4),
             "any_best": round(max(float(e["cos"].max()) for e in lists), 4)}
-    # Whole-note best cosine under the floor: show nothing
+    # Show nothing when the whole-note best cosine is under the floor
     if variant.get("note_gate") and best["note_best"] < variant.get("note_floor", floor):
         return {"considered": 0, "shown": [], **best}
     neighbourhood = None

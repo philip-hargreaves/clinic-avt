@@ -21,8 +21,6 @@ namespace {
 
 using namespace test_harness;
 
-// Note, sheet and title
-
 TEST(SessionController, StopWritesTheNoteThenTheSheetThenTheTitle) {
     Rig rig;
     rig.diariser.clusters = 2;
@@ -347,14 +345,12 @@ TEST(SessionController, ANoteStillWritingIsCancelledByCancelOrDestruction) {
         auto controller = rig.Make(Script::kCompleteAfterAudio, {.writer = true});
         ASSERT_TRUE(controller.Start());
         controller.Stop();
-        // Destruction must catch the write in flight rather than before it starts
+        // Destruction must catch the write while it is in flight
         ASSERT_TRUE(rig.events.WaitUntil([&] { return !rig.events.note_partials.empty(); }));
     }
     EXPECT_TRUE(rig.writer.cancelled.load());
     EXPECT_EQ(rig.events.note_ready, "interrupted") << "an interrupted write returns what it had";
 }
-
-// Refusal and override
 
 TEST(SessionController, ARefusedRecordingYieldsNothingAndIsErasedAtClose) {
     Rig rig;
@@ -420,7 +416,7 @@ TEST(SessionController, AnInsistedRewriteIsDeliveredAndTheSessionKept) {
     }
 }
 
-// Restored consultations can lack a transcript; a reviewed note must be kept
+// Restored consultations can lack a transcript. A reviewed note must still be kept
 TEST(SessionController, AReviewedSessionIsNeverRewrittenFromNothingNorErasedByARefusal) {
     Rig rig;
     rig.writer.result = "NOT A CONSULTATION: a cooking video";

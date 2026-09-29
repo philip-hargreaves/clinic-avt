@@ -31,16 +31,16 @@ inline constexpr std::uint64_t kAssembleTolFrames = 5600;  // 0.35 s: snap windo
 std::optional<std::vector<asr::Turn>> AssembleFromChunks(const TurnChunks& cache, std::uint64_t a,
                                                          std::uint64_t b);
 
-// Decodes each merged turn's audio; empty means dropped. Cached texts are used only on an
-// exact span match, so any hit rate is safe
+// Decodes each merged turn's audio. An empty text means the turn is dropped. Cached texts are used
+// only on an exact span match, so any hit rate is safe
 std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>& turns,
                                          std::span<const float> audio, const DecodeClipFn& decode,
                                          const TurnTexts* cache = nullptr,
                                          const TurnChunks* chunk_cache = nullptr,
                                          std::vector<std::vector<asr::Turn>>* chunks_out = nullptr);
 
-// Leading merged turns already cached, up to the first span finalise would decode. Spans
-// below kPerTurnMinClipFrames are skipped, as in finalise
+// Returns the leading merged turns already cached, up to the first span finalise would decode.
+// Spans below kPerTurnMinClipFrames are skipped, as in finalise
 std::vector<LabelledSlice> SpeculatedTurns(const std::vector<LabelledSlice>& merged,
                                            std::uint64_t audio_frames, const TurnTexts& cache,
                                            std::vector<std::string>* texts);

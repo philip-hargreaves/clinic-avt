@@ -9,9 +9,9 @@
 
 namespace clinicavt::diar {
 
-// At finalise, moves a merged turn's edge chunks to another speaker when their embedding is
-// nearer that centroid by the margin, working inwards until one stays. Catches the other
-// speaker's sentence left at a turn edge. Chunks under kResplitMinFrames embed too poorly
+// At finalise, moves a merged turn's edge chunks to another speaker when their embedding is nearer
+// that centroid by the margin, working inwards until one stays. This catches the other speaker's
+// sentence left at a turn edge. Chunks under kResplitMinFrames embed too poorly to move
 inline constexpr std::uint64_t kResplitMinFrames = 9600;  // 0.6 s
 
 inline constexpr double kResplitMargin = 0.20;  // cosine, calibrated by cross-validation

@@ -45,7 +45,6 @@ struct TieredStore {
     }
 };
 
-// Records lane transitions, with a wait helper
 struct Transitions {
     std::mutex mutex;
     std::condition_variable changed;
@@ -169,7 +168,7 @@ TEST(NoteLane, ASwitchDuringALoadIsRefusedUntilTheLoadSettles) {
 }
 
 // The host reads nothing while prefilling, so a second large prefill would block the capture
-// thread; it is skipped instead
+// thread. The lane skips it
 TEST(NoteLane, APrefillWaitsForTheLastOneRatherThanBlockingTheCaller) {
     TieredStore staged;
     const models::ModelStore store(staged.root);

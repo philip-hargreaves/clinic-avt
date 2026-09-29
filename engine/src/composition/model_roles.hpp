@@ -32,8 +32,8 @@ class NllbTranslator;
 
 namespace clinicavt::composition {
 
-// first_use: a compile cache was missing, so one-off compiles are running. missing: roles a
-// consultation needs that are not installed
+// first_use is set when a compile cache was missing and one-off compiles are running. missing lists
+// the roles a consultation needs that are not installed
 struct RoleReport {
     bool first_use = false;
     std::vector<std::string> missing;
@@ -44,14 +44,14 @@ struct RoleReport {
 
 struct Transcriber {
     std::unique_ptr<asr::ITranscriber> port;
-    asr::WhisperTranscriber* whisper = nullptr;  // null for a stand-in; used to switch device
+    asr::WhisperTranscriber* whisper = nullptr;  // null for a stand-in, used to switch device
 };
 
 Transcriber BuildTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
                              const std::string& device, metrics::Registry& metrics, bool scripted,
                              RoleReport& report);
 
-// Compiles in the background; session/start waits for it, hello does not
+// Compiles in the background. session/start waits for it and hello does not
 std::unique_ptr<audio::IStreamingVad> BuildVad(const models::ModelStore& store,
                                                models::OvRuntime& runtime,
                                                metrics::Registry& metrics, bool scripted,
@@ -64,12 +64,12 @@ std::unique_ptr<diar::IDiariser> BuildDiariser(const models::ModelStore& store,
                                                metrics::Registry& metrics, bool scripted,
                                                RoleReport& report);
 
-// The note tier "auto" means on this machine, chosen from its memory and logged. Empty when
+// Returns the tier "auto" stands for on this machine, chosen from its memory and logged. Empty when
 // no note model is staged
 std::string MachineNoteTier(const models::ModelStore& store);
 
-// Note generation in a supervised child, so a GPU driver fault only costs a respawn.
-// Null if nothing can write
+// Runs note generation in a supervised child, so a GPU driver fault only costs a respawn. Null if
+// nothing can write
 std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(models::ModelStore& store,
                                                         const std::filesystem::path& models_root,
                                                         const std::string& requested_tier,
@@ -77,14 +77,13 @@ std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(models::ModelStore& stor
                                                         note::INoteTiers::Listener listener,
                                                         RoleReport& report);
 
-// CPU only, so no GPU contention. Null if the model is not staged
+// Runs on the CPU only, so it does not contend for the GPU. Null if the model is not staged
 std::unique_ptr<translate::NllbTranslator> BuildTranslator(const models::ModelStore& store,
                                                            models::OvRuntime& runtime,
                                                            RoleReport& report);
 
-// An orphaned note host exits within seconds; one still present after that is
-// stuck in the driver until reboot. Checked before any model uses the GPU, and marks the
-// GPU lease wedged when found
+// An orphaned note host exits within seconds. One still present after that is stuck in the driver
+// until reboot. Checked before any model uses the GPU, and marks the GPU lease wedged when found
 bool FindStrayNoteHost();
 
 }  // namespace clinicavt::composition

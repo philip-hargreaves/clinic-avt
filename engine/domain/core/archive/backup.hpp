@@ -16,8 +16,8 @@ struct Period {
     std::string to;
 };
 
-// Counts for a backup of a period. Unfinished sessions (crashed, awaiting recovery) are
-// counted, never included; demos are excluded
+// Counts for a backup of a period. Unfinished sessions (crashed, awaiting recovery) are counted but
+// never included. Demos are excluded
 struct Counts {
     std::size_t consultations = 0;
     std::size_t reflections = 0;  // with an appraisal entry
@@ -34,20 +34,20 @@ enum class Phase { kWriting, kChecking, kRestoring };
 using Progress = std::function<void(Phase phase, std::size_t done, std::size_t total)>;
 
 struct BackupResult {
-    std::vector<store::SessionId> ids;  // written and checked; empty if reflections_only
+    std::vector<store::SessionId> ids;  // written and checked, empty if reflections_only
     std::size_t reflections = 0;
     Manifest manifest;
 };
 
-// Writes finalised non-demo consultations in the period (cleared ones too, for their
-// appraisal entry), then commits the sink, which checks the file. reflections_only: only
-// those with an appraisal entry, stripped as on clear
+// Writes finalised non-demo consultations in the period (cleared ones too, for their appraisal
+// entry), then commits the sink, which checks the file. With reflections_only it writes only those
+// with an appraisal entry, stripped as on clear
 BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveSink& sink,
                     const Progress& progress, bool reflections_only);
 
 struct RestoreResult {
     std::size_t added = 0;
-    std::size_t completed = 0;  // were cleared locally; content restored
+    std::size_t completed = 0;  // were cleared locally and had their content restored
     std::size_t skipped = 0;    // already here
     std::size_t reflections = 0;
     Manifest manifest;
@@ -57,10 +57,9 @@ struct RestoreResult {
     }
 };
 
-// Validates every record before writing any, so a wrong password, damaged file or
-// refused record changes nothing; dry_run returns there with the counts. Each record is
-// then added in its own transaction, so an interrupted restore leaves whole consultations
-// and a rerun completes it
+// Validates every record before writing any, so a wrong password, damaged file or refused record
+// changes nothing. dry_run returns at that point with the counts. Each record is then added in its
+// own transaction, so an interrupted restore leaves whole consultations and a rerun completes it
 RestoreResult Restore(store::ISessionStore& store, IArchiveSource& source, bool dry_run,
                       const Progress& progress);
 

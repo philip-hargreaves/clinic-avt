@@ -36,7 +36,6 @@ bool Uncompiled(const models::ModelStore& store, const std::string& role,
     return !models::Compiled(store.Resolve(role, tier));
 }
 
-// The roles the store cannot resolve
 std::vector<std::string> Unstaged(const models::ModelStore& store,
                                   std::initializer_list<const char*> roles) {
     std::vector<std::string> unstaged;
@@ -134,7 +133,8 @@ std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(models::ModelStore& stor
             log::Printf("clinicavt-engine: no note model staged\n");
             return nullptr;
         }
-        // Start on the tier the shell will request; auto or unstaged uses the machine default
+        // Start on the tier the shell will request. Auto or an unstaged tier uses the machine
+        // default
         std::string tier = auto_tier;
         if (!requested_tier.empty() && requested_tier != models::kAutoNoteTier) {
             try {
@@ -147,14 +147,15 @@ std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(models::ModelStore& stor
         }
         const auto host = system::ExeDir() / system::kNoteHostExe;
         if (!std::filesystem::exists(host)) {
-            // Never generate in-process; that is the configuration the driver fault corrupts
+            // Never generate in-process, because that is the configuration the driver fault
+            // corrupts
             log::Printf("clinicavt-engine: note DISABLED, %s is missing\n", host.string().c_str());
             return nullptr;
         }
         auto worker = std::make_unique<note::WorkerNoteWriter>(
             host, models_root, models_root.parent_path() / "prompts", &store, tier,
             std::move(listener));
-        // First use: compile on an idle GPU before any recording
+        // On first use, compile on an idle GPU before any recording
         if (Uncompiled(store, "note", tier)) {
             report.first_use = true;
             log::Printf("clinicavt-engine: first use, compiling the note model\n");

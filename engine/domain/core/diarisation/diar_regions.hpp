@@ -10,7 +10,7 @@
 
 namespace clinicavt::diar {
 
-// Silero thresholds for the whole-recording batch pass. Validated; do not retune
+// Silero thresholds for the whole-recording batch pass. They are validated, so do not retune them
 inline constexpr float kEnter = 0.40f;
 inline constexpr float kExit = 0.25f;
 inline constexpr std::uint64_t kMinSpeechFrames = 1600;   // 100 ms

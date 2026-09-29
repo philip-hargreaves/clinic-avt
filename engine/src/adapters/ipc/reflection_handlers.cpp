@@ -166,7 +166,7 @@ void RegisterReflectionMethods(PipeServer& server, const EngineServices& service
             if (controller.Busy()) return SessionError("finish the consultation first");
             return HandleDemoClear(demo);
         });
-    // Runs on the note lane; result sent as reflection/summary
+    // Runs on the note lane and sends the result as reflection/summary
     server.RegisterMethod(
         "reflection/summary", [&controller](const json& params) -> std::variant<json, Error> {
             const auto id = IdFrom(params);

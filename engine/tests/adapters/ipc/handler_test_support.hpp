@@ -37,7 +37,6 @@
 #include "adapters/translate/translate_lane.hpp"
 #include "adapters/vad/passthrough_vad.hpp"
 
-// Helpers shared by the handler tests
 namespace clinicavt::ipc::handler_test {
 
 inline const json& ResultOf(const std::variant<json, Error>& outcome) {
@@ -115,7 +114,7 @@ bool WaitUntil(Pred done) {
     return true;
 }
 
-// fail reaches both calls, fail_decode only the decode on the import's thread
+// fail affects both calls. fail_decode affects only the decode on the import's thread
 struct FakeReader : clinicavt::audio::IRecordingReader {
     clinicavt::audio::RecordingInfo info;
     std::vector<float> audio;

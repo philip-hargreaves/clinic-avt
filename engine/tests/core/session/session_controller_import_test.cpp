@@ -21,8 +21,6 @@ namespace {
 
 using namespace test_harness;
 
-// Import
-
 TEST(SessionController, AnImportFinalisesAsAStopDoesButNeverTeachesThePrint) {
     Rig rig;
     rig.diariser.clusters = 2;
@@ -128,7 +126,7 @@ TEST(SessionController, WhileAnImportRunsTheSlotIsItsAndStopWaitsForIt) {
     EXPECT_FALSE(controller.StartEnrolment(2.0, {}, 0.1));
     EXPECT_FALSE(controller.Open("s1")) << "nor can a review open meanwhile";
 
-    // A closing shell stops the controller: the import finishes and is kept
+    // When a closing shell stops the controller, the import finishes and is kept
     std::thread closing([&] {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         release = true;
@@ -174,7 +172,7 @@ TEST(SessionController, ACancelledImportIsErasedAndFreesTheSlotAtOnce) {
         << "no speakers or note follow";
     EXPECT_FALSE(controller.Busy());
 
-    // The cancel was import-only: the next recording stops and is kept
+    // The cancel applied only to the import, so the next recording stops and is kept
     ASSERT_TRUE(controller.Start());
     ASSERT_TRUE(rig.WaitForFrames(1));
     controller.Stop();

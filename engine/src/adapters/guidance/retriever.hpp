@@ -21,8 +21,8 @@ struct RetrieverOptions {
     bool include_research = false;  // dev only
 };
 
-// All ready added documents as one matrix plus rows. Built by ingest and
-// swapped in whole, so a search never reads the store
+// Every ready added document as one matrix plus rows. Ingest builds it and swaps it in whole, so a
+// search never reads the store
 struct UploadSnapshot {
     struct Row {
         std::int64_t document = 0;
@@ -43,11 +43,11 @@ struct UploadSnapshot {
 
 using EmbedderLoader = std::function<std::unique_ptr<IEmbedder>()>;
 
-// One embedder, every corpus under corpora_root that passes load checks. Exact
-// scan, rank vote across sub-queries, cosine floor, population guard. Score is
-// best cosine; order is the vote. Prepare and Search are serialised; Corpora
-// and Status are thread-safe. A load failure is cached and rethrown, since
-// the model store does not change at runtime
+// Uses one embedder and every corpus under corpora_root that passes load checks. Searches by exact
+// scan with a rank vote across sub-queries, a cosine floor and a population guard. Score is the
+// best cosine and order follows the vote. Prepare and Search are serialised. Corpora and Status are
+// thread-safe. A load failure is cached and rethrown, since the model store does not change at
+// runtime
 class Retriever : public IGuidanceRetriever {
    public:
     Retriever(EmbedderLoader load_embedder, std::filesystem::path corpora_root,
@@ -58,7 +58,7 @@ class Retriever : public IGuidanceRetriever {
     std::vector<Corpus> Corpora() override;
     Readiness Status() override;
 
-    // For ingest; serialised with searches
+    // Used by ingest. Serialised with searches
     Embedding Embed(const std::string& text);
     EmbedderIdentity Identity();
     void PublishUploads(std::shared_ptr<const UploadSnapshot> uploads);

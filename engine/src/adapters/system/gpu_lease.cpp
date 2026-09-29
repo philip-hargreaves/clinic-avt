@@ -128,8 +128,8 @@ GpuLease::OnWait WatchForStuckHosts(const char* who, GpuLease& lease, OrphanScan
             return false;
         }
         seen = orphans;
-        // Only a load holds the GPU this long legitimately, and loads are not probed.
-        // Ask our own host to exit; a healthy one will
+        // Only a load holds the GPU this long legitimately, and loads are not probed. Ask our own
+        // host to exit, which a healthy one does
         if (!probed && waited >= kProbeAfterSeconds) {
             probed = true;
             if (lease.ProbeOwnHost()) {

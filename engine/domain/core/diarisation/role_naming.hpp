@@ -12,8 +12,8 @@ namespace clinicavt::diar {
 // margin range without a sweep. Revisit first if it abstains too often
 inline constexpr double kRoleMinMargin = 0.5;
 
-// Below this the print is treated as another clinician's and lexical scoring is used. On 57
-// enrolled consultations: own clinician >= 0.84, others <= 0.75
+// Below this the print is treated as another clinician's and lexical scoring is used. Across 57
+// enrolled consultations the own clinician scored >= 0.84 and others <= 0.75
 inline constexpr double kAnchorMinSimilarity = 0.80;
 
 struct RoleResult {
@@ -21,16 +21,16 @@ struct RoleResult {
     int doctor_cluster = -1;                   // -1: abstained
     int patient_cluster = -1;
     double margin = 0.0;
-    bool from_anchor = false;  // named from the voice print rather than lexical score
+    bool from_anchor = false;  // true when named from the voice print, false for lexical score
 };
 
 // Cold-start scorer without question features: they invert where the patient
 // asks the questions (measured 6/6 -> 0/6)
 double LexicalDoctorScore(const std::string& text);
 
-// Picks doctor/patient from the two clusters with most talk time: by voice print if it
-// matches, else lexical score. Abstains below kRoleMinMargin since swapped roles corrupt the
-// record. texts[i] is turns[i]'s text, may be empty
+// Picks doctor and patient from the two clusters with most talk time. It uses the voice print if it
+// matches and the lexical score otherwise. Abstains below kRoleMinMargin because swapped roles
+// corrupt the record. texts[i] is turns[i]'s text and may be empty
 RoleResult NameRoles(const std::vector<LabelledSlice>& turns, const std::vector<std::string>& texts,
                      int cluster_count, const std::vector<double>& anchor_similarity = {});
 

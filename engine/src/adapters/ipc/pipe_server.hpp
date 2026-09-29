@@ -14,7 +14,6 @@
 
 namespace clinicavt::ipc {
 
-// Another process already serves the pipe name
 class PipeTaken : public std::runtime_error {
    public:
     PipeTaken() : std::runtime_error("pipe name already claimed by another process") {}

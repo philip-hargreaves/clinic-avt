@@ -50,7 +50,7 @@ TEST(WasapiCapture, StopBeforeRunEndsAtOnceAndARunCapturesThenStopsCleanly) {
     WasapiCapture source;
     RecordingSink sink;
     std::thread runner([&source, &sink] { source.Run(sink); });
-    std::this_thread::sleep_for(std::chrono::seconds(2));  // two seconds of real capture
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     source.RequestStop();
     runner.join();
 

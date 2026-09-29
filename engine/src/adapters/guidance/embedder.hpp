@@ -13,9 +13,8 @@ namespace clinicavt::guidance {
 
 inline constexpr int kEmbedMaxTokens = 512;
 
-// Staged embedding model on CPU via GenAI: mean pooling, normalised, no
-// instruction prefix. Load verifies files, runs the startup checks, and throws
-// with the failure
+// Staged embedding model on CPU through GenAI, with mean pooling, normalisation and no instruction
+// prefix. Load verifies files, runs the startup checks and throws with the failure
 class Embedder : public IEmbedder {
    public:
     static std::unique_ptr<Embedder> Load(const models::ModelStore& store);

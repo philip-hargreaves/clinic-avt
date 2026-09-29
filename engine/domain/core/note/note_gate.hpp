@@ -10,7 +10,8 @@
 
 namespace clinicavt::note {
 
-// Note model's first line for a non-consultation transcript; reported as a refusal, not saved
+// First line the note model writes for a transcript that is not a consultation. It is reported as a
+// refusal and never saved
 inline constexpr std::string_view kNotAConsultation = "NOT A CONSULTATION:";
 
 // The reason after the sentinel when the note is a refusal, else nothing

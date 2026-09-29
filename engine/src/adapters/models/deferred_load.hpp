@@ -16,7 +16,7 @@
 namespace clinicavt::models {
 
 // Builds T on a background thread. Get waits and rethrows a load failure.
-// Success records the load seconds under `name`
+// A successful load records its seconds under `name`
 template <typename T>
 class DeferredLoad {
    public:
@@ -60,12 +60,12 @@ class DeferredLoad {
         return *built_;
     }
 
-    // Non-blocking; true only if the build succeeded
+    // Does not block. True only if the build succeeded
     bool Loaded() const {
         return ready_.load() && error_ == nullptr;
     }
 
-    // Non-blocking; true once the build ends, either way
+    // Does not block. True once the build ends, whether or not it succeeded
     bool Settled() const {
         return ready_.load();
     }

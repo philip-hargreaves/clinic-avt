@@ -1,5 +1,5 @@
 # Core and ports have their own include root, so a core file that includes an adapter fails to
-# build. core has no deps; OpenVINO and Win32 live in adapters
+# build. Core has no dependencies. OpenVINO and Win32 code lives in adapters
 add_library(clinicavt_core STATIC
     domain/core/archive/backup.cpp
     domain/core/archive/record_rules.cpp
@@ -26,12 +26,10 @@ add_library(clinicavt_core STATIC
 target_include_directories(clinicavt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain)
 target_link_libraries(clinicavt_core PRIVATE clinicavt_warnings)
 
-# Adapters, the executables and the tests include "adapters/..." from src
 add_library(clinicavt_adapters_root INTERFACE)
 target_include_directories(clinicavt_adapters_root INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(clinicavt_adapters_root INTERFACE clinicavt_core)
 
-# Win32 helpers for processes, the GPU lease, power, COM, the Recycle Bin and the stderr log
 add_library(clinicavt_system STATIC
     src/adapters/system/awake_request.cpp
     src/adapters/system/child_process.cpp
@@ -83,7 +81,7 @@ function(clinicavt_deploy_openvino stamp_target)
     add_custom_target(${stamp_target} DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ov.deployed")
 endfunction()
 
-# PDFium for the ingest host; fetched and pinned by tools/get-pdfium.ps1
+# PDFium for the ingest host. tools/get-pdfium.ps1 fetches and pins it
 set(_pdfium_root "${clinicavt_SOURCE_DIR}/external/pdfium")
 if(NOT EXISTS "${_pdfium_root}")
     message(FATAL_ERROR "PDFium not found: run tools/get-pdfium.ps1 first")
@@ -104,7 +102,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# Guidance result JSON. Separate library so ipc needn't link the guidance adapter
+# Guidance result JSON, in its own library so ipc does not link the guidance adapter
 add_library(clinicavt_guidance_record STATIC
     src/adapters/guidance/guidance_record.cpp)
 target_link_libraries(clinicavt_guidance_record
@@ -163,7 +161,6 @@ target_link_libraries(clinicavt_storage
     PUBLIC clinicavt_adapters_root
     PRIVATE clinicavt_warnings sqlite3 bcrypt crypt32 nlohmann_json::nlohmann_json)
 
-# Password-encrypted backup file, one sealed record per consultation
 add_library(clinicavt_archive STATIC
     src/adapters/archive/archive_file.cpp
     src/adapters/archive/archive_lane.cpp
@@ -238,8 +235,8 @@ target_link_libraries(clinicavt_vad
     PUBLIC clinicavt_adapters_root
     PRIVATE clinicavt_models clinicavt_warnings openvino::genai)
 
-# fastcluster average linkage; matched sklearn in the research. No upstream
-# CMake build, so compiled from source like sqlite
+# fastcluster average linkage, which matched sklearn in the research. It has no upstream CMake
+# build, so it is compiled from source like sqlite
 FetchContent_Declare(
     hclust_cpp
     GIT_REPOSITORY https://github.com/cdalitz/hclust-cpp.git
@@ -292,8 +289,6 @@ target_link_libraries(clinicavt_audio
 # Windows N editions and Server may lack Media Foundation; the engine must still start there
 target_link_options(clinicavt_audio INTERFACE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll)
 
-# main and the helpers that parse its command line, build the model roles and set up the
-# guidelines folder
 add_executable(clinicavt_engine
     src/engine_main.cpp
     src/composition/engine_config.cpp
@@ -323,15 +318,15 @@ target_link_libraries(clinicavt_pdf
 # Out-of-process PDF parsing so a parser crash only fails that document
 add_executable(clinicavt_ingest_host src/ingest_host_main.cpp)
 target_link_libraries(clinicavt_ingest_host PRIVATE
-    clinicavt_pdf clinicavt_system wer clinicavt_warnings)  # wer: Windows Error Reporting, for WerAddExcludedApplication
+    clinicavt_pdf clinicavt_system wer clinicavt_warnings)  # wer is Windows Error Reporting, for WerAddExcludedApplication
 add_custom_command(TARGET clinicavt_ingest_host POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_pdfium_root}/bin/pdfium.dll"
             "$<TARGET_FILE_DIR:clinicavt_ingest_host>"
     VERBATIM)
 add_dependencies(clinicavt_engine clinicavt_ingest_host)
 
-# Corpus build tools, not deployed. Uses the staged embedder so index and
-# query embeddings match
+# Corpus build tools, which are not deployed. They use the staged embedder so index and query
+# embeddings match
 add_library(clinicavt_corpus STATIC
     tools/corpus/chunker.cpp
     tools/corpus/corpus_builder.cpp

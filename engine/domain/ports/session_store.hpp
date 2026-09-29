@@ -97,7 +97,7 @@ struct SessionRecord {
 };
 
 enum class AddOutcome {
-    kAdded,      // a new session
+    kAdded,
     kCompleted,  // a cleared session restored with what it had lost
     kSkipped,    // already stored, nothing written
 };

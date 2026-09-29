@@ -9,8 +9,8 @@ namespace clinicavt::note {
 
 // Why a note model would not load, read from OpenVINO's message
 enum class LoadFailure {
-    kMemory,  // out of memory; retrying won't help until memory is freed
-    kCache,   // corrupt compile cache; won't clear without intervention
+    kMemory,  // out of memory, so retrying won't help until memory is freed
+    kCache,   // corrupt compile cache, which won't clear without intervention
     kOther,
 };
 

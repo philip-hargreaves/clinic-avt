@@ -25,7 +25,6 @@ struct Answers {
     std::optional<std::vector<Reference>> references;
 };
 
-// Converts a reflection to and from its stored text
 class IReflectionCodec {
    public:
     virtual ~IReflectionCodec() = default;

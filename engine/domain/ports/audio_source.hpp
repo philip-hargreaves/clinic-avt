@@ -37,7 +37,7 @@ class IAudioSink {
    public:
     virtual ~IAudioSink() = default;
 
-    // lost_frames: audio before this packet that was never delivered. Zero for a
+    // lost_frames counts audio before this packet that was never delivered. It is zero for a
     // complete recording
     virtual void OnAudio(std::span<const float> frames, std::uint64_t lost_frames) = 0;
 

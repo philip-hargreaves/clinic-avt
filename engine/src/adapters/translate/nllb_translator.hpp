@@ -13,8 +13,8 @@ class OvRuntime;
 
 namespace clinicavt::translate {
 
-// NLLB-200 on CPU: encoder once, greedy stateful decode. Loads on Prepare or
-// first use; unloads on Release or after 10 idle minutes
+// NLLB-200 on CPU. Runs the encoder once, then a greedy stateful decode. Loads on Prepare or first
+// use and unloads on Release or after 10 idle minutes
 class NllbTranslator : public ITranslator {
    public:
     NllbTranslator(const models::ModelStore& store, models::OvRuntime& runtime);

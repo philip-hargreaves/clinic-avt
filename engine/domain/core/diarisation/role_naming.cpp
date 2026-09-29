@@ -132,7 +132,7 @@ RoleResult NameRoles(const std::vector<LabelledSlice>& turns, const std::vector<
         const double sim2 = anchor_similarity[static_cast<std::size_t>(top2)];
         result.margin = std::abs(sim1 - sim2);
         result.from_anchor = true;
-        doctor = sim1 >= sim2 ? top1 : top2;  // closer to the voice print wins
+        doctor = sim1 >= sim2 ? top1 : top2;  // the one closer to the voice print is the doctor
     } else {
         double sum1 = 0.0, sum2 = 0.0;
         int n1 = 0, n2 = 0;

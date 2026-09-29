@@ -39,7 +39,7 @@ inline std::optional<NoteDetail> NoteDetailFrom(std::string_view name) {
 struct NoteOptions {
     NoteStyle style = NoteStyle::kProse;
     NoteDetail detail = NoteDetail::kConcise;
-    bool confirmed = false;  // clinician confirmed it is a consultation, so no refusal
+    bool confirmed = false;  // the clinician confirmed a consultation, so the note is never refused
 };
 
 // Streams partials, returns the note, throws on failure. Cancel

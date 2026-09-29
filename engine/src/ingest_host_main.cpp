@@ -1,5 +1,5 @@
-// Reads a PDF on stdin and writes its pages as JSON, or one page as BMP, to
-// stdout. Separate process so a parser crash only fails one document
+// Reads a PDF on stdin and writes its pages as JSON, or one page as BMP, to stdout. It runs as a
+// separate process so a parser crash only fails one document
 #include <fcntl.h>
 #include <io.h>
 

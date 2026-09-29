@@ -9,10 +9,10 @@ namespace clinicavt::guidance {
 
 using nlohmann::json;
 
-// Bump when a field changes meaning; readers refuse newer records
+// Bump when a field changes meaning. Readers refuse newer records
 inline constexpr int kRecordVersion = 1;
 
-// Same shape on the wire and in the store; guidance/ready adds the session id
+// The wire and the store use the same shape. guidance/ready adds the session id
 json ToJson(const Corpus& corpus);
 json ToJson(const Results& results);
 
@@ -27,7 +27,7 @@ struct Record {
 json ToJson(const Record& record);
 Record RecordFromJson(const json& j);
 
-// Store text, invalid UTF-8 replaced as on the wire
+// Store text, with invalid UTF-8 replaced as on the wire
 std::string Dump(const Record& record);
 
 // True for an object whose version, if present, is 1 to kRecordVersion

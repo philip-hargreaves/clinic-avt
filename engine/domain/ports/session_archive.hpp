@@ -64,8 +64,8 @@ class ArchiveError : public std::runtime_error {
     ArchiveCode code_;
 };
 
-// Writes one backup: manifest, then each session. Commit verifies the whole file
-// before publishing; destroying without Commit leaves nothing
+// Writes the manifest, then each session. Commit verifies the whole file before publishing.
+// Destroying the writer without Commit leaves nothing
 class IArchiveSink {
    public:
     virtual ~IArchiveSink() = default;
@@ -74,8 +74,8 @@ class IArchiveSink {
     virtual void Commit() = 0;
 };
 
-// Reads one backup. Opening authenticates the manifest; Next yields sessions in
-// order and throws ArchiveError on damage, including a record count mismatch
+// Reads one backup. Opening authenticates the manifest. Next returns sessions in order and throws
+// ArchiveError on damage, including a record count mismatch
 class IArchiveSource {
    public:
     virtual ~IArchiveSource() = default;

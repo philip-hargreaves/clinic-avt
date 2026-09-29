@@ -23,7 +23,8 @@ class AudioRing {
         return capacity_;
     }
 
-    // Producer only. Returns frames written; fewer than frames.size() means the ring is full
+    // Called by the producer only. Returns frames written. Fewer than frames.size() means the ring
+    // is full
     std::size_t TryPush(std::span<const float> frames) {
         const std::size_t write = write_.load(std::memory_order_relaxed);
         const std::size_t read = read_.load(std::memory_order_acquire);
@@ -39,7 +40,7 @@ class AudioRing {
         return count;
     }
 
-    // Consumer only. Returns frames read
+    // Called by the consumer only. Returns frames read
     std::size_t TryPop(std::span<float> out) {
         const std::size_t read = read_.load(std::memory_order_relaxed);
         const std::size_t write = write_.load(std::memory_order_acquire);

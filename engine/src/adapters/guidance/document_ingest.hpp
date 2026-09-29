@@ -61,7 +61,7 @@ class DocumentIngest : public IDocumentIngest {
         std::string path;
     };
 
-    // Syncs index to folder. Files in `fresh` skip the settle wait
+    // Files in `fresh` skip the settle wait
     void Scan(const std::set<std::string>& fresh = {});
     void Work();
     void Index(const Queued& item);

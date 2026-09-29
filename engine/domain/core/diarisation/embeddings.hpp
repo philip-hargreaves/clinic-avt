@@ -13,7 +13,7 @@
 
 namespace clinicavt::diar {
 
-// One fbank frame (25 ms); anything shorter can't be embedded
+// One fbank frame (25 ms). Anything shorter can't be embedded
 inline constexpr std::size_t kEmbedMinFrames = 400;
 
 // Embeddings are unit norm, so the dot product is the cosine similarity
@@ -63,8 +63,8 @@ using EmbedRangeFn = std::function<std::vector<float>(std::uint64_t first, std::
 
 inline constexpr std::uint64_t kOverlapTurnMinFrames = 6400;  // 0.4 s
 
-// Overlap spans of kOverlapTurnMinFrames+ in a slice become extra turns on the nearest
-// other centroid. None with fewer than two clusters
+// Overlap spans of kOverlapTurnMinFrames+ in a slice become extra turns on the nearest other
+// centroid. There are none with fewer than two clusters
 inline std::vector<LabelledSlice> OverlapTurns(const std::vector<Region>& slices,
                                                const std::vector<int>& labels,
                                                const std::vector<std::vector<float>>& centroids,

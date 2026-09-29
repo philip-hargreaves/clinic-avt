@@ -7,7 +7,7 @@
 
 namespace clinicavt::metrics {
 
-// Thread-safe; Take() returns a copy. BeginSession keeps devices and load times, resets the rest
+// Thread-safe. Take() returns a copy. BeginSession keeps devices and load times and resets the rest
 class Registry {
    public:
     struct Snapshot {

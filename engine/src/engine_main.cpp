@@ -95,9 +95,9 @@ class ProbeScope {
     ProbeScope& operator=(const ProbeScope&) = delete;
 };
 
-// Closing the shell ends capture; a reopened shell reconnects. Stay while a
-// note model is loading or ASR is switching device (neither can be cancelled).
-// Otherwise exit when idle with no client, immediately if the shell asked
+// Closing the shell ends capture and a reopened shell reconnects. Stay while a note model is
+// loading or ASR is switching device, since neither can be cancelled. Otherwise exit when idle with
+// no client, or at once if the shell asked
 void Serve(clinicavt::ipc::PipeServer& server, clinicavt::session::SessionController& controller,
            const std::function<bool()>& busy) {
     bool exit_asked = false;
@@ -109,8 +109,8 @@ void Serve(clinicavt::ipc::PipeServer& server, clinicavt::session::SessionContro
     while (server.AwaitClient(exit_asked ? std::chrono::seconds(0) : kIdleExit, busy) ==
            clinicavt::ipc::PipeServer::Accept::kClient) {
         asked_now = false;
-        // Only a client that sent a frame changes exit_asked; a stale connect that
-        // leaves cannot cancel a requested exit
+        // Only a client that sent a frame changes exit_asked, so a stale connection that leaves
+        // cannot cancel a requested exit
         if (server.Serve()) exit_asked = asked_now;
         controller.Stop();
     }
@@ -157,7 +157,7 @@ int wmain(int argc, wchar_t* argv[]) {
         auto diariser = composition::BuildDiariser(model_store, ov_runtime, anchors, metrics,
                                                    config.scripted, roles);
         const std::string auto_tier = composition::MachineNoteTier(model_store);
-        // The shell re-sends its tier on connect; a no-op by then
+        // The shell re-sends its tier on connect, which is a no-op by then
         auto note_writer = composition::BuildNoteWriter(
             model_store, config.models_root, config.note_tier, auto_tier,
             [&server](const clinicavt::note::NoteModelState& state) {

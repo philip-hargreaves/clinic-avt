@@ -10,8 +10,8 @@
 
 namespace clinicavt::guidance {
 
-// Header/footer: repeats in the top or bottom band on this share of pages (min
-// kFurnitureMinPages)
+// A line is a header or footer if it repeats in the top or bottom band on this share of pages, and
+// on at least kFurnitureMinPages
 inline constexpr float kFurnitureShare = 0.4F;
 
 inline constexpr int kFurnitureMinPages = 3;
@@ -26,14 +26,14 @@ inline constexpr int kHyphenLineEnds = 3;
 // hyphenated line end
 std::set<char32_t> HyphenCodes(const std::vector<Page>& pages);
 
-// Hyphen codes become '-' (en dash between digits). Other unmapped glyphs become U+FFFD next
-// to a digit, where they're likely a meaningful symbol, and are dropped otherwise (accents,
-// bullets, footnote marks). Expands ligatures, plains no-break spaces, squeezes spaces. Soft
-// hyphens are dropped except at line end, for JoinBrokenWords
+// Hyphen codes become '-' (en dash between digits). Other unmapped glyphs become U+FFFD next to a
+// digit, where they're likely a meaningful symbol, and are dropped otherwise (accents, bullets,
+// footnote marks). Expands ligatures, turns no-break spaces into plain ones and squeezes spaces.
+// Soft hyphens are dropped except at line end, where JoinBrokenWords needs them
 std::string RepairText(std::string_view text, const std::set<char32_t>& hyphens = {});
 
-// Joins words split across lines. Soft hyphens always join; a plain hyphen is removed only if
-// the joined word appears elsewhere in the document (keeps anti-inflammatory)
+// Joins words split across lines. Soft hyphens always join. A plain hyphen is removed only if the
+// joined word appears elsewhere in the document, which keeps anti-inflammatory
 void JoinBrokenWords(Page& page, const std::unordered_set<std::string>& words);
 
 // Removes repeated lines in the top/bottom band. Mid-page repeats (e.g. Recommendation,

@@ -15,9 +15,9 @@
 
 namespace clinicavt::audio {
 
-// Moves processing off the source thread. OnAudio copies into a ring; a consumer thread
-// feeds the inner sink. An inner stall is absorbed up to ring capacity, then frames are
-// dropped and counted as lost. OnEnd drains the ring and runs the inner OnEnd before returning
+// Moves processing off the source thread. OnAudio copies into a ring and a consumer thread feeds
+// the inner sink. An inner stall is absorbed up to ring capacity, then frames are dropped and
+// counted as lost. OnEnd drains the ring and runs the inner OnEnd before returning
 class BufferedSink : public IAudioSink {
    public:
     BufferedSink(IAudioSink& inner, std::size_t capacity_frames)
@@ -36,9 +36,9 @@ class BufferedSink : public IAudioSink {
     BufferedSink(const BufferedSink&) = delete;
     BufferedSink& operator=(const BufferedSink&) = delete;
 
-    // Source thread. Never blocks; frames that don't fit are counted as lost. Source-reported
-    // loss is added before the push so it goes with these frames; overrun loss is added after,
-    // so it goes with the next batch
+    // Runs on the source thread and never blocks. Frames that don't fit are counted as lost.
+    // Source-reported loss is added before the push so it goes with these frames. Overrun loss is
+    // added after, so it goes with the next batch
     void OnAudio(std::span<const float> frames, std::uint64_t lost_frames) override {
         if (lost_frames > 0) {
             pending_lost_.fetch_add(lost_frames, std::memory_order_relaxed);
@@ -50,7 +50,7 @@ class BufferedSink : public IAudioSink {
         Wake();
     }
 
-    // Source thread. Blocks until the ring is drained and the inner OnEnd has run
+    // Runs on the source thread. Blocks until the ring is drained and the inner OnEnd has run
     void OnEnd(const SourceEnd& end) override {
         end_ = end;
         ended_.store(true, std::memory_order_release);
@@ -93,7 +93,7 @@ class BufferedSink : public IAudioSink {
         }
     }
 
-    // Max 1 s per inner call, to bound work behind a stall
+    // At most 1 s per inner call, to bound the work queued behind a stall
     static constexpr std::size_t kChunkFrames = static_cast<std::size_t>(kSampleRate);
 
     IAudioSink& inner_;

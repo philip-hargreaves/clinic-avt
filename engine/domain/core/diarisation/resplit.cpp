@@ -43,7 +43,7 @@ std::vector<ResplitTurn> ResplitByEmbedding(const std::vector<LabelledSlice>& tu
         std::vector<int> owner(parts.size(), turn.cluster);
         const auto judge = [&](std::size_t j) -> bool {
             const auto& p = parts[j];
-            // Chunk stamps can overrun the turn; clamp to it
+            // Chunk stamps can overrun the turn, so clamp them to it
             const std::uint64_t lo = std::max(p.first_frame, turn.first_frame);
             const std::uint64_t hi = std::min(p.first_frame + p.frame_count, turn.end_frame);
             if (hi <= lo || hi - lo < kResplitMinFrames) return false;

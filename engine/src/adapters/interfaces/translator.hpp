@@ -19,7 +19,7 @@ class ITranslator {
     // Starts slow loading in the background so the first Translate is warm. Idempotent
     virtual void Prepare() {}
 
-    // Frees the model once no translation uses it; the next Prepare or Translate reloads
+    // Frees the model once no translation uses it. The next Prepare or Translate reloads it
     virtual void Release() {}
 
     virtual std::string Translate(const std::string& text, const std::string& language,

@@ -16,7 +16,7 @@ std::string StringField(const json& object, const char* key) {
 
 }  // namespace
 
-// Answers and ticked references are one sealed JSON text; unparseable reads as empty
+// Answers and ticked references are one sealed JSON text. Text that does not parse reads as empty
 records::Answers JsonReflectionCodec::Decode(const std::string& text) const {
     const json parsed = json::parse(text, nullptr, false);
     records::Answers answers;

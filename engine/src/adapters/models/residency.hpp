@@ -12,9 +12,9 @@
 
 namespace clinicavt::models {
 
-// Keeps a model loaded while wanted. Want loads in the background; Use loads
-// inline if needed and retries a failed background load. Release or idle
-// timeout unloads once no work runs. Want and Release never block
+// Keeps a model loaded while wanted. Want loads in the background. Use loads inline if needed and
+// retries a failed background load. Release or the idle timeout unloads once no work runs. Want and
+// Release never block
 class Residency {
    public:
     using Clock = std::chrono::steady_clock;

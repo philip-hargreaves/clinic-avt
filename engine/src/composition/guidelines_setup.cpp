@@ -17,7 +17,7 @@ namespace clinicavt::composition {
 
 namespace {
 
-// Default: the user's Documents folder, unless overridden
+// Defaults to the user's Documents folder unless overridden
 std::filesystem::path GuidelinesFolder(const std::string& override) {
     if (!override.empty()) return utf8::ToPath(override);
     PWSTR documents = nullptr;

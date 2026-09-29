@@ -46,9 +46,8 @@ json HandleModels(const clinicavt::models::ModelStore& models,
 
 json NoteModelJson(const clinicavt::note::NoteModelState& state);
 
-// note/tier: resolves and loads the named tier; "auto" is the machine default.
-// Refused during a consultation. Unknown or unstaged tier is an invalid-params
-// error listing what is staged
+// note/tier: "auto" is the machine default. Refused during a consultation. An unknown or unstaged
+// tier is an invalid-params error listing what is staged
 std::variant<json, Error> HandleNoteTier(clinicavt::note::INoteTiers* lane, bool session_active,
                                          const json& params, const std::string& auto_tier = "");
 
@@ -70,7 +69,6 @@ std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& 
 std::variant<json, Error> HandleSessionTranscript(clinicavt::store::ISessionStore& sessions,
                                                   const json& params);
 
-// Appraisal reflections on a stored session
 std::variant<json, Error> HandleReflectionGet(clinicavt::records::Reflections& reflections,
                                               const json& params);
 std::variant<json, Error> HandleReflectionUpdate(clinicavt::records::Reflections& reflections,
@@ -100,7 +98,7 @@ std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& l
 std::variant<json, Error> HandleArchiveRestore(clinicavt::archive::ArchiveLane& lane,
                                                bool session_active, const json& params);
 
-// Seeds demo data, a no-op if already seeded. Clearing keeps real sessions
+// Seeds demo data unless it is already seeded. Clearing keeps real sessions
 std::variant<json, Error> HandleDemoSeed(clinicavt::demo::DemoSamples& demo);
 json HandleDemoClear(clinicavt::demo::DemoSamples& demo);
 
@@ -203,9 +201,9 @@ using AsrSwitch =
 std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool session_active,
                                           const json& params, std::function<void(json)> notify);
 
-// Dependencies for the RPC methods. The references are always set; the rest only when
-// staged. first_use: model caches were cold at launch, so
-// one-off compiles are running and readiness reports them
+// Dependencies for the RPC methods. The references are always set and the rest only when staged.
+// first_use is set when model caches were cold at launch, so one-off compiles are running and
+// readiness reports them
 struct EngineServices {
     clinicavt::session::SessionController& controller;
     const clinicavt::models::ModelStore& models;

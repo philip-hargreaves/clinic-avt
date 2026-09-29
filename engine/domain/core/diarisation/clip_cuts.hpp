@@ -9,8 +9,8 @@
 
 namespace clinicavt::diar {
 
-// Whisper chunk edges can be a few hundred ms off. Each cut snaps to the quietest VAD hop in
-// the window; it's dropped if there's no pause or it's too close to another cut
+// Whisper chunk edges can be a few hundred ms off. Each cut snaps to the quietest VAD hop in the
+// window. A cut is dropped if there is no pause or it is too close to another cut
 inline constexpr std::uint64_t kClipCutSnapFrames = 4800;    // 300 ms each side
 inline constexpr std::uint64_t kClipCutMinGapFrames = 8000;  // 0.5 s from any other cut
 inline std::vector<std::uint64_t> SnapClipCuts(std::span<const std::uint64_t> cuts,

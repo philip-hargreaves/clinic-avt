@@ -10,7 +10,7 @@
 
 namespace clinicavt::demo {
 
-// Start time: months_back months before now, the day clamped to the month
+// Returns the time months_back months before now, with the day clamped to the length of that month
 std::chrono::sys_seconds SampleStart(const Sample& sample, std::chrono::sys_seconds now);
 
 std::size_t SeedSampleYear(store::ISessionStore& sessions, const records::IReflectionCodec& codec,
@@ -18,14 +18,13 @@ std::size_t SeedSampleYear(store::ISessionStore& sessions, const records::IRefle
 
 bool HasSamples(store::ISessionStore& sessions);
 
-// Seeds and clears the sample year alongside real sessions
 class DemoSamples {
    public:
     DemoSamples(store::ISessionStore& sessions, const records::IReflectionCodec& codec,
                 ISampleSource& source)
         : sessions_(sessions), codec_(codec), source_(source) {}
 
-    // A no-op returning 0 when samples are stored already. Throws when the source has none
+    // Returns 0 without writing when samples are stored already. Throws when the source has none
     std::size_t SeedOnce(std::chrono::sys_seconds now);
 
     // Removes only the samples and returns how many

@@ -17,7 +17,7 @@ struct ProcessEntry {
     std::uint64_t created = 0;  // FILETIME ticks, 0 when the process cannot be opened
 };
 
-// Running processes only; an exited one is absent even while a handle is open
+// Lists running processes only. An exited one is absent even while a handle is open
 std::vector<ProcessEntry> ListProcesses();
 
 std::uint64_t CreationTime(ProcessId pid);
@@ -30,7 +30,7 @@ std::vector<ProcessId> Orphans(const std::vector<ProcessEntry>& entries, const w
 // only while exiting, or indefinitely when stuck in the driver
 std::vector<ProcessId> OrphanedProcesses(const wchar_t* image);
 
-// Orphans still present after `grace`; an exiting host is gone by then
+// Orphans still present after `grace`. An exiting host is gone by then
 std::vector<ProcessId> LingeringOrphans(const wchar_t* image, std::chrono::milliseconds grace);
 
 }  // namespace clinicavt::system

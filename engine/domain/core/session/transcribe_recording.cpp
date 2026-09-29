@@ -68,7 +68,7 @@ Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& di
     stage("turns decoded");
     const auto similarity = anchor_similarity.get();
     stage("voiceprints joined");
-    // Must run after the voiceprint task joins: the embedder is single-threaded
+    // Must run after the voiceprint task joins because the embedder is single-threaded
     {
         const auto centroids = diariser.ClusterCentroids();
         const auto pieces = diar::ResplitByEmbedding(

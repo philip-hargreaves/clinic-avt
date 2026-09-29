@@ -8,8 +8,8 @@
 
 namespace clinicavt::diar {
 
-// Regions behind this margin from the VAD head can't change: closing takes up to
-// kMinSilenceFrames, padding up to 2*kPadFrames
+// Regions behind this margin from the VAD head can't change, because closing a region takes up to
+// kMinSilenceFrames and padding up to 2*kPadFrames
 inline constexpr std::uint64_t kSegFrontierMarginFrames = kMinSilenceFrames + 2 * kPadFrames;
 
 inline std::uint64_t SegSettledFrontier(std::uint64_t seg_done, std::uint64_t vad_frames) {

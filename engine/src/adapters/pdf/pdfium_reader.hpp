@@ -22,7 +22,8 @@ class PdfiumReader {
     // Every page's size and text lines as JSON, with the counts for the log
     std::string ExtractJson(int& pages, std::size_t& lines) const;
 
-    // One page as a 32-bit top-down BMP, white behind the content. kOk, kBadPage or kOutputBound
+    // Renders one page as a 32-bit top-down BMP, white behind the content. Returns kOk, kBadPage or
+    // kOutputBound
     int RenderBmp(int index, int dpi, std::vector<unsigned char>& out, int& width,
                   int& height) const;
 

@@ -37,7 +37,7 @@ inline std::string LabelFrom(std::string_view note, std::size_t max_chars = 80) 
     return label;
 }
 
-// Cleans a model-written title. Empty is fine: the list falls back to the date
+// Cleans a model-written title. An empty title is allowed because the list then shows the date
 inline std::string SanitiseLabel(std::string_view raw, std::size_t max_chars = 60) {
     const auto line_end = raw.find('\n');
     std::string label = LabelFrom(raw.substr(0, line_end), max_chars);

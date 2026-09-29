@@ -21,8 +21,6 @@ namespace {
 
 using namespace test_harness;
 
-// Capture and crash safety
-
 TEST(SessionController, AFailedStartLeavesNoTraceAndTheNextStartWorks) {
     struct Row {
         const char* name;
@@ -63,7 +61,6 @@ TEST(SessionController, AFailedStartLeavesNoTraceAndTheNextStartWorks) {
             << "a session that never produced audio leaves no trace";
         EXPECT_TRUE(rig.events.interruptions.empty());
 
-        // The failure is not sticky
         rig.store.refuse_begin = false;
         ASSERT_TRUE(controller.Start());
         controller.Stop();
@@ -102,7 +99,7 @@ TEST(SessionController, EachWayOfEndingASessionHasItsOwnStoreOutcome) {
          {"begin s1", "abandon s1"},
          SourceEndReason::kFailed,
          "driver exploded"},
-        // One window is under the shortest decodable turn: no transcript
+        // One window is shorter than the shortest decodable turn, so there is no transcript
         {"a completed replay waits for the stop",
          Script::kCompleteAfterAudio,
          Ending::kStop,
@@ -275,8 +272,6 @@ TEST(SessionController, RetainReachesTheStoreAndLeavingSweeps) {
     EXPECT_EQ(rig.store.sweeps, 3);
     controller.Stop();
 }
-
-// Diarisation hand-off
 
 TEST(SessionController,
      StopHandsTheCapturedAudioToDiarisationAndStoresOnlyTheAttributedTranscript) {

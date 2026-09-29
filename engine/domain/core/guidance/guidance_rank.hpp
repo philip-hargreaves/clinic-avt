@@ -44,25 +44,25 @@ struct Ordered {
     bool abstained = false;
 };
 
-// Sentence hits under vote_floor don't vote; whole-note hits always do
+// Sentence hits under vote_floor don't vote. Whole-note hits always do
 std::vector<Candidate> RankVote(const std::vector<SubQueryHits>& lists, int limit = kUnionSize,
                                 double vote_floor = -1.0);
 
-// Whole-note top hit reaches floor (true with no whole-note list). Sentences are ignored: one
-// can match a passage in any document
+// True when the whole-note top hit reaches floor, or when there is no whole-note list. Sentences
+// are ignored because one can match a passage in any document
 bool NoteClears(const std::vector<SubQueryHits>& lists, double floor);
 
-// Drops candidates whose best cosine is under floor; abstained when none remain
+// Drops candidates whose best cosine is under floor. abstained is set when none remain
 Ordered ApplyFloor(std::vector<Candidate> ranked, double floor = kDefaultFloor);
 
-// Recommendation targets a population the note explicitly excludes: pregnancy vs "not
-// pregnant", children vs a stated adult, or the other sex. Checks the title too, since a
-// recommendation rarely restates e.g. under-5s. Explicit statements only
+// True when the recommendation targets a population the note explicitly excludes, such as pregnancy
+// against "not pregnant", children against a stated adult, or the other sex. Checks the title too,
+// since a recommendation rarely restates e.g. under-5s. Only explicit statements count
 bool PopulationConflict(std::string_view note, std::string_view recommendation,
                         std::string_view title = "");
 
-// Half the shorter passage's content words appear in the other (e.g. a quality standard
-// restating its guideline)
+// True when half the shorter passage's content words appear in the other, as when a quality
+// standard restates its guideline
 inline constexpr double kDuplicateOverlap = 0.5;
 
 bool NearDuplicate(std::string_view a, std::string_view b);

@@ -34,7 +34,6 @@ namespace clinicavt::session {
 // transcribing 15-95 %, finalising 95-100 %
 enum class ImportStage { kReading, kSpeech, kTranscribing, kFinalising };
 
-// Overall percentage for a fraction through `stage`
 int ImportPercent(ImportStage stage, double fraction);
 
 // Called on the import thread. done: empty error on success, else why the session was erased

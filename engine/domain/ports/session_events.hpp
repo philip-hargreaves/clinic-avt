@@ -28,13 +28,12 @@ class ISessionEvents {
     virtual void OnNotePartial(const std::string&) {}
     virtual void OnNoteReady(const std::string&) {}
     virtual void OnNoteFailed(const std::string&) {}
-    // Saved note with its revision
     virtual void OnNoteSaved(const std::string& /*session*/, const store::Document& /*note*/) {}
 
     // The store could not write (disk full, I/O). Recording continues
     virtual void OnStorageFault(const std::string& /*detail*/) {}
-    // No note. overridable: true when the model judged it not a consultation, false when the
-    // transcript was too short
+    // No note was written. overridable is true when the model judged it not a consultation and
+    // false when the transcript was too short
     virtual void OnNoteRefused(const std::string&, bool) {}
 
     // Patient information follows the note on the same thread

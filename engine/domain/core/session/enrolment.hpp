@@ -12,8 +12,8 @@
 
 namespace clinicavt::session {
 
-// Records until Finish or the time cap, embeds the speech and replaces the voice anchor.
-// Reports via events. Caller must not run it alongside recording
+// Records until Finish or the time cap, embeds the speech and replaces the voice anchor. Reports
+// through events. The caller must not run it alongside recording
 class Enrolment {
    public:
     Enrolment(const SourceFactory& factory, audio::IStreamingVad& vad, diar::IDiariser& diariser,
@@ -28,7 +28,6 @@ class Enrolment {
     // Stops early and builds the print from what was captured
     void Finish();
     bool Running() const;
-    // Waits for a running enrolment to end
     void Join();
 
    private:

@@ -103,7 +103,7 @@ struct NllbTranslator::Impl {
         decoder = ov::InferRequest();
     }
 
-    // NLLB input: source language token, ids, end token
+    // NLLB input is the source language token, the ids, then the end token
     std::vector<std::int64_t> Tokenize(const std::string& sentence) {
         ov::Tensor input(ov::element::string, ov::Shape{1});
         input.data<std::string>()[0] = PlainPunctuation(sentence);
@@ -135,7 +135,7 @@ struct NllbTranslator::Impl {
         return text;
     }
 
-    // NLLB is sentence-level; translate line by line to keep structure and quality
+    // NLLB works on sentences, so translate line by line to keep structure and quality
     std::string TranslateLine(const std::string& line, std::int64_t target,
                               const std::function<void(const std::string&)>& partial = {}) {
         const auto source = Tokenize(line);
@@ -152,7 +152,8 @@ struct NllbTranslator::Impl {
         decoder.reset_state();
         ov::Tensor beam(ov::element::i32, {1});
         beam.data<std::int32_t>()[0] = 0;
-        // First step feeds decoder start + forced target language; state holds the rest
+        // The first step feeds the decoder start and the forced target language. The state holds
+        // the rest
         std::vector<std::int64_t> step = {decoder_start, target};
         std::vector<std::int64_t> generated;
         while (generated.size() < kMaxTokens && !cancel.load()) {
@@ -170,7 +171,7 @@ struct NllbTranslator::Impl {
             const float* last = logits.data<float>() + (shape[1] - 1) * vocab;
             auto token = static_cast<std::int64_t>(
                 std::distance(last, std::max_element(last, last + vocab)));
-            // Greedy decoding can loop on one token; the runner-up breaks the loop
+            // Greedy decoding can loop on one token, so the runner-up is taken to break the loop
             const auto size = generated.size();
             if (size >= 2 && token == generated[size - 1] && token == generated[size - 2]) {
                 std::vector<float> copy(last, last + vocab);

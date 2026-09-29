@@ -97,7 +97,6 @@ class IDocumentIngest {
     virtual Listing List() = 0;
     // Sends every file holding the document to the Recycle Bin
     virtual void Remove(std::int64_t id) = 0;
-    // Removes every document; returns the count
     virtual std::size_t RemoveAll() = 0;
     virtual PageRender Render(std::int64_t id, int page, std::int64_t chunk) = 0;
     // Path in the guidelines folder, for the PDF viewer

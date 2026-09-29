@@ -5,7 +5,7 @@
 
 namespace clinicavt::note {
 
-// Configured tier and whether its model is loaded; drives the shell status
+// Configured tier and whether its model is loaded. The shell status is built from it
 struct NoteModelState {
     enum class Phase { kIdle, kLoading, kReady, kFailed };
 
@@ -18,8 +18,8 @@ struct NoteModelState {
     bool first_use = false;  // no compile cache yet, so the load takes minutes
 };
 
-// Note tier configuration; a tier is a role the model store resolves. Separate
-// from INoteWriter so single-model writers do not need it
+// Note tier configuration. A tier is a role the model store resolves. It is separate from
+// INoteWriter so single-model writers do not need it
 class INoteTiers {
    public:
     using Listener = std::function<void(const NoteModelState&)>;

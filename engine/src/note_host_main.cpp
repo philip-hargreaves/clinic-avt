@@ -1,5 +1,5 @@
-// Note model process, so a driver fault only costs a respawn. JSON-RPC over a private
-// pipe; exits when the engine disconnects
+// Runs the note model in its own process, so a driver fault only costs a respawn. Speaks JSON-RPC
+// over a private pipe and exits when the engine disconnects
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -29,8 +29,8 @@
 
 namespace {
 
-// OpenVINO workaround: after a driver fault any GPU call can hang, so report and
-// exit immediately, skipping teardown
+// Works around OpenVINO, where any GPU call can hang after a driver fault. Reports and exits at
+// once without teardown
 void ExitIfPoisoned(const std::string& detail) {
     if (!clinicavt::note::PoisonsGpuContext(detail)) return;
     clinicavt::log::Printf("clinicavt-note-host: the GPU context is corrupt (%.200s); exiting\n",
@@ -105,7 +105,7 @@ std::vector<clinicavt::asr::Turn> TurnsFrom(const nlohmann::json& params) {
     return clinicavt::ipc::TurnsFromJson(params.value("turns", nlohmann::json::array()));
 }
 
-// The engine sends only names it validated; anything else takes the default
+// The engine sends only names it validated. Anything else gets the default
 clinicavt::note::NoteStyle StyleFrom(const nlohmann::json& params) {
     return clinicavt::note::NoteStyleFrom(params.value("style", "prose"))
         .value_or(clinicavt::note::NoteStyle::kProse);
@@ -174,8 +174,8 @@ int main(int argc, char* argv[]) {
             writer.Cancel();
             return json::object();
         });
-        // Inline: short, and a failure only loses a guess. Returning an error could be
-        // mistaken by the engine for its next request's
+        // Runs inline because it is short and a failure only loses a guess. The engine could
+        // mistake a returned error for the reply to its next request
         server.RegisterMethod("prefill", [&writer](const json& params) {
             try {
                 writer.Prefill(TurnsFrom(params),
@@ -209,9 +209,9 @@ int main(int argc, char* argv[]) {
             });
         });
 
-        // Single client (the engine). When it disconnects the loop ends and any
-        // generation is cancelled, so the host exits within seconds. A running load
-        // cannot be cancelled and finishes first
+        // Serves one client, the engine. When it disconnects the loop ends and any generation is
+        // cancelled, so the host exits within seconds. A running load cannot be cancelled and
+        // finishes first
         server.ServeOneClient();
         writer.Close();
         return 0;

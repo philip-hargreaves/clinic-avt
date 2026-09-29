@@ -85,7 +85,7 @@ void NoteLane::WriteNote(store::SessionId id, std::vector<asr::Turn> transcript,
                 log::Printf("clinicavt-engine: note refused: %s\n", reason->c_str());
                 refused_ = true;
                 events_.OnNoteRefused(*reason, true);
-                return;  // no note, sheet or label; accepted() not called
+                return;  // no note, sheet or label, and accepted() is not called
             }
             if (const auto stored = SaveNote(id, note, options)) {
                 // An OnNoteSaved handler failure must not lose the note
@@ -156,8 +156,8 @@ void NoteLane::Join() {
     }
 }
 
-// abort_ covers a Join racing thread start; otherwise the writer's per-generation cancel reset
-// would drop the cancel
+// abort_ covers a Join that races the thread start. Without it the writer's per-generation cancel
+// reset would drop the cancel
 void NoteLane::Run(std::function<void()> work) {
     Join();
     std::lock_guard<std::mutex> lock(mutex_);
@@ -218,7 +218,7 @@ std::optional<store::Document> NoteLane::SaveNote(const store::SessionId& id,
     }
 }
 
-// Never overwrites a user-edited label; skips titles the sanitiser rejects
+// Never overwrites a user-edited label, and skips titles the sanitiser rejects
 void NoteLane::SaveLabel(const store::SessionId& id, const std::string& note_text) {
     try {
         if (!store_.ReadDocument(id, store::DocumentKind::kLabel).edited_at.empty()) {

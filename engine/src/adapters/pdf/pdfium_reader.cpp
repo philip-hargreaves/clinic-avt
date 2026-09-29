@@ -49,8 +49,8 @@ struct Line {
     bool any = false;
 };
 
-// Characters in content order. A line ends at a generated break or when the next
-// character is outside the line band. Boxes in points, page rotation applied, origin top left
+// Characters in content order. A line ends at a generated break or when the next character is
+// outside the line band. Boxes are in points, with page rotation applied and the origin top left
 json PageJson(FPDF_DOCUMENT doc, int index) {
     FPDF_PAGE page = FPDF_LoadPage(doc, index);
     json out{{"width", 0}, {"height", 0}, {"lines", json::array()}};
