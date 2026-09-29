@@ -1,0 +1,12 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 43,
+        "method": "anchor/enrol/finish"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 43,
+        "result": {}
+    }
+}

@@ -1,6 +1,5 @@
 #include "adapters/storage/sqlite_session_store.hpp"
 
-#include <cstdio>
 #include <format>
 #include <nlohmann/json.hpp>
 #include <random>
@@ -10,6 +9,7 @@
 #include "adapters/storage/store_migrations.hpp"
 #include "core/archive/record_rules.hpp"
 #include "core/common/iso8601.hpp"
+#include "core/common/log.hpp"
 
 namespace clinicavt::store {
 
@@ -88,7 +88,7 @@ SqliteSessionStore::~SqliteSessionStore() {
         try {
             CommitPending();
         } catch (const StoreError& e) {
-            std::fprintf(stderr, "clinicavt-engine: store commit failed at close: %s\n", e.what());
+            log::Printf("clinicavt-engine: store commit failed at close: %s\n", e.what());
         }
     }
 }
@@ -282,8 +282,11 @@ std::vector<SessionSummary> SqliteSessionStore::ListSessions() {
         " WHERE NOT (s.retain = 0 AND s.state = 'finalised')"
         " ORDER BY s.started_at DESC, s.rowid DESC");
     while (select.Step()) {
+        // The schema's CHECK allows only recording and finalised
         SessionSummary summary{select.ColumnText(0), select.ColumnText(1), select.ColumnText(2),
-                               select.ColumnText(3), static_cast<int>(select.ColumnInt64(4))};
+                               select.ColumnText(3) == "finalised" ? SessionState::kFinalised
+                                                                   : SessionState::kRecording,
+                               static_cast<int>(select.ColumnInt64(4))};
         const std::vector<std::uint8_t> sealed = select.ColumnBlob(6);
         if (!sealed.empty()) {
             try {
@@ -769,7 +772,7 @@ void SqliteSessionStore::WriterLoop() {
         try {
             if (CommitPending() && session.faulted) {
                 session.faulted = false;
-                std::fprintf(stderr, "clinicavt-engine: store commits again\n");
+                log::Printf("clinicavt-engine: store commits again\n");
             }
         } catch (const StoreError& e) {
             const std::uint64_t bound = kPendingBound.count() * session.sample_rate;
@@ -782,7 +785,7 @@ void SqliteSessionStore::WriterLoop() {
             }
             if (!session.faulted) {
                 session.faulted = true;
-                std::fprintf(stderr, "clinicavt-engine: store commit failed: %s\n", e.what());
+                log::Printf("clinicavt-engine: store commit failed: %s\n", e.what());
                 if (on_fault_) {
                     const auto listener = on_fault_;
                     lock.unlock();
@@ -807,7 +810,7 @@ void SqliteSessionStore::SetMaxPageCount(std::int64_t pages) {
 
 void SqliteSessionStore::Checkpoint() {
     if (!db_.CheckpointTruncate()) {
-        std::fprintf(stderr, "clinicavt-engine: store log kept, a reader holds it\n");
+        log::Printf("clinicavt-engine: store log kept, a reader holds it\n");
     }
 }
 

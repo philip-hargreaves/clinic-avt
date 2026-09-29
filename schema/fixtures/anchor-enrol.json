@@ -1,0 +1,18 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 41,
+        "method": "anchor/enrol",
+        "params": {
+            "seconds": 45,
+            "mic": {
+                "id": "{0.0.1}.{aa}"
+            }
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 41,
+        "result": {}
+    }
+}

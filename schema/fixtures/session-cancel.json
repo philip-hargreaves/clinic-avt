@@ -1,0 +1,12 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 59,
+        "method": "session/cancel"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 59,
+        "result": {}
+    }
+}

@@ -1,6 +1,5 @@
 #include "adapters/diarisation/anchor_store.hpp"
 
-#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
@@ -12,6 +11,7 @@
 #include <dpapi.h>
 // clang-format on
 
+#include "core/common/log.hpp"
 #include "core/diarisation/embeddings.hpp"
 
 namespace clinicavt::diar {
@@ -118,14 +118,14 @@ void AnchorStore::Load() {
     DATA_BLOB blob_out{};
     if (!CryptUnprotectData(&blob_in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN,
                             &blob_out)) {
-        std::fprintf(stderr, "clinicavt-engine: anchor unreadable, starting fresh\n");
+        log::Printf("clinicavt-engine: anchor unreadable, starting fresh\n");
         return;
     }
     const auto record = detail::ParseAnchor({blob_out.pbData, blob_out.cbData});
     if (record.has_value()) {
         record_ = *record;
     } else {
-        std::fprintf(stderr, "clinicavt-engine: anchor format mismatch, starting fresh\n");
+        log::Printf("clinicavt-engine: anchor format mismatch, starting fresh\n");
     }
     SecureZeroMemory(blob_out.pbData, blob_out.cbData);
     LocalFree(blob_out.pbData);

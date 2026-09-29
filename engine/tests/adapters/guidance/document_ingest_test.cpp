@@ -62,7 +62,7 @@ void Delete(const std::filesystem::path& path) {
     std::filesystem::remove(path);
 }
 
-// An ingest over root, its folder root/guidelines unless given
+// DocumentIngest over root. The folder defaults to root/guidelines
 struct Harness {
     std::filesystem::path root;
     Retriever retriever;
@@ -72,7 +72,7 @@ struct Harness {
     std::mutex mutex;
     std::vector<DocumentInfo> documents;
     std::vector<IngestProgress> progress;
-    DocumentIngest ingest;  // last, so its threads stop before what they report into goes
+    DocumentIngest ingest;  // last, so its threads stop before the members they write to
 
     explicit Harness(std::filesystem::path dir, std::filesystem::path host = {},
                      std::filesystem::path in = {})
@@ -127,7 +127,7 @@ struct Harness {
         return false;
     }
 
-    // The document the file holds, once the scan has taken it
+    // Waits for the scan to list the file and returns its id
     std::int64_t IdOf(const char* path, int seconds = 10) {
         std::int64_t id = 0;
         WaitUntil(
@@ -144,7 +144,7 @@ struct Harness {
         return id;
     }
 
-    bool WaitForState(std::int64_t id, const char* state, int seconds = 10) {
+    bool WaitForState(std::int64_t id, DocumentState state, int seconds = 10) {
         return WaitUntil(
             [&] {
                 std::lock_guard<std::mutex> lock(mutex);
@@ -156,7 +156,7 @@ struct Harness {
     }
 
     // For a document seen before, whose earlier events would satisfy WaitForState
-    bool WaitListed(std::size_t count, const char* state) {
+    bool WaitListed(std::size_t count, DocumentState state) {
         return WaitUntil([&] {
             const auto rows = ingest.List().documents;
             return rows.size() == count && std::ranges::all_of(rows, [&](const DocumentInfo& d) {
@@ -189,8 +189,8 @@ TEST(DocumentIngest, AFileIsIndexedSearchedCitedAndRemovedEveryWay) {
     const auto pmr = h.IdOf("pmr.md");
     ASSERT_NE(gout, 0);
     ASSERT_NE(pmr, 0);
-    ASSERT_TRUE(h.WaitForState(gout, "ready"));
-    ASSERT_TRUE(h.WaitForState(pmr, "ready"));
+    ASSERT_TRUE(h.WaitForState(gout, DocumentState::kReady));
+    ASSERT_TRUE(h.WaitForState(pmr, DocumentState::kReady));
 
     const auto listing = h.ingest.List();
     EXPECT_EQ(listing.folder, h.folder);
@@ -238,26 +238,24 @@ TEST(DocumentIngest, AFileIsIndexedSearchedCitedAndRemovedEveryWay) {
     const auto ord = std::stoll(hit.chunk_id.substr(hit.chunk_id.rfind('-') + 1));
     EXPECT_EQ(DocumentIndex(h.root / "index" / kIndexFile).ReadChunk(pmr, ord).text, hit.text);
 
-    // Deleting the file removes its document
     Delete(gout_file);
-    ASSERT_TRUE(h.WaitForState(gout, "removed"));
+    ASSERT_TRUE(h.WaitForState(gout, DocumentState::kRemoved));
     EXPECT_EQ(h.ingest.List().documents.size(), 1u);
     EXPECT_FALSE(Shows(h.retriever.Search(flare, 3, SearchMode::kQuery), gout));
 
-    // Remove sends the file to the bin
     h.ingest.Remove(pmr);
     EXPECT_EQ(h.binned, std::vector<std::filesystem::path>{pmr_file});
     EXPECT_FALSE(std::filesystem::exists(pmr_file));
-    ASSERT_TRUE(h.WaitForState(pmr, "removed"));
+    ASSERT_TRUE(h.WaitForState(pmr, DocumentState::kRemoved));
     EXPECT_THROW(h.ingest.Remove(pmr), store::StoreError);
 
-    // The file coming back brings the document back, and RemoveAll bins every file
+    // Restoring the file restores the document. RemoveAll bins every file
     h.Write("Gout local guideline.md", kGuideline);
-    ASSERT_TRUE(h.WaitListed(1, "ready"));
+    ASSERT_TRUE(h.WaitListed(1, DocumentState::kReady));
     EXPECT_EQ(h.ingest.RemoveAll(), 1u);
     EXPECT_EQ(h.binned.size(), 2u);
     EXPECT_FALSE(std::filesystem::exists(gout_file));
-    ASSERT_TRUE(h.WaitListed(0, "ready"));
+    ASSERT_TRUE(h.WaitListed(0, DocumentState::kReady));
     EXPECT_TRUE(std::filesystem::exists(h.folder / kReadMe));
 }
 
@@ -266,7 +264,7 @@ TEST(DocumentIngest, ARenameKeepsTheDocumentAndAChangedFileIsANewOne) {
     Harness h(dir.path);
     const auto file = h.Write("pmr.md", kPathway);
     const auto id = h.IdOf("pmr.md");
-    ASSERT_TRUE(h.WaitForState(id, "ready"));
+    ASSERT_TRUE(h.WaitForState(id, DocumentState::kReady));
     const auto sha = h.ingest.List().documents[0].sha256;
 
     std::filesystem::rename(file, h.folder / "PMR pathway 2024.md");
@@ -276,13 +274,13 @@ TEST(DocumentIngest, ARenameKeepsTheDocumentAndAChangedFileIsANewOne) {
     }));
     const auto renamed = h.ingest.List().documents[0];
     EXPECT_EQ(renamed.name, "PMR pathway 2024");
-    EXPECT_EQ(renamed.state, "ready") << "a rename does not re-index";
+    EXPECT_EQ(renamed.state, DocumentState::kReady) << "a rename does not re-index";
 
     h.Write("PMR pathway 2024.md", std::string(kPathway) + "\n1.3 Review bone protection.\n");
-    ASSERT_TRUE(h.WaitForState(id, "removed")) << "the old content is gone";
+    ASSERT_TRUE(h.WaitForState(id, DocumentState::kRemoved)) << "the old content is gone";
     ASSERT_TRUE(h.WaitUntil([&] {
         const auto rows = h.ingest.List().documents;
-        return rows.size() == 1 && rows[0].state == "ready" && rows[0].sha256 != sha;
+        return rows.size() == 1 && rows[0].state == DocumentState::kReady && rows[0].sha256 != sha;
     })) << "the changed file is a new document";
     EXPECT_NE(h.ingest.List().documents[0].id, id) << "so old citations never point into new text";
 }
@@ -314,9 +312,9 @@ TEST(DocumentIngest, ADeletedFolderIsMadeAgainEmptyAndAnUnreachableParentHoldsTh
     Harness h(dir.path);
     h.Write("gout.md", kGuideline);
     const auto id = h.IdOf("gout.md");
-    ASSERT_TRUE(h.WaitForState(id, "ready"));
+    ASSERT_TRUE(h.WaitForState(id, DocumentState::kReady));
     std::filesystem::remove_all(h.folder);
-    ASSERT_TRUE(h.WaitForState(id, "removed"));
+    ASSERT_TRUE(h.WaitForState(id, DocumentState::kRemoved));
     ASSERT_TRUE(h.WaitUntil([&] { return std::filesystem::exists(h.folder / kReadMe); }));
     EXPECT_TRUE(h.ingest.List().found);
 
@@ -325,7 +323,7 @@ TEST(DocumentIngest, ADeletedFolderIsMadeAgainEmptyAndAnUnreachableParentHoldsTh
     const auto drive = away_dir.path / "drive";
     Harness away(away_dir.path, {}, drive / "guidelines");
     away.Write("gout.md", kGuideline);
-    ASSERT_TRUE(away.WaitForState(away.IdOf("gout.md"), "ready"));
+    ASSERT_TRUE(away.WaitForState(away.IdOf("gout.md"), DocumentState::kReady));
     std::filesystem::remove_all(drive);
     // The scan that finds the folder unreachable stops before acting on anything
     ASSERT_TRUE(away.WaitUntil([&] { return !away.ingest.List().found; }));
@@ -343,8 +341,8 @@ TEST(DocumentIngest, PatientDataIsRefusedAndWhatCannotBeReadIsSkippedOrCounted) 
     h.Write("~$lock.txt", "an Office lock");
     h.Write("gout.md", kGuideline);
     const auto letter = h.IdOf("letter.txt");
-    ASSERT_TRUE(h.WaitForState(letter, "failed"));
-    ASSERT_TRUE(h.WaitForState(h.IdOf("gout.md"), "ready"));
+    ASSERT_TRUE(h.WaitForState(letter, DocumentState::kFailed));
+    ASSERT_TRUE(h.WaitForState(h.IdOf("gout.md"), DocumentState::kReady));
     const auto listing = h.ingest.List();
     EXPECT_EQ(listing.unsupported, 2) << "the docx and the pdf; the lock file is ignored";
     ASSERT_EQ(listing.documents.size(), 2u);
@@ -363,7 +361,7 @@ TEST(DocumentIngest, PatientDataIsRefusedAndWhatCannotBeReadIsSkippedOrCounted) 
     // Add copies then scans. A scan under load may take the file on the next pass
     const auto pmr = h.IdOf("PMR pathway.md");
     ASSERT_NE(pmr, 0);
-    ASSERT_TRUE(h.WaitForState(pmr, "ready"));
+    ASSERT_TRUE(h.WaitForState(pmr, DocumentState::kReady));
     EXPECT_EQ(h.ingest.Add({h.root / "PMR pathway.md"}).documents.size(), 1u)
         << "the same content again is the same document";
     EXPECT_EQ(h.ingest.List().documents.size(), 3u);
@@ -377,7 +375,7 @@ TEST(DocumentIngest, ReadsAPdfThroughTheHostWithItsPages) {
         "Check urate six weeks after any dose change."};
     const auto path = h.WritePdf("gout.pdf", lines);
     const auto id = h.IdOf("gout.pdf");
-    ASSERT_TRUE(h.WaitForState(id, "ready"));
+    ASSERT_TRUE(h.WaitForState(id, DocumentState::kReady));
     const auto row = h.ingest.List().documents[0];
     EXPECT_EQ(row.pages, 1);
     EXPECT_EQ(row.pages_without_text, 0);
@@ -413,9 +411,9 @@ TEST(DocumentIngest, HostRefusalsBecomeTheRowsError) {
     const auto locked = h.IdOf("locked.pdf");
     const auto broken = h.IdOf("broken.pdf");
     const auto fine = h.IdOf("fine.pdf");
-    ASSERT_TRUE(h.WaitForState(locked, "failed"));
-    ASSERT_TRUE(h.WaitForState(broken, "failed"));
-    ASSERT_TRUE(h.WaitForState(fine, "ready"));
+    ASSERT_TRUE(h.WaitForState(locked, DocumentState::kFailed));
+    ASSERT_TRUE(h.WaitForState(broken, DocumentState::kFailed));
+    ASSERT_TRUE(h.WaitForState(fine, DocumentState::kReady));
     for (const auto& row : h.ingest.List().documents) {
         if (row.id == locked) EXPECT_EQ(row.error, "password");
         if (row.id == broken) EXPECT_EQ(row.error, "crashed");
@@ -437,12 +435,12 @@ TEST(DocumentIngest, AReadyDocumentIsListedAndSearchedAgainAfterARestart) {
     {
         Harness first(dir.path);
         first.Write("guideline.md", kGuideline);
-        ASSERT_TRUE(first.WaitForState(first.IdOf("guideline.md"), "ready"));
+        ASSERT_TRUE(first.WaitForState(first.IdOf("guideline.md"), DocumentState::kReady));
     }
 
     Harness h(dir.path);
     ASSERT_EQ(h.ingest.List().documents.size(), 1u) << "listed before any scan or embedder";
-    EXPECT_EQ(h.ingest.List().documents[0].state, "ready");
+    EXPECT_EQ(h.ingest.List().documents[0].state, DocumentState::kReady);
     Results results;
     ASSERT_TRUE(h.WaitUntil([&] {
         results =
@@ -466,12 +464,12 @@ TEST(DocumentIngest, IndexingPausesWhileAConsultationRunsAndRemoveDuringItCancel
         for (const auto& p : h.progress) paused = paused || p.phase == "paused";
         return paused;
     }));
-    EXPECT_EQ(h.ingest.List().documents[0].state, "indexing");
+    EXPECT_EQ(h.ingest.List().documents[0].state, DocumentState::kIndexing);
 
     h.ingest.Remove(id);
     EXPECT_FALSE(std::filesystem::exists(file));
     h.busy = false;
-    ASSERT_TRUE(h.WaitForState(id, "removed"));
+    ASSERT_TRUE(h.WaitForState(id, DocumentState::kRemoved));
     EXPECT_TRUE(h.ingest.List().documents.empty());
 }
 

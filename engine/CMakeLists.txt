@@ -1,25 +1,56 @@
-# core has no deps; OpenVINO and Win32 live in adapters
+# Core and ports have their own include root, so a core file that includes an adapter fails to
+# build. Core has no dependencies. OpenVINO and Win32 code lives in adapters
 add_library(clinicavt_core STATIC
-    src/core/diarisation/resplit.cpp
-    src/core/diarisation/role_naming.cpp
-    src/core/diarisation/tidy_transcript.cpp
-    src/core/diarisation/turn_decode.cpp
-    src/core/guidance/document_units.cpp
-    src/core/guidance/guidance_query.cpp
-    src/core/guidance/guidance_rank.cpp
-    src/core/guidance/page_clean.cpp
-    src/core/guidance/page_text.cpp
-    src/core/guidance/patient_screen.cpp
-    src/core/guidance/recommendation_marks.cpp
-    src/core/guidance/reference_tail.cpp
-    src/core/session/enrolment.cpp
-    src/core/session/note_lane.cpp
-    src/core/session/session_controller.cpp
-    src/core/session/transcribe_recording.cpp
-    src/core/archive/backup.cpp
-    src/core/archive/record_rules.cpp)
-target_include_directories(clinicavt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    domain/core/archive/backup.cpp
+    domain/core/archive/record_rules.cpp
+    domain/core/common/log.cpp
+    domain/core/demo/sample_year.cpp
+    domain/core/diarisation/resplit.cpp
+    domain/core/diarisation/role_naming.cpp
+    domain/core/diarisation/tidy_transcript.cpp
+    domain/core/diarisation/turn_decode.cpp
+    domain/core/guidance/document_units.cpp
+    domain/core/guidance/guidance_query.cpp
+    domain/core/guidance/guidance_rank.cpp
+    domain/core/guidance/page_clean.cpp
+    domain/core/guidance/page_text.cpp
+    domain/core/guidance/patient_screen.cpp
+    domain/core/guidance/recommendation_marks.cpp
+    domain/core/guidance/reference_tail.cpp
+    domain/core/records/reflections.cpp
+    domain/core/records/session_records.cpp
+    domain/core/session/enrolment.cpp
+    domain/core/session/note_lane.cpp
+    domain/core/session/session_controller.cpp
+    domain/core/session/transcribe_recording.cpp)
+target_include_directories(clinicavt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain)
 target_link_libraries(clinicavt_core PRIVATE clinicavt_warnings)
+
+add_library(clinicavt_adapters_root INTERFACE)
+target_include_directories(clinicavt_adapters_root INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(clinicavt_adapters_root INTERFACE clinicavt_core)
+
+add_library(clinicavt_system STATIC
+    src/adapters/system/awake_request.cpp
+    src/adapters/system/child_process.cpp
+    src/adapters/system/com_apartment.cpp
+    src/adapters/system/exe_paths.cpp
+    src/adapters/system/gpu_lease.cpp
+    src/adapters/system/machine_memory.cpp
+    src/adapters/system/power_throttling.cpp
+    src/adapters/system/process_scan.cpp
+    src/adapters/system/recycle_bin.cpp
+    src/adapters/system/stderr_log.cpp)
+target_link_libraries(clinicavt_system
+    PUBLIC clinicavt_adapters_root
+    PRIVATE clinicavt_warnings dxgi ole32 shell32)
+
+# Pipe client the engine uses to talk to the note host
+add_library(clinicavt_pipe_client STATIC
+    src/adapters/ipc/pipe_client.cpp)
+target_link_libraries(clinicavt_pipe_client
+    PUBLIC clinicavt_adapters_root
+    PRIVATE clinicavt_warnings)
 
 # Toolchain is fetched and pinned by tools/get-openvino.ps1
 if(NOT EXISTS "${clinicavt_SOURCE_DIR}/external/openvino")
@@ -50,7 +81,7 @@ function(clinicavt_deploy_openvino stamp_target)
     add_custom_target(${stamp_target} DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ov.deployed")
 endfunction()
 
-# The PDF reader the ingest host links, fetched and pinned by tools/get-pdfium.ps1
+# PDFium for the ingest host. tools/get-pdfium.ps1 fetches and pins it
 set(_pdfium_root "${clinicavt_SOURCE_DIR}/external/pdfium")
 if(NOT EXISTS "${_pdfium_root}")
     message(FATAL_ERROR "PDFium not found: run tools/get-pdfium.ps1 first")
@@ -71,25 +102,27 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# Results to and from JSON. Ports and json only, so ipc links this and not the
-# guidance adapter
+# Guidance result JSON, in its own library so ipc does not link the guidance adapter
 add_library(clinicavt_guidance_record STATIC
     src/adapters/guidance/guidance_record.cpp)
 target_link_libraries(clinicavt_guidance_record
-    PUBLIC clinicavt_core nlohmann_json::nlohmann_json
+    PUBLIC clinicavt_adapters_root nlohmann_json::nlohmann_json
     PRIVATE clinicavt_warnings)
 
 add_library(clinicavt_ipc STATIC
     src/adapters/ipc/archive_handlers.cpp
     src/adapters/ipc/engine_handlers.cpp
     src/adapters/ipc/guidance_handlers.cpp
+    src/adapters/ipc/import_handlers.cpp
+    src/adapters/ipc/reflection_handlers.cpp
     src/adapters/ipc/session_handlers.cpp
+    src/adapters/ipc/translate_handlers.cpp
     src/adapters/ipc/pipe_security.cpp
     src/adapters/ipc/pipe_server.cpp
     src/adapters/ipc/wire_events.cpp)
 target_link_libraries(clinicavt_ipc
-    PUBLIC clinicavt_core clinicavt_guidance_record clinicavt_models nlohmann_json::nlohmann_json
-    PRIVATE clinicavt_warnings clinicavt_archive clinicavt_audio advapi32)
+    PUBLIC clinicavt_adapters_root clinicavt_guidance_record clinicavt_models nlohmann_json::nlohmann_json
+    PRIVATE clinicavt_warnings clinicavt_archive clinicavt_audio clinicavt_system advapi32)
 
 FetchContent_Declare(
     sqlite3
@@ -120,49 +153,57 @@ configure_file(src/adapters/storage/schema.hpp.in
 add_library(clinicavt_storage STATIC
     src/adapters/storage/chunk_cipher.cpp
     src/adapters/storage/db.cpp
+    src/adapters/storage/reflection_json.cpp
     src/adapters/storage/sqlite_session_store.cpp
     src/adapters/storage/store_migrations.cpp)
 target_include_directories(clinicavt_storage PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(clinicavt_storage
-    PUBLIC clinicavt_core
+    PUBLIC clinicavt_adapters_root
     PRIVATE clinicavt_warnings sqlite3 bcrypt crypt32 nlohmann_json::nlohmann_json)
 
-# The backup file: password-keyed, one sealed record per consultation
 add_library(clinicavt_archive STATIC
     src/adapters/archive/archive_file.cpp
     src/adapters/archive/archive_lane.cpp
     src/adapters/archive/archive_password.cpp
     src/adapters/archive/archive_record.cpp)
 target_link_libraries(clinicavt_archive
-    PUBLIC clinicavt_core nlohmann_json::nlohmann_json
+    PUBLIC clinicavt_adapters_root nlohmann_json::nlohmann_json
     PRIVATE clinicavt_storage clinicavt_warnings bcrypt)
+
+# The sample year read from demo/reflections
+add_library(clinicavt_demo STATIC
+    src/adapters/demo/json_sample_source.cpp)
+target_link_libraries(clinicavt_demo
+    PUBLIC clinicavt_adapters_root
+    PRIVATE clinicavt_warnings nlohmann_json::nlohmann_json)
 
 add_library(clinicavt_models STATIC
     src/adapters/models/model_store.cpp
     src/adapters/models/ov_runtime.cpp
     src/adapters/system/sha256.cpp)
 target_link_libraries(clinicavt_models
-    PUBLIC clinicavt_core nlohmann_json::nlohmann_json openvino::genai
+    PUBLIC clinicavt_adapters_root nlohmann_json::nlohmann_json openvino::genai
     PRIVATE clinicavt_warnings bcrypt)
 
 add_library(clinicavt_transcription STATIC
     src/adapters/transcription/whisper_transcriber.cpp)
 target_link_libraries(clinicavt_transcription
-    PUBLIC clinicavt_core
-    PRIVATE clinicavt_models clinicavt_warnings openvino::genai)
+    PUBLIC clinicavt_adapters_root
+    PRIVATE clinicavt_models clinicavt_system clinicavt_warnings openvino::genai)
 
 add_library(clinicavt_note STATIC
     src/adapters/note/llm_note_writer.cpp
     src/adapters/note/text_pipeline.cpp
     src/adapters/note/worker_note_writer.cpp)
 target_link_libraries(clinicavt_note
-    PUBLIC clinicavt_core
-    PRIVATE clinicavt_models clinicavt_warnings nlohmann_json::nlohmann_json openvino::genai)
+    PUBLIC clinicavt_adapters_root
+    PRIVATE clinicavt_models clinicavt_pipe_client clinicavt_system clinicavt_warnings
+            nlohmann_json::nlohmann_json openvino::genai)
 
 add_library(clinicavt_translate STATIC
     src/adapters/translate/nllb_translator.cpp)
 target_link_libraries(clinicavt_translate
-    PUBLIC clinicavt_core nlohmann_json::nlohmann_json
+    PUBLIC clinicavt_adapters_root nlohmann_json::nlohmann_json
     PRIVATE clinicavt_models clinicavt_warnings openvino::genai)
 
 # The corpus schema is a SQL file, embedded like the session schema
@@ -185,18 +226,17 @@ add_library(clinicavt_guidance STATIC
     src/adapters/guidance/retriever.cpp)
 target_include_directories(clinicavt_guidance PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(clinicavt_guidance
-    PUBLIC clinicavt_core clinicavt_models nlohmann_json::nlohmann_json
-    PRIVATE clinicavt_storage clinicavt_warnings openvino::genai bcrypt ole32 shell32)
+    PUBLIC clinicavt_adapters_root clinicavt_models clinicavt_system nlohmann_json::nlohmann_json
+    PRIVATE clinicavt_storage clinicavt_warnings openvino::genai bcrypt)
 
 add_library(clinicavt_vad STATIC
     src/adapters/vad/silero_vad.cpp)
 target_link_libraries(clinicavt_vad
-    PUBLIC clinicavt_core
+    PUBLIC clinicavt_adapters_root
     PRIVATE clinicavt_models clinicavt_warnings openvino::genai)
 
-# Average-linkage clustering (fastcluster), the implementation the research
-# proved identical to the sklearn reference. No CMake build upstream; the
-# amalgamated source is compiled here like sqlite
+# fastcluster average linkage, which matched sklearn in the research. It has no upstream CMake
+# build, so it is compiled from source like sqlite
 FetchContent_Declare(
     hclust_cpp
     GIT_REPOSITORY https://github.com/cdalitz/hclust-cpp.git
@@ -235,7 +275,7 @@ add_library(clinicavt_diarisation STATIC
     src/adapters/diarisation/speaker_embedder.cpp)
 target_include_directories(clinicavt_diarisation SYSTEM PRIVATE ${kaldi_native_fbank_SOURCE_DIR})
 target_link_libraries(clinicavt_diarisation
-    PUBLIC clinicavt_core clinicavt_models clinicavt_vad
+    PUBLIC clinicavt_adapters_root clinicavt_models clinicavt_vad
     PRIVATE clinicavt_warnings crypt32 hclust kaldi-native-fbank-core)
 
 add_library(clinicavt_audio STATIC
@@ -244,38 +284,49 @@ add_library(clinicavt_audio STATIC
     src/adapters/audio/wasapi_capture.cpp
     src/adapters/audio/wav_source.cpp)
 target_link_libraries(clinicavt_audio
-    PUBLIC clinicavt_core
-    PRIVATE clinicavt_warnings ole32 advapi32 mfplat mfreadwrite mfuuid delayimp)
+    PUBLIC clinicavt_adapters_root
+    PRIVATE clinicavt_system clinicavt_warnings ole32 advapi32 mfplat mfreadwrite mfuuid delayimp)
 # Windows N editions and Server may lack Media Foundation; the engine must still start there
 target_link_options(clinicavt_audio INTERFACE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll)
 
-add_executable(clinicavt_engine src/engine_main.cpp)
+add_executable(clinicavt_engine
+    src/engine_main.cpp
+    src/composition/engine_config.cpp
+    src/composition/guidelines_setup.cpp
+    src/composition/model_roles.cpp)
 target_link_libraries(clinicavt_engine PRIVATE
-    clinicavt_ipc clinicavt_audio clinicavt_diarisation clinicavt_guidance clinicavt_note clinicavt_storage
-    clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings dxgi ole32 shell32)
+    clinicavt_ipc clinicavt_audio clinicavt_demo clinicavt_diarisation clinicavt_guidance clinicavt_note
+    clinicavt_storage clinicavt_system clinicavt_transcription clinicavt_translate clinicavt_vad
+    clinicavt_warnings ole32 shell32)
 clinicavt_deploy_openvino(ov_engine_runtime)
 add_dependencies(clinicavt_engine ov_engine_runtime)
 
-# The note model's own process; deployed beside the engine that spawns it
+# Note model host, deployed beside clinicavt_engine, which spawns it
 add_executable(clinicavt_note_host src/note_host_main.cpp)
 target_link_libraries(clinicavt_note_host PRIVATE
-    clinicavt_ipc clinicavt_models clinicavt_note clinicavt_warnings)
+    clinicavt_ipc clinicavt_models clinicavt_note clinicavt_system clinicavt_warnings)
 add_dependencies(clinicavt_note_host ov_engine_runtime)
 add_dependencies(clinicavt_engine clinicavt_note_host)
 
-# Reads PDFs in a process of its own, so a parser fault costs one document
+# The PDF reader, linked only by the ingest host
+add_library(clinicavt_pdf STATIC
+    src/adapters/pdf/pdfium_reader.cpp)
+target_link_libraries(clinicavt_pdf
+    PUBLIC clinicavt_adapters_root
+    PRIVATE clinicavt_warnings pdfium nlohmann_json::nlohmann_json)
+
+# Out-of-process PDF parsing so a parser crash only fails that document
 add_executable(clinicavt_ingest_host src/ingest_host_main.cpp)
 target_link_libraries(clinicavt_ingest_host PRIVATE
-    clinicavt_core pdfium nlohmann_json::nlohmann_json wer clinicavt_warnings)  # wer: Windows Error Reporting, for WerAddExcludedApplication
+    clinicavt_pdf clinicavt_system wer clinicavt_warnings)  # wer is Windows Error Reporting, for WerAddExcludedApplication
 add_custom_command(TARGET clinicavt_ingest_host POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_pdfium_root}/bin/pdfium.dll"
             "$<TARGET_FILE_DIR:clinicavt_ingest_host>"
     VERBATIM)
 add_dependencies(clinicavt_engine clinicavt_ingest_host)
 
-# Corpus building: the chunker, builder and indexer the engine never runs.
-# clinicavt_index builds a corpus with the staged embedder, so index and query
-# embeddings come from the same code; neither tool is deployed
+# Corpus build tools, which are not deployed. They use the staged embedder so index and query
+# embeddings match
 add_library(clinicavt_corpus STATIC
     tools/corpus/chunker.cpp
     tools/corpus/corpus_builder.cpp
@@ -284,7 +335,7 @@ target_include_directories(clinicavt_corpus
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(clinicavt_corpus
-    PUBLIC clinicavt_guidance clinicavt_models nlohmann_json::nlohmann_json
+    PUBLIC clinicavt_guidance clinicavt_models clinicavt_system nlohmann_json::nlohmann_json
     PRIVATE clinicavt_storage clinicavt_warnings openvino::genai)
 
 add_executable(clinicavt_index tools/corpus/index_main.cpp)
@@ -293,7 +344,8 @@ add_dependencies(clinicavt_index ov_engine_runtime)
 
 # Prints a PDF's units, to check the chunker on real documents
 add_executable(clinicavt_units tools/units_main.cpp)
-target_link_libraries(clinicavt_units PRIVATE clinicavt_guidance nlohmann_json::nlohmann_json clinicavt_warnings)
+target_link_libraries(clinicavt_units PRIVATE
+    clinicavt_guidance clinicavt_system nlohmann_json::nlohmann_json clinicavt_warnings)
 add_dependencies(clinicavt_units clinicavt_ingest_host)
 
 add_subdirectory(tests)

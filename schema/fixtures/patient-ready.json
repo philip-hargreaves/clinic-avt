@@ -1,0 +1,8 @@
+{
+    "jsonrpc": "2.0",
+    "method": "patient/ready",
+    "params": {
+        "text": "Rest the elbow and take ibuprofen with food.",
+        "tokensPerSecond": 16.8
+    }
+}

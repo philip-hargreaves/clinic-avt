@@ -1,0 +1,9 @@
+{
+    "jsonrpc": "2.0",
+    "method": "anchor/enrolled",
+    "params": {
+        "ok": true,
+        "detail": "",
+        "speechSeconds": 31.5
+    }
+}

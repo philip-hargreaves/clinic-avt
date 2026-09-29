@@ -66,7 +66,6 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
                                                const EmbedderIdentity& embedder,
                                                std::string& reason) {
     try {
-        // 1. the manifest
         std::ifstream in(dir / kManifestFile);
         Guard(in.is_open(), "no manifest.json");
         nlohmann::json manifest;
@@ -91,14 +90,12 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
         info.chunk_count = Int(manifest, "chunks");
         const auto bytes = Int(manifest, "bytes");
 
-        // 2. the file is the one the manifest describes
         const auto path = dir / manifest.value("file", kCorpusFile);
         Guard(std::filesystem::exists(path), "corpus.db missing");
         Guard(static_cast<std::int64_t>(std::filesystem::file_size(path)) == bytes,
               "corpus.db size differs from the manifest");
         Guard(system::Sha256File(path) == info.sha256, "corpus.db hash differs from the manifest");
 
-        // 3. a corpus file of this format, out of WAL mode
         store::Db db(path, store::Db::Mode::kImmutableReadOnly);
         Guard(db.ApplicationId() == static_cast<std::int64_t>(kCorpusApplicationId),
               "not a corpus file");
@@ -113,7 +110,6 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
                   "corpus file was left in WAL mode");
         }
 
-        // 4. meta agrees with the manifest and the staged embedder
         auto meta = db.Prepare(
             "SELECT corpus_id, embedder_id, embedder_rev, dim, chunk_count, shard_count,"
             " max_tokens, normalised, vector_format, source FROM corpus_meta"
@@ -136,7 +132,6 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
         info.source = meta.ColumnText(9);
         Guard(!meta.Step(), "corpus_meta has more than one row");
 
-        // 5. the chunk table is dense
         Guard(db.QueryInt64("SELECT count(*) FROM chunks") == info.chunk_count,
               "chunk rows differ from chunk_count");
         if (info.chunk_count > 0) {
@@ -145,7 +140,6 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
                   "chunk ordinals are not dense");
         }
 
-        // 6. memory, before allocating
         const auto dim = static_cast<std::size_t>(info.dim);
         const auto rows = static_cast<std::size_t>(info.chunk_count);
         GuardMemory(rows, dim, "corpus");
@@ -154,7 +148,6 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
         store->matrix_.resize(rows * dim);
         store->cites_.reserve(rows);
 
-        // 7. shards are contiguous and the right length, then fill
         auto shards = store->db_.Prepare(
             "SELECT shard, first_ord, count, dim, data FROM guidance_vectors ORDER BY shard");
         std::int64_t expected_shard = 0, next_ord = 0;
@@ -176,7 +169,6 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
         Guard(expected_shard == shard_count, "shard rows differ from shard_count");
         Guard(next_ord == info.chunk_count, "shards do not cover every chunk");
 
-        // 8. every vector is unit length
         GuardUnitVectors(store->matrix_.data(), rows, dim);
 
         auto cites = store->db_.Prepare(

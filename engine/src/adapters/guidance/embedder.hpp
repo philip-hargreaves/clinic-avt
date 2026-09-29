@@ -1,9 +1,9 @@
 #pragma once
 
-#include <cstddef>
 #include <memory>
 #include <string>
-#include <vector>
+
+#include "adapters/interfaces/embedder.hpp"
 
 namespace clinicavt::models {
 class ModelStore;
@@ -11,35 +11,10 @@ class ModelStore;
 
 namespace clinicavt::guidance {
 
-// The staged embedder a corpus must have been built with
-struct EmbedderIdentity {
-    std::string id;
-    std::string rev;  // sha256 of the weights
-    int dim = 0;
-    int max_tokens = 0;
-
-    bool operator==(const EmbedderIdentity&) const = default;
-};
-
-struct Embedding {
-    std::vector<float> vector;  // unit length, Identity().dim floats
-    std::size_t tokens = 0;     // before truncation
-    bool truncated = false;     // the text ran past max_tokens
-};
-
-// The seam the indexer and the retriever share. One text at a time
-class IEmbedder {
-   public:
-    virtual ~IEmbedder() = default;
-    virtual const EmbedderIdentity& Identity() const = 0;
-    virtual Embedding Embed(const std::string& text) = 0;
-};
-
 inline constexpr int kEmbedMaxTokens = 512;
 
-// The staged embedding model on the CPU through the GenAI pipeline: mean
-// pooling, normalised, no instruction strings. Load verifies the files and
-// runs the startup guards. It throws naming the failure
+// Staged embedding model on CPU through GenAI, with mean pooling, normalisation and no instruction
+// prefix. Load verifies files, runs the startup checks and throws with the failure
 class Embedder : public IEmbedder {
    public:
     static std::unique_ptr<Embedder> Load(const models::ModelStore& store);

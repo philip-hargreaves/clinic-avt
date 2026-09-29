@@ -23,6 +23,7 @@ add_executable(core_tests
     core/common/cli_args_test.cpp
     core/common/strings_test.cpp
     core/common/version_test.cpp
+    core/demo/sample_year_test.cpp
     core/diarisation/clip_cuts_test.cpp
     core/diarisation/diar_regions_test.cpp
     core/diarisation/embeddings_test.cpp
@@ -53,10 +54,13 @@ target_link_libraries(core_tests PRIVATE clinicavt_core clinicavt_warnings GTest
 # Adapters, and the core tests that need one or read a JSON fixture
 add_executable(engine_tests
     adapters/diarisation/seg_decode_test.cpp
-    core/session/session_controller_test.cpp
+    core/session/session_controller_enrolment_test.cpp
+    core/session/session_controller_import_test.cpp
+    core/session/session_controller_lifecycle_test.cpp
+    core/session/session_controller_note_test.cpp
     core/note/summary_scrub_test.cpp
     adapters/diarisation/anchor_store_test.cpp
-    adapters/demo/sample_year_test.cpp
+    adapters/demo/json_sample_source_test.cpp
     adapters/audio/capture_errors_test.cpp
     adapters/audio/capture_timeline_test.cpp
     adapters/storage/chunk_cipher_test.cpp
@@ -81,7 +85,12 @@ add_executable(engine_tests
     adapters/guidance/folder_scan_test.cpp
     adapters/guidance/ingest_host_test.cpp
     adapters/audio/capture_devices_test.cpp
-    adapters/ipc/handlers_test.cpp
+    adapters/ipc/engine_handlers_test.cpp
+    adapters/ipc/guidance_handlers_test.cpp
+    adapters/ipc/import_handlers_test.cpp
+    adapters/ipc/reflection_handlers_test.cpp
+    adapters/ipc/session_handlers_test.cpp
+    adapters/ipc/wire_events_test.cpp
     adapters/ipc/messages_test.cpp
     adapters/models/model_store_test.cpp
     adapters/models/note_lane_test.cpp
@@ -126,9 +135,10 @@ target_compile_definitions(engine_tests PRIVATE
     CLINICAVT_FAKE_INGEST_HOST="$<TARGET_FILE:fake_ingest_host>"
     CLINICAVT_INGEST_HOST="$<TARGET_FILE:clinicavt_ingest_host>")
 target_link_libraries(engine_tests PRIVATE
-    clinicavt_archive clinicavt_ipc clinicavt_audio clinicavt_corpus clinicavt_diarisation clinicavt_guidance
-    clinicavt_guidance_record clinicavt_models clinicavt_note clinicavt_storage clinicavt_transcription
-    clinicavt_warnings openvino::genai GTest::gtest_main)
+    clinicavt_archive clinicavt_ipc clinicavt_audio clinicavt_corpus clinicavt_demo clinicavt_diarisation
+    clinicavt_guidance
+    clinicavt_guidance_record clinicavt_models clinicavt_note clinicavt_pipe_client clinicavt_storage
+    clinicavt_system clinicavt_transcription clinicavt_warnings openvino::genai GTest::gtest_main)
 
 # Real-microphone tests live in their own binary under the microphone label,
 # so the ci presets can exclude what a runner without audio cannot execute
@@ -169,12 +179,13 @@ target_compile_definitions(models_tests PRIVATE
     CLINICAVT_GUIDANCE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/guidance")
 target_link_libraries(models_tests PRIVATE
     clinicavt_corpus clinicavt_diarisation clinicavt_guidance clinicavt_models clinicavt_note
-    clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings
+    clinicavt_system clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings
     nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
 
 # Dev evaluation tool for the research acceptance scorer; never shipped
 add_executable(diar_eval_runner tools/diar_eval_runner.cpp)
-target_link_libraries(diar_eval_runner PRIVATE clinicavt_diarisation clinicavt_transcription clinicavt_warnings)
+target_link_libraries(diar_eval_runner PRIVATE
+    clinicavt_diarisation clinicavt_system clinicavt_transcription clinicavt_warnings)
 
 clinicavt_deploy_openvino(ov_test_runtime)
 add_dependencies(diar_eval_runner ov_test_runtime)

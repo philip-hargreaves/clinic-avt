@@ -18,7 +18,7 @@ Checks: >
 #   unchecked-string-to-number      atoi's 0 on bad input is the wanted fallback, range-checked after
 #   enum-size                       a narrower enum saves nothing at these sizes
 #   inefficient-string-concatenation  a + b + c in cold text assembly; clearer than append chains
-HeaderFilterRegex: 'engine[/\\](src|tools|tests)[/\\]'
+HeaderFilterRegex: 'engine[/\\](domain|src|tools|tests)[/\\]'
 FormatStyle: none
 CheckOptions:
   # Allocation failure ends the process anyway (bad_alloc itself is ignored by default)

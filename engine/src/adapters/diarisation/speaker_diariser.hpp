@@ -33,7 +33,7 @@ class SpeakerDiariser : public IDiariser {
                                            const std::vector<LabelledSlice>& slices,
                                            int cluster_count) override;
 
-    // Capture-phase work. Diarise then finalises from the accumulated state
+    // Diarise then finalises from the accumulated state
     void Advance(std::span<const float> audio, const DecodeClipFn& decode) override {
         worker_.Advance(audio, decode);
     }

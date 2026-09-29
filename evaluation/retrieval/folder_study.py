@@ -15,7 +15,7 @@
 FILE names a run file inside the working directory and defaults to runs.jsonl. Working data goes
 to build/retrieval/study, or to build/retrieval/$FOLDER_STUDY for the same study over a changed
 folder or chunker. The splitter, the exclusion filter, the vote and the floor are ports of
-engine/src/core/guidance/guidance_query.hpp and guidance_rank.hpp, and parity proves the port before any
+engine/domain/core/guidance/guidance_query.hpp and guidance_rank.hpp, and parity proves the port before any
 variant is trusted. Run with the harness venv (openvino_genai).
 """
 
@@ -118,8 +118,8 @@ def content_words(text: str) -> set[str]:
 
 
 def near_duplicate(a: str, b: str) -> bool:
-    """Two passages saying the same thing, as a quality standard restates its guideline: half the
-    shorter one's content words appear in the other."""
+    """True when half the shorter passage's content words appear in the other,
+    e.g. a quality standard restating its guideline."""
     wa, wb = content_words(a), content_words(b)
     smaller = min(len(wa), len(wb))
     return smaller >= 5 and len(wa & wb) / smaller >= DUPLICATE
@@ -184,7 +184,7 @@ def units():
 
 
 def pipeline():
-    # The model the app ships, read as the app reads it: mean pooling, no instruction
+    # Shipped model, loaded as the app loads it with mean pooling and no instruction
     return make_pipeline({"pooling": "mean", "max_length": 512}, MODEL)
 
 
@@ -200,7 +200,7 @@ def embed(queries_only: bool = False):
                 print(name, i, "/", len(texts), flush=True)
         np.save(STUDY / f"{name}.npy", np.asarray(out, dtype=np.float32))
 
-    # `embed queries` leaves the passages alone, for a working directory that holds only docs-text
+    # `embed queries` skips passages (working dir may hold only docs-text)
     if not queries_only and not (STUDY / "docs-titled.npy").exists():
         headed = [(r["section"] + ". " if r["section"] else "") + r["text"] for r in rows]
         documents([r["text"] for r in rows], "docs-text")
@@ -225,7 +225,7 @@ def rank(variant: dict, lists: list[dict], unit_rows: list[dict], background=Non
     whole = next((e for e in lists if e["whole"]), lists[-1])
     best = {"note_best": round(float(whole["cos"].max()), 4),
             "any_best": round(max(float(e["cos"].max()) for e in lists), 4)}
-    # The note as a whole decides whether the folder covers it at all
+    # Show nothing when the whole-note best cosine is under the floor
     if variant.get("note_gate") and best["note_best"] < variant.get("note_floor", floor):
         return {"considered": 0, "shown": [], **best}
     neighbourhood = None
@@ -244,7 +244,7 @@ def rank(variant: dict, lists: list[dict], unit_rows: list[dict], background=Non
             if neighbourhood is not None and unit not in neighbourhood:
                 continue  # sentences only reorder what the whole note already found
             if variant.get("gate") and cos[unit] < floor and not (entry["whole"] and variant.get("note_votes")):
-                continue  # a sentence votes only for what it actually resembles
+                continue
             tallied = tally.setdefault(unit, {"score": 0.0, "cos": -1.0, "best": 10 ** 9, "trigger": "", "votes": 0})
             if variant.get("order") == "vote":
                 tallied["score"] += weight / (RRF_K + position + 1.0)
@@ -261,7 +261,7 @@ def rank(variant: dict, lists: list[dict], unit_rows: list[dict], background=Non
     for unit, tallied in ranked:
         if len(shown) >= LIMIT:
             break
-        # The floor is on the best cosine a card reached, whatever the vote made of it
+        # Floor applies to the best cosine, not the vote score
         if tallied["cos"] < floor:
             continue
         if any(near_duplicate(unit_rows[s["unit"]]["text"], unit_rows[unit]["text"]) for s in shown):
@@ -334,10 +334,9 @@ def run():
 
 
 def remap(old_units: str):
-    """After a chunker change renumbers the units: moves the expected ordinals of notes.jsonl and
-    the units of judgments.jsonl from the old numbering to the new by their text. A unit the
-    chunker has stopped producing keeps its old id in the judgments, where nothing can show it,
-    and is reported when a note expected it."""
+    """Moves notes.jsonl expected ordinals and judgments.jsonl units to the new numbering, by text,
+    after a chunker change. Units no longer produced keep their old id and are reported if a note
+    expects one."""
     old = {u["id"]: u for u in read_jsonl(Path(old_units))}
     # by_head is the fallback for a unit the chunker reflowed: same opening, different tail
     by_text, by_head = {}, {}
@@ -432,7 +431,7 @@ def score(name: str = "runs.jsonl"):
     against the best three judged cards for the note, so a silent variant scores zero on it."""
     judged = load_judgments()
     runs = load_runs(name)
-    # The best a note could be shown is judged over this folder's units only
+    # Ideal ranking uses this folder's units only
     present = {u["id"] for u in load_units()}
     ideal = {}
     for (qid, unit), label in judged.items():

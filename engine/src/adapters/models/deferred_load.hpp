@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <cstdio>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -11,12 +10,13 @@
 #include <thread>
 #include <utility>
 
+#include "core/common/log.hpp"
 #include "core/metrics/metrics.hpp"
 
 namespace clinicavt::models {
 
 // Builds T on a background thread. Get waits and rethrows a load failure.
-// A successful build records its seconds under `name`
+// A successful load records its seconds under `name`
 template <typename T>
 class DeferredLoad {
    public:
@@ -29,12 +29,10 @@ class DeferredLoad {
                 built_ = build();
                 const double seconds =
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-                std::fprintf(stderr, "clinicavt-engine: %s ready in %.1f s\n", name_.c_str(),
-                             seconds);
+                log::Printf("clinicavt-engine: %s ready in %.1f s\n", name_.c_str(), seconds);
                 if (metrics != nullptr) metrics->RecordLoad(name_, seconds);
             } catch (const std::exception& e) {
-                std::fprintf(stderr, "clinicavt-engine: %s unavailable (%s)\n", name_.c_str(),
-                             e.what());
+                log::Printf("clinicavt-engine: %s unavailable (%s)\n", name_.c_str(), e.what());
                 error_ = std::current_exception();
             } catch (...) {
                 error_ = std::current_exception();
@@ -62,12 +60,12 @@ class DeferredLoad {
         return *built_;
     }
 
-    // True only for a successful build. Never blocks
+    // Does not block. True only if the build succeeded
     bool Loaded() const {
         return ready_.load() && error_ == nullptr;
     }
 
-    // True once the build finished, loaded or failed. Never blocks
+    // Does not block. True once the build ends, whether or not it succeeded
     bool Settled() const {
         return ready_.load();
     }

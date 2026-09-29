@@ -18,16 +18,9 @@ double Rounded(double rate) {
 
 }  // namespace
 
-WireEvents::WireEvents(PipeServer& server, store::ISessionStore& sessions)
-    : server_(server), sessions_(sessions) {}
-
-void WireEvents::SetTranslator(translate::ITranslator* translator) {
-    translator_ = translator;
-}
-
-void WireEvents::SetGuidance(guidance::IGuidanceLane* lane) {
-    guidance_ = lane;
-}
+WireEvents::WireEvents(PipeServer& server, store::ISessionStore& sessions,
+                       translate::ITranslator* translator, guidance::IGuidanceLane* guidance)
+    : server_(server), sessions_(sessions), translator_(translator), guidance_(guidance) {}
 
 void WireEvents::OnLevel(const audio::LevelReading& reading) {
     server_.PushNotification("audio.level",
@@ -65,8 +58,7 @@ void WireEvents::OnNotePartial(const std::string& text) {
 
 void WireEvents::OnNoteReady(const std::string& text) {
     PushStreamEnd("note/partial", "note/ready", {{"text", text}});
-    // Warms while the patient sheet writes, so the first translation is as
-    // fast as the rest
+    // Warm up during the patient sheet write so the first translation isn't slower
     if (translator_ != nullptr) {
         translator_->Prepare();
     }
@@ -119,8 +111,7 @@ void WireEvents::OnTranslation(const std::string& method, const nlohmann::json& 
     }
 }
 
-// Metered before the notification cap, so tokensPerSecond is the model's
-// real rate
+// Metered before the notification cap so tokensPerSecond is the model rate
 void WireEvents::PushPartial(const std::string& method, nlohmann::json params) {
     const auto now = std::chrono::steady_clock::now();
     double rate = 0;
@@ -139,7 +130,7 @@ void WireEvents::PushPartial(const std::string& method, nlohmann::json params) {
     server_.PushNotification(method, std::move(params));
 }
 
-// The end event carries the whole-generation average and retires the meter
+// The end event carries the whole-generation average and resets the meter
 void WireEvents::PushStreamEnd(const char* partial_method, const char* method,
                                nlohmann::json params) {
     double average = 0;

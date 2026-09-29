@@ -1,12 +1,12 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
-#include <cstdio>
 #include <optional>
 #include <set>
 
 #include "adapters/guidance/guidance_record.hpp"
 #include "adapters/ipc/handlers.hpp"
+#include "core/common/log.hpp"
 #include "core/common/utf8.hpp"
 #include "ports/store_error.hpp"
 
@@ -68,9 +68,8 @@ clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISess
                                       {.text = clinicavt::guidance::Dump(record)});
             } catch (const clinicavt::store::StoreError& e) {
                 if (e.Code() == clinicavt::store::StoreCode::kNotFound) {
-                    std::fprintf(stderr,
-                                 "clinicavt-engine: guidance for %s dropped, session gone\n",
-                                 session.c_str());
+                    log::Printf("clinicavt-engine: guidance for %s dropped, session gone\n",
+                                session.c_str());
                     return;
                 }
                 body["storeError"] = e.what();
@@ -148,7 +147,8 @@ bool DocumentsChangedSince(const clinicavt::guidance::Record& record,
     }
     std::set<std::string> ready;
     for (const auto& d : ingest.List().documents) {
-        if (d.state == "ready") ready.insert("upload:" + std::to_string(d.id));
+        if (d.state == clinicavt::guidance::DocumentState::kReady)
+            ready.insert("upload:" + std::to_string(d.id));
     }
     return searched != ready;
 }
@@ -171,8 +171,8 @@ std::variant<json, Error> HandleSessionGuidance(clinicavt::store::ISessionStore&
             }
         }
         if (!record) {
-            std::fprintf(stderr, "clinicavt-engine: guidance record for %s unreadable, dropped\n",
-                         session.c_str());
+            log::Printf("clinicavt-engine: guidance record for %s unreadable, dropped\n",
+                        session.c_str());
             return json{{"guidance", nullptr}};
         }
         json guidance = clinicavt::guidance::ToJson(*record);
@@ -187,7 +187,7 @@ json DocumentJson(const clinicavt::guidance::DocumentInfo& document) {
     return json{{"id", document.id},
                 {"name", document.name},
                 {"path", document.path},
-                {"state", document.state},
+                {"state", clinicavt::guidance::DocumentStateName(document.state)},
                 {"error", NullWhenEmpty(document.error)},
                 {"addedAt", document.added_at},
                 {"pages", document.pages},
@@ -203,7 +203,9 @@ json ProgressJson(const clinicavt::guidance::IngestProgress& progress) {
 }
 
 bool ChangesReadySet(const clinicavt::guidance::DocumentInfo& document) {
-    return document.state == "ready" || (document.state == "removed" && document.chunks > 0);
+    using clinicavt::guidance::DocumentState;
+    return document.state == DocumentState::kReady ||
+           (document.state == DocumentState::kRemoved && document.chunks > 0);
 }
 
 namespace {

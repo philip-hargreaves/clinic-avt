@@ -1,0 +1,9 @@
+{
+    "jsonrpc": "2.0",
+    "method": "translate/ready",
+    "params": {
+        "text": "Odpoczywaj łokieć i przyjmuj ibuprofen z jedzeniem.",
+        "language": "Polish",
+        "tokensPerSecond": 21.9
+    }
+}

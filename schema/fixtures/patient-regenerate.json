@@ -1,0 +1,12 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 54,
+        "method": "patient/regenerate"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 54,
+        "result": {}
+    }
+}

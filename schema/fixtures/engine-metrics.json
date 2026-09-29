@@ -1,0 +1,40 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 47,
+        "method": "engine/metrics"
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 47,
+        "result": {
+            "devices": {
+                "asr": "GPU.0",
+                "note": "GPU.0"
+            },
+            "loadSeconds": {
+                "asr": 3.1,
+                "diarisation": 0.3,
+                "vad": 0.1
+            },
+            "stageSeconds": {
+                "finalise": 4.2,
+                "note": 11.8
+            },
+            "asrRealtimeFactor": 12.5,
+            "audioSeconds": 320.2,
+            "lostFrames": 0,
+            "diarTicks": 2,
+            "turns": 41,
+            "clusters": 2,
+            "replay": false,
+            "replaySpeed": 0.0,
+            "hardware": {
+                "CPU": "Intel(R) Core(TM) Ultra 7 258V",
+                "GPU": "Intel(R) Arc(TM) 140V GPU (16GB) (iGPU)"
+            },
+            "openvino": "2026.3.0-19590-1b6b2c3f1d8",
+            "powerThrottling": "off"
+        }
+    }
+}

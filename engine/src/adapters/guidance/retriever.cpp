@@ -1,13 +1,13 @@
 #include "adapters/guidance/retriever.hpp"
 
 #include <algorithm>
-#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 
+#include "core/common/log.hpp"
 #include "core/common/strings.hpp"
 #include "core/guidance/guidance_query.hpp"
 #include "core/guidance/guidance_scan.hpp"
@@ -249,7 +249,7 @@ Results Retriever::Search(const std::string& text, int limit, SearchMode mode) {
     // Hits failing the population guard, or restating a shown card, take no slot
     const auto suppressed = [&](const std::string& body, const std::string& title) {
         if (PopulationConflict(text, body, title)) {
-            std::fprintf(stderr, "clinicavt-engine: guard suppressed a hit in %s\n", title.c_str());
+            log::Printf("clinicavt-engine: guard suppressed a hit in %s\n", title.c_str());
             return true;
         }
         return Restates(out.shown, body);

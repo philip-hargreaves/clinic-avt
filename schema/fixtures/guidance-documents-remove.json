@@ -1,0 +1,15 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 48,
+        "method": "guidance/documents/remove",
+        "params": {
+            "id": 7302914125883421
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 48,
+        "result": {}
+    }
+}

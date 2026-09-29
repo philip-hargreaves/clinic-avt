@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
-#include <cstdio>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <system_error>
 
 #include "adapters/guidance/folder_scan.hpp"
 #include "adapters/system/sha256.hpp"
+#include "core/common/log.hpp"
 #include "core/common/utf8.hpp"
 #include "core/guidance/document_units.hpp"
 #include "core/guidance/patient_screen.hpp"
@@ -73,7 +73,7 @@ std::filesystem::path IndexPath(const std::filesystem::path& root) {
 }
 
 DocumentInfo Removed(DocumentInfo info) {
-    info.state = "removed";
+    info.state = DocumentState::kRemoved;
     return info;
 }
 
@@ -378,7 +378,7 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
         }
 
         if (std::ranges::any_of(changed, [](const DocumentInfo& info) {
-                return info.state == "removed" && info.chunks > 0;
+                return info.state == DocumentState::kRemoved && info.chunks > 0;
             })) {
             Publish();
         }
@@ -514,12 +514,12 @@ void DocumentIngest::Index(const Queued& item) {
         Publish();
         Notify(index_.Get(id));
     } catch (const HostError& e) {
-        std::fprintf(stderr, "clinicavt-engine: document %lld %s: %s\n", static_cast<long long>(id),
-                     e.Reason().c_str(), e.what());
+        log::Printf("clinicavt-engine: document %lld %s: %s\n", static_cast<long long>(id),
+                    e.Reason().c_str(), e.what());
         fail(e.Reason());
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: document %lld failed: %s\n",
-                     static_cast<long long>(id), e.what());
+        log::Printf("clinicavt-engine: document %lld failed: %s\n", static_cast<long long>(id),
+                    e.what());
         fail("unreadable");
     }
 }
@@ -539,7 +539,7 @@ void DocumentIngest::Publish() {
     auto snapshot = std::make_shared<UploadSnapshot>();
     snapshot->dim = index_.Embedder().dim;
     for (const auto& doc : index_.List()) {
-        if (doc.state != "ready") continue;
+        if (doc.state != DocumentState::kReady) continue;
         Corpus corpus;
         corpus.id = "upload:" + std::to_string(doc.id);
         corpus.name = doc.name;

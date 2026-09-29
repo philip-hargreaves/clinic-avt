@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <cstdio>
 #include <functional>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -10,12 +9,13 @@
 #include <thread>
 #include <utility>
 
-#include "ports/translator.hpp"
+#include "adapters/interfaces/translator.hpp"
+#include "core/common/log.hpp"
 
 namespace clinicavt::translate {
 
-// Runs one translation at a time off the RPC thread, announcing
-// translate/partial, translate/ready and translate/failed.
+// Runs one translation at a time off the RPC thread and sends translate/partial, translate/ready
+// and translate/failed
 class TranslateLane {
    public:
     using Emit = std::function<void(const std::string& method, const nlohmann::json& params)>;
@@ -30,8 +30,7 @@ class TranslateLane {
 
     using OnReady = std::function<void(const std::string& translated, const std::string& language)>;
 
-    // on_ready runs before the ready notification, so a reader reacting to it
-    // finds the translation stored
+    // on_ready runs before the ready notification so readers see the stored translation
     bool Run(std::string text, std::string language, OnReady on_ready = nullptr) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (running_.load()) {
@@ -50,8 +49,8 @@ class TranslateLane {
                     text, language, [this, &t0, &first](const std::string& partial) {
                         if (first) {
                             first = false;
-                            std::fprintf(
-                                stderr, "clinicavt-engine: first translated word in %.1f s\n",
+                            log::Printf(
+                                "clinicavt-engine: first translated word in %.1f s\n",
                                 std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
                                     .count());
                         }

@@ -45,13 +45,12 @@ struct TieredStore {
     }
 };
 
-// Every transition the lane announced, waitable
 struct Transitions {
     std::mutex mutex;
     std::condition_variable changed;
     std::vector<NoteModelState> seen;
 
-    INoteLane::Listener Listener() {
+    INoteTiers::Listener Listener() {
         return [this](const NoteModelState& state) {
             std::lock_guard<std::mutex> lock(mutex);
             seen.push_back(state);
@@ -79,14 +78,14 @@ struct Transitions {
 TEST(NoteLane, ConfiguringATierLoadsItAtOnceAndTheHostServesIt) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
+    Transitions seen;
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
+                          seen.Listener());
     const auto start = lane.State();
     EXPECT_EQ(start.phase, Phase::kIdle);
     EXPECT_EQ(start.tier, "default");
     EXPECT_EQ(start.id, "qwen3.5-9b-int4");
     EXPECT_EQ(start.name, "Qwen3.5 9B");
-    Transitions seen;
-    lane.SetListener(seen.Listener());
 
     const auto reply = lane.Configure("accuracy");
 
@@ -114,9 +113,9 @@ TEST(NoteLane, ConfiguringATierLoadsItAtOnceAndTheHostServesIt) {
 TEST(NoteLane, WhatTheLaneCannotServeFailsLoudlyAndChangesNothing) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
     Transitions seen;
-    lane.SetListener(seen.Listener());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
+                          seen.Listener());
 
     EXPECT_THROW(lane.Write({}, {}, nullptr), std::runtime_error) << "an empty transcript";
 
@@ -151,9 +150,9 @@ TEST(NoteLane, ASwitchDuringALoadIsRefusedUntilTheLoadSettles) {
     std::filesystem::remove_all(staged.root / "qwen3.6-35b-a3b-int4");
     staged.Stage("qwen-slow-int4", "Slow", "accuracy");
     const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
     Transitions seen;
-    lane.SetListener(seen.Listener());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
+                          seen.Listener());
     lane.Configure("accuracy");
 
     EXPECT_THROW(lane.Configure("default"), std::logic_error);
@@ -168,14 +167,14 @@ TEST(NoteLane, ASwitchDuringALoadIsRefusedUntilTheLoadSettles) {
     EXPECT_EQ(seen.Snapshot().back().id, "qwen3.5-9b-int4");
 }
 
-// A host busy with one guess reads nothing else. A second large one sent then
-// would block the capture thread until the first ends, so it is skipped
+// The host reads nothing while prefilling, so a second large prefill would block the capture
+// thread. The lane skips it
 TEST(NoteLane, APrefillWaitsForTheLastOneRatherThanBlockingTheCaller) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
     Transitions seen;
-    lane.SetListener(seen.Listener());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
+                          seen.Listener());
     lane.Configure("accuracy");
     ASSERT_TRUE(seen.WaitFor(Phase::kReady));
     std::vector<asr::Turn> transcript;
@@ -189,13 +188,12 @@ TEST(NoteLane, APrefillWaitsForTheLastOneRatherThanBlockingTheCaller) {
     EXPECT_LT(std::chrono::steady_clock::now() - t0, std::chrono::milliseconds(1000));
 }
 
-// Asked whether it is stuck, a healthy host exits and the next note starts it again
 TEST(NoteLane, AHealthyHostAskedIfStuckExitsAndServesTheNextNote) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store);
     Transitions seen;
-    lane.SetListener(seen.Listener());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
+                          seen.Listener());
     lane.Configure("accuracy");
     ASSERT_TRUE(seen.WaitFor(Phase::kReady));
 

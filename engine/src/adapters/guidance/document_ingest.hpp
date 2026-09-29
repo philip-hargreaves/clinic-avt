@@ -14,8 +14,8 @@
 #include "adapters/guidance/document_index.hpp"
 #include "adapters/guidance/ingest_host.hpp"
 #include "adapters/guidance/retriever.hpp"
+#include "adapters/interfaces/document_ingest.hpp"
 #include "adapters/system/recycle_bin.hpp"
-#include "ports/document_ingest.hpp"
 
 namespace clinicavt::guidance {
 
@@ -61,7 +61,7 @@ class DocumentIngest : public IDocumentIngest {
         std::string path;
     };
 
-    // Syncs index to folder. Files in `fresh` skip the settle wait
+    // Files in `fresh` skip the settle wait
     void Scan(const std::set<std::string>& fresh = {});
     void Work();
     void Index(const Queued& item);

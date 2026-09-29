@@ -1,0 +1,7 @@
+{
+    "jsonrpc": "2.0",
+    "method": "patient/failed",
+    "params": {
+        "detail": "the note model stopped responding"
+    }
+}

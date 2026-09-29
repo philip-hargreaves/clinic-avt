@@ -44,7 +44,7 @@ public class FixtureTest
 
         var close = Fixtures.Load("session-close.json");
         Assert.Equal("session/close", close.GetProperty("method").GetString());
-        Assert.Equal(JsonValueKind.Null, close.GetProperty("params").ValueKind);
+        Assert.False(close.TryGetProperty("params", out _));
 
         var level = Fixtures.Load("audio-level.json");
         Assert.Equal("audio.level", level.GetProperty("method").GetString());
@@ -437,6 +437,116 @@ public class FixtureTest
         Assert.Equal("no session nope", thrown.Message);
         Assert.Equal("Invalid params", new EngineErrorException(-32602, "Invalid params", null).Message);
     }
+
+    [Fact]
+    public async Task EngineAnchorAndSessionRequestsAreWhatTheClientSends()
+    {
+        const string session = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
+        var transport = new ReplayingTransport();
+        var api = new EngineApi(transport);
+        var calls = new (string Fixture, Func<Task> Call)[]
+        {
+            ("anchor-clear.json", () => api.ClearAnchorAsync()),
+            ("anchor-enrol.json", () => api.StartEnrolmentAsync(45, "{0.0.1}.{aa}")),
+            ("anchor-enrol-cancel.json", () => api.CancelEnrolmentAsync()),
+            ("anchor-enrol-finish.json", () => api.FinishEnrolmentAsync()),
+            ("asr-device.json", () => api.SetAsrDeviceAsync("NPU")),
+            ("audio-inputs.json", () => api.ListAudioInputsAsync()),
+            ("engine-exit.json", () => api.RequestExitAsync()),
+            ("engine-metrics.json", () => api.MetricsAsync()),
+            ("guidance-documents-remove.json", () => api.RemoveDocumentAsync(7302914125883421)),
+            ("guidance-documents-removeAll.json", () => api.RemoveAllDocumentsAsync()),
+            ("guidance-research.json", () => api.SetResearchGuidanceAsync(true)),
+            ("note-options.json", () => api.SetNoteOptionsAsync("soap", "concise")),
+            ("note-regenerate.json", () => api.RegenerateNoteAsync("prose", "detailed")),
+            ("note-update.json", () => api.UpdateNoteAsync(session, "Swollen left elbow for a week.\nNo injury.")),
+            ("patient-regenerate.json", () => api.RegeneratePatientAsync()),
+            ("patient-translate.json", () => api.TranslatePatientAsync(session, "Polish")),
+            ("patient-update.json", () => api.UpdatePatientAsync(session, "Rest the elbow and take ibuprofen with food.")),
+            ("reflection-delete.json", () => api.DeleteReflectionAsync(session)),
+            ("reflection-summary-request.json", () => api.SummariseReflectionAsync(session)),
+            ("session-cancel.json", () => api.CancelSessionAsync()),
+            ("session-delete.json", () => api.DeleteSessionAsync("0f1e2d3c4b5a69788796a5b4c3d2e1f0")),
+            ("session-start.json", () => api.StartSessionAsync(true, "")),
+            ("session-stop.json", () => api.StopSessionAsync()),
+            ("translate-languages.json", () => api.LanguagesAsync()),
+        };
+        foreach (var (fixture, call) in calls)
+        {
+            var request = Fixtures.Load(fixture).GetProperty("request");
+            transport.Reply = Fixtures.Load(fixture).GetProperty("response").GetProperty("result");
+            await call();
+            transport.AssertSent(request.GetProperty("method").GetString()!, ParamsOf(request));
+        }
+    }
+
+    [Fact]
+    public async Task EngineAnchorAndSessionRepliesParseIntoTheClientTypes()
+    {
+        var transport = new ReplayingTransport();
+        var api = new EngineApi(transport);
+
+        transport.Reply = Result("asr-device.json");
+        Assert.Equal(new AsrDeviceState("NPU", "loading"), await api.SetAsrDeviceAsync("NPU"));
+
+        transport.Reply = Result("audio-inputs.json");
+        Assert.Equal(
+            [
+                new AudioInput("{0.0.1}.{aa}", "Microphone Array (Realtek(R) Audio)", "Microphone Array", true, false),
+                new AudioInput("{0.0.1}.{bb}", "Headset (H800 Hands-Free)", "Headset", false, true),
+            ],
+            await api.ListAudioInputsAsync());
+
+        transport.Reply = Result("engine-metrics.json");
+        var metrics = await api.MetricsAsync();
+        Assert.Equal(12.5, metrics.AsrRealtimeFactor);
+        Assert.Equal(new EngineDevices("GPU.0", "GPU.0"), metrics.Devices);
+
+        transport.Reply = Result("session-start.json");
+        Assert.Equal("a1b2c3d4e5f60718293a4b5c6d7e8f90", await api.StartSessionAsync(true, ""));
+        transport.Reply = Result("session-stop.json");
+        Assert.Equal("a1b2c3d4e5f60718293a4b5c6d7e8f90", await api.StopSessionAsync());
+
+        transport.Reply = Result("translate-languages.json");
+        Assert.Equal(["French", "Polish", "Romanian"], await api.LanguagesAsync());
+    }
+
+    [Fact]
+    public void EnrolmentNoteSheetTranslationAndSummaryNotificationsParse()
+    {
+        Assert.Equal(new EnrolmentProgress(0.5, 12.4, 9.1, false), Parse("anchor-progress.json"));
+        Assert.Equal(new EnrolmentDone(true, ""), Parse("anchor-enrolled.json"));
+        Assert.Equal(new AsrDeviceState("NPU", "ready"), Parse("asr-device-notification.json"));
+
+        Assert.Equal(new NotePartial("Swollen left elbow", 17.2), Parse("note-partial.json"));
+        Assert.Equal(new NoteReady("Swollen left elbow for a week. No injury.", 16.8), Parse("note-ready.json"));
+        Assert.Equal(new NoteRefused("This does not sound like a consultation.", true), Parse("note-refused.json"));
+        Assert.Equal(new NoteFailed("the note model stopped responding"), Parse("note-failed.json"));
+
+        Assert.Equal(new PatientPartial("Rest the elbow", 17.2), Parse("patient-partial.json"));
+        Assert.Equal(
+            new PatientReady("Rest the elbow and take ibuprofen with food.", 16.8), Parse("patient-ready.json"));
+        Assert.Equal(new PatientFailed("the note model stopped responding"), Parse("patient-failed.json"));
+
+        Assert.Equal(new TranslationPartial("Odpoczywaj", 22.4), Parse("translate-partial.json"));
+        Assert.Equal(
+            new TranslationReady("Odpoczywaj łokieć i przyjmuj ibuprofen z jedzeniem.", "Polish", 21.9),
+            Parse("translate-ready.json"));
+        Assert.Equal(new TranslationFailed("translation failed"), Parse("translate-failed.json"));
+
+        Assert.Equal(
+            new ReflectionSummaryFailed("a1b2c3d4e5f60718293a4b5c6d7e8f90", "no stored note"),
+            Parse("reflection-summaryFailed.json"));
+    }
+
+    // A method without parameters has no params member, and the transport sees null
+    private static JsonElement ParamsOf(JsonElement request) =>
+        request.TryGetProperty("params", out var parameters)
+            ? parameters
+            : JsonSerializer.SerializeToElement<object?>(null);
+
+    private static JsonElement Result(string fixture) =>
+        Fixtures.Load(fixture).GetProperty("response").GetProperty("result");
 
     private static EngineNotification? Parse(string fixture)
     {

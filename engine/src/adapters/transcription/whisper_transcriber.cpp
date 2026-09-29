@@ -1,7 +1,6 @@
 #include "adapters/transcription/whisper_transcriber.hpp"
 
 #include <chrono>
-#include <cstdio>
 #include <memory>
 #include <openvino/genai/whisper_pipeline.hpp>
 #include <utility>
@@ -9,6 +8,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/system/gpu_lease.hpp"
+#include "core/common/log.hpp"
 #include "core/metrics/metrics.hpp"
 #include "ports/audio_source.hpp"
 
@@ -40,7 +40,7 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
         const auto lease = take_gpu("asr load");
         store.Verify(info);
         device = runtime.ResolveDevice(requested);
-        std::fprintf(stderr, "clinicavt-engine: asr on %s\n", device.c_str());
+        log::Printf("clinicavt-engine: asr on %s\n", device.c_str());
         if (metrics != nullptr) metrics->RecordDevice("asr", device);
         pipeline = std::make_shared<ov::genai::WhisperPipeline>(info.dir, device,
                                                                 models::CompileProperties(info));
@@ -57,8 +57,7 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
         // If a stuck holder wedged the lease, decode anyway alongside it
         const auto lease = take_gpu("asr");
         if (lease.Waited() > 0.25) {
-            std::fprintf(stderr, "clinicavt-engine: asr waited %.2f s for the GPU lease\n",
-                         lease.Waited());
+            log::Printf("clinicavt-engine: asr waited %.2f s for the GPU lease\n", lease.Waited());
         }
         auto result = pipeline->generate(audio, config);
 
@@ -181,7 +180,7 @@ std::string WhisperTranscriber::Load(DecodeLoader loader) {
         }
         return {};
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "clinicavt-engine: transcription unavailable (%s)\n", e.what());
+        log::Printf("clinicavt-engine: transcription unavailable (%s)\n", e.what());
         return e.what();
     }
 }

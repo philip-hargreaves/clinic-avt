@@ -1,0 +1,15 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 50,
+        "method": "guidance/research",
+        "params": {
+            "include": true
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 50,
+        "result": {}
+    }
+}

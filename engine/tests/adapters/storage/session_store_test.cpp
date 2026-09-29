@@ -144,11 +144,11 @@ std::vector<SessionId> Ids(const std::vector<SessionSummary>& sessions) {
     return ids;
 }
 
-// Still marked recording: what a crash left, or the live session
+// Sessions still marked recording (crashed or live)
 std::vector<SessionId> Recording(const std::vector<SessionSummary>& sessions) {
     std::vector<SessionId> ids;
     for (const auto& session : sessions) {
-        if (session.state == "recording") ids.push_back(session.id);
+        if (session.state == SessionState::kRecording) ids.push_back(session.id);
     }
     return ids;
 }
@@ -219,7 +219,7 @@ TEST(SessionStore, ACrashedOrAbandonedSessionStaysRecoverable) {
     {
         const auto listed = store.ListSessions();
         ASSERT_EQ(listed.size(), 1u);
-        EXPECT_EQ(listed[0].state, "recording");
+        EXPECT_EQ(listed[0].state, SessionState::kRecording);
         EXPECT_TRUE(listed[0].ended_at.empty());
         EXPECT_NEAR(listed[0].audio_seconds, 3.0, 0.01) << "the length comes from the chunks";
         EXPECT_EQ(store.ReadAudio(crashed), crashed_audio);
@@ -247,7 +247,7 @@ TEST(SessionStore, ACrashedOrAbandonedSessionStaysRecoverable) {
     EXPECT_EQ(Recording(store.ListSessions()), (std::vector<SessionId>{abandoned, crashed}))
         << "a finalised session is not recoverable";
     const auto listed = store.ListSessions();
-    EXPECT_EQ(listed[0].state, "finalised");
+    EXPECT_EQ(listed[0].state, SessionState::kFinalised);
     EXPECT_FALSE(listed[0].ended_at.empty());
 }
 
@@ -534,7 +534,7 @@ TEST(SessionStore, DeleteErasesTheSessionItsKeyAndEveryRow) {
     }
 }
 
-// Clear keeps the session but replaces its key, so the rows it erased are noise as after a delete
+// Clear keeps the session but replaces its key, so erased rows are unreadable, as after a delete
 TEST(SessionStore, ErasedKeysLeaveNoRemnantInTheFileOrWal) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
@@ -601,7 +601,6 @@ void ExpectSameRecord(const SessionRecord& expected, const SessionRecord& actual
     }
 }
 
-// What a backup carries: read whole from one store, added whole to another, once
 TEST(SessionStore, ARecordMovesWholeIntoAnotherStoreUnderAFreshKeyAndOnlyOnce) {
     TempRoot root;
     TempRoot other_root;
@@ -637,7 +636,7 @@ TEST(SessionStore, ARecordMovesWholeIntoAnotherStoreUnderAFreshKeyAndOnlyOnce) {
     ExpectSameRecord(record, target.ReadRecord(id));
     const auto listed = target.ListSessions();
     ASSERT_EQ(listed.size(), 1u);
-    EXPECT_EQ(listed[0].state, "finalised");
+    EXPECT_EQ(listed[0].state, SessionState::kFinalised);
     EXPECT_FALSE(listed[0].demo);
     EXPECT_FALSE(listed[0].cleared);
     EXPECT_TRUE(listed[0].has_reflection);
@@ -821,7 +820,7 @@ TEST(SessionStore, AFreshStoreIsStampedAndForeignOlderOrNewerFilesAreRefused) {
         Db db(foreign / "clinicavt.db");
         EXPECT_EQ(db.QueryInt64("SELECT count(*) FROM sqlite_master WHERE name = 'sessions'"), 0)
             << "no schema was created into it";
-        // Another application's mark, whatever the version says
+        // Foreign application_id, whatever the user_version
         db.Exec("DROP TABLE notes");
         db.SetApplicationId(0x11111111);
         db.SetUserVersion(5);

@@ -1,0 +1,8 @@
+{
+    "jsonrpc": "2.0",
+    "method": "note/refused",
+    "params": {
+        "reason": "This does not sound like a consultation.",
+        "overridable": true
+    }
+}

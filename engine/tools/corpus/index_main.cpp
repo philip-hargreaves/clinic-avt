@@ -14,6 +14,7 @@
 #include "adapters/guidance/embedder.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/system/exe_paths.hpp"
+#include "adapters/system/stderr_log.hpp"
 #include "core/common/cli_args.hpp"
 #include "core/common/iso8601.hpp"
 #include "tools/corpus/indexer.hpp"
@@ -25,6 +26,7 @@ constexpr const char* kBuilder = "clinicavt_index 1";
 }  // namespace
 
 int main(int argc, char** argv) {
+    clinicavt::system::LogToStderr();
     std::vector<std::string> positional(argv + 1, argv + argc);
     const std::string models_flag = clinicavt::TakeFlag(positional, "--models");
     const std::filesystem::path models_root =

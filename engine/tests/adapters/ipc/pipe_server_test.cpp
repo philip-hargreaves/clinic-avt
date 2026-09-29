@@ -11,6 +11,14 @@
 #include <thread>
 #include <vector>
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
 #include "adapters/ipc/pipe_client.hpp"
 
 namespace clinicavt::ipc {
@@ -31,8 +39,8 @@ void Connect(PipeClient& client, const std::wstring& name) {
     ASSERT_TRUE(client.IsOpen());
 }
 
-// A shell that closes can come back to the same engine, and a dial that
-// connects and leaves at once never costs the next one its turn
+// The shell can reconnect to the same engine, and a client that connects and leaves at once
+// doesn't block the next
 TEST(PipeServer, AClientThatLeavesEarlyNeverBlocksTheNext) {
     const auto name = PipeName("turns");
     PipeServer server(name);
@@ -61,12 +69,12 @@ TEST(PipeServer, AClientThatLeavesEarlyNeverBlocksTheNext) {
 
     ASSERT_TRUE(reply.has_value());
     EXPECT_NE(reply->find("hello"), std::string::npos);
-    // Only the second spoke. An engine asked to exit is kept to it by a silent visitor
+    // Only the second client sent a request
     EXPECT_EQ(std::count(spoke.begin(), spoke.end(), true), 1);
     EXPECT_TRUE(spoke.back());
 }
 
-// An engine already asked to exit waits at zero idle, and busy still holds it
+// At zero idle the server still waits while busy returns true
 TEST(PipeServer, AnIdleServerGivesUpOnlyOnceNothingKeepsItBusy) {
     PipeServer server(PipeName("idle"));
     const auto t0 = std::chrono::steady_clock::now();

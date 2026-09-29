@@ -1,55 +1,36 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-
 #include <cstddef>
 #include <filesystem>
-#include <stdexcept>
 #include <string>
-#include <utility>
-
-#include "adapters/system/power_throttling.hpp"
 
 namespace clinicavt::system {
 
+// Owns a Win32 HANDLE, held as void* so windows.h stays out of the header
 class UniqueHandle {
    public:
     UniqueHandle() = default;
-    explicit UniqueHandle(HANDLE value) : value_(value) {}
-    ~UniqueHandle() {
-        Reset();
-    }
-    UniqueHandle(UniqueHandle&& other) noexcept : value_(other.Release()) {}
-    UniqueHandle& operator=(UniqueHandle&& other) noexcept {
-        if (this != &other) Reset(other.Release());
-        return *this;
-    }
+    explicit UniqueHandle(void* value) : value_(value) {}
+    ~UniqueHandle();
+    UniqueHandle(UniqueHandle&& other) noexcept;
+    UniqueHandle& operator=(UniqueHandle&& other) noexcept;
     UniqueHandle(const UniqueHandle&) = delete;
     UniqueHandle& operator=(const UniqueHandle&) = delete;
 
-    HANDLE Get() const {
+    void* Get() const {
         return value_;
     }
-    explicit operator bool() const {
-        return value_ != nullptr && value_ != INVALID_HANDLE_VALUE;
-    }
-    HANDLE Release() {
-        return std::exchange(value_, nullptr);
-    }
-    void Reset(HANDLE value = nullptr) {
-        if (*this) CloseHandle(value_);
-        value_ = value;
-    }
+    explicit operator bool() const;
+    void* Release();
+    void Reset(void* value = nullptr);
 
    private:
-    HANDLE value_ = nullptr;
+    void* value_ = nullptr;
 };
 
 struct ChildOptions {
-    HANDLE stdin_read = nullptr;          // inherited as the child's stdin, null keeps the parent's
-    HANDLE stdout_write = nullptr;        // likewise for stdout
+    void* stdin_read = nullptr;           // inherited as the child's stdin, null keeps the parent's
+    void* stdout_write = nullptr;         // likewise for stdout
     std::size_t memory_cap = 0;           // job memory limit in bytes, 0 for none
     bool single_process = false;          // the job admits one process
     bool exempt_from_throttling = false;  // EcoQoS off, like the engine
@@ -64,83 +45,23 @@ class ChildProcess {
     // Spawns `exe` suspended, puts it in the job, then resumes it. Throws
     // std::runtime_error when it cannot start
     static ChildProcess Spawn(const std::filesystem::path& exe, const std::wstring& args,
-                              const ChildOptions& options = {}) {
-        STARTUPINFOW startup{};
-        startup.cb = sizeof(startup);
-        startup.dwFlags = STARTF_USESTDHANDLES;
-        startup.hStdInput =
-            options.stdin_read != nullptr ? options.stdin_read : GetStdHandle(STD_INPUT_HANDLE);
-        startup.hStdOutput = options.stdout_write != nullptr ? options.stdout_write
-                                                             : GetStdHandle(STD_OUTPUT_HANDLE);
-        startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-        SetHandleInformation(startup.hStdError, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-        std::wstring command = L"\"" + exe.wstring() + L"\" " + args;
-        PROCESS_INFORMATION info{};
-        if (!CreateProcessW(exe.wstring().c_str(), command.data(), nullptr, nullptr, TRUE,
-                            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup,
-                            &info)) {
-            throw std::runtime_error(exe.filename().string() + " failed to start");
-        }
-        ChildProcess child;
-        child.process_.Reset(info.hProcess);
-        UniqueHandle thread(info.hThread);
-        child.job_.Reset(CreateJobObjectW(nullptr, nullptr));
-        if (child.job_) {
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if (options.memory_cap > 0) {
-                limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_PROCESS_MEMORY;
-                limits.ProcessMemoryLimit = options.memory_cap;
-            }
-            if (options.single_process) {
-                limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
-                limits.BasicLimitInformation.ActiveProcessLimit = 1;
-            }
-            SetInformationJobObject(child.job_.Get(), JobObjectExtendedLimitInformation, &limits,
-                                    sizeof(limits));
-            AssignProcessToJobObject(child.job_.Get(), child.process_.Get());
-        }
-        if (options.exempt_from_throttling) DisableThrottling(child.process_.Get());
-        ResumeThread(thread.Get());
-        return child;
-    }
+                              const ChildOptions& options = {});
 
-    bool Alive() const {
-        return process_ && WaitForSingleObject(process_.Get(), 0) == WAIT_TIMEOUT;
-    }
+    bool Alive() const;
 
-    DWORD Pid() const {
-        return process_ ? GetProcessId(process_.Get()) : 0;
-    }
+    unsigned long Pid() const;
 
     // True once the process has ended, waiting up to `ms` for it
-    bool WaitFor(DWORD ms) const {
-        return process_ && WaitForSingleObject(process_.Get(), ms) != WAIT_TIMEOUT;
-    }
+    bool WaitFor(unsigned long ms) const;
 
     // Kills the whole job if any, else just the process
-    void Kill() {
-        if (job_) {
-            TerminateJobObject(job_.Get(), 1);
-        } else if (process_) {
-            TerminateProcess(process_.Get(), 1);
-        }
-    }
+    void Kill();
 
-    DWORD ExitCode() const {
-        DWORD code = 0;
-        if (process_) GetExitCodeProcess(process_.Get(), &code);
-        return code;
-    }
+    unsigned long ExitCode() const;
 
     // Waits up to grace_ms for exit, then releases the handles. Returns false and
     // keeps the handles if still running, since closing the job would kill it
-    bool End(DWORD grace_ms) {
-        if (process_ && !WaitFor(grace_ms)) return false;
-        process_.Reset();
-        job_.Reset();
-        return true;
-    }
+    bool End(unsigned long grace_ms);
 
    private:
     UniqueHandle process_;

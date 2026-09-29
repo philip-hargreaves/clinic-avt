@@ -61,7 +61,7 @@ TEST(DocumentIndex, HoldsFilesByContentAndReleasesADocumentNoFileHolds) {
                  0);
     const auto rows = index.List();
     ASSERT_EQ(rows.size(), 1u);
-    EXPECT_EQ(rows[0].state, "ready");
+    EXPECT_EQ(rows[0].state, DocumentState::kReady);
     EXPECT_EQ(rows[0].path, "BSR PMR 2009.pdf");
     EXPECT_EQ(rows[0].sha256, two);
     EXPECT_EQ(rows[0].bytes, 120);
@@ -77,7 +77,7 @@ TEST(DocumentIndex, HoldsFilesByContentAndReleasesADocumentNoFileHolds) {
 
     index.Fail(changed.document, "noText", 5, 5);
     const auto failed = index.Get(changed.document);
-    EXPECT_EQ(failed.state, "failed");
+    EXPECT_EQ(failed.state, DocumentState::kFailed);
     EXPECT_EQ(failed.chunks, 0);
     EXPECT_THROW(index.Get(12345), store::StoreError);
     EXPECT_THROW(index.Fail(12345, "noText"), store::StoreError);

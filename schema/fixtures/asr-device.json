@@ -1,0 +1,18 @@
+{
+    "request": {
+        "jsonrpc": "2.0",
+        "id": 44,
+        "method": "asr/device",
+        "params": {
+            "device": "NPU"
+        }
+    },
+    "response": {
+        "jsonrpc": "2.0",
+        "id": 44,
+        "result": {
+            "device": "NPU",
+            "state": "loading"
+        }
+    }
+}

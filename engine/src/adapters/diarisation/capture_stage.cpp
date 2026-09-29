@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <string>
 
+#include "core/common/log.hpp"
 #include "core/diarisation/clip_cuts.hpp"
 #include "core/diarisation/diar_regions.hpp"
 #include "core/diarisation/embeddings.hpp"
@@ -185,9 +185,9 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
             ++decoded;
             decoded_audio += static_cast<double>(b - a) / audio::kSampleRate;
             if (catch_up) {
-                std::fprintf(stderr, "clinicavt-engine: catch-up decoded %.1f-%.1f s\n",
-                             static_cast<double>(a) / audio::kSampleRate,
-                             static_cast<double>(b) / audio::kSampleRate);
+                log::Printf("clinicavt-engine: catch-up decoded %.1f-%.1f s\n",
+                            static_cast<double>(a) / audio::kSampleRate,
+                            static_cast<double>(b) / audio::kSampleRate);
             }
             if (text.empty()) continue;  // rejected, silent, or stopping
             if (MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
@@ -197,15 +197,14 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
     }
     if (catch_up) {
         const auto t_end = Clock::now();
-        std::fprintf(stderr,
-                     "clinicavt-engine: catch-up frontier %.1f of %.1f s, slices %zu, "
-                     "segment+cuts %.2f s, embed %.2f s, cluster %.2f s, decode %d spans "
-                     "(%.1f s audio, %d cached) %.2f s, total %.2f s\n",
-                     static_cast<double>(settled) / audio::kSampleRate,
-                     static_cast<double>(audio.size()) / audio::kSampleRate, kept.size(),
-                     seconds(t_start, t_embed), seconds(t_embed, t_cluster),
-                     seconds(t_cluster, t_decode), decoded, decoded_audio, cached,
-                     seconds(t_decode, t_end), seconds(t_start, t_end));
+        log::Printf(
+            "clinicavt-engine: catch-up frontier %.1f of %.1f s, slices %zu, "
+            "segment+cuts %.2f s, embed %.2f s, cluster %.2f s, decode %d spans "
+            "(%.1f s audio, %d cached) %.2f s, total %.2f s\n",
+            static_cast<double>(settled) / audio::kSampleRate,
+            static_cast<double>(audio.size()) / audio::kSampleRate, kept.size(),
+            seconds(t_start, t_embed), seconds(t_embed, t_cluster), seconds(t_cluster, t_decode),
+            decoded, decoded_audio, cached, seconds(t_decode, t_end), seconds(t_start, t_end));
     }
 
     // Edge chunks are embedded now, a few per tick, so the finalise re-split

@@ -9,8 +9,8 @@
 
 #include "adapters/guidance/corpus_store.hpp"
 #include "adapters/guidance/embedder.hpp"
+#include "adapters/interfaces/guidance_retriever.hpp"
 #include "core/guidance/guidance_rank.hpp"
-#include "ports/guidance_retriever.hpp"
 
 namespace clinicavt::guidance {
 
@@ -21,8 +21,8 @@ struct RetrieverOptions {
     bool include_research = false;  // dev only
 };
 
-// Every ready added document as one matrix and its rows. Built by the ingest
-// and swapped in whole, so a search never touches the store
+// Every ready added document as one matrix plus rows. Ingest builds it and swaps it in whole, so a
+// search never reads the store
 struct UploadSnapshot {
     struct Row {
         std::int64_t document = 0;
@@ -43,12 +43,11 @@ struct UploadSnapshot {
 
 using EmbedderLoader = std::function<std::unique_ptr<IEmbedder>()>;
 
-// The shipped retriever: one embedder, every corpus under corpora_root that
-// passes the load guards, exact scan, rank vote across the sub-queries, cosine
-// floor, population guard. A result's score is its best cosine and the order
-// is the vote. Prepare and Search run one at a time. Corpora and Status may be
-// read from any thread. A load failure is kept and rethrown without a retry,
-// since the model store does not change while the engine runs
+// Uses one embedder and every corpus under corpora_root that passes load checks. Searches by exact
+// scan with a rank vote across sub-queries, a cosine floor and a population guard. Score is the
+// best cosine and order follows the vote. Prepare and Search are serialised. Corpora and Status are
+// thread-safe. A load failure is cached and rethrown, since the model store does not change at
+// runtime
 class Retriever : public IGuidanceRetriever {
    public:
     Retriever(EmbedderLoader load_embedder, std::filesystem::path corpora_root,
@@ -59,12 +58,11 @@ class Retriever : public IGuidanceRetriever {
     std::vector<Corpus> Corpora() override;
     Readiness Status() override;
 
-    // For the ingest: one embed at a time, interleaved with searches
+    // Used by ingest. Serialised with searches
     Embedding Embed(const std::string& text);
     EmbedderIdentity Identity();
     void PublishUploads(std::shared_ptr<const UploadSnapshot> uploads);
 
-    // Dev only: reload the corpora with or without the ones marked research
     void SetResearch(bool include) override;
 
    private:

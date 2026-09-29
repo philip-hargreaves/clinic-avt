@@ -15,6 +15,7 @@
 
 #include "adapters/archive/archive_lane.hpp"
 #include "adapters/ipc/handlers.hpp"
+#include "adapters/storage/reflection_json.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
 #include "core/common/utf8.hpp"
 
@@ -44,6 +45,9 @@ void ExpectSameKeys(const json& actual, const json& fixture) {
 struct Store {
     std::filesystem::path root;
     std::unique_ptr<store::SqliteSessionStore> sessions;
+    std::unique_ptr<records::SessionRecords> records;
+    store::JsonReflectionCodec codec;
+    std::unique_ptr<records::Reflections> reflections;
 
     Store() {
         root = std::filesystem::temp_directory_path() /
@@ -53,6 +57,8 @@ struct Store {
         std::filesystem::remove_all(root);
         sessions =
             std::make_unique<store::SqliteSessionStore>(root / "store", std::chrono::hours(1));
+        records = std::make_unique<records::SessionRecords>(*sessions);
+        reflections = std::make_unique<records::Reflections>(*sessions, codec);
     }
 
     ~Store() {
@@ -88,7 +94,7 @@ struct Store {
     }
 };
 
-// What the lane sends, waited on from the test thread
+// Lane notices, waited on by the test thread
 struct Notices {
     std::mutex mutex;
     std::condition_variable arrived;
@@ -204,8 +210,6 @@ TEST(ArchiveHandlers, BackUpAndRestoreRunOnTheLaneFromTheFixtureRequests) {
     EXPECT_EQ(end.second["skipped"], 1);
 }
 
-// Nothing starts during a consultation or beside another job, deletes are refused while one
-// runs, and a malformed request never reaches the lane
 TEST(ArchiveHandlers, JobsAndDeletesAreRefusedWhileBusyAndBadParamsNeverStartOne) {
     Store store;
     store.Add("a1b2c3d4e5f60718293a4b5c6d7e8f90", false);
@@ -232,8 +236,8 @@ TEST(ArchiveHandlers, JobsAndDeletesAreRefusedWhileBusyAndBadParamsNeverStartOne
     ASSERT_TRUE(busy);
     EXPECT_TRUE(refused(HandleArchiveBackup(lane, false, backup), kSessionError));
     EXPECT_TRUE(refused(HandleArchiveRestore(lane, false, restore), kSessionError));
-    EXPECT_TRUE(refused(HandleSessionRemove(*store.sessions, remove, busy), kSessionError));
-    EXPECT_TRUE(refused(HandleSessionDeleteAll(*store.sessions, json::object(), false, busy),
+    EXPECT_TRUE(refused(HandleSessionRemove(*store.records, remove, busy), kSessionError));
+    EXPECT_TRUE(refused(HandleSessionDeleteAll(*store.records, json::object(), false, busy),
                         kSessionError));
     EXPECT_EQ(notices.Final().first, "archive/done");
     EXPECT_EQ(store.sessions->ListSessions().size(), 1u);
@@ -271,19 +275,19 @@ TEST(ArchiveHandlers, JobsAndDeletesAreRefusedWhileBusyAndBadParamsNeverStartOne
                                          json{{"covered", {{"from", ""}, {"to", ""}}}});
          }},
         {"remove without a list",
-         [&] { return HandleSessionRemove(*store.sessions, json{{"ids", "a1b2"}}, false); }},
+         [&] { return HandleSessionRemove(*store.records, json{{"ids", "a1b2"}}, false); }},
         {"remove with a numeric id",
          [&] {
-             return HandleSessionRemove(*store.sessions, json{{"ids", json::array({1})}}, false);
+             return HandleSessionRemove(*store.records, json{{"ids", json::array({1})}}, false);
          }},
         {"remove with deleteReflections as text",
          [&] {
-             return HandleSessionRemove(*store.sessions, with(remove, "deleteReflections", "no"),
+             return HandleSessionRemove(*store.records, with(remove, "deleteReflections", "no"),
                                         false);
          }},
         {"delete all with deleteReflections as a number",
          [&] {
-             return HandleSessionDeleteAll(*store.sessions, json{{"deleteReflections", 1}}, false,
+             return HandleSessionDeleteAll(*store.records, json{{"deleteReflections", 1}}, false,
                                            false);
          }},
     };
@@ -303,11 +307,11 @@ TEST(ArchiveHandlers, RemoveAndDeleteAllKeepReflectionsUnlessAskedAndMatchTheFix
     store.Add("0f1e2d3c4b5a69788796a5b4c3d2e1f0", false);
 
     const json remove = LoadFixture("session-remove.json");
-    const auto removed = HandleSessionRemove(*store.sessions, remove["request"]["params"], false);
+    const auto removed = HandleSessionRemove(*store.records, remove["request"]["params"], false);
     ASSERT_TRUE(std::holds_alternative<json>(removed));
     EXPECT_EQ(MakeResult(std::int64_t{34}, ResultOf(removed)), remove["response"]);
-    EXPECT_TRUE(HandleSessionList(*store.sessions)["sessions"].empty());
-    json journal = HandleReflectionList(*store.sessions)["reflections"];
+    EXPECT_TRUE(HandleSessionList(*store.records)["sessions"].empty());
+    json journal = HandleReflectionList(*store.reflections)["reflections"];
     ASSERT_EQ(journal.size(), 1u);
     EXPECT_EQ(journal[0]["id"], "a1b2c3d4e5f60718293a4b5c6d7e8f90");
 
@@ -318,16 +322,16 @@ TEST(ArchiveHandlers, RemoveAndDeleteAllKeepReflectionsUnlessAskedAndMatchTheFix
     }
     const json delete_all = LoadFixture("session-deleteAll.json");
     const auto erased =
-        HandleSessionDeleteAll(*store.sessions, delete_all["request"]["params"], false, false);
+        HandleSessionDeleteAll(*store.records, delete_all["request"]["params"], false, false);
     ASSERT_TRUE(std::holds_alternative<json>(erased));
     EXPECT_EQ(MakeResult(std::int64_t{35}, ResultOf(erased)), delete_all["response"]);
-    EXPECT_EQ(HandleReflectionList(*store.sessions)["reflections"].size(), 1u);
+    EXPECT_EQ(HandleReflectionList(*store.reflections)["reflections"].size(), 1u);
 
     const auto everything =
-        HandleSessionDeleteAll(*store.sessions, json{{"deleteReflections", true}}, false, false);
+        HandleSessionDeleteAll(*store.records, json{{"deleteReflections", true}}, false, false);
     ASSERT_TRUE(std::holds_alternative<json>(everything));
     EXPECT_EQ(ResultOf(everything)["removed"], 1);
-    EXPECT_TRUE(HandleReflectionList(*store.sessions)["reflections"].empty());
+    EXPECT_TRUE(HandleReflectionList(*store.reflections)["reflections"].empty());
     EXPECT_TRUE(store.sessions->ListSessions().empty());
 }
 

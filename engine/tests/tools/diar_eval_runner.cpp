@@ -19,6 +19,7 @@
 #include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
+#include "adapters/system/stderr_log.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
 #include "core/diarisation/role_naming.hpp"
 #include "core/diarisation/turn_decode.hpp"
@@ -38,7 +39,7 @@ std::vector<float> LoadWav(const char* path) {
     return frames;
 }
 
-// The clip-decode contract hands back chunks. The probe's whole-clip text is one
+// Wraps whole-clip text as one chunk, as the clip-decode contract returns
 std::vector<clinicavt::asr::Turn> AsChunk(std::string text, std::span<const float> clip,
                                           std::uint64_t first_frame) {
     clinicavt::asr::Turn chunk;
@@ -88,8 +89,8 @@ void AmortiseProbe(const clinicavt::models::ModelStore& store,
     }
     const std::size_t capture_decodes = decodes;
 
-    // Stop: everything production's finalise pays, including the pair's
-    // voiceprints for anchor ranking and accrual
+    // On stop, time the full production finalise, including the pair's voiceprints for anchor
+    // ranking and accrual
     const auto stop_start = Clock::now();
     const auto result = fed.Diarise(audio);
     const auto cache = fed.TakeTurnTexts();
@@ -158,6 +159,7 @@ void AmortiseProbe(const clinicavt::models::ModelStore& store,
 }  // namespace
 
 int main(int argc, char** argv) {
+    clinicavt::system::LogToStderr();
     if (argc < 3) {
         std::fprintf(
             stderr,

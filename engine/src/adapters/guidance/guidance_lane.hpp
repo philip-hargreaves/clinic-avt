@@ -7,16 +7,16 @@
 #include <optional>
 #include <thread>
 
-#include "ports/guidance_lane.hpp"
-#include "ports/guidance_retriever.hpp"
+#include "adapters/interfaces/guidance_lane.hpp"
+#include "adapters/interfaces/guidance_retriever.hpp"
 
 namespace clinicavt::guidance {
 
 using ReadinessListener = std::function<void(const Readiness&)>;
 
-// One worker over the retriever: loads in the background and calls a request's
-// callbacks on the worker, except the superseded failure, which runs on the
-// caller's thread. The listener hears how loading ended
+// Runs the retriever on one worker thread. Loads in the background and runs request callbacks on
+// the worker, except the superseded failure, which runs on the caller thread. The listener is told
+// how loading ended
 class GuidanceLane : public IGuidanceLane {
    public:
     explicit GuidanceLane(IGuidanceRetriever& retriever, ReadinessListener on_readiness = {});
