@@ -39,7 +39,7 @@ struct TempRoot {
     }
 };
 
-// The victim with its stdout piped back, killed hard and never asked to exit
+// Crash helper with stdout piped back; killed hard, never asked to exit
 class HelperProcess {
    public:
     HelperProcess(const std::filesystem::path& root, const char* mode) {
@@ -140,7 +140,7 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
     const auto listed = reopened.ListSessions();
     ASSERT_EQ(listed.size(), 1u);
     EXPECT_EQ(listed[0].id, session_id);
-    EXPECT_EQ(listed[0].state, "recording");
+    EXPECT_EQ(listed[0].state, SessionState::kRecording);
 
     // Every acked chunk survived the kill, decrypts, and carries the exact
     // frames that were appended

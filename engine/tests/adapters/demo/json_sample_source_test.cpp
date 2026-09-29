@@ -1,21 +1,19 @@
-#include "adapters/demo/sample_year.hpp"
+#include "adapters/demo/json_sample_source.hpp"
 
 #include <gtest/gtest.h>
 
-#include <chrono>
+#include <cstdint>
 #include <set>
+#include <string>
 
 #include "core/note/summary_scrub.hpp"
 
 namespace clinicavt::demo {
 namespace {
 
-using namespace std::chrono;
-
-// The shipped content: eight consultations over eight distinct months, each
-// whole, and nothing in what the app shows that the scrub would change
+// Also checks the scrub would change nothing the app shows
 TEST(SampleYear, TheShippedContentIsWholeAndSpreadOverTheYear) {
-    const auto samples = LoadSampleYear(CLINICAVT_DEMO_DIR);
+    const auto samples = JsonSampleSource(CLINICAVT_DEMO_DIR).Load();
     ASSERT_EQ(samples.size(), 8u);
     std::set<int> months;
     std::set<std::string> sources;
@@ -45,21 +43,6 @@ TEST(SampleYear, TheShippedContentIsWholeAndSpreadOverTheYear) {
     }
     EXPECT_EQ(months.size(), 8u) << "two samples in one month";
     EXPECT_EQ(sources.size(), 8u) << "a consultation used twice";
-}
-
-TEST(SampleYear, StartsFallOnTheSampleDayMonthsBackClampedToTheMonth) {
-    Sample sample;
-    sample.months_back = 1;
-    sample.day = 31;
-    sample.hour = 13;
-    sample.minute = 15;
-    // 15 March 2026 -> February has 28 days, so the 31st becomes the 28th
-    const sys_seconds now = sys_days{2026y / March / 15} + hours{10};
-    EXPECT_EQ(Iso8601(SampleStart(sample, now)), "2026-02-28T13:15:00Z");
-
-    sample.months_back = 11;
-    sample.day = 4;
-    EXPECT_EQ(Iso8601(SampleStart(sample, now)), "2025-04-04T13:15:00Z");
 }
 
 }  // namespace
