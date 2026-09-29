@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 # Windows PowerShell leaves $PSScriptRoot empty in parameter defaults
 if (-not $Root) { $Root = Split-Path $PSScriptRoot -Parent }
-$src = Join-Path $Root 'engine\src'
+$domain = Join-Path $Root 'engine\domain'
 $allowed = '^\s*#\s*include\s*(<[a-z0-9_]+>|"(core|ports)/[^"]+")'
 $reasons = [ordered]@{
     'adapters/'      = 'an adapter'
@@ -21,7 +21,7 @@ $reasons = [ordered]@{
 }
 
 $files = @('core', 'ports') | ForEach-Object {
-    Get-ChildItem -Path (Join-Path $src $_) -Recurse -File -Include *.cpp, *.hpp, *.h, *.inl
+    Get-ChildItem -Path (Join-Path $domain $_) -Recurse -File -Include *.cpp, *.hpp, *.h, *.inl
 }
 $violations = @($files |
     Select-String -Pattern '^\s*#\s*(include|pragma\s+comment)' |

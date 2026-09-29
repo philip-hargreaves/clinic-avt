@@ -29,7 +29,7 @@ if (-not (Test-Path $commands)) { throw "$commands not found; run cmake --preset
 
 $files = @(Get-Content $commands -Raw | ConvertFrom-Json |
     ForEach-Object { $_.file.Replace('\', '/') } |
-    Where-Object { $_ -match '/engine/(src|tools|tests)/' -and $_ -match $Filter } |
+    Where-Object { $_ -match '/engine/(domain|src|tools|tests)/' -and $_ -match $Filter } |
     Sort-Object -Unique)
 if ($files.Count -eq 0) { throw "no engine files in $commands" }
 Write-Host "clang-tidy $(& $tidy --version | Select-String 'version') on $($files.Count) files, $Jobs at a time"

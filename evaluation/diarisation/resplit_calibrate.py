@@ -1,4 +1,4 @@
-"""Calibrate the re-split margin (engine/src/core/diarisation/resplit.hpp) from a dry-run sweep:
+"""Calibrate the re-split margin (engine/domain/core/diarisation/resplit.hpp) from a dry-run sweep:
 label each logged resplit-candidate against the reference and score "other - own >= margin" over a
 range of margins, with cross-validation.
 

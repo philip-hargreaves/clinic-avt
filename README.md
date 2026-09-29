@@ -163,7 +163,7 @@ clang-tidy reads the dev preset's `compile_commands.json`.
 ```
 ClinicAVT/
 ├── engine/                      C++20 engine
-│   ├── src/
+│   ├── domain/                  its own include root, so core cannot include an adapter
 │   │   ├── core/                pure pipeline logic, one folder per stage
 │   │   │   ├── audio/           capture ring, level metering and voice enrolment
 │   │   │   ├── diarisation/     speaker turns, per-turn decoding and role naming
@@ -171,13 +171,16 @@ ClinicAVT/
 │   │   │   ├── guidance/        guideline retrieval and ranking
 │   │   │   ├── translate/       patient information translation
 │   │   │   ├── archive/         backup and restore
+│   │   │   ├── records/         session history, deletion and appraisal reflections
 │   │   │   └── session/         consultation lifecycle, import and the note lane
-│   │   ├── ports/               interfaces the core depends on
+│   │   └── ports/               interfaces the core depends on
+│   ├── src/
 │   │   ├── adapters/            implementations: OpenVINO models, audio, storage, IPC
+│   │   ├── composition/         command line and model roles for the engine's main
 │   │   ├── engine_main.cpp      engine process
 │   │   ├── note_host_main.cpp   isolated note-generation process
 │   │   └── ingest_host_main.cpp isolated PDF parsing process
-│   ├── tests/                   GoogleTest suites mirroring src/
+│   ├── tests/                   GoogleTest suites mirroring domain/ and src/
 │   ├── tools/                   guideline corpus builder
 │   └── licences/                third-party notices shipped with the app
 ├── app/                         .NET 10 shell
@@ -194,7 +197,7 @@ ClinicAVT/
 │   ├── retrieval/               guideline search
 │   ├── translation/             translation quality
 │   └── performance/             latency and memory across note models
-├── schema/fixtures/             example wire messages shared by engine and shell tests
+├── schema/                      wire messages shared by engine and shell tests, and the version rule
 ├── prompts/                     note and patient information prompts
 ├── demo/                        example consultations (PriMock57)
 ├── weights/                     model pack manifests with SHA-256 hashes
@@ -203,7 +206,7 @@ ClinicAVT/
 └── clinicavt.slnx               shell solution
 ```
 
-`engine/src/README.md` and `app/README.md` describe each half in more detail.
+`engine/README.md` and `app/README.md` describe each half in more detail.
 
 ## Licence
 
