@@ -14,21 +14,23 @@ public sealed partial class PatientEditorView : UserControl
     public static FlowDirection Flow(bool rightToLeft) =>
         rightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
-    public PatientEditorView(NoteViewModel viewModel, DocumentExportViewModel export)
+    public PatientEditorView(
+        PatientSheetViewModel viewModel, ReviewCommandsViewModel commands, DocumentExportViewModel export)
     {
         ViewModel = viewModel;
+        Commands = commands;
         Export = export;
         InitializeComponent();
         _fitAlone = new TabFit(PatientHost, 0.6);
         _fitShared = new TabFit(PatientHost, 0.42);
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(NoteViewModel.PatientEditing))
+            if (e.PropertyName == nameof(PatientSheetViewModel.PatientEditing))
             {
                 EditingChrome.Show(PatientBox, ViewModel.PatientEditing);
             }
 
-            if (e.PropertyName == nameof(NoteViewModel.TranslationVisible))
+            if (e.PropertyName == nameof(PatientSheetViewModel.TranslationVisible))
             {
                 TranslationRow.Height = ViewModel.TranslationVisible ? GridLength.Auto : new GridLength(0);
                 if (_area is not null)
@@ -41,7 +43,9 @@ public sealed partial class PatientEditorView : UserControl
         TranslationHeader.SizeChanged += (_, _) => FitTranslation();
     }
 
-    public NoteViewModel ViewModel { get; }
+    public PatientSheetViewModel ViewModel { get; }
+
+    public ReviewCommandsViewModel Commands { get; }
 
     public DocumentExportViewModel Export { get; }
 

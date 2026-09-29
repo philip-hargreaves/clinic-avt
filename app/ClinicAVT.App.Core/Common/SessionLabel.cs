@@ -1,4 +1,4 @@
-using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Common;
@@ -10,7 +10,7 @@ public static class SessionLabel
     /// when the title is blank, unchanged or refused.
     /// </summary>
     public static async Task<string> SaveAsync(
-        IEngineApi engine, StatusBarViewModel status, string id, string typed, string saved)
+        ISessionStoreApi engine, IStatusLine status, string id, string typed, string saved)
     {
         var title = typed.Trim();
         if (id.Length == 0 || title.Length == 0 || title == saved)

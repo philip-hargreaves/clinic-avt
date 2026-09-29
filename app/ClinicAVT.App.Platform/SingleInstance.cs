@@ -6,8 +6,8 @@ using Windows.Win32.UI.WindowsAndMessaging;
 namespace ClinicAVT.App.Platform;
 
 /// <summary>
-/// One app per sign-in. A second launch would find the engine's pipe taken and sit on
-/// "Not running", so it brings the open window forward and leaves instead.
+/// One instance per sign-in. A second one would show "Not running" because the engine pipe is
+/// taken, so it activates the first window and exits.
 /// </summary>
 public static class SingleInstance
 {

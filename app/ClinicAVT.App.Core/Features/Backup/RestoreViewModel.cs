@@ -23,24 +23,23 @@ public enum RestoreStep
 /// </summary>
 public sealed partial class RestoreViewModel : ObservableObject, IDisposable
 {
-    private readonly IEngineApi _engine;
+    private readonly IArchiveApi _engine;
     private readonly IFilePicker _picker;
-    private readonly IUiDispatcher? _dispatcher;
     private readonly TimeProvider _clock;
-    private readonly ILogger? _logger;
+    private readonly ILogger<RestoreViewModel> _logger;
+    private readonly IDisposable _notifications;
     private string _things = "consultation";
 
-    public RestoreViewModel(IEngineApi engine, IFilePicker picker, AppPreferences? preferences = null,
-        IUiDispatcher? dispatcher = null, TimeProvider? clock = null, ILogger? logger = null)
+    public RestoreViewModel(IArchiveApi engine, IEngineEvents events, IFilePicker picker,
+        AppPreferences preferences, TimeProvider clock, ILogger<RestoreViewModel> logger)
     {
         _engine = engine;
         _logger = logger;
         _picker = picker;
-        _dispatcher = dispatcher;
-        _clock = clock ?? TimeProvider.System;
+        _clock = clock;
         // Restoring into a computer set to keep nothing would go against that choice
-        KeepingOff = preferences is { KeepConsultations: false };
-        _engine.NotificationReceived += OnNotification;
+        KeepingOff = !preferences.KeepConsultations;
+        _notifications = events.Subscribe<EngineNotification>(OnNotification);
     }
 
     public string Caption { get; } = BackupWords.RestoreCaption;
@@ -115,7 +114,6 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string DoneLine { get; private set; } = "";
 
-    // What the dry run found to add
     private int ToAdd { get; set; }
 
     [RelayCommand]
@@ -149,12 +147,12 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
         }
         catch (Exception e)
         {
-            Error = BackupWords.Refused("restore", e, _logger);
+            Error = BackupWords.Refused(ArchiveJob.Restore, e, _logger);
             Step = back;
         }
     }
 
-    private void OnNotification(EngineNotification notification) => _dispatcher.PostOrRun(() =>
+    private void OnNotification(EngineNotification notification)
     {
         if (!Busy)
         {
@@ -163,7 +161,7 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
 
         switch (notification)
         {
-            case ArchiveProgress { Job: "restore" } progress:
+            case ArchiveProgress { Job: ArchiveJob.Restore } progress:
                 Progress = progress.Total > 0 ? (double)progress.Done / progress.Total : 0;
                 if (Step == RestoreStep.Restoring)
                 {
@@ -171,21 +169,21 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
                 }
 
                 break;
-            case ArchiveDone { Job: "restore" } done when Step == RestoreStep.Checking:
+            case ArchiveDone { Job: ArchiveJob.Restore } done when Step == RestoreStep.Checking:
                 Summarise(done);
                 break;
-            case ArchiveDone { Job: "restore" } done:
+            case ArchiveDone { Job: ArchiveJob.Restore } done:
                 RestoredAny = done.Consultations > 0;
                 DoneLine = $"{Words.Count(done.Consultations, _things)} restored.";
                 Step = RestoreStep.Done;
                 break;
-            case ArchiveFailed { Job: "restore" } failed:
-                Error = BackupWords.Failure("restore", failed.Code);
+            case ArchiveFailed { Job: ArchiveJob.Restore } failed:
+                Error = BackupWords.Failure(ArchiveJob.Restore, failed.Code);
                 // A failure part way through a restore leaves nothing to summarise again
                 Step = RestoreStep.Choose;
                 break;
         }
-    });
+    }
 
     // "33 consultations to restore, 1 Jul to 30 Sep 2026." Only what would be added counts
     private void Summarise(ArchiveDone done)
@@ -217,5 +215,5 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
         Step = RestoreStep.Summary;
     }
 
-    public void Dispose() => _engine.NotificationReceived -= OnNotification;
+    public void Dispose() => _notifications.Dispose();
 }

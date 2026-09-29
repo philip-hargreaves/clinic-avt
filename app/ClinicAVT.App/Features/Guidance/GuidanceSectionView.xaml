@@ -48,12 +48,12 @@
                 Grid.Column="1"
                 MinWidth="200"
                 AutomationProperties.Name="Search guidance"
-                IsEnabled="{x:Bind ViewModel.QueryBoxEnabled, Mode=OneWay}"
+                IsEnabled="{x:Bind Search.QueryBoxEnabled, Mode=OneWay}"
                 KeyDown="OnQueryKeyDown"
                 PlaceholderText="Search guidance"
                 QueryIcon="Find"
                 QuerySubmitted="OnQuerySubmitted"
-                Text="{x:Bind ViewModel.Query, Mode=TwoWay}" />
+                Text="{x:Bind Search.Query, Mode=TwoWay}" />
         </Grid>
 
         <Grid Grid.Row="1" RowSpacing="8">
@@ -82,17 +82,17 @@
                         Grid.Column="1"
                         Width="14"
                         Height="14"
-                        IsActive="{x:Bind ViewModel.QuerySearching, Mode=OneWay}"
-                        Visibility="{x:Bind ViewModel.QuerySearching, Mode=OneWay}" />
+                        IsActive="{x:Bind Search.QuerySearching, Mode=OneWay}"
+                        Visibility="{x:Bind Search.QuerySearching, Mode=OneWay}" />
                     <TextBlock
                         Grid.Column="2"
                         VerticalAlignment="Center"
                         Style="{StaticResource MicroText}"
-                        Text="{x:Bind ViewModel.QueryCaption, Mode=OneWay}"
-                        Visibility="{x:Bind ViewModel.QueryCaptionVisible, Mode=OneWay}" />
+                        Text="{x:Bind Search.QueryCaption, Mode=OneWay}"
+                        Visibility="{x:Bind Search.QueryCaptionVisible, Mode=OneWay}" />
                     <HyperlinkButton
                         Grid.Column="3"
-                        Command="{x:Bind ViewModel.ClearQueryCommand}"
+                        Command="{x:Bind Search.ClearQueryCommand}"
                         Content="Clear"
                         Style="{StaticResource CaptionLink}" />
                 </Grid>
@@ -104,12 +104,12 @@
                         IsActive="{x:Bind ViewModel.Searching, Mode=OneWay}"
                         Text="{x:Bind ViewModel.StateCaption, Mode=OneWay}" />
                     <HyperlinkButton
-                        Command="{x:Bind ViewModel.SearchNoteCommand}"
+                        Command="{x:Bind Search.SearchNoteCommand}"
                         Content="Search again"
                         Style="{StaticResource CaptionLink}"
                         Visibility="{x:Bind ViewModel.Failed, Mode=OneWay}" />
                     <HyperlinkButton
-                        Command="{x:Bind ViewModel.SearchNoteCommand}"
+                        Command="{x:Bind Search.SearchNoteCommand}"
                         Content="Search"
                         Style="{StaticResource CaptionLink}"
                         Visibility="{x:Bind ViewModel.NotSearched, Mode=OneWay}" />
@@ -122,7 +122,7 @@
                 <!-- The note changed after the search -->
                 <controls:StaleNotice
                     ActionText="Search again"
-                    Command="{x:Bind ViewModel.SearchNoteCommand}"
+                    Command="{x:Bind Search.SearchNoteCommand}"
                     Text="{x:Bind ViewModel.StaleCaption, Mode=OneWay}"
                     Visibility="{x:Bind ViewModel.SearchAgainVisible, Mode=OneWay}" />
                 <TextBlock

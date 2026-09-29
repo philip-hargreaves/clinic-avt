@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ClinicAVT.Client;
 
-// Engine reply records. Defaults let sparse replies parse; a null string means the field
+// Engine reply records. Defaults let sparse replies parse. A null string means the field
 // was absent
 
 public sealed record EngineReadiness(bool FirstUse = false, bool Ready = true, bool StrayNoteHost = false)
@@ -16,8 +16,8 @@ public sealed record EngineReadiness(bool FirstUse = false, bool Ready = true, b
 }
 
 public sealed record ModelInfo(
-    string Id = "", string? Name = null, string Task = "", string Tier = "", string Device = "",
-    bool Active = false);
+    string Id = "", string? Name = null, ModelTask Task = ModelTask.Other, string Tier = "",
+    string Device = "", bool Active = false);
 
 public sealed record EngineDevices(string? Asr = null, string? Note = null);
 
@@ -33,14 +33,15 @@ public sealed record AudioInput(
     bool Bluetooth = false);
 
 /// <summary>
-/// An audio file's length, and when it was recorded as an ISO UTC instant: the container's
-/// own time, else the file's modified time.
+/// An audio file's length, and when it was recorded as an ISO UTC instant. That is the
+/// container's own time, else the file's modified time.
 /// </summary>
 public sealed record RecordingInfo(double Seconds = 0, string? RecordedAt = null);
 
 public sealed record SessionSummary(
     string Id = "", string StartedAt = "", string EndedAt = "", string? Label = null,
-    string? EditedAt = null, double AudioSeconds = 0, bool Demo = false, bool HasReflection = false);
+    string? EditedAt = null, double AudioSeconds = 0,
+    [property: JsonPropertyName("demo")] bool Sample = false, bool HasReflection = false);
 
 public sealed record TranscriptTurn(
     string Speaker = "", ulong FirstFrame = 0, string Text = "");
@@ -57,20 +58,21 @@ public sealed record StoredPatient(
     StoredTranslation? Translation = null);
 
 public sealed record NoteTierState(
-    string Tier = "", string Id = "", string Name = "", string State = "");
+    string Tier = "", string Id = "", string Name = "", ModelState State = ModelState.Unknown);
 
 public sealed record CorpusInfo(
     string Id = "", string Name = "", string? Attribution = null, string? Source = null,
     int Chunks = 0, string? BuiltAt = null, string? Unavailable = null);
 
-public sealed record CorporaStatus(string State = "", string? Detail = null)
+public sealed record CorporaStatus(CorporaState State = CorporaState.Unknown, string? Detail = null)
 {
     public IReadOnlyList<CorpusInfo> Corpora { get; init; } = [];
 }
 
 public sealed record DocumentInfo(
-    long Id = 0, string? Name = null, string? Path = null, string State = "", string? Error = null,
-    int Pages = 0, int PagesWithoutText = 0, int Chunks = 0, string? AddedAt = null);
+    long Id = 0, string? Name = null, string? Path = null, DocumentState State = DocumentState.Unknown,
+    DocumentError? Error = null, int Pages = 0, int PagesWithoutText = 0, int Chunks = 0,
+    string? AddedAt = null);
 
 public sealed record DocumentList(string? Folder = null, bool Found = true, int Unsupported = 0)
 {
@@ -96,7 +98,6 @@ public sealed record GuidancePage(
     public IReadOnlyList<PassageBox> Boxes { get; init; } = [];
 }
 
-/// <summary>One recommendation of a guidance search, as the wire gives it.</summary>
 public sealed record GuidanceResult(
     string? Corpus = null, string? ChunkId = null, string? Code = null, string? Number = null,
     string? Title = null, string? Section = null, string? Text = null, string? Url = null,
@@ -119,7 +120,8 @@ public sealed record GuidanceRecord(
     public IReadOnlyList<SearchedCorpus> Searched { get; init; } = [];
 }
 
-public sealed record AnchorStatus(string Origin = "none", int Sessions = 0, long? EnrolledAt = null);
+public sealed record AnchorStatus(
+    AnchorOrigin Origin = AnchorOrigin.None, int Sessions = 0, long? EnrolledAt = null);
 
 public sealed record ReflectionSummary(
     string? Text = null, string? GeneratedAt = null, string? EditedAt = null);
@@ -143,7 +145,7 @@ public sealed record StoredReflection(
 public sealed record ReflectionListing(
     string Id = "", string StartedAt = "", string? Label = null, string? Happened = null,
     string? Learned = null, string? Next = null, string? Summary = null, string? EditedAt = null,
-    bool Demo = false);
+    [property: JsonPropertyName("demo")] bool Sample = false);
 
 /// <summary>
 /// What a backup of a period would hold. Unfinished consultations are counted and left out.

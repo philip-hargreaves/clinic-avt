@@ -3,8 +3,8 @@ using System.Globalization;
 namespace ClinicAVT.App.Core.Features.Backup;
 
 /// <summary>
-/// A run of whole local days, First to Last inclusive. A null end is open, so Everything has
-/// neither. The engine is sent the half-open UTC range from the local midnights.
+/// Whole local days, First to Last inclusive. A null end is open, and Everything has both
+/// ends null. Sent to the engine as a half-open UTC range between local midnights.
 /// </summary>
 public sealed record BackupPeriod(DateOnly? First, DateOnly? Last)
 {

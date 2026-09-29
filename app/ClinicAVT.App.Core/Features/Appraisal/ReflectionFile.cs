@@ -1,6 +1,5 @@
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Core.Shell;
 
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
@@ -8,7 +7,7 @@ namespace ClinicAVT.App.Core.Features.Appraisal;
 public static class ReflectionFile
 {
     public static async Task SaveAsync(
-        IDialogService dialogs, IFilePicker picker, StatusBarViewModel status, string text,
+        IDialogService dialogs, IFilePicker picker, ITextFiles files, IStatusLine status, string text,
         string title, string warning)
     {
         if (warning.Length > 0 && !await dialogs.ConfirmAsync("Check before saving",
@@ -18,7 +17,7 @@ public static class ReflectionFile
             return;
         }
 
-        if (await picker.SaveTextAsync(FileName(title), "Plain text", ".txt", text).ConfigureAwait(true)
+        if (await picker.SaveTextAsync(files, FileName(title), "Plain text", ".txt", text).ConfigureAwait(true)
             is { } path)
         {
             status.Append($"Reflection saved to {Path.GetFileName(path)}");

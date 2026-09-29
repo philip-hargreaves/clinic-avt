@@ -16,7 +16,8 @@ public class SessionStateMachineTest
                 : null,
         };
         var log = new ListLogger();
-        var (session, _, _) = TestSession.Create(engine: engine, log: log);
+        var shell = TestSession.Create(engine: engine, log: log);
+        var (session, _, _) = shell;
 
         await session.StartRecordingAsync();
         Assert.Equal(SessionState.Idle, session.State);
@@ -27,14 +28,15 @@ public class SessionStateMachineTest
         await session.StopRecordingAsync();
 
         Assert.Equal("Stop failed, consultation kept: ClinicAVT didn't respond in time",
-            session.Status.LatestActivity);
+            shell.Line.LatestActivity);
         Assert.Equal(SessionState.Idle, session.State);  // never wedged in Finalising
     }
 
     [Fact]
     public async Task IllegalTransitionsAndUnknownNotificationsAreIgnoredAndCancelReturnsToIdle()
     {
-        var (session, engine, _) = TestSession.Create();
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
 
         // Nothing but start is legal from idle
         await session.StopRecordingAsync();

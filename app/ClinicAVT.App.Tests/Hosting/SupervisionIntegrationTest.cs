@@ -7,8 +7,8 @@ using ClinicAVT.App.Tests.TestDoubles;
 namespace ClinicAVT.App.Tests.Hosting;
 
 /// <summary>
-/// The assembled supervision loop on real processes. A stand-in engine is
-/// killed from outside, as Task Manager would, and the test watches it recover.
+/// Runs the supervision loop on real processes. A stand-in engine is killed from outside and must
+/// recover.
 /// </summary>
 [Trait("Requires", "Processes")]
 public class SupervisionIntegrationTest
@@ -67,7 +67,7 @@ public class SupervisionIntegrationTest
             }
         }
 
-        // The app's own end: its job takes down whatever it was not told to release
+        // Disposing the job object kills any process not released from it
         public void DisposeLauncher() => _inner.Dispose();
     }
 

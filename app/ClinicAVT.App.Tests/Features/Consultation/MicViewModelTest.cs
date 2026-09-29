@@ -2,14 +2,12 @@ using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Tests.Features.Consultation;
 
 public class MicViewModelTest
 {
-    private static AppPreferences TempPreferences() =>
-        new(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
+    private static AppPreferences TempPreferences() => new(new MemoryPreferencesStore());
 
     private static MicDevice Array(bool isDefault = true) =>
         new("{aa}", "Microphone Array (Cirrus Logic)", "Microphone Array", isDefault, false);
@@ -21,7 +19,7 @@ public class MicViewModelTest
     public async Task TheLabelSaysWhenThereIsNoMicrophoneAndNamesOneDeviceAsShortAsThatAllows()
     {
         var engine = new FakeEngineClient();
-        var mic = new MicViewModel(new EngineApi(engine));
+        var mic = new TestShell(engine).Get<MicViewModel>();
 
         await mic.RefreshAsync();
         Assert.False(mic.HasDevices);
@@ -30,7 +28,7 @@ public class MicViewModelTest
         Assert.Equal("No microphone found - connect one to record", mic.NoDevicesText);
         Assert.Equal("", mic.MicId);
 
-        // A single-microphone laptop, the common clinical case, reads cleanly
+        // Single built-in microphone, the common case
         engine.AudioInputs = [Array()];
         await mic.RefreshAsync();
         Assert.Equal("Microphone Array", mic.Label);
@@ -60,7 +58,7 @@ public class MicViewModelTest
     {
         var preferences = TempPreferences();
         var engine = new FakeEngineClient();
-        var mic = new MicViewModel(new EngineApi(engine), preferences);
+        var mic = new TestShell(engine, preferences).Get<MicViewModel>();
         engine.AudioInputs = [Array(), Jabra()];
         await mic.RefreshAsync();
 
@@ -69,8 +67,7 @@ public class MicViewModelTest
         Assert.Equal("{bb}", preferences.MicId);
         Assert.Equal([false, true], mic.Rows.Select(r => r.IsChecked));
 
-        // With the headset unplugged the default stands in, and the saved
-        // choice survives for when it comes back
+        // An unplugged headset falls back to the default and keeps the saved choice
         engine.AudioInputs = [Array()];
         await mic.RefreshAsync();
         Assert.Equal("{aa}", mic.MicId);
@@ -80,7 +77,8 @@ public class MicViewModelTest
         await mic.RefreshAsync();
         Assert.Equal("{bb}", mic.MicId);
 
-        var (session, sessionEngine, _) = TestSession.Create(preferences);
+        var shell = TestSession.Create(preferences);
+        var (session, sessionEngine, _) = shell;
         await session.StartRecordingAsync();
         var start = sessionEngine.Requests.Single(r => r.Method == "session/start");
         Assert.Contains("{bb}", start.Params);

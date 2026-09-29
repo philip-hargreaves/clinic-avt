@@ -21,38 +21,36 @@ public enum BackupStep
 /// <summary>The Back up dialog. A checked backup offers to remove the consultations it holds.</summary>
 public sealed partial class BackupViewModel : ObservableObject, IDisposable
 {
-    private readonly IEngineApi _engine;
+    private readonly IArchiveApi _engine;
     private readonly IFilePicker _picker;
     private readonly ILauncher _launcher;
-    private readonly AppPreferences? _preferences;
-    private readonly IUiDispatcher? _dispatcher;
+    private readonly AppPreferences _preferences;
     private readonly TimeProvider _clock;
-    private readonly Func<string, string?> _environment;
-    private readonly ISessionState? _session;
-    private readonly ILogger? _logger;
+    private readonly IOneDriveFolders _oneDrive;
+    private readonly ISessionState _session;
+    private readonly ILogger<BackupViewModel> _logger;
+    private readonly IDisposable _notifications;
     private int _countVersion;
     private string _folder = "";
     private string _sentFrom = "";
     private string _sentTo = "";
     private IReadOnlyList<string> _ids = [];
 
-    public BackupViewModel(IEngineApi engine, IFilePicker picker, ILauncher launcher,
-        AppPreferences? preferences = null, IUiDispatcher? dispatcher = null, TimeProvider? clock = null,
-        Func<string, string?>? environment = null, ISessionState? session = null,
-        ILogger? logger = null)
+    public BackupViewModel(IArchiveApi engine, IEngineEvents events, IFilePicker picker, ILauncher launcher,
+        AppPreferences preferences, TimeProvider clock, IOneDriveFolders oneDrive, ISessionState session,
+        ILogger<BackupViewModel> logger)
     {
         _logger = logger;
         _engine = engine;
         _picker = picker;
         _launcher = launcher;
         _preferences = preferences;
-        _dispatcher = dispatcher;
-        _clock = clock ?? TimeProvider.System;
-        _environment = environment ?? Environment.GetEnvironmentVariable;
+        _clock = clock;
+        _oneDrive = oneDrive;
         _session = session;
         PeriodOptions = Enumerable.Range(0, BackupPeriod.Kinds.Count)
             .Select(i => BackupPeriod.Label(i, Today)).ToArray();
-        _engine.NotificationReceived += OnNotification;
+        _notifications = events.Subscribe<EngineNotification>(OnNotification);
     }
 
     public string PasswordNote { get; } = BackupWords.PasswordNote;
@@ -141,7 +139,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         ChosenFrom is { } from ? DateOnly.FromDateTime(from.Date) : null,
         ChosenTo is { } to ? DateOnly.FromDateTime(to.Date) : null);
 
-    /// <summary>How many the period holds, and its dates.</summary>
     [ObservableProperty]
     public partial string CountLine { get; private set; } = "";
 
@@ -189,7 +186,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     private TimeZoneInfo Zone => _clock.LocalTimeZone;
 
-    /// <summary>Counts the default period as the dialog opens.</summary>
     public Task LoadAsync() => CountAsync();
 
     [RelayCommand]
@@ -286,7 +282,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         }
 
         _folder = Path.GetDirectoryName(path) ?? "";
-        OneDriveLine = BackupWords.OneDriveLine(_folder, _environment);
+        OneDriveLine = BackupWords.OneDriveLine(_folder, _oneDrive);
         SavedLine = BackupWords.SavedLine(path);
         _sentFrom = period.From(Zone);
         _sentTo = period.To(Zone);
@@ -300,7 +296,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         }
         catch (Exception e)
         {
-            Error = BackupWords.Refused("backup", e, _logger);
+            Error = BackupWords.Refused(ArchiveJob.Backup, e, _logger);
             OneDriveLine = "";
             Step = BackupStep.Setup;
         }
@@ -314,7 +310,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         try
         {
             // The consultation under review is being removed, so end the review first
-            if (_session?.ReviewedSessionId is { } open && _ids.Contains(open))
+            if (_session.ReviewedSessionId is { } open && _ids.Contains(open))
             {
                 await _session.EndReviewAsync().ConfigureAwait(true);
             }
@@ -331,7 +327,7 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void OnNotification(EngineNotification notification) => _dispatcher.PostOrRun(() =>
+    private void OnNotification(EngineNotification notification)
     {
         if (Step != BackupStep.Working)
         {
@@ -340,22 +336,22 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
         switch (notification)
         {
-            case ArchiveProgress { Job: "backup" } progress:
+            case ArchiveProgress { Job: ArchiveJob.Backup } progress:
                 Progress = progress.Total > 0 ? (double)progress.Done / progress.Total : 0;
-                ProgressText = progress.Phase == "writing"
+                ProgressText = progress.Phase == ArchivePhase.Writing
                     ? $"Backing up {progress.Done} of {Words.Count(progress.Total, Things(ReflectionsOnly))}…"
                     : "Checking the backup…";
                 break;
-            case ArchiveDone { Job: "backup" } done:
+            case ArchiveDone { Job: ArchiveJob.Backup } done:
                 Finish(done);
                 break;
-            case ArchiveFailed { Job: "backup" } failed:
-                Error = BackupWords.Failure("backup", failed.Code);
+            case ArchiveFailed { Job: ArchiveJob.Backup } failed:
+                Error = BackupWords.Failure(ArchiveJob.Backup, failed.Code);
                 OneDriveLine = "";
                 Step = BackupStep.Setup;
                 break;
         }
-    });
+    }
 
     private void Finish(ArchiveDone done)
     {
@@ -376,5 +372,5 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         _preferences.Update(p => p.LastBackup = new LastBackup(_sentFrom, _sentTo, createdAt, done.Consultations));
     }
 
-    public void Dispose() => _engine.NotificationReceived -= OnNotification;
+    public void Dispose() => _notifications.Dispose();
 }

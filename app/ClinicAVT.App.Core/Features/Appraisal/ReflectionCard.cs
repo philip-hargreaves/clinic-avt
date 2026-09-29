@@ -5,18 +5,20 @@ using ClinicAVT.App.Core.Common;
 
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
-/// <summary>The journal card for one consultation the clinician reflected on.</summary>
 public sealed partial class ReflectionCard : ObservableObject
 {
-    public ReflectionCard(string id, string title, DateTimeOffset started, string learned,
-        string summary = "", bool demo = false, string happened = "", string next = "")
+    private readonly IReflectionJournal _journal;
+
+    public ReflectionCard(IReflectionJournal journal, string id, string title, DateTimeOffset started,
+        string learned, string summary = "", bool sample = false, string happened = "", string next = "")
     {
+        _journal = journal;
         Id = id;
         Title = title;
         Started = started;
         Learned = learned;
         Summary = summary;
-        Demo = demo;
+        Sample = sample;
         Happened = happened;
         Next = next;
     }
@@ -24,18 +26,18 @@ public sealed partial class ReflectionCard : ObservableObject
     public string Id { get; }
 
     /// <summary>A seeded sample.</summary>
-    public bool Demo { get; }
+    public bool Sample { get; }
 
     public DateTimeOffset Started { get; }
 
     [ObservableProperty]
     public partial string Title { get; set; }
 
-    /// <summary>Search reads it. The card does not show it.</summary>
+    /// <summary>Used by search and hidden on the card.</summary>
     [ObservableProperty]
     public partial string Happened { get; set; }
 
-    /// <summary>Search reads it. The card does not show it.</summary>
+    /// <summary>Used by search and hidden on the card.</summary>
     [ObservableProperty]
     public partial string Next { get; set; }
 
@@ -53,10 +55,8 @@ public sealed partial class ReflectionCard : ObservableObject
 
     public string MonthLabel => Words.Month(Started);
 
-    /// <summary>"September", the group heading under a year stepper.</summary>
     public string MonthHeading => Started.ToString("MMMM", CultureInfo.CurrentCulture);
 
-    /// <summary>"14 Sep", the day on the closed card.</summary>
     public string DayLabel => Started.ToString("d MMM", CultureInfo.CurrentCulture);
 
     /// <summary>True on the first card of each month, so the month heads the group.</summary>
@@ -66,14 +66,9 @@ public sealed partial class ReflectionCard : ObservableObject
     [ObservableProperty]
     public partial bool Expanded { get; set; }
 
-    /// <summary>The editor, present only while the card is open.</summary>
+    /// <summary>Present only while the card is open.</summary>
     [ObservableProperty]
     public partial ReflectionViewModel? Editor { get; set; }
-
-    /// <summary>Set by the page, which owns the engine.</summary>
-    public Func<ReflectionCard, Task>? ToggleRequested { get; set; }
-
-    public Func<ReflectionCard, Task>? DeleteRequested { get; set; }
 
     public bool Matches(string needle) =>
         Title.Contains(needle, StringComparison.CurrentCultureIgnoreCase)
@@ -83,8 +78,8 @@ public sealed partial class ReflectionCard : ObservableObject
         || Next.Contains(needle, StringComparison.CurrentCultureIgnoreCase);
 
     [RelayCommand]
-    private Task Toggle() => ToggleRequested?.Invoke(this) ?? Task.CompletedTask;
+    private Task Toggle() => _journal.ToggleAsync(this);
 
     [RelayCommand]
-    private Task Delete() => DeleteRequested?.Invoke(this) ?? Task.CompletedTask;
+    private Task Delete() => _journal.DeleteAsync(this);
 }

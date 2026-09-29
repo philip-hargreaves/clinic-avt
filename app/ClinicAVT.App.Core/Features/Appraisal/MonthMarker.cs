@@ -6,7 +6,6 @@ public sealed record MonthMarker(int Month, string Name, int Count, bool Current
 {
     public bool Filled => Count > 0;
 
-    /// <summary>The cell's tooltip, which says what pressing it does.</summary>
     public string Tip => Count == 0 ? "No reflections"
         : Selected ? "Show the whole year"
         : $"{Words.Count(Count, "reflection")}, press to show only this month";

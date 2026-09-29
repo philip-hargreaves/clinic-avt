@@ -4,10 +4,7 @@ using ClinicAVT.App.Core.Hosting;
 
 namespace ClinicAVT.App.Platform;
 
-/// <summary>
-/// The shell's diagnostics log beside the engine's log, one line per event. Launches append
-/// until the file is large, so a crash's lines survive many starts.
-/// </summary>
+/// <summary>Shell diagnostics log. Appended across launches, rotated when large.</summary>
 public sealed class FileLoggerProvider : ILoggerProvider
 {
     private readonly object _gate = new();
@@ -58,7 +55,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
             }
             catch (IOException)
             {
-                // A log that cannot be written must never take the app with it
+                // Logging failures must not crash the app
             }
         }
     }

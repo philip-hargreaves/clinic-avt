@@ -35,18 +35,18 @@
                     Text="{x:Bind ViewModel.RefusalReason, Mode=OneWay}"
                     Visibility="{x:Bind ViewModel.NoteRefused, Mode=OneWay}" />
                 <Button
-                    Command="{x:Bind ViewModel.WriteAnywayCommand}"
+                    Command="{x:Bind Commands.WriteAnywayCommand}"
                     Content="Write a note anyway"
                     Visibility="{x:Bind ViewModel.CanWriteAnyway, Mode=OneWay}" />
-                <!-- Demo records only. A written case stands in for the note -->
+                <!-- Sample records only. A written case stands in for the note -->
                 <ComboBox
                     MinWidth="140"
                     MaxWidth="180"
                     AutomationProperties.Name="Example case"
-                    ItemsSource="{x:Bind ViewModel.ExampleCaseTitles, Mode=OneWay}"
+                    ItemsSource="{x:Bind Examples.ExampleCaseTitles, Mode=OneWay}"
                     PlaceholderText="Example case"
-                    SelectedIndex="{x:Bind ViewModel.ExampleCaseIndex, Mode=TwoWay}"
-                    Visibility="{x:Bind ViewModel.ExampleCasesVisible, Mode=OneWay}" />
+                    SelectedIndex="{x:Bind Examples.ExampleCaseIndex, Mode=TwoWay}"
+                    Visibility="{x:Bind Examples.ExampleCasesVisible, Mode=OneWay}" />
                 <!-- Style and detail apply on the next Regenerate. Items are built in code -->
                 <DropDownButton
                     AutomationProperties.Name="Note style"
@@ -59,7 +59,7 @@
                 <Button
                     AutomationProperties.Name="Regenerate"
                     x:Name="RegenerateButton"
-                    Command="{x:Bind ViewModel.RegenerateCommand}"
+                    Command="{x:Bind Commands.RegenerateCommand}"
                     ToolTipService.ToolTip="Rewrite the note with the chosen style and detail">
                     <controls:IconLabel Glyph="&#xE72C;" Text="Regenerate" />
                 </Button>
@@ -94,7 +94,7 @@
                     <controls:IconLabel Glyph="&#xE898;" Text="Export" />
                 </Button>
                 <!-- Disabled when the consultation is not being kept -->
-                <Button AutomationProperties.Name="{x:Bind ViewModel.ReflectLabel, Mode=OneWay}" Command="{x:Bind ViewModel.ReflectCommand}"
+                <Button AutomationProperties.Name="{x:Bind ViewModel.ReflectLabel, Mode=OneWay}" Command="{x:Bind Commands.ReflectCommand}"
                         ToolTipService.ToolTip="An appraisal reflection on this consultation"
                         Visibility="{x:Bind ViewModel.NoteViewing, Mode=OneWay}">
                     <controls:IconLabel Glyph="&#xE70B;" Text="{x:Bind ViewModel.ReflectLabel, Mode=OneWay}" />
@@ -113,7 +113,7 @@
                     Visibility="{x:Bind ViewModel.NoteEditing, Mode=OneWay}" />
                 <Button
                     AutomationProperties.Name="Save note"
-                    Command="{x:Bind ViewModel.SaveNoteCommand}"
+                    Command="{x:Bind Commands.SaveNoteCommand}"
                     Style="{StaticResource AccentButtonStyle}"
                     Visibility="{x:Bind ViewModel.NoteEditing, Mode=OneWay}">
                     <controls:IconLabel Glyph="&#xE74E;" Text="Save note" />
@@ -124,7 +124,7 @@
         <!-- Regenerate asks first because an edited note holds the clinician's own wording -->
         <TeachingTip
             Title="Replace your edits?"
-            ActionButtonCommand="{x:Bind ViewModel.ConfirmRegenerateCommand}"
+            ActionButtonCommand="{x:Bind Commands.ConfirmRegenerateCommand}"
             ActionButtonContent="Regenerate"
             CloseButtonCommand="{x:Bind ViewModel.KeepEditsCommand}"
             CloseButtonContent="Keep my note"

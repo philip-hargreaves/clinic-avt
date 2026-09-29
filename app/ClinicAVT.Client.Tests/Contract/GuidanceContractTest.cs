@@ -45,8 +45,8 @@ public class GuidanceContractTest
                 }
             };
 
-            // The embedder loads on the engine's own thread. A client that connects
-            // first sees loading and hears how it ended
+            // The embedder loads on its own thread, so an early client gets loading and then
+            // guidance/model
             var corpora = await client.RequestAsync("guidance/corpora", null, Timeout);
             if (corpora.GetProperty("state").GetString() == "loading")
             {

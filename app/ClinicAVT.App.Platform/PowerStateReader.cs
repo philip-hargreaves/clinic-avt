@@ -2,16 +2,17 @@ using Microsoft.Win32;
 using Windows.Win32;
 using Windows.Win32.System.Power;
 using ClinicAVT.App.Core.Metrics;
+using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Platform;
 
 /// <summary>The power slider's overlay from the registry and the mains state from Win32.</summary>
-public static class PowerStateReader
+public sealed class PowerStateReader : IPowerStateReader
 {
     private const string OverlayKey =
         @"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes";
 
-    public static PowerState Read()
+    public PowerState Read()
     {
         var onMains = !PInvoke.GetSystemPowerStatus(out var status) || status.ACLineStatus != 0;
 

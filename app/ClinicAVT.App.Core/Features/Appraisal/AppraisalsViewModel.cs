@@ -9,27 +9,27 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
-/// <summary>The Appraisal page, a journal of reflections shown one year at a time.</summary>
-public sealed partial class AppraisalsViewModel : ObservableObject
+/// <summary>Shows reflections one year at a time.</summary>
+public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJournal, INavigationGuard
 {
-    private readonly IEngineApi _engine;
-    private readonly IUiDispatcher _dispatcher;
-    private readonly StatusBarViewModel _status;
-    private readonly IClipboard _clipboard;
-    private readonly IFilePicker _picker;
+    private readonly IReflectionApi _engine;
+    private readonly IStatusLine _status;
     private readonly IDialogService _dialogs;
+    private readonly Func<ReflectionViewModel> _editors;
+    private readonly Func<ExportReflectionsViewModel> _exports;
+    private readonly TimeProvider _time;
     private readonly List<ReflectionCard> _all = [];
 
     public AppraisalsViewModel(
-        IEngineApi engine, IUiDispatcher dispatcher, StatusBarViewModel status, IClipboard clipboard,
-        IFilePicker picker, IDialogService dialogs)
+        IReflectionApi engine, IStatusLine status, IDialogService dialogs,
+        Func<ReflectionViewModel> editors, Func<ExportReflectionsViewModel> exports, TimeProvider time)
     {
         _engine = engine;
-        _dispatcher = dispatcher;
         _status = status;
-        _clipboard = clipboard;
-        _picker = picker;
         _dialogs = dialogs;
+        _editors = editors;
+        _exports = exports;
+        _time = time;
     }
 
     [ObservableProperty]
@@ -44,7 +44,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject
     [ObservableProperty]
     public partial string CountLabel { get; private set; } = "";
 
-    /// <summary>True when there are no entries at all, so the page shows its empty state.</summary>
+    /// <summary>No reflections in any year.</summary>
     [ObservableProperty]
     public partial bool Empty { get; private set; } = true;
 
@@ -59,7 +59,6 @@ public sealed partial class AppraisalsViewModel : ObservableObject
 
     public string YearLabel => Year == 0 ? "" : Year.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>Pressing the year shows all of it.</summary>
     [RelayCommand]
     private void ShowWholeYear()
     {
@@ -92,9 +91,6 @@ public sealed partial class AppraisalsViewModel : ObservableObject
 
     private bool CanGoToNextYear() => _all.Any(c => c.Started.Year > Year);
 
-    /// <summary>
-    /// Pressing a month narrows the year to it. Pressing it again shows the year.
-    /// </summary>
     public void ToggleMonth(int month)
     {
         if (_all.All(c => c.Started.Year != Year || c.Started.Month != month))
@@ -115,26 +111,23 @@ public sealed partial class AppraisalsViewModel : ObservableObject
             _all.Clear();
             foreach (var entry in entries)
             {
-                var started = Words.LocalTime(entry.StartedAt) ?? DateTimeOffset.Now;
+                var started = Words.LocalTime(entry.StartedAt) ?? _time.GetLocalNow();
                 var label = entry.Label ?? "";
                 _all.Add(new ReflectionCard(
+                    this,
                     entry.Id,
                     label.Length > 0 ? label : started.ToString("d MMMM", CultureInfo.CurrentCulture),
                     started,
                     entry.Learned ?? "",
                     entry.Summary ?? "",
-                    entry.Demo,
+                    entry.Sample,
                     entry.Happened ?? "",
-                    entry.Next ?? "")
-                {
-                    ToggleRequested = ToggleAsync,
-                    DeleteRequested = DeleteAsync,
-                });
+                    entry.Next ?? ""));
             }
 
             if (_all.Count == 0)
             {
-                Year = DateTimeOffset.Now.Year;
+                Year = _time.GetLocalNow().Year;
             }
             else if (_all.All(c => c.Started.Year != Year))
             {
@@ -145,7 +138,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject
         }).ConfigureAwait(true);
     }
 
-    /// <summary>Opens one card and closes any other, which saves it.</summary>
+    /// <summary>Opens or closes the card. Opening it closes and saves any other.</summary>
     public async Task ToggleAsync(ReflectionCard card)
     {
         if (card.Expanded)
@@ -155,7 +148,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject
         }
 
         await CollapseAllAsync().ConfigureAwait(true);
-        var editor = new ReflectionViewModel(_engine, _dispatcher, _clipboard, _picker, _dialogs, _status);
+        var editor = _editors();
         await editor.LoadAsync(card.Id, card.Started.ToString("o", CultureInfo.InvariantCulture))
             .ConfigureAwait(true);
         card.Editor = editor;
@@ -174,21 +167,24 @@ public sealed partial class AppraisalsViewModel : ObservableObject
             _status.Append("Reflection removed");
         });
 
-    /// <summary>
-    /// The Export reflections dialog. An open card saves first, so the file has its latest words.
-    /// </summary>
+    /// <summary>Saves any open card first so the export has its latest text.</summary>
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportReflections()
     {
         await CollapseAllAsync().ConfigureAwait(true);
-        await _dialogs.RunExportReflectionsAsync().ConfigureAwait(true);
+        var export = _exports();
+        _ = export.LoadAsync();
+        await _dialogs.ShowAsync(export).ConfigureAwait(true);
     }
 
     // Samples are never exported, as a backup never holds them
-    private bool CanExport() => _all.Any(c => !c.Demo);
+    private bool CanExport() => _all.Any(c => !c.Sample);
 
     /// <summary>Leaving the page saves whatever is open.</summary>
     public Task LeaveAsync() => CollapseAllAsync();
+
+    public Task OnNavigatingAsync(string? leaving, string arriving) =>
+        leaving == Routes.Appraisals && arriving != Routes.Appraisals ? LeaveAsync() : Task.CompletedTask;
 
     partial void OnSearchChanged(string value) => Rebuild();
 
@@ -215,7 +211,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject
         }
 
         var inYear = _all.Count(c => c.Started.Year == Year);
-        var today = DateTimeOffset.Now;
+        var today = _time.GetLocalNow();
         Months = Enumerable.Range(1, 12)
             .Select(m => new MonthMarker(
                 m,
@@ -248,7 +244,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject
             card.Happened = editor.Happened;
             card.Learned = editor.Learned;
             card.Next = editor.Next;
-            card.Summary = editor.Summary;
+            card.Summary = editor.CaseStudy.Summary;
         }
 
         card.Editor = null;

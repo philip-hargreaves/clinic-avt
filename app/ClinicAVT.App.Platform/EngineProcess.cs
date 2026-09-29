@@ -4,10 +4,7 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Platform;
 
-/// <summary>
-/// Watches a launched engine through the process handle CreateProcess
-/// returned, so there is no pid-reuse race and no System.Diagnostics.
-/// </summary>
+/// <summary>Watches the engine via its CreateProcess handle, which avoids pid reuse.</summary>
 internal sealed class EngineProcess : IEngineProcess
 {
     private readonly object _gate = new();

@@ -1,15 +1,13 @@
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Appraisal;
-using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Core.Features.Sessions;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Tests.Shell;
 
-/// <summary>The pure helpers the views lean on.</summary>
 public class ShellHelpersTest
 {
     // Engine, session and RPC terms stay off the status line. The detail goes to the log
@@ -44,7 +42,7 @@ public class ShellHelpersTest
     public void TheLevelCurveRestsOnRoomNoiseAndSpreadsSpeechOverTheSwing()
     {
         Assert.Equal(1.0, LevelCurve.RingScale(-1));
-        Assert.Equal(1.0, LevelCurve.RingScale(0.2), 10);  // room noise: at rest
+        Assert.Equal(1.0, LevelCurve.RingScale(0.2), 10);  // room noise, at rest
         Assert.InRange(LevelCurve.RingScale(0.55), 1.18, 1.25);  // ordinary speech moves the ring visibly
         Assert.Equal(1.0, LevelCurve.GlowScale(0));
         Assert.Equal(LevelCurve.GlowScale(1), LevelCurve.GlowScale(4), 10);  // loud input saturates
@@ -64,8 +62,8 @@ public class ShellHelpersTest
     [Fact]
     public async Task GoingToRecordEndsAStoredReviewAndLeavingAppraisalClosesTheOpenReflection()
     {
-        var navigation = new RecordingNavigationService();
-        var (shell, consultation, sessions, appraisals) = Shell(navigation);
+        var (shell, consultation, sessions, appraisals) = Shell();
+        var navigation = (RecordingNavigationService)consultation.Get<INavigationService>();
         var engine = consultation.Engine;
 
         engine.StoredNote = "the stored note";
@@ -96,16 +94,11 @@ public class ShellHelpersTest
         Assert.Equal(Routes.Settings, navigation.Current);
     }
 
-    private static (ShellViewModel Shell,
-        (ConsultationViewModel Session, FakeEngineClient Engine) Consultation,
-        SessionsViewModel Sessions, AppraisalsViewModel Appraisals) Shell(RecordingNavigationService navigation)
+    private static (ShellViewModel Shell, TestShell Consultation, SessionsViewModel Sessions,
+        AppraisalsViewModel Appraisals) Shell()
     {
-        var (session, engine, _) = TestSession.Create();
-        var api = new EngineApi(engine);
-        var sessions = new SessionsViewModel(api, session.Status, session, new FakeDialogService());
-        var appraisals = new AppraisalsViewModel(
-            api, new InlineDispatcher(), session.Status, new FakeClipboard(), new FakeFilePicker(),
-            new FakeDialogService());
-        return (new ShellViewModel(navigation, sessions, appraisals), (session, engine), sessions, appraisals);
+        var consultation = TestSession.Create();
+        return (consultation.Get<ShellViewModel>(), consultation, consultation.Get<SessionsViewModel>(),
+            consultation.Get<AppraisalsViewModel>());
     }
 }

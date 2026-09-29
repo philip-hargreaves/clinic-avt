@@ -1,7 +1,6 @@
 using ClinicAVT.App.Core.Features.Appraisal;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Tests.Features.Appraisal;
 
@@ -14,8 +13,8 @@ public class AppraisalsViewModelTest
         engine.Reflections.Add(("b", "2026-09-01T14:00:00Z", "Cough", "ask about smoking", ""));
         engine.Reflections.Add(("c", "2026-06-20T10:00:00Z", "Back pain", "", "A patient in their sixties with back pain."));
         engine.Reflections.Add(("d", "2025-11-03T10:00:00Z", "", "listen longer", ""));
-        engine.DemoReflections.Add("c");
-        return (new AppraisalsViewModel(new EngineApi(engine), new InlineDispatcher(), TestSession.Status(engine), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService()), engine);
+        engine.SampleReflections.Add("c");
+        return (new TestShell(engine).Get<AppraisalsViewModel>(), engine);
     }
 
     [Fact]
@@ -32,7 +31,7 @@ public class AppraisalsViewModelTest
         Assert.Equal("A patient in their forties.", page.Cards[0].Line);
         Assert.Equal("ask about smoking", page.Cards[1].Line);  // without a case study the line is the clinician's words
         Assert.Equal("A patient in their sixties with back pain.", page.Cards[2].Line);
-        Assert.Equal([false, false, true], page.Cards.Select(c => c.Demo));
+        Assert.Equal([false, false, true], page.Cards.Select(c => c.Sample));
         Assert.Equal("September 2026", page.Cards[0].MonthLabel);
         Assert.Equal("September", page.Cards[0].MonthHeading);
         Assert.Equal(12, page.Months.Count);
@@ -42,7 +41,6 @@ public class AppraisalsViewModelTest
         Assert.Equal("Sep", page.Months[8].Name);
         Assert.Equal(DateTimeOffset.Now.Year == 2026 ? 1 : 0, page.Months.Count(m => m.Current));
 
-        // Pressing a month narrows the year to it and pressing it again widens it
         page.ToggleMonth(9);
         Assert.Equal(9, page.MonthFilter);
         Assert.Equal(["a", "b"], page.Cards.Select(c => c.Id));
@@ -105,7 +103,7 @@ public class AppraisalsViewModelTest
         Assert.Equal("check the temperature", card.Editor!.Learned);
 
         card.Editor.Learned = "check the temperature and the pulse";
-        card.Editor.Summary = "A patient in their forties with a hot elbow.";
+        card.Editor.CaseStudy.Summary = "A patient in their forties with a hot elbow.";
         await page.ToggleAsync(card);
 
         Assert.False(card.Expanded);
@@ -154,8 +152,7 @@ public class AppraisalsViewModelTest
     [Fact]
     public async Task NothingWrittenYetIsSaidPlainly()
     {
-        var engine = new FakeEngineClient();
-        var page = new AppraisalsViewModel(new EngineApi(engine), new InlineDispatcher(), TestSession.Status(engine), new FakeClipboard(), new FakeFilePicker(), new FakeDialogService());
+        var page = new TestShell(new FakeEngineClient()).Get<AppraisalsViewModel>();
 
         await page.RefreshAsync();
 

@@ -4,7 +4,6 @@ using ClinicAVT.App.Core.Features.Appraisal;
 
 namespace ClinicAVT.App.Features.Appraisal;
 
-/// <summary>The Appraisal page. A journal of reflections, shown one year at a time.</summary>
 public sealed partial class AppraisalsView : UserControl
 {
     private bool _syncing;

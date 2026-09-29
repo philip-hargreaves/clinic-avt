@@ -3,7 +3,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Guidance;
 
-/// <summary>One recommendation as the wire gives it.</summary>
 public sealed record GuidanceRecommendation(
     string Corpus, string ChunkId, string Code, string Number, string Title, string Section,
     string Text, string Link, string LastUpdated, string UpdateTag, string Source,
@@ -46,7 +45,6 @@ public sealed record GuidanceRecommendation(
     /// <summary>A passage from a document the clinician added.</summary>
     public bool FromDocument => Source == "upload";
 
-    /// <summary>"Page 2" of an added PDF, empty for anything without pages.</summary>
     public string PageLabel => Pages > 0 ? $"Page {Page + 1}" : "";
 
     public bool PageLabelVisible => PageLabel.Length > 0;
@@ -65,7 +63,6 @@ public sealed record GuidanceRecommendation(
 
     public bool TagVisible => UpdateTag.Length > 0;
 
-    /// <summary>The section path under the title. The wire's " > " reads as "›".</summary>
     public string Path => Section.Replace(" > ", " › ", StringComparison.Ordinal);
 
     public bool PathVisible => Section.Length > 0;
@@ -85,10 +82,9 @@ public sealed record GuidanceRecommendation(
     /// <summary>A web link opens in the browser, a document as a copy in the PDF viewer.</summary>
     public bool CanOpen => FromDocument || HasWebLink;
 
-    /// <summary>A plain-text corpus carries a file name here, which nothing can open.</summary>
+    /// <summary>Plain-text corpora put a file name in Link.</summary>
     private bool HasWebLink => WebLinks.IsWeb(Link);
 
-    /// <summary>The citation, with the web address on its own line when there is one.</summary>
     public string CitationText => HasWebLink ? $"{Citation}\n{Link}" : Citation;
 
     public string OpenTip => FromDocument ? "Opens the file in your PDF viewer." : "";

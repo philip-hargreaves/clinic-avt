@@ -1,6 +1,5 @@
 namespace ClinicAVT.App.Core.Ports;
 
-/// <summary>Hands files, folders and links to the programs that open them.</summary>
 public interface ILauncher
 {
     /// <summary>

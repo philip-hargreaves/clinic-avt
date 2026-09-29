@@ -1,55 +1,68 @@
-using ClinicAVT.App.Core.Features.Consultation;
-using ClinicAVT.App.Core.Features.Demo;
-using ClinicAVT.App.Core.Features.Documents;
-using ClinicAVT.App.Core.Features.Guidance;
+using Microsoft.Extensions.DependencyInjection;
+using ClinicAVT.App.Core.Features.Examples;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Tests.Support;
 
 internal static class TestSession
 {
-    /// <summary>A consultation over a quiet fake engine. The status bar is the session's own, and its lines go to the log when one is given.</summary>
-    public static (ConsultationViewModel Session, FakeEngineClient Engine, NoteViewModel Note) Create(
+    /// <summary>The consultation over a fake engine that sends no notifications unprompted. Log lines go to the given log.</summary>
+    public static TestShell Create(
         AppPreferences? preferences = null, FakeDialogService? dialogs = null,
-        FakeEngineClient? engine = null, IReadOnlyList<DemoCase>? exampleCases = null,
-        TimeSpan? readinessPollInterval = null,
-        ListLogger? log = null)
+        FakeEngineClient? engine = null, IReadOnlyList<ExampleCase>? exampleCases = null,
+        ListLogger? log = null, Func<string, bool>? logged = null)
     {
-        engine ??= new FakeEngineClient(autoNotify: false);
-        var note = new NoteViewModel();
-        var status = Status(engine, log);
-        var session = new ConsultationViewModel(
-            new EngineApi(engine), new InlineDispatcher(), new TranscriptViewModel(), note, status,
-            dialogs ?? new FakeDialogService(), Page(engine, status), Guidance(status),
-            readinessPollInterval: readinessPollInterval, preferences: preferences,
-            exampleCases: exampleCases);
-        return (session, engine, note);
+        var shell = new TestShell(engine, preferences, log: log, logged: logged, configure: services =>
+        {
+            if (dialogs is not null)
+            {
+                services.AddSingleton<IDialogService>(dialogs);
+            }
+
+            var library = new FakeExampleLibrary();
+            library.Cases.AddRange(exampleCases ?? []);
+            services.AddSingleton<IExampleLibrary>(library);
+        });
+        // Built first, as the app's main window builds it before anything else is shown
+        _ = shell.Session;
+        return shell;
     }
 
     /// <summary>
-    /// A status bar over the engine, so note/model reaches it as in the app. Without an engine it
-    /// hears nothing. Its clock never moves, so it polls once at connect and not again.
+    /// The app's graph with default preferences. A given session replaces the consultation's
+    /// state.
     /// </summary>
-    public static StatusBarViewModel Status(IEngineTransport? engine = null, ListLogger? log = null)
-    {
-        if (engine is null)
+    public static TestShell Settings(
+        FakeEngineClient? engine = null, AppPreferences? preferences = null, ISessionState? session = null,
+        FakeDialogService? dialogs = null, FakeFilePicker? picker = null) =>
+        new(engine, preferences ?? new AppPreferences(new MemoryPreferencesStore()), configure: services =>
         {
-            var silent = new FakeEngineClient();
-            silent.SetConnected(false);
-            engine = silent;
-        }
+            if (session is not null)
+            {
+                services.AddSingleton(session);
+            }
 
-        return new(new EngineApi(engine), new InlineDispatcher(), new FakeTimeProvider(), logger: log);
+            if (dialogs is not null)
+            {
+                services.AddSingleton<IDialogService>(dialogs);
+            }
+
+            if (picker is not null)
+            {
+                services.AddSingleton<IFilePicker>(picker);
+            }
+        });
+
+    /// <summary>
+    /// The app's graph over a disconnected engine, so no notification arrives until a test raises
+    /// one.
+    /// </summary>
+    public static TestShell Offline(ListLogger? log = null, Func<string, bool>? logged = null)
+    {
+        var silent = new FakeEngineClient();
+        silent.SetConnected(false);
+        return new TestShell(silent, log: log, logged: logged);
     }
-
-    public static PageViewModel Page(IEngineTransport engine, StatusBarViewModel status) =>
-        new(new EngineApi(engine), new FakeLauncher(), new FakeClipboard(), status);
-
-    public static GuidanceViewModel Guidance(StatusBarViewModel status) =>
-        new(new FakeLauncher(), new FakeClipboard(), status);
-
-    public static MicViewModel Mic() => new(new EngineApi(new FakeEngineClient()));
 }

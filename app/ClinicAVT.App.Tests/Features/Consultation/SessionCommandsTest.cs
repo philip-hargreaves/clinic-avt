@@ -11,8 +11,9 @@ public class SessionCommandsTest
     [Fact]
     public async Task CommandsDriveTheMachineAndCanExecuteVisibilityAndTheClockFollowTheState()
     {
-        var (session, engine, _) = TestSession.Create();
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
 
         // Recording waits for the engine
         engine.SetConnected(false);
@@ -47,7 +48,7 @@ public class SessionCommandsTest
         Assert.Equal("01:15", controls.ElapsedLabel);
         Assert.Equal(0.5, controls.Level);
 
-        // Once sealed and before the note streams, the centre holds and says why
+        // Between the stop and the first token the centre stays up with a label
         await controls.StopRecordingCommand.ExecuteAsync(null);
         Assert.True(controls.CentreStageVisible);
         Assert.True(controls.FinalisingVisible);
@@ -55,7 +56,6 @@ public class SessionCommandsTest
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         Assert.False(controls.MicPickerVisible);
 
-        // The first token opens the panes, with the note already filling
         engine.RaiseNotification("note/partial", Params(new { text = "The" }));
         Assert.True(controls.PanesVisible);
         Assert.False(controls.FinalisingVisible);
@@ -73,14 +73,15 @@ public class SessionCommandsTest
         Assert.True(controls.MicPickerVisible, "back for the next consultation");
     }
 
-    // No partial streams for a thin recording, so note/ready must open the panes on its own or
-    // the centre would spin forever, and nothing may claim to be writing
+    // A thin recording sends no note/partial, so note/ready must open the panes and "Writing" never
+    // shows
     [Fact]
     public async Task AThinRecordingOpensThePanesOnTheCannedNoteAndNeverClaimsToBeWriting()
     {
         var log = new ListLogger();
-        var (session, engine, _) = TestSession.Create(log: log);
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create(log: log);
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         Assert.True(controls.CentreStageVisible);
@@ -91,30 +92,30 @@ public class SessionCommandsTest
         Assert.True(controls.PanesVisible);
         Assert.True(controls.ReviewVisible);
         Assert.DoesNotContain(log.Lines, l => l.Contains("Writing", StringComparison.Ordinal));
-        Assert.Equal("Ready for review", session.Status.LatestActivity);
+        Assert.Equal("Ready for review", shell.Line.LatestActivity);
     }
 
     [Fact]
     public async Task FirstTimeSetupBlocksRecordingUntilModelsCompile()
     {
-        var (session, engine, _) = TestSession.Create(
-            engine: new FakeEngineClient(autoNotify: false) { FirstUse = true, ModelsCompiled = false },
-            readinessPollInterval: TimeSpan.FromMilliseconds(1));
-        var bar = session.Status;
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
-        bar.SetEngineState(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
-        bar.SetEngineReady(true);
+        var shell = TestSession.Create(
+            engine: new FakeEngineClient(autoNotify: false) { FirstUse = true, ModelsCompiled = false });
+        var (session, engine, _) = shell;
+        var bar = shell.Status;
+        var controls = shell.Get<SessionControlsViewModel>();
+        shell.Host.RaiseStatus(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
 
         Assert.False(session.ModelsReady);
         Assert.False(controls.StartRecordingCommand.CanExecute(null));
         Assert.True(bar.ShowsSetup);
         Assert.False(bar.Busy, "the bar stands in for the ring");
         Assert.Equal("First-time setup · 0:00 · optimising for your PC", bar.DisplayLabel);
-        bar.SetMicVisible(true);
+        shell.Activity.Listening = true;
         Assert.False(bar.ShowsSetup, "the level meter has the bar's place");
-        bar.SetMicVisible(false);
+        shell.Activity.StopListening();
 
         engine.ModelsCompiled = true;
+        shell.Clock.Advance(TimeSpan.FromSeconds(2));
         await WaitUntilAsync(() => session.ModelsReady);
 
         Assert.True(session.ModelsReady);
@@ -126,38 +127,39 @@ public class SessionCommandsTest
     [Fact]
     public void AWarmLaunchAndAWarmNoteModelLoadNeverGateRecording()
     {
-        var (session, engine, _) = TestSession.Create();
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
         Assert.True(session.ModelsReady);
         Assert.Equal(1, engine.Requests.Count(r => r.Method == "engine/readiness"));
-        session.Status.SetEngineState(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
-        session.Status.SetEngineReady(true);
+        shell.Host.RaiseStatus(ClinicAVT.App.Core.Hosting.EngineStatus.Running);
 
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "loading", firstUse = false }));
 
         Assert.True(session.ModelsReady);
         Assert.True(controls.StartRecordingCommand.CanExecute(null));
-        Assert.Equal("Ready", session.Status.DisplayLabel);
+        Assert.Equal("Ready", shell.Status.DisplayLabel);
         Assert.Equal("Ready to start", controls.StartLabel);
 
         // A first-use compile holds recording, and only then does the status line show it
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "loading", firstUse = true }));
         Assert.False(session.ModelsReady);
-        Assert.StartsWith("First-time setup", session.Status.DisplayLabel);
+        Assert.StartsWith("First-time setup", shell.Status.DisplayLabel);
 
         engine.RaiseNotification("note/model", System.Text.Json.JsonSerializer.SerializeToElement(
             new { tier = "default", id = "qwen3.5-9b-int4", name = "Qwen3.5 9B", state = "ready" }));
         Assert.True(session.ModelsReady);
-        Assert.Equal("Ready", session.Status.DisplayLabel);
+        Assert.Equal("Ready", shell.Status.DisplayLabel);
     }
 
     [Fact]
     public async Task FinaliseStagesNameTheCentreSpinner()
     {
-        var (session, engine, _) = TestSession.Create();
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
         var phases = new List<FinalisePhase>();
         session.PropertyChanged += (_, e) =>
         {
@@ -186,25 +188,23 @@ public class SessionCommandsTest
             Assert.Equal("Writing transcript", controls.FinalisingLabel);  // an unknown stage changes nothing
             engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
             Assert.Equal("Labelling speakers", controls.FinalisingLabel);
-            // The per-turn re-decode is transcript work again, and on the
-            // NPU the longest stage, so the spinner says what it is doing
+            // turns is a transcript re-decode and the longest NPU stage, so label it as transcript
             engine.RaiseNotification("session/progress", Params(new { stage = "turns" }));
             Assert.Equal("Writing transcript", controls.FinalisingLabel);
         };
         await session.StopRecordingAsync();
         engine.BeforeReply = null;
 
-        // Once sealed the caption names the prefill, and a late stage cannot go back
+        // After the seal the phase is Preparing note, and a late stage cannot move it back
         Assert.Equal(FinalisePhase.Note, session.Phase);
         Assert.Equal("Preparing note", controls.FinalisingLabel);
-        // A note that waits on the model's load says so
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "loading" }));
         Assert.Equal("Waiting for the note model · 0:00", controls.FinalisingLabel);
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "ready" }));
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
         Assert.Equal(FinalisePhase.Note, session.Phase);
-        // Start resets to None, then the stop walks forward only
+        // Phases only move forward after the reset to None
         Assert.Collection(phases.SkipWhile(p => p == FinalisePhase.None),
             p => Assert.Equal(FinalisePhase.Sealing, p),
             p => Assert.Equal(FinalisePhase.Transcript, p),
@@ -224,11 +224,13 @@ public class SessionCommandsTest
         Assert.Equal(FinalisePhase.Note, session.Phase);
     }
 
-    // A resume the engine dies during stays recording, and the next reconnect retries it
+    // If the engine dies during a resume, the state stays Recording and the resume is retried on
+    // the next reconnect
     [Fact]
     public async Task ARestartedEngineResumesTheLiveSessionUntilItTakesButNothingWhileIdle()
     {
-        var (session, engine, _) = TestSession.Create();
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
 
         engine.SetConnected(false);
         engine.SetConnected(true);
@@ -241,7 +243,7 @@ public class SessionCommandsTest
         engine.SetConnected(false);
         engine.SetConnected(true);
         Assert.Equal(SessionState.Recording, session.State);
-        Assert.Equal("Recovering", session.Status.LatestActivity);
+        Assert.Equal("Recovering", shell.Line.LatestActivity);
 
         engine.SetConnected(false);
         engine.SetConnected(true);
@@ -251,13 +253,14 @@ public class SessionCommandsTest
         Assert.Contains("resume", starts[2].Params);
         Assert.Contains("s1", starts[2].Params);
         Assert.Equal(SessionState.Recording, session.State);
-        Assert.Equal("Recording", session.Status.LatestActivity);
+        Assert.Equal("Recording", shell.Line.LatestActivity);
     }
 
     [Fact]
     public async Task AResumeTheEngineRefusesKeepsTheSessionAndStopsRecording()
     {
-        var (session, engine, _) = TestSession.Create();
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
         await session.StartRecordingAsync();
 
         engine.FailNext = method => method == "session/start"
@@ -266,6 +269,6 @@ public class SessionCommandsTest
         engine.SetConnected(true);
 
         Assert.Equal(SessionState.Idle, session.State);
-        Assert.Equal("Could not resume - consultation kept", session.Status.LatestActivity);
+        Assert.Equal("Could not resume - consultation kept", shell.Line.LatestActivity);
     }
 }

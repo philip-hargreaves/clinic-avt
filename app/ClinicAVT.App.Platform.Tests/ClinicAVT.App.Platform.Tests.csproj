@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClinicAVT.App.Platform\ClinicAVT.App.Platform.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="ClinicAVT.TestSupport" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\TestSupport\*.cs" LinkBase="Support" />
+    <Compile Include="..\ClinicAVT.App.Tests\TestDoubles\ListLogger.cs" Link="Support\ListLogger.cs" />
+  </ItemGroup>
+
+</Project>

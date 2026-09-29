@@ -1,30 +1,22 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Metrics;
+using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Core.Preferences;
+using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Tests.Metrics;
 
-public class PerformanceCollectorTest : IDisposable
+public class PerformanceCollectorTest
 {
-    private readonly string _path = Path.Combine(
-        Path.GetTempPath(), Path.GetRandomFileName(), "metrics.jsonl");
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(Path.GetDirectoryName(_path)!, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-
-        GC.SuppressFinalize(this);
-    }
+    private readonly FakeMetricsLog _log = new();
 
     private PerformanceCollector NewCollector(FakeEngineClient engine, bool enabled = true) =>
-        new(new EngineApi(engine), () => enabled, () => null, _path);
+        new TestShell(
+            engine,
+            new AppPreferences(new MemoryPreferencesStore()) { CollectPerformanceData = enabled },
+            configure: services => services.AddSingleton<IMetricsLog>(_log)).Get<PerformanceCollector>();
 
     [Fact]
     public async Task OnlyAFinishedSessionWithCollectionOnAppendsALine()
@@ -33,11 +25,11 @@ public class PerformanceCollectorTest : IDisposable
         disabled.SessionStarted();
         disabled.StopRequested();
         await disabled.SessionFinishedAsync(null, 100);
-        Assert.False(File.Exists(_path));
+        Assert.Empty(_log.Lines);
 
         var collector = NewCollector(new FakeEngineClient());
         await collector.SessionFinishedAsync(null, 5);  // no stop was requested
-        Assert.False(File.Exists(_path));
+        Assert.Empty(_log.Lines);
 
         collector.NoteModel("Qwen3.5 9B", "default", 24.1);
         collector.SessionStarted();
@@ -48,7 +40,7 @@ public class PerformanceCollectorTest : IDisposable
         collector.PatientPartial(14.0);
         await collector.SessionFinishedAsync(null, 1290, patientTokensPerSecond: 16.0);
 
-        var line = Assert.Single(File.ReadAllLines(_path));
+        var line = Assert.Single(_log.Lines);
         using var record = JsonDocument.Parse(line);
         var root = record.RootElement;
         Assert.Equal(33.4, root.GetProperty("engine").GetProperty("asrRealtimeFactor").GetDouble());
@@ -89,8 +81,8 @@ public class PerformanceCollectorTest : IDisposable
         collector.NoteReady();
         await collector.SessionFinishedAsync(null, 300, "failed");
 
-        var lines = File.ReadAllLines(_path);
-        Assert.Equal(4, lines.Length);
+        var lines = _log.Lines;
+        Assert.Equal(4, lines.Count);
         using var failed = JsonDocument.Parse(lines[0]);
         Assert.Equal("clinical note failed", failed.RootElement.GetProperty("outcome").GetString());
         Assert.False(failed.RootElement.TryGetProperty("patient", out _));

@@ -25,6 +25,5 @@ internal static class MenuItems
             CommandParameter = parameter,
         };
 
-    /// <summary>A line of information that cannot be chosen.</summary>
     public static MenuFlyoutItem Caption(string text) => new() { Text = text, IsEnabled = false };
 }

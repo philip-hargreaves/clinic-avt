@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Features.Consultation;
-using ClinicAVT.App.Core.Features.Demo;
 using ClinicAVT.App.Core.Features.Documents;
+using ClinicAVT.App.Core.Features.Examples;
 using ClinicAVT.App.Core.Hosting;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
@@ -10,9 +12,6 @@ using static ClinicAVT.App.Tests.Support.Waits;
 
 namespace ClinicAVT.App.Tests.Features.Consultation;
 
-/// <summary>
-/// Consultations through the whole shell stack against the real engine and real models.
-/// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
 public class RealEngineSessionTest
@@ -45,7 +44,7 @@ public class RealEngineSessionTest
                 }
             };
 
-            var dialog = new ImportRecordingViewModel(new EngineApi(connection), new FakeFilePicker(), examples: []);
+            var dialog = new TestShell(connection, time: TimeProvider.System).Create<ImportRecordingViewModel>();
             await dialog.UseFileAsync(wav);
             var (session, _, _) = Session(connection, dialog);
 
@@ -61,12 +60,12 @@ public class RealEngineSessionTest
             }
             catch (IOException)
             {
-                // The engine may still hold the wav for a moment, and temp cleans itself
+                // The engine may still hold the wav, so temp cleanup removes it
             }
         }
     }
 
-    // The import dialog's example list is the one demo path, so an example goes end to end
+    // Examples are the only demo path, so test one end to end
     [Fact]
     public async Task AnExampleImportsToALabelledTranscriptANoteAndASheet()
     {
@@ -111,14 +110,16 @@ public class RealEngineSessionTest
             }
         };
 
-        var dialog = new ImportRecordingViewModel(new EngineApi(connection), new FakeFilePicker(),
-            examples: [new DemoTrack("Elbow swelling", track)]);
+        var library = new FakeExampleLibrary();
+        library.Recordings.Add(new ExampleRecording("Elbow swelling", track));
+        var dialog = new TestShell(connection, time: TimeProvider.System,
+            configure: services => services.AddSingleton<IExampleLibrary>(library)).Create<ImportRecordingViewModel>();
         dialog.ExampleIndex = 0;
         await WaitUntilAsync(() => dialog.Inspected, Timeout);
         var (session, transcript, _) = Session(connection, dialog);
 
         string? sealedId = null;
-        session.Recorder.Sealed += id => sealedId = id;
+        session.Sealed += id => sealedId = id;
         await session.ImportRecordingAsync();
         Assert.NotNull(sealedId);
         var labelled = transcript.Turns.Count(t => t.Speaker is "doctor" or "patient");
@@ -131,7 +132,6 @@ public class RealEngineSessionTest
         var stored = await connection.RequestAsync("session/note", new { id = sealedId }, Timeout);
         Assert.Equal(note, stored.GetProperty("text").GetString());
 
-        // The patient information follows the note
         var patient = await patientReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
         Assert.Contains("Your appointment today", patient);
         var storedPatient =
@@ -169,12 +169,12 @@ public class RealEngineSessionTest
             }
         };
 
-        // A replayed file stands in for the microphone, which a resume carries on from
+        // A replay file stands in for the microphone, and the resume continues it
         var started = await connection.RequestAsync(
             "session/start", new { replay = new { path = track, speed = 16.0 } }, Timeout);
         var firstId = started.GetProperty("sessionId").GetString();
 
-        // Mid-consult, the engine dies the way the driver fault kills it
+        // Kill the engine mid-consult to mimic the driver fault
         await Task.Delay(TimeSpan.FromSeconds(8));
         Process.GetProcessById(host.EnginePid!.Value).Kill();
         await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "back" }, Timeout));
@@ -250,18 +250,14 @@ public class RealEngineSessionTest
         Assert.True(crashes == 0, $"{crashes}/6 accelerated session starts crashed the engine");
     }
 
-    // The consultation page over the real engine, with the import dialog answering as the given one
     private static (ConsultationViewModel Session, TranscriptViewModel Transcript, NoteViewModel Note) Session(
         EngineConnection connection, ImportRecordingViewModel dialog)
     {
         Assert.NotNull(dialog.Result);
-        var transcript = new TranscriptViewModel();
-        var note = new NoteViewModel();
-        var status = TestSession.Status();
-        var session = new ConsultationViewModel(new EngineApi(connection), new InlineDispatcher(), transcript, note,
-            status, new FakeDialogService { Import = dialog.Result }, TestSession.Page(connection, status),
-            TestSession.Guidance(status));
-        return (session, transcript, note);
+        var dialogs = new FakeDialogService { Import = dialog.Result };
+        var shell = new TestShell(connection, time: TimeProvider.System,
+            configure: services => services.AddSingleton<IDialogService>(dialogs));
+        return (shell.Session, shell.Get<TranscriptViewModel>(), shell.Note);
     }
 
     private static string Track() => Path.Combine(

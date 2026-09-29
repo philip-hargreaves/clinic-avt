@@ -21,7 +21,7 @@ public sealed partial class ConsultationView : UserControl
         AudioDrop.Attach(Root, DropHighlight, () => Controls.ImportRecordingCommand.CanExecute(null),
             path => Controls.ImportRecordingCommand.ExecuteAsync(path));
 
-        // Open the review on the transcript; guidance is not ready until the note finishes
+        // Open the review on the transcript. Guidance is not ready until the note finishes
         Controls.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SessionControlsViewModel.PanesVisible) && Controls.PanesVisible)

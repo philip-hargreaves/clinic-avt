@@ -2,28 +2,36 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Documents;
-using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
 
 public sealed partial class SessionControlsViewModel : ObservableObject
 {
-    private readonly ConsultationViewModel _session;
+    private readonly IConsultation _session;
     private readonly MicViewModel _mic;
+    private readonly ConsultationActivity _activity;
+    private readonly INoteModelLoad _load;
 
-    public SessionControlsViewModel(ConsultationViewModel session, MicViewModel mic)
+    public SessionControlsViewModel(
+        IConsultation session, MicViewModel mic, ConsultationActivity activity, INoteModelLoad load,
+        NoteViewModel note, ReviewCommandsViewModel commands)
     {
         _session = session;
         _mic = mic;
+        _activity = activity;
+        _load = load;
+        Note = note;
+        Commands = commands;
         _mic.PropertyChanged += (_, _) => OnPropertyChanged(nameof(MicTip));
         _session.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(ConsultationViewModel.State)
-                or nameof(ConsultationViewModel.EngineReady)
-                or nameof(ConsultationViewModel.Phase)
-                or nameof(ConsultationViewModel.ModelsReady)
-                or nameof(ConsultationViewModel.Importing)
-                or nameof(ConsultationViewModel.ImportLine))
+            if (e.PropertyName is nameof(IConsultation.State)
+                or nameof(IConsultation.EngineReady)
+                or nameof(IConsultation.Phase)
+                or nameof(IConsultation.ModelsReady)
+                or nameof(IConsultation.Importing)
+                or nameof(IConsultation.ImportLine))
             {
                 OnPropertyChanged(nameof(IdleVisible));
                 OnPropertyChanged(nameof(RecordingVisible));
@@ -44,18 +52,21 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 CancelImportCommand.NotifyCanExecuteChanged();
                 FinishConsultationCommand.NotifyCanExecuteChanged();
             }
-            else if (e.PropertyName is nameof(ConsultationViewModel.AudioSeconds))
+            else if (e.PropertyName is nameof(IConsultation.AudioSeconds))
             {
                 OnPropertyChanged(nameof(ElapsedLabel));
             }
         };
-        _session.Status.PropertyChanged += (_, e) =>
+        _activity.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(StatusBarViewModel.MicLevel))
+            if (e.PropertyName is nameof(ConsultationActivity.Level))
             {
                 OnPropertyChanged(nameof(Level));
             }
-            else if (e.PropertyName is nameof(StatusBarViewModel.ModelLoadLine))
+        };
+        _load.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(INoteModelLoad.ModelLoadLine))
             {
                 OnPropertyChanged(nameof(FinalisingLabel));
             }
@@ -63,7 +74,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     }
 
     /// <summary>Microphone level, 0 to 1, for the ring around the disc.</summary>
-    public double Level => _session.Status.MicLevel;
+    public double Level => _activity.Level;
 
     /// <summary>The centre-stage caption for the finalise phase. An import shows its own progress
     /// until it is sealed.</summary>
@@ -73,8 +84,8 @@ public sealed partial class SessionControlsViewModel : ObservableObject
         FinalisePhase.Transcript => "Writing transcript",
         FinalisePhase.Speakers => "Labelling speakers",
         FinalisePhase.Turns => "Writing transcript",
-        FinalisePhase.Note when _session.Status.ModelLoading =>
-            $"Waiting for the note model · {_session.Status.ModelLoadElapsed}",
+        FinalisePhase.Note when _load.ModelLoading =>
+            $"Waiting for the note model · {_load.ModelLoadElapsed}",
         FinalisePhase.Note => "Preparing note",
         _ => "Finalising",
     };
@@ -89,14 +100,17 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     public bool RefusedVisible => _session.State == SessionState.Refused;
 
     /// <summary>The refusal card reads its reason and override from here.</summary>
-    public NoteViewModel Note => _session.Note;
+    public NoteViewModel Note { get; }
 
-    // Idle only: the device is pinned from Record, and Finish consultation takes the cell in review
+    public ReviewCommandsViewModel Commands { get; }
+
+    // Shown only when idle. The mic is fixed from Record, and Finish consultation takes this slot
+    // in review
     public bool MicPickerVisible => _session.State == SessionState.Idle;
 
     public string MicTip => _mic.FullName;
 
-    // The centre holds until the note streams. Panes and centre never show together
+    // Shown until the note starts streaming, never together with the panes
     public bool CentreStageVisible =>
         _session.State is SessionState.Idle or SessionState.Recording or SessionState.Refused
         || _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;
@@ -122,11 +136,10 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     private bool CanStartRecording() =>
         _session.State == SessionState.Idle && _session.EngineReady && _session.ModelsReady;
 
-    /// <summary>Opens the import dialog, on the dropped file when given one.</summary>
     [RelayCommand(CanExecute = nameof(CanImportRecording))]
     private Task ImportRecording(string? path) => _session.ImportRecordingAsync(path);
 
-    // From idle, or from a review the import then ends
+    // An import can also start from review, which it ends
     private bool CanImportRecording() =>
         _session.State is SessionState.Idle or SessionState.Review or SessionState.Refused
         && _session.EngineReady && _session.ModelsReady;

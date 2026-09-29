@@ -4,6 +4,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using ClinicAVT.App.Composition;
 using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Composition;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Platform;
 using ClinicAVT.App.Shell;
@@ -27,13 +28,18 @@ public partial class App : Application
 
         InitializeComponent();
         var paths = AppPaths.Default;
+        // A debug build checks at launch that every registration can be built
         _services = new ServiceCollection()
             .AddPlatform(paths)
             .AddEngine(paths)
-            .AddViewModels(paths)
+            .AddCore()
             .AddViews()
             .AddStartupTasks(paths)
-            .BuildServiceProvider();
+            .BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = BuildFlags.Debug,
+                ValidateScopes = BuildFlags.Debug,
+            });
         UiEvent.Logger = _services.GetRequiredService<ILogger<App>>();
     }
 
@@ -47,7 +53,7 @@ public partial class App : Application
         _window.Activate();
     }
 
-    // Cancel the first close to confirm shutdown; CloseAsync closes the window
+    // Cancel the first close to confirm shutdown. CloseAsync closes the window
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs e)
     {
         if (!_closing)

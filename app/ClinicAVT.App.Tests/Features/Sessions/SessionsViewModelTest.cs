@@ -1,10 +1,10 @@
 using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Sessions;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 using static ClinicAVT.App.Tests.Support.Waits;
 
 namespace ClinicAVT.App.Tests.Features.Sessions;
@@ -12,12 +12,10 @@ namespace ClinicAVT.App.Tests.Features.Sessions;
 public class SessionsViewModelTest
 {
     private static (SessionsViewModel Sessions, ConsultationViewModel Consultation,
-        FakeEngineClient Engine, StatusBarViewModel Status) Create(AppPreferences? preferences = null)
+        FakeEngineClient Engine, StatusLine Status, TestShell Shell) Create(AppPreferences? preferences = null)
     {
-        var (consultation, engine, _) = TestSession.Create(preferences);
-        var sessions = new SessionsViewModel(
-            new EngineApi(engine), consultation.Status, consultation, new FakeDialogService(), preferences);
-        return (sessions, consultation, engine, consultation.Status);
+        var shell = TestSession.Create(preferences);
+        return (shell.Get<SessionsViewModel>(), shell.Session, shell.Engine, shell.Line, shell);
     }
 
     private static void ScriptOneSession(FakeEngineClient engine)
@@ -66,7 +64,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task RefreshListsSessionsWithLabelAndEditStampAndAMissingLabelFallsBackToTheDateAndTime()
     {
-        var (vm, _, engine, _) = Create();
+        var (vm, _, engine, _, _) = Create();
         ScriptOneSession(engine);
 
         await vm.RefreshAsync();
@@ -105,7 +103,7 @@ public class SessionsViewModelTest
         row = Assert.Single(vm.Sessions);
         Assert.Equal(row.Started, row.Title);
         Assert.False(row.Edited);
-        Assert.True(row.Demo);
+        Assert.True(row.Sample);
         Assert.True(row.HasReflection);
         Assert.False(row.HasLabel);
         Assert.Equal($"{row.Started} · {row.Duration}", row.Heading);  // said once
@@ -115,7 +113,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task SelectingOpensTheSessionRenamingKeepsItOpenLeavingSavesEditsAndDeleteClosesFirst()
     {
-        var (vm, consultation, engine, _) = Create();
+        var (vm, consultation, engine, _, shell) = Create();
         ScriptOneSession(engine);
         await vm.RefreshAsync();
 
@@ -125,19 +123,19 @@ public class SessionsViewModelTest
         Assert.True(vm.DetailOpen);
         Assert.Contains(engine.Requests, c => c.Method == "session/open" && c.Params.Contains("abc"));
         Assert.Equal(SessionState.Review, consultation.State);
-        Assert.Equal("the note", consultation.Note.ClinicalNoteText);
-        Assert.Equal("the sheet", consultation.Note.PatientInfoText);
-        Assert.Equal("arkusz", consultation.Note.TranslationText);
-        Assert.Equal("pl", consultation.Note.TranslationLanguage);
-        Assert.Equal("soap", consultation.Note.Style);
-        Assert.True(consultation.Note.Edited);
-        Assert.Single(consultation.Transcript.Turns);
+        Assert.Equal("the note", shell.Note.ClinicalNoteText);
+        Assert.Equal("the sheet", shell.Patient.PatientInfoText);
+        Assert.Equal("arkusz", shell.Patient.TranslationText);
+        Assert.Equal("pl", shell.Patient.TranslationLanguage);
+        Assert.Equal("soap", shell.Note.Style);
+        Assert.True(shell.Note.Edited);
+        Assert.Single(shell.Get<TranscriptViewModel>().Turns);
         Assert.Equal("Elbow swelling", vm.DetailTitle);
         Assert.Contains("SOAP, concise", vm.DetailMeta);
 
         // A rewrite in another style is named under the title
-        consultation.Note.Style = "prose";
-        consultation.Note.Detail = "detailed";
+        shell.Note.Style = "prose";
+        shell.Note.Detail = "detailed";
         Assert.Contains("Prose, detailed", vm.DetailMeta);
 
         vm.DetailTitle = "Left elbow bursitis";
@@ -150,7 +148,7 @@ public class SessionsViewModelTest
         Assert.True(vm.DetailOpen, "renaming must not close the open session");
         Assert.Equal(1, engine.Requests.Count(c => c.Method == "session/open"));
 
-        consultation.Note.ClinicalNoteText = "the note, corrected";
+        shell.Note.ClinicalNoteText = "the note, corrected";
         await vm.LeaveAsync();
 
         Assert.Contains(engine.Requests, c => c.Method == "note/update"
@@ -175,7 +173,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task EngineErrorsLandInTheStatusLogARefusedOpenStaysClosedAndAnEmptyStoreIsNotAnError()
     {
-        var (vm, consultation, engine, status) = Create();
+        var (vm, consultation, engine, status, _) = Create();
         engine.Failing.Add("session/list");
 
         await vm.RefreshAsync();
@@ -202,8 +200,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task AnEmptyListExplainsItselfWhenRetentionIsOff()
     {
-        var (vm, _, engine, _) = Create(new AppPreferences(
-            Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())));
+        var (vm, _, engine, _, _) = Create(new AppPreferences(new MemoryPreferencesStore()));
         engine.Responses["session/list"] = new { sessions = Array.Empty<object>() };
 
         await vm.RefreshAsync();
@@ -218,7 +215,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task EnteringOpensTheMostRecentConsultationAndGoingToRecordEndsAStoredReviewOnly()
     {
-        var (vm, consultation, engine, _) = Create();
+        var (vm, consultation, engine, _, _) = Create();
         ScriptOneSession(engine);
 
         await vm.CloseStoredReviewAsync();
@@ -242,7 +239,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task EnteringDuringTheLiveReviewShowsItWithoutReopeningAndGoingBackKeepsIt()
     {
-        var (vm, consultation, engine, _) = Create();
+        var (vm, consultation, engine, _, _) = Create();
         await consultation.StartRecordingAsync();
         await consultation.StopRecordingAsync();
         engine.RaiseNotification("note/ready");
@@ -272,7 +269,7 @@ public class SessionsViewModelTest
     [Fact]
     public async Task RowsGroupByDayAndTheQueryNarrowsThem()
     {
-        var (vm, _, engine, _) = Create();
+        var (vm, _, engine, _, _) = Create();
         engine.Responses["session/list"] = new
         {
             sessions = new[]

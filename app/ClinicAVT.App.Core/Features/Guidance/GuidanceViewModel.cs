@@ -1,17 +1,14 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Guidance;
 
 /// <summary>
-/// The Guidelines section of the review. The consultation view model owns the
-/// engine and feeds this from the wire. Nothing here talks to it.
+/// Fed from the wire by the consultation view model. It never calls the engine itself.
 /// </summary>
 public sealed partial class GuidanceViewModel : ObservableObject
 {
@@ -20,34 +17,50 @@ public sealed partial class GuidanceViewModel : ObservableObject
     private const string DocumentsStaleCaption =
         "Added documents changed since this guidance was found.";
 
+    private readonly GuidanceAvailability _availability;
     private readonly ILauncher _launcher;
     private readonly IClipboard _clipboard;
-    private readonly StatusBarViewModel _status;
-    private readonly Stopwatch _noteClock = new();
-    private readonly Stopwatch _queryClock = new();
+    private readonly IStatusLine _status;
+    private readonly IDocumentPages _pages;
+    private readonly TimeProvider _time;
+    // When the note's search started, null once its time is shown
+    private long? _noteSearchStarted;
     private List<GuidanceRecommendation> _noteResults = [];
-    private List<GuidanceRecommendation>? _queryResults;
+    private IReadOnlyList<GuidanceRecommendation>? _queryResults;
     private string _queryText = "";
 
-    public GuidanceViewModel(ILauncher launcher, IClipboard clipboard, StatusBarViewModel status)
+    public GuidanceViewModel(
+        GuidanceAvailability availability, ILauncher launcher, IClipboard clipboard, IStatusLine status,
+        IDocumentPages pages, IEngineEvents events, TimeProvider time)
     {
+        _availability = availability;
         _launcher = launcher;
         _clipboard = clipboard;
         _status = status;
+        _pages = pages;
+        _time = time;
+        availability.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Readiness));
+            OnPropertyChanged(nameof(StateCaption));
+            OnPropertyChanged(nameof(CaptionVisible));
+            OnPropertyChanged(nameof(SettingsLinkVisible));
+        };
+        events.SubscribeConnection(connected =>
+        {
+            if (!connected)
+            {
+                ConnectionLost();
+            }
+        });
     }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StateCaption), nameof(CaptionVisible),
-        nameof(SettingsLinkVisible),
-        nameof(QueryBoxEnabled), nameof(SearchEnabled))]
-    [NotifyCanExecuteChangedFor(nameof(SearchNoteCommand), nameof(SearchQueryCommand))]
-    public partial GuidanceReadiness Readiness { get; private set; } = GuidanceReadiness.Loading;
+    public GuidanceReadiness Readiness => _availability.Readiness;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Visible), nameof(Searching), nameof(Failed),
         nameof(NotSearched), nameof(StateCaption), nameof(CaptionVisible), nameof(SettingsLinkVisible),
-        nameof(SearchAgainVisible), nameof(QueryBoxEnabled), nameof(SearchEnabled))]
-    [NotifyCanExecuteChangedFor(nameof(SearchNoteCommand), nameof(SearchQueryCommand))]
+        nameof(SearchAgainVisible))]
     public partial GuidanceSection Section { get; private set; } = GuidanceSection.Hidden;
 
     /// <summary>The note or the added documents changed after this was found.</summary>
@@ -64,21 +77,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
     [ObservableProperty]
     public partial bool NotStored { get; private set; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SearchEnabled))]
-    [NotifyCanExecuteChangedFor(nameof(SearchQueryCommand))]
-    public partial string Query { get; set; } = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(QueryCaption), nameof(QueryCaptionVisible),
-        nameof(QueryBoxEnabled), nameof(SearchEnabled))]
-    [NotifyCanExecuteChangedFor(nameof(SearchQueryCommand))]
-    public partial bool QuerySearching { get; private set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(QueryCaption), nameof(QueryCaptionVisible))]
-    public partial bool QueryFailed { get; private set; }
-
     /// <summary>"found in 0.4 s" for the search that put the cards on screen.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FoundInVisible))]
@@ -88,27 +86,10 @@ public sealed partial class GuidanceViewModel : ObservableObject
     [ObservableProperty]
     public partial string Hovered { get; set; } = "";
 
-    /// <summary>The loader's reason when unavailable, for the log. Never shown.</summary>
-    public string ReadinessDetail { get; private set; } = "";
-
-    /// <summary>Corpora the engine refused, as "id: reason", for the log.</summary>
-    public IReadOnlyList<string> RefusedCorpora { get; private set; } = [];
-
     /// <summary>A typed query's cards while one shows, otherwise the note's.</summary>
     public ObservableCollection<GuidanceCard> Cards { get; } = [];
 
-    /// <summary>Set by the consultation view model, which owns the engine.</summary>
-    public Func<Task>? SearchNoteRequested { get; set; }
-
-    public Func<string, Task>? SearchQueryRequested { get; set; }
-
-    /// <summary>The cards on screen were replaced.</summary>
-    public Action? CardsShown { get; set; }
-
-    /// <summary>A card's Show in document and Open, answered by the page view.</summary>
-    public Func<GuidanceRecommendation, Task>? ShowInDocumentRequested { get; set; }
-
-    public Func<GuidanceRecommendation, Task>? OpenDocumentRequested { get; set; }
+    public event Action? Cleared;
 
     public bool Visible => Section != GuidanceSection.Hidden;
 
@@ -156,21 +137,13 @@ public sealed partial class GuidanceViewModel : ObservableObject
 
     public bool SearchAgainVisible => Stale && !Searching;
 
-    /// <summary>The box waits while either search runs. The button also needs a query.</summary>
-    public bool QueryBoxEnabled => Readiness == GuidanceReadiness.Ready && Visible
-        && !Searching && !QuerySearching;
-
-    public bool SearchEnabled => QueryBoxEnabled && Query.Trim().Length > 0;
-
     public bool CaptionVisible => StateCaption.Length > 0 && !QueryShown;
 
-    /// <summary>A typed query is on screen in place of the note's cards.</summary>
     public bool QueryShown => _queryText.Length > 0;
 
     public string QueryHeader => QueryShown ? $"Search: '{_queryText}'" : "";
 
-    // What the section says when it has nothing to show. That is the search's own state, or
-    // why the engine cannot search yet
+    // With no cards, the caption gives the search state or why the engine cannot search yet
     public string StateCaption => Section switch
     {
         GuidanceSection.Hidden or GuidanceSection.Results => "",
@@ -190,18 +163,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
         _ => "Guidance was not searched for this consultation",
     };
 
-    public string QueryCaption => QuerySearching ? "Searching"
-        : QueryFailed ? "Search failed."
-        : _queryResults is null ? ""
-        : _queryResults.Count switch
-        {
-            0 => "Nothing came close enough to show.",
-            1 => "1 result",
-            var n => $"{n} results",
-        };
-
-    public bool QueryCaptionVisible => QueryCaption.Length > 0;
-
     /// <summary>
     /// Whether the note's search should run again by itself once added documents settle. That
     /// needs a result to refresh and no typed query on screen to replace.
@@ -215,7 +176,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
     {
         if (found.FromDocument)
         {
-            await OpenDocumentAsync(found).ConfigureAwait(true);
+            await _pages.OpenAsync(found).ConfigureAwait(true);
         }
         else if (!await _launcher.OpenLinkAsync(found.Link).ConfigureAwait(true))
         {
@@ -224,52 +185,18 @@ public sealed partial class GuidanceViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task ShowInDocument(GuidanceRecommendation found) =>
-        ShowInDocumentRequested?.Invoke(found) ?? Task.CompletedTask;
+    private Task ShowInDocument(GuidanceRecommendation found) => _pages.ShowAsync(found);
 
     [RelayCommand]
     private Task CopyCitation(GuidanceRecommendation found) =>
         _clipboard.CopyAsync(_status, found.CitationText, "Citation");
-
-    [RelayCommand(CanExecute = nameof(CanSearchNote))]
-    private Task SearchNote() => SearchNoteRequested?.Invoke() ?? Task.CompletedTask;
-
-    private bool CanSearchNote() => SearchNoteRequested is not null
-        && Readiness == GuidanceReadiness.Ready && !Searching
-        && Section is not (GuidanceSection.Hidden or GuidanceSection.FollowsNote);
-
-    [RelayCommand(CanExecute = nameof(SearchEnabled))]
-    private Task SearchQuery()
-    {
-        _queryText = Query.Trim();
-        _queryResults = null;
-        QueryFailed = false;
-        QuerySearching = true;
-        _queryClock.Restart();
-        QueryChanged();
-        return SearchQueryRequested?.Invoke(_queryText) ?? Task.CompletedTask;
-    }
-
-    [RelayCommand(CanExecute = nameof(QueryShown))]
-    private void ClearQuery()
-    {
-        Query = "";
-        _queryText = "";
-        _queryResults = null;
-        QuerySearching = false;
-        QueryFailed = false;
-        FoundIn = "";
-        QueryChanged();
-    }
-
-    public Task OpenDocumentAsync(GuidanceRecommendation found) =>
-        OpenDocumentRequested?.Invoke(found) ?? Task.CompletedTask;
 
     public void Reset()
     {
         ForgetNoteResults();
         Section = GuidanceSection.Hidden;
         ClearQuery();
+        Cleared?.Invoke();
     }
 
     /// <summary>The note is being written. Its search follows.</summary>
@@ -281,13 +208,13 @@ public sealed partial class GuidanceViewModel : ObservableObject
         ShowCards();
     }
 
-    /// <summary>The note arrived. A result or failure that beat it stands.</summary>
+    /// <summary>The note arrived. Any earlier result or failure is kept.</summary>
     public void NoteReady()
     {
         if (Section == GuidanceSection.FollowsNote)
         {
             Section = GuidanceSection.Searching;
-            _noteClock.Restart();
+            _noteSearchStarted = _time.GetTimestamp();
         }
     }
 
@@ -298,7 +225,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
     {
         Stale = false;
         Section = GuidanceSection.Searching;
-        _noteClock.Restart();
+        _noteSearchStarted = _time.GetTimestamp();
     }
 
     public void MarkStale()
@@ -311,7 +238,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Marks the result stale on guidance/documentsChanged. A note edit stays the stronger reason.
+    /// Marks the result stale on guidance/documentsChanged, unless a note edit already has.
     /// </summary>
     public void DocumentsChanged()
     {
@@ -354,73 +281,37 @@ public sealed partial class GuidanceViewModel : ObservableObject
     {
         ApplyRecord(result);
         NotStored = result.StoreError is { Length: > 0 };
-        ShowFoundIn(_noteClock);
+        ShowFoundIn(SearchClock.FoundIn(_time, ref _noteSearchStarted));
     }
 
     public void ApplyFailed() => Section = GuidanceSection.Failed;
 
-    // A query reply after Clear or a new consultation belongs to nothing on screen
-    public void ApplyQueryReady(GuidanceRecord result)
+    /// <summary>Shows a typed query's cards in place of the note's. Results are null while it
+    /// runs.</summary>
+    public void ShowQuery(string text, IReadOnlyList<GuidanceRecommendation>? results)
     {
-        if (!QuerySearching)
-        {
-            return;
-        }
-
-        _queryResults = GuidanceRecommendation.ReadAll(result, false);
-        QuerySearching = false;
-        QueryFailed = false;
-        ShowFoundIn(_queryClock);
+        _queryText = text;
+        _queryResults = results;
         QueryChanged();
     }
 
-    public void ApplyQueryFailed()
+    public void ClearQuery()
     {
-        if (!QuerySearching)
-        {
-            return;
-        }
-
-        QuerySearching = false;
-        QueryFailed = true;
+        _queryText = "";
+        _queryResults = null;
+        FoundIn = "";
+        QueryChanged();
     }
 
-    /// <summary>
-    /// Takes the embedder's state from guidance/corpora. Searching needs only that, since added
-    /// documents are searched whether or not any corpus is installed.
-    /// </summary>
-    public void ApplyCorpora(CorporaStatus corpora)
+    // Cleared first, so two searches of the same length still announce the second
+    public void ShowFoundIn(string foundIn)
     {
-        ReadinessDetail = corpora.Detail ?? "";
-        var refused = new List<string>();
-        foreach (var corpus in corpora.Corpora)
-        {
-            var reason = corpus.Unavailable ?? "";
-            if (reason.Length > 0)
-            {
-                refused.Add($"{corpus.Id}: {reason}");
-            }
-        }
-
-        RefusedCorpora = refused;
-        Readiness = corpora.State switch
-        {
-            "loading" => GuidanceReadiness.Loading,
-            "ready" => GuidanceReadiness.Ready,
-            _ => GuidanceReadiness.Unavailable,
-        };
-    }
-
-    /// <summary>The poll itself failed, so there is nothing to wait for.</summary>
-    public void CorporaUnavailable()
-    {
-        ReadinessDetail = "";
-        RefusedCorpora = [];
-        Readiness = GuidanceReadiness.Unavailable;
+        FoundIn = "";
+        FoundIn = foundIn;
     }
 
     /// <summary>A search running when the engine drops never returns, so the cards stay.</summary>
-    public void ConnectionLost()
+    private void ConnectionLost()
     {
         if (Searching)
         {
@@ -428,8 +319,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
                 ? GuidanceSection.Results
                 : GuidanceSection.NotSearched;
         }
-
-        ApplyQueryFailed();
     }
 
     private void ForgetNoteResults()
@@ -437,13 +326,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
         _noteResults = [];
         Stale = false;
         NotStored = false;
-    }
-
-    // Cleared first, so two searches of the same length still announce the second
-    private void ShowFoundIn(Stopwatch clock)
-    {
-        FoundIn = "";
-        FoundIn = Elapsed(clock);
     }
 
     private void ApplyRecord(GuidanceRecord record)
@@ -461,10 +343,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(QueryShown));
         OnPropertyChanged(nameof(QueryHeader));
-        OnPropertyChanged(nameof(QueryCaption));
-        OnPropertyChanged(nameof(QueryCaptionVisible));
         OnPropertyChanged(nameof(CaptionVisible));
-        ClearQueryCommand.NotifyCanExecuteChanged();
         ShowCards();
     }
 
@@ -499,18 +378,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
 
         OnPropertyChanged(nameof(CardsVisible));
         OnPropertyChanged(nameof(Summary));
-        CardsShown?.Invoke();
-    }
-
-    // A search the clock never timed, such as a stored record, shows nothing
-    private static string Elapsed(Stopwatch clock)
-    {
-        if (!clock.IsRunning)
-        {
-            return "";
-        }
-
-        clock.Stop();
-        return $"found in {clock.Elapsed.TotalSeconds:0.0} s";
+        _pages.KeepOnlyFor(Cards);
     }
 }

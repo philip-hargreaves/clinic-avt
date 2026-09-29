@@ -1,9 +1,8 @@
 namespace ClinicAVT.App.Core.Features.Sessions;
 
-/// <summary>One stored consultation as the list shows it.</summary>
 public sealed record SessionRow(
     string Id, string Title, string Started, string Duration, string EditedLabel,
-    string StartedAt = "", bool Demo = false, bool HasReflection = false)
+    string StartedAt = "", bool Sample = false, bool HasReflection = false)
 {
     public bool Edited => EditedLabel.Length > 0;
 

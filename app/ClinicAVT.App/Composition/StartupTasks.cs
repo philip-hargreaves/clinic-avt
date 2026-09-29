@@ -4,7 +4,6 @@ using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.App.Platform;
 
 namespace ClinicAVT.App.Composition;
@@ -17,7 +16,6 @@ internal static class StartupTasks
     {
         services.AddSingleton<IStartupTask>(_ => new RegisterCrashDumps(paths));
         services.AddSingleton<IStartupTask, AttachSessionState>();
-        services.AddSingleton<IStartupTask, ApplySavedPreferences>();
         services.AddSingleton<IStartupTask, ApplyTheme>();
         services.AddSingleton<IStartupTask, StartEngine>();
         services.AddSingleton<IStartupTask, RequestMicrophoneAccess>();
@@ -25,8 +23,8 @@ internal static class StartupTasks
         return services;
     }
 
-    // The engine host reads the session through LiveSessionState, which follows the view model
-    private sealed class AttachSessionState(LiveSessionState state, ConsultationViewModel session) : IStartupTask
+    // LiveSessionState mirrors the view model so the engine host can read the session
+    private sealed class AttachSessionState(LiveSessionState state, IConsultation session) : IStartupTask
     {
         public string Name => "attach session state";
 
@@ -46,16 +44,6 @@ internal static class StartupTasks
             EngineLayout.EngineExe, EngineLayout.NoteHostExe);
     }
 
-    // The status bar follows the saved preference before the settings page is opened
-    private sealed class ApplySavedPreferences(AppPreferences preferences, StatusBarViewModel status) : IStartupTask
-    {
-        public string Name => "apply saved preferences";
-
-        public StartupStage Stage => StartupStage.BeforeWindow;
-
-        public void Run() => status.MetricsVisible = preferences.ShowPerformanceMetrics;
-    }
-
     // Before Activate, so a dark preference never flashes light
     private sealed class ApplyTheme(AppPreferences preferences, IThemeService theme) : IStartupTask
     {
@@ -66,17 +54,13 @@ internal static class StartupTasks
         public void Run() => theme.Apply(preferences.Theme);
     }
 
-    private sealed class StartEngine(IEngineHost host, IUiDispatcher dispatcher, StatusBarViewModel status) : IStartupTask
+    private sealed class StartEngine(IEngineHost host) : IStartupTask
     {
         public string Name => "start engine";
 
         public StartupStage Stage => StartupStage.AfterWindow;
 
-        public void Run()
-        {
-            host.StatusChanged += _ => dispatcher.Post(() => status.SetEngineState(host.Status));
-            host.Start();
-        }
+        public void Run() => host.Start();
     }
 
     // Lists the app on the Windows microphone privacy page. The engine enforces the setting

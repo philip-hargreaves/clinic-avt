@@ -67,8 +67,7 @@ public sealed class EngineApi : IEngineApi
     public Task<RecordingInfo> InspectRecordingAsync(string path) =>
         ReplyAsync<RecordingInfo>("recording/inspect", new { path }, LongTimeout);
 
-    // The engine answers with the session at once and ends the import with a notification, which
-    // can overtake the answer. So the wait starts before the request
+    // Subscribe before the request, because the import-end notification can arrive before the reply
     public async Task<string> ImportRecordingAsync(string path, string startedAt, bool retain)
     {
         var end = new ImportEnd();
@@ -132,7 +131,7 @@ public sealed class EngineApi : IEngineApi
                 : new { from = periodStart, to = periodEnd, covered },
             LongTimeout);
 
-    // The job runs on the engine's own thread, so these return once it has started
+    // These return once the engine has started the job
     public Task BackUpAsync(
         string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false) =>
         CallAsync("archive/backup",
@@ -144,7 +143,7 @@ public sealed class EngineApi : IEngineApi
     public Task<NoteTierState> SetNoteTierAsync(string tier) =>
         ReplyAsync<NoteTierState>("note/tier", new { tier }, LongTimeout);
 
-    public Task<AsrDeviceState> SetAsrDeviceAsync(string device) =>
+    public Task<AsrDeviceState> SetAsrDeviceAsync(AsrDevice device) =>
         ReplyAsync<AsrDeviceState>("asr/device", new { device });
 
     public Task SetNoteOptionsAsync(string style, string detail) =>
@@ -221,10 +220,10 @@ public sealed class EngineApi : IEngineApi
 
     public Task DeleteReflectionAsync(string id) => CallAsync("reflection/delete", new { id });
 
-    public async Task<int> SeedDemoAsync() =>
+    public async Task<int> SeedSamplesAsync() =>
         Int(await CallAsync("demo/seed", null, LongTimeout).ConfigureAwait(false), "added");
 
-    public async Task<int> ClearDemoAsync() =>
+    public async Task<int> ClearSamplesAsync() =>
         Int(await CallAsync("demo/clear", null, LongTimeout).ConfigureAwait(false), "removed");
 
     private async Task<string> StartAsync(object parameters, TimeSpan timeout) =>
@@ -252,7 +251,6 @@ public sealed class EngineApi : IEngineApi
         where T : class =>
         Protocol.Parse<T>(reply) ?? throw new InvalidOperationException($"{method}: malformed reply");
 
-    // A notification the shell does not know, or cannot read, is dropped here
     private void OnNotification(string method, JsonElement parameters)
     {
         if (EngineNotifications.Parse(method, parameters) is { } notification)
@@ -263,7 +261,7 @@ public sealed class EngineApi : IEngineApi
 
     private static string Text(JsonElement reply, string property) => reply.Text(property) ?? "";
 
-    // One import runs at a time. Its end is held until the answer names the session
+    // One import runs at a time. Its end is held until the reply names the session
     private sealed class ImportEnd
     {
         private readonly object _gate = new();

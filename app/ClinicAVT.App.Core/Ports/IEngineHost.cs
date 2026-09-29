@@ -2,10 +2,7 @@ using ClinicAVT.App.Core.Hosting;
 
 namespace ClinicAVT.App.Core.Ports;
 
-/// <summary>
-/// The shell's port to the engine process lifecycle. StatusChanged may fire on
-/// background threads.
-/// </summary>
+/// <summary>StatusChanged may fire on background threads.</summary>
 public interface IEngineHost
 {
     event Action<EngineStatus>? StatusChanged;
@@ -16,7 +13,7 @@ public interface IEngineHost
 
     void Start();
 
-    /// <summary>Asks the engine to leave and stops supervising it without waiting, so it can
-    /// finish a load after the app has closed.</summary>
+    /// <summary>Asks the engine to exit and stops supervising without waiting, so it can
+    /// finish a load after the app closes.</summary>
     Task ReleaseAsync();
 }

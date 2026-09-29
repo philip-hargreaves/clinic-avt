@@ -1,11 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Microsoft.Extensions.Logging;
-using ClinicAVT.App.Core.Features.Demo;
-using ClinicAVT.App.Core.Features.Documents;
-using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Core.Preferences;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
@@ -14,141 +8,96 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 /// Facade for the views over the recorder, review, readiness and notification router. Forwards
 /// their state and commands under the same names.
 /// </summary>
-public sealed partial class ConsultationViewModel : ObservableObject, ISessionState
+public sealed partial class ConsultationViewModel : ObservableObject, IConsultation
 {
+    private readonly IStatusLine _status;
+    private readonly SessionRecorder _recorder;
+    private readonly SessionImport _import;
+    private readonly SessionReview _review;
+    private readonly ConsultationReadiness _readiness;
     private readonly IDialogService _dialogs;
+    private readonly Func<ImportRecordingViewModel> _imports;
 
     public ConsultationViewModel(
-        IEngineApi engine, IUiDispatcher dispatcher,
-        TranscriptViewModel transcript, NoteViewModel note, StatusBarViewModel status,
-        IDialogService dialogs, PageViewModel pageView, GuidanceViewModel guidance,
-        Metrics.PerformanceCollector? metrics = null, TimeSpan? readinessPollInterval = null,
-        AppPreferences? preferences = null, IReadOnlyList<DemoCase>? exampleCases = null,
-        ILogger<ConsultationViewModel>? logger = null)
+        IEngineEvents events, IStatusLine status, SessionRecorder recorder, SessionImport import,
+        SessionReview review, ConsultationReadiness readiness, NotificationRouter router,
+        IDialogService dialogs, Func<ImportRecordingViewModel> imports)
     {
+        _status = status;
+        _recorder = recorder;
+        _import = import;
+        _review = review;
+        _readiness = readiness;
         _dialogs = dialogs;
-        Transcript = transcript;
-        Note = note;
-        Guidance = guidance;
-        PageView = pageView;
-        Status = status;
-        Recorder = new SessionRecorder(
-            engine, status, note, guidance, pageView, transcript, metrics, preferences);
-        Review = new SessionReview(
-            engine, dispatcher, status, note, guidance, transcript, dialogs, Recorder, preferences);
-        Readiness = new ConsultationReadiness(
-            engine, status, note, guidance, Recorder, preferences,
-            readinessPollInterval ?? TimeSpan.FromSeconds(2));
-        var router = new NotificationRouter(Recorder, Review, Readiness, note, guidance, status, metrics);
+        _imports = imports;
 
-        // The parts' properties are this object's, under the same names
-        Recorder.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
-        Readiness.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
+        recorder.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
+        import.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
+        readiness.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
 
-        EngineReady = engine.Connected;
-        Note.TranslateRequested = Review.TranslateAsync;
-        Note.RegenerateRequested = Review.RegenerateNoteAsync;
-        Note.WriteAnywayRequested = Review.WriteNoteAnywayAsync;
-        Note.RegeneratePatientRequested = Review.RegeneratePatientAsync;
-        Note.ReflectRequested = Review.ReflectAsync;
-        Note.SaveNoteRequested = Review.SaveNoteAsync;
-        Note.SavePatientRequested = Review.SavePatientAsync;
-        Note.ExampleCases = exampleCases ?? DemoCases.Load(logger: logger);
-        Note.ExampleCaseRequested = example => _ = Review.ApplyExampleCaseAsync(example);
-        Note.OriginalNoteRequested = () => _ = Review.RestoreOriginalNoteAsync();
-        Guidance.SearchNoteRequested = Review.SearchGuidanceAsync;
-        Guidance.SearchQueryRequested = Review.SearchGuidanceAsync;
-        Guidance.ShowInDocumentRequested = PageView.ShowAsync;
-        Guidance.OpenDocumentRequested = PageView.OpenAsync;
-        Guidance.CardsShown = () => PageView.KeepOnlyFor(Guidance.Cards);
-        // Saved options are applied before the change callback is wired, so restoring them
-        // is not itself a change
-        if (preferences is not null)
-        {
-            Note.Style = preferences.NoteStyle;
-            Note.Detail = preferences.NoteDetail;
-        }
-
-        Note.OptionsChanged = Readiness.NoteOptionsChanged;
-        // Off the transport's thread. A handler that throws must not take the others with it
-        engine.NotificationReceived += notification => dispatcher.Post(() =>
-        {
-            try
-            {
-                router.Route(notification);
-            }
-            catch (Exception e)
-            {
-                Status.Log($"{notification.GetType().Name} handler failed: {e.Message}");
-            }
-        });
+        EngineReady = events.Connected;
+        events.Subscribe<EngineNotification>(router.Route);
         // The status-bar label carries readiness. A lost connection is only logged, because
         // an intentional restart such as the NPU switch must not read as a failure
-        engine.ConnectedChanged += connected => dispatcher.Post(() =>
+        events.SubscribeConnection(connected =>
         {
             EngineReady = connected;
-            Status.SetEngineReady(connected);
             if (!connected)
             {
-                Note.TranslationRunning = false;
-                Guidance.ConnectionLost();
-                Status.Log("connection lost");
+                _status.Log("connection lost");
             }
             else
             {
                 // Whatever activity the restart interrupted, such as "switching
                 // transcription...", is over. Resume overwrites this
-                Status.Append("Ready");
-                Readiness.Connected();
+                _status.Append("Ready");
+                _readiness.Connected();
                 if (State == SessionState.Recording)
                 {
-                    _ = Recorder.ResumeAfterRestartAsync();
+                    _ = _recorder.ResumeAfterRestartAsync();
                 }
             }
         });
         if (EngineReady)
         {
-            Readiness.Connected();
+            _readiness.Connected();
         }
     }
 
-    public SessionRecorder Recorder { get; }
+    public event Action<string>? Sealed
+    {
+        add => _recorder.Sealed += value;
+        remove => _recorder.Sealed -= value;
+    }
 
-    public SessionReview Review { get; }
-
-    public ConsultationReadiness Readiness { get; }
-
-    public TranscriptViewModel Transcript { get; }
-
-    public NoteViewModel Note { get; }
-
-    public GuidanceViewModel Guidance { get; }
-
-    /// <summary>The page of an added document beside the note, when a card asks.</summary>
-    public PageViewModel PageView { get; }
-
-    public StatusBarViewModel Status { get; }
+    public event Action<RecordingImport>? ImportStarted
+    {
+        add => _import.ImportStarted += value;
+        remove => _import.ImportStarted -= value;
+    }
 
     /// <summary>False while the engine is still starting or reconnecting.</summary>
     [ObservableProperty]
     public partial bool EngineReady { get; private set; }
 
-    public SessionState State => Recorder.State;
+    public SessionState State => _recorder.State;
 
-    public FinalisePhase Phase => Recorder.Phase;
+    public FinalisePhase Phase => _recorder.Phase;
 
-    public double AudioSeconds => Recorder.AudioSeconds;
+    public double AudioSeconds => _recorder.AudioSeconds;
 
-    public bool Importing => Recorder.Importing;
+    public string? RecordingSessionId => _recorder.RecordingSessionId;
 
-    public string? ImportLine => Recorder.ImportLine;
+    public bool Importing => _import.Importing;
 
-    public bool ModelsReady => Readiness.ModelsReady;
+    public string? ImportLine => _import.ImportLine;
+
+    public bool ModelsReady => _readiness.ModelsReady;
 
     public bool ConsultationInProgress => State is SessionState.Recording or SessionState.Finalising;
 
     public string? ReviewedSessionId =>
-        State is SessionState.Review or SessionState.Refused ? Review.FinalisedSessionId : null;
+        State is SessionState.Review or SessionState.Refused ? _review.FinalisedSessionId : null;
 
     public Task EndReviewAsync() => CloseReviewAsync();
 
@@ -159,11 +108,23 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     public string SessionPhase =>
         State == SessionState.Finalising ? $"{State}:{Phase}" : State.ToString();
 
-    public Task StartRecordingAsync() => Recorder.StartRecordingAsync();
+    /// <summary>
+    /// True while the review shows a stored consultation. False for the one just recorded.
+    /// </summary>
+    public bool ReviewingStored => _review.StoredOpen;
 
-    public Task StopRecordingAsync() => Recorder.StopRecordingAsync();
+    /// <summary>
+    /// The id of the consultation just recorded while its review is up. Null once a stored one
+    /// replaces it.
+    /// </summary>
+    public string? LiveReviewId =>
+        State == SessionState.Review && !_review.StoredOpen ? _review.FinalisedSessionId : null;
 
-    public Task CancelRecordingAsync() => Recorder.CancelRecordingAsync();
+    public Task StartRecordingAsync() => _recorder.StartRecordingAsync();
+
+    public Task StopRecordingAsync() => _recorder.StopRecordingAsync();
+
+    public Task CancelRecordingAsync() => _recorder.CancelRecordingAsync();
 
     /// <summary>
     /// The Add consultation recording dialog, on a dropped file when there is one. An open
@@ -171,38 +132,29 @@ public sealed partial class ConsultationViewModel : ObservableObject, ISessionSt
     /// </summary>
     public async Task ImportRecordingAsync(string? path = null)
     {
-        if (await _dialogs.RunImportAsync(path).ConfigureAwait(true) is not { } import)
+        var dialog = _imports();
+        if (path is not null)
+        {
+            _ = dialog.UseFileAsync(path);
+        }
+
+        // Add closes the dialog and the consultation page shows the finalise
+        if (!await _dialogs.ShowAsync(dialog).ConfigureAwait(true) || dialog.Result is not { } import)
         {
             return;
         }
 
         await CloseReviewAsync().ConfigureAwait(true);
-        await Recorder.ImportRecordingAsync(import).ConfigureAwait(true);
+        await _import.ImportRecordingAsync(import).ConfigureAwait(true);
     }
 
-    public Task CancelImportAsync() => Recorder.CancelImportAsync();
+    public Task CancelImportAsync() => _import.CancelImportAsync();
 
     public Task<bool> OpenStoredSessionAsync(string id, string startedLabel = "",
-        string startedAt = "", bool hasReflection = false, bool demo = false) =>
-        Review.OpenStoredSessionAsync(id, startedLabel, startedAt, hasReflection, demo);
+        string startedAt = "", bool hasReflection = false, bool sample = false) =>
+        _review.OpenStoredSessionAsync(id, startedLabel, startedAt, hasReflection, sample);
 
-    public Task CloseReviewAsync() => Review.CloseReviewAsync();
-
-    /// <summary>
-    /// True while the review shows a stored consultation. False for the one just recorded.
-    /// </summary>
-    public bool ReviewingStored => Review.StoredOpen;
-
-    /// <summary>
-    /// The id of the consultation just recorded while its review is up. Null once a stored one
-    /// replaces it.
-    /// </summary>
-    public string? LiveReviewId =>
-        State == SessionState.Review && !Review.StoredOpen ? Review.FinalisedSessionId : null;
-
-    public Task SaveNoteAsync() => Review.SaveNoteAsync();
-
-    public Task RegenerateNoteAsync() => Review.RegenerateNoteAsync();
+    public Task CloseReviewAsync() => _review.CloseReviewAsync();
 
     public void FinishConsultation() => _ = CloseReviewAsync();
 }

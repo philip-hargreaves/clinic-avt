@@ -2,10 +2,6 @@ using ClinicAVT.Client.Tests.Support;
 
 namespace ClinicAVT.Client.Tests.Contract;
 
-/// <summary>
-/// The session methods and the notifications they produce, against the real
-/// engine on a private pipe.
-/// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
 public class SessionContractTest
@@ -68,8 +64,8 @@ public class SessionContractTest
                 await client.RequestAsync("engine/exit", null, Timeout);
             }
 
-            // Asked to leave, the engine goes once its shell disconnects. Unasked, it would
-            // wait for the shell to come back
+            // After engine/exit the engine quits once its shell disconnects. Without it the engine
+            // waits for a reconnect
             Assert.Equal(0, await engine.WaitForExitAsync(Timeout));
 
             // Of the two sessions, the cancelled one left nothing and the stopped

@@ -8,9 +8,8 @@ using Windows.Win32.System.JobObjects;
 namespace ClinicAVT.App.Platform;
 
 /// <summary>
-/// A Windows Job Object with kill-on-close. Disposing it terminates every
-/// assigned process, and the kernel closes the handle when this process dies
-/// for any reason, so an assigned engine cannot outlive its owner.
+/// Kill-on-close job object. Disposing it, or this process dying for any reason, ends every
+/// assigned process.
 /// </summary>
 public sealed class JobObject : IDisposable
 {

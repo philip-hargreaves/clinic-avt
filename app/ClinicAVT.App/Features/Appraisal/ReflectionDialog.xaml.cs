@@ -3,7 +3,7 @@ using ClinicAVT.App.Core.Features.Appraisal;
 
 namespace ClinicAVT.App.Features.Appraisal;
 
-/// <summary>The reflection sheet over the review screen. Closing saves changes.</summary>
+/// <summary>Closing saves changes.</summary>
 public sealed partial class ReflectionDialog : ContentDialog
 {
     public ReflectionDialog(ReflectionViewModel viewModel)

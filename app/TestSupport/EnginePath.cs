@@ -1,10 +1,9 @@
 namespace ClinicAVT.TestSupport;
 
 /// <summary>
-/// Locates the engine binary for real-engine tests. An explicit override comes
-/// first, then the release build, then the newest binary under any preset.
-/// Release wins to match the shipped app, and because OpenVINO's debug GPU
-/// plugin asserts on the second generation of the note/patient lane.
+/// Finds the engine binary for real-engine tests. CLINICAVT_ENGINE_PATH comes first, then the
+/// release build, then the newest build under any preset. Release matches the shipped app, and
+/// OpenVINO's debug GPU plugin asserts on the second note/patient generation.
 /// </summary>
 internal static class EnginePath
 {

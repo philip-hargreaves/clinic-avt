@@ -4,11 +4,10 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using ClinicAVT.App.Core.Features.Guidance;
-using ClinicAVT.App.Platform;
+using ClinicAVT.App.Adapters;
 
 namespace ClinicAVT.App.Features.Guidance;
 
-/// <summary>A page of an added document with the cited lines marked.</summary>
 public sealed partial class PageView : UserControl
 {
     // Glyph boxes are tight, so a mark reaches a little past the letters

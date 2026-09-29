@@ -8,7 +8,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Composition;
 
-/// <summary>The engine process, its supervision and the typed connection to it.</summary>
 internal static class EngineServices
 {
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
@@ -25,7 +24,7 @@ internal static class EngineServices
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ICrashLog>(),
             () => sp.GetRequiredService<EngineConnection>().MethodInFlight,
-            () => sp.GetRequiredService<IEngineApi>().RequestExitAsync()));
+            () => sp.GetRequiredService<IEngineControl>().RequestExitAsync()));
         services.AddSingleton(sp => new EngineConnection(
             sp.GetRequiredService<IEngineHost>(),
             static async (pid, ct) => await PipeTransport.ConnectAsync(

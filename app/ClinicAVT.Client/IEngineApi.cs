@@ -1,10 +1,14 @@
 namespace ClinicAVT.Client;
 
-/// <summary>
-/// The engine as the shell uses it, with one method per request and typed replies.
-/// Method names and wire shapes live only in EngineApi.
-/// </summary>
+/// <summary>Typed engine requests. Wire names and shapes live only in EngineApi.</summary>
 public interface IEngineApi
+    : IEngineControl, IRecordingApi, ISessionStoreApi, INoteApi, IGuidanceApi, IEnrolmentApi,
+        IReflectionApi, IArchiveApi
+{
+}
+
+/// <summary>Connection state and pushed notifications, common to every role interface.</summary>
+public interface IEngineLink
 {
     /// <summary>True while a verified transport is up and requests can succeed.</summary>
     bool Connected { get; }
@@ -12,16 +16,29 @@ public interface IEngineApi
     event Action<bool>? ConnectedChanged;
 
     event Action<EngineNotification>? NotificationReceived;
+}
 
+public interface IEngineControl : IEngineLink
+{
     Task<EngineReadiness> ReadinessAsync();
 
-    /// <summary>Asks the engine to leave once this shell disconnects, as soon as no load keeps it.</summary>
+    /// <summary>Asks the engine to exit when idle after this shell disconnects.</summary>
     Task RequestExitAsync();
 
     Task<IReadOnlyList<ModelInfo>> ListModelsAsync();
 
     Task<EngineMetrics> MetricsAsync(TimeSpan? timeout = null);
 
+    Task<NoteTierState> SetNoteTierAsync(string tier);
+
+    /// <summary>Moves speech recognition to "GPU" or "NPU" in place. An asr/device
+    /// notification says when it is ready.</summary>
+    Task<AsrDeviceState> SetAsrDeviceAsync(AsrDevice device);
+}
+
+/// <summary>Live recording and file import.</summary>
+public interface IRecordingApi : IEngineLink
+{
     Task<IReadOnlyList<AudioInput>> ListAudioInputsAsync();
 
     // Every start returns the session id, empty when the engine sent none
@@ -31,6 +48,8 @@ public interface IEngineApi
 
     Task<string> StopSessionAsync();
 
+    Task CancelSessionAsync();
+
     /// <summary>Reads an audio file's length and recording time without importing it.</summary>
     Task<RecordingInfo> InspectRecordingAsync(string path);
 
@@ -39,9 +58,10 @@ public interface IEngineApi
     /// sealed. A cancel throws ImportCancelledException and a lost engine IOException.
     /// </summary>
     Task<string> ImportRecordingAsync(string path, string startedAt, bool retain);
+}
 
-    Task CancelSessionAsync();
-
+public interface ISessionStoreApi : IEngineLink
+{
     Task OpenSessionAsync(string id);
 
     Task CloseSessionAsync();
@@ -62,37 +82,20 @@ public interface IEngineApi
     Task DeleteSessionAsync(string id);
 
     /// <summary>
-    /// Erases every stored consultation and returns how many went. Reflections, with their case
-    /// summary, stay unless asked to go too.
+    /// Deletes all consultations and returns the count. Reflections are kept unless
+    /// deleteReflections is set.
     /// </summary>
     Task<int> DeleteAllSessionsAsync(bool deleteReflections = false);
 
-    /// <summary>Erases the given consultations, as after a checked backup, and returns how many went.</summary>
-    Task<int> RemoveSessionsAsync(IReadOnlyList<string> ids, bool deleteReflections);
+    // Both return how many sample consultations were added or removed
+    Task<int> SeedSamplesAsync();
 
-    /// <summary>
-    /// Counts what a backup of the half-open UTC period would hold. Empty ends are open. With
-    /// the last backup's coverage it also counts what no backup holds.
-    /// </summary>
-    Task<ArchiveSummary> ArchiveSummaryAsync(
-        string periodStart, string periodEnd, ArchiveCoverage? covered = null);
+    Task<int> ClearSamplesAsync();
+}
 
-    /// <summary>
-    /// Starts a backup. archive/progress, then archive/done or archive/failed follow. Reflections
-    /// only writes just the appraisal entries, and backs up no consultation.
-    /// </summary>
-    Task BackUpAsync(
-        string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false);
-
-    /// <summary>Starts a restore, or on a dry run only reads the file and counts.</summary>
-    Task RestoreAsync(string path, string password, bool dryRun);
-
-    Task<NoteTierState> SetNoteTierAsync(string tier);
-
-    /// <summary>Moves speech recognition to "GPU" or "NPU" in place. An asr/device
-    /// notification says when it is ready.</summary>
-    Task<AsrDeviceState> SetAsrDeviceAsync(string device);
-
+/// <summary>Note and patient sheet generation, edits and translation.</summary>
+public interface INoteApi : IEngineLink
+{
     Task SetNoteOptionsAsync(string style, string detail);
 
     Task RegenerateNoteAsync(string style, string detail, bool confirmed = false);
@@ -106,7 +109,10 @@ public interface IEngineApi
     Task TranslatePatientAsync(string id, string language);
 
     Task<IReadOnlyList<string>> LanguagesAsync();
+}
 
+public interface IGuidanceApi : IEngineLink
+{
     Task<CorporaStatus> GuidanceCorporaAsync();
 
     Task SearchGuidanceAsync(string id);
@@ -127,7 +133,10 @@ public interface IEngineApi
     Task<string> OpenDocumentAsync(long id);
 
     Task SetResearchGuidanceAsync(bool include);
+}
 
+public interface IEnrolmentApi : IEngineLink
+{
     Task<AnchorStatus> AnchorStatusAsync();
 
     Task ClearAnchorAsync();
@@ -137,7 +146,10 @@ public interface IEngineApi
     Task CancelEnrolmentAsync();
 
     Task FinishEnrolmentAsync();
+}
 
+public interface IReflectionApi : IEngineLink
+{
     Task<IReadOnlyList<ReflectionListing>> ListReflectionsAsync();
 
     Task<StoredReflection> GetReflectionAsync(string id);
@@ -151,9 +163,30 @@ public interface IEngineApi
     Task UpdateReflectionSummaryAsync(string id, string summary);
 
     Task DeleteReflectionAsync(string id);
+}
 
-    // Each demo call returns how many consultations were added or removed
-    Task<int> SeedDemoAsync();
+/// <summary>Encrypted backup and restore.</summary>
+public interface IArchiveApi : IEngineLink
+{
+    /// <summary>
+    /// Counts what a backup of the half-open UTC period would hold. Empty ends are open. With
+    /// the last backup's coverage it also counts what no backup holds.
+    /// </summary>
+    Task<ArchiveSummary> ArchiveSummaryAsync(
+        string periodStart, string periodEnd, ArchiveCoverage? covered = null);
 
-    Task<int> ClearDemoAsync();
+    /// <summary>
+    /// Starts a backup. Progress arrives as archive/progress, then archive/done or archive/failed.
+    /// reflectionsOnly writes appraisal entries only.
+    /// </summary>
+    Task BackUpAsync(
+        string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false);
+
+    /// <summary>Starts a restore, or on a dry run only reads the file and counts.</summary>
+    Task RestoreAsync(string path, string password, bool dryRun);
+
+    /// <summary>
+    /// Deletes the given consultations (e.g. after a verified backup) and returns the count.
+    /// </summary>
+    Task<int> RemoveSessionsAsync(IReadOnlyList<string> ids, bool deleteReflections);
 }

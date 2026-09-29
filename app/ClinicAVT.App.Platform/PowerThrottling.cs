@@ -7,9 +7,8 @@ using Windows.Win32.System.Threading;
 namespace ClinicAVT.App.Platform;
 
 /// <summary>
-/// Windows throttles windowless background processes (EcoQoS) once the user
-/// is idle, which can stretch a finalise by more than half. The engine is
-/// opted out here as well as by itself, so the state never rests on one call.
+/// Opts a process out of EcoQoS, which can slow a finalise by over half when the user is idle.
+/// The engine also does this itself.
 /// </summary>
 [SupportedOSPlatform("windows8.0")]
 public static class PowerThrottling

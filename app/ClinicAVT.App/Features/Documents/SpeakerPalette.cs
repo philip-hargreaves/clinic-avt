@@ -3,8 +3,7 @@ using Microsoft.UI.Xaml;
 namespace ClinicAVT.App.Features.Documents;
 
 /// <summary>
-/// Maps speaker roles to their colour styles. The brushes are theme resources, so each
-/// element resolves them for its own theme.
+/// The brushes are theme resources, so each element resolves them for its own theme.
 /// </summary>
 public static class SpeakerPalette
 {

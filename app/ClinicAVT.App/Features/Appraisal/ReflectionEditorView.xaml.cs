@@ -36,7 +36,7 @@ public sealed partial class ReflectionEditorView : UserControl
 
     private void OnTitleCommitted(object sender, RoutedEventArgs e) => UiEvent.Run(ViewModel.SaveTitleAsync);
 
-    private void OnSummaryCommitted(object sender, RoutedEventArgs e) => UiEvent.Run(ViewModel.SaveSummaryAsync);
+    private void OnSummaryCommitted(object sender, RoutedEventArgs e) => UiEvent.Run(ViewModel.CaseStudy.SaveAsync);
 
     // Pressing Enter or leaving the box turns the typed line into an entry
     private void OnDraftKeyDown(object sender, KeyRoutedEventArgs e)
@@ -44,10 +44,10 @@ public sealed partial class ReflectionEditorView : UserControl
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
             e.Handled = true;
-            UiEvent.Run(() => ViewModel.AddDraftCommand.ExecuteAsync(null));
+            UiEvent.Run(() => ViewModel.Guidance.AddDraftCommand.ExecuteAsync(null));
         }
     }
 
     private void OnDraftLeft(object sender, RoutedEventArgs e) =>
-        UiEvent.Run(() => ViewModel.AddDraftCommand.ExecuteAsync(null));
+        UiEvent.Run(() => ViewModel.Guidance.AddDraftCommand.ExecuteAsync(null));
 }

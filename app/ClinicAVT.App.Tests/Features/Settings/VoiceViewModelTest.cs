@@ -2,6 +2,7 @@ using ClinicAVT.App.Core.Features.Settings;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
+using static ClinicAVT.App.Tests.Support.Wire;
 
 namespace ClinicAVT.App.Tests.Features.Settings;
 
@@ -11,7 +12,6 @@ public class VoiceViewModelTest
     public async Task SettingUpRunsTheDialogRereadsTheEngineAndTheHeadlineNamesEachStateOfThePrint()
     {
         var engine = new FakeEngineClient();
-        var status = TestSession.Status(engine);
         var dialogs = new FakeDialogService
         {
             OnEnrolment = () =>
@@ -19,9 +19,13 @@ public class VoiceViewModelTest
                 engine.AnchorOrigin = "enrolled";  // what the dialog's enrolment did
                 engine.AnchorEnrolledAt = new DateTimeOffset(2026, 9, 4, 14, 2, 0, TimeSpan.Zero)
                     .ToUnixTimeSeconds();
+                engine.RaiseNotification("anchor/enrolled",
+                    Params(new { ok = true, detail = "", speechSeconds = 34.0 }));
             },
         };
-        var voice = new VoiceViewModel(new EngineApi(engine), dialogs, new FakeSession(), status);
+        var shell = TestSession.Settings(engine, session: new FakeSession(), dialogs: dialogs);
+        var voice = shell.Get<VoiceViewModel>();
+        var status = shell.Line;
 
         await voice.RefreshAsync();
         Assert.False(voice.HasVoice);
@@ -32,7 +36,7 @@ public class VoiceViewModelTest
 
         await voice.SetUpVoiceCommand.ExecuteAsync(null);
 
-        Assert.Equal("enrolled", voice.Origin);
+        Assert.Equal(AnchorOrigin.Enrolled, voice.Origin);
         Assert.StartsWith("Set up on 4 Sep", voice.Headline);
         Assert.Contains("enrolment complete", status.LatestActivity);
         Assert.False(voice.Busy);
@@ -57,10 +61,11 @@ public class VoiceViewModelTest
     public async Task ForgettingWaitsForTheConsultationIsConfirmedThenClearsAndReportsBack()
     {
         var engine = new FakeEngineClient { AnchorOrigin = "accrued", AnchorSessions = 4 };
-        var status = TestSession.Status(engine);
         var dialogs = new FakeDialogService();
         var session = new FakeSession { ConsultationInProgress = true };
-        var voice = new VoiceViewModel(new EngineApi(engine), dialogs, session, status);
+        var shell = TestSession.Settings(engine, session: session, dialogs: dialogs);
+        var voice = shell.Get<VoiceViewModel>();
+        var status = shell.Line;
         await voice.RefreshAsync();
         Assert.True(voice.ForgetVoiceCommand.CanExecute(null));
 

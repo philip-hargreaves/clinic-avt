@@ -1,23 +1,34 @@
+using Microsoft.Extensions.DependencyInjection;
 using ClinicAVT.App.Core.Features.Settings;
+using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
-using ClinicAVT.Client;
 using static ClinicAVT.App.Tests.Support.Wire;
 
 namespace ClinicAVT.App.Tests.Features.Settings;
 
 public class EnrolmentViewModelTest
 {
+    private sealed class ChosenMic(string id) : IMicrophoneChoice
+    {
+        public string MicId => id;
+    }
+
+    private static EnrolmentViewModel Dialog(FakeEngineClient engine, string micId = "") =>
+        new TestShell(engine, configure: services =>
+            services.AddSingleton<IMicrophoneChoice>(new ChosenMic(micId))).Create<EnrolmentViewModel>();
+
     [Fact]
     public async Task StartAsksTheEngineProgressCountsClearSpeechThenFinishAndSuccessClose()
     {
         var engine = new FakeEngineClient();
-        using var enrolment = new EnrolmentViewModel(new EngineApi(engine), micId: "mic-7", seconds: 30);
+        using var enrolment = Dialog(engine, "mic-7");
         Assert.Equal(EnrolmentState.Ready, enrolment.State);
         Assert.Equal("Start", enrolment.PrimaryText);
         Assert.True(enrolment.KeepsOpen);
         Assert.Equal("Cancel", enrolment.CloseText);
 
-        // Progress before Start belongs to someone else's window
+        // Progress before Start comes from another window and is ignored
         engine.RaiseNotification("anchor/progress",
             Params(new { elapsed = 3.0, speech = 1.0, level = 0.9, clipped = true }));
         Assert.Equal(0, enrolment.Level);
@@ -26,7 +37,7 @@ public class EnrolmentViewModelTest
         await enrolment.PrimaryCommand.ExecuteAsync(null);
 
         var request = Assert.Single(engine.Requests, r => r.Method == "anchor/enrol");
-        Assert.Contains("\"seconds\":30", request.Params);
+        Assert.Contains("\"seconds\":120", request.Params);
         Assert.Contains("\"id\":\"mic-7\"", request.Params);
         Assert.Equal(EnrolmentState.Recording, enrolment.State);
         Assert.True(enrolment.Recording);
@@ -67,7 +78,7 @@ public class EnrolmentViewModelTest
     {
         var engine = new FakeEngineClient();
         engine.SetConnected(false);
-        var enrolment = new EnrolmentViewModel(new EngineApi(engine));
+        var enrolment = Dialog(engine);
 
         await enrolment.PrimaryCommand.ExecuteAsync(null);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "anchor/enrol");

@@ -14,29 +14,26 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 /// The microphone picker. It fetches the engine's list each time it opens. The choice is
 /// stored by id and falls back to another device only while that one is gone.
 /// </summary>
-public sealed partial class MicViewModel : ObservableObject
+public sealed partial class MicViewModel : ObservableObject, IMicrophoneChoice
 {
     private const string BluetoothNote = "    Bluetooth call mode - reduced recording quality";
 
-    private readonly IEngineApi _engine;
-    private readonly AppPreferences? _preferences;
-    private readonly ILogger? _logger;
+    private readonly IRecordingApi _engine;
+    private readonly AppPreferences _preferences;
+    private readonly ILogger<MicViewModel> _logger;
 
     // Empty means "the system default", which the engine pins
     private string _selectedId;
 
-    public MicViewModel(IEngineApi engine, AppPreferences? preferences = null,
-        IUiDispatcher? dispatcher = null, ILogger<MicViewModel>? logger = null)
+    public MicViewModel(
+        IRecordingApi engine, IEngineEvents events, AppPreferences preferences, ILogger<MicViewModel> logger)
     {
         _engine = engine;
         _preferences = preferences;
         _logger = logger;
-        _selectedId = preferences?.MicId ?? "";
+        _selectedId = preferences.MicId;
         // Refresh at connect so the label is right before the first open
-        if (dispatcher is not null)
-        {
-            engine.OnConnected(dispatcher, () => _ = RefreshAsync());
-        }
+        events.OnConnected(() => _ = RefreshAsync());
     }
 
     public ObservableCollection<MicDevice> Devices { get; } = [];
@@ -84,7 +81,7 @@ public sealed partial class MicViewModel : ObservableObject
         ?? Devices.FirstOrDefault(d => d.IsDefault)
         ?? Devices.FirstOrDefault();
 
-    /// <summary>Reloads the device list. Called when the picker opens.</summary>
+    /// <summary>Called when the picker opens.</summary>
     [RelayCommand]
     public async Task RefreshAsync()
     {
@@ -107,7 +104,7 @@ public sealed partial class MicViewModel : ObservableObject
         catch (Exception e)
         {
             // A failed refresh keeps the last list. The engine still resolves the device
-            _logger?.StepFailed("audio/inputs", e.Message);
+            _logger.StepFailed("audio/inputs", e.Message);
         }
 
         Changed();

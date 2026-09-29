@@ -12,7 +12,7 @@ namespace ClinicAVT.App.Core.Common;
 /// </summary>
 public static class UiEvent
 {
-    /// <summary>Logger for failures, set once at startup.</summary>
+    /// <summary>Set once at startup.</summary>
     public static ILogger? Logger { get; set; }
 
     /// <summary>

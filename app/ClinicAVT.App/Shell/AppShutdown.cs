@@ -6,12 +6,12 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Shell;
 
 /// <summary>
-/// Closes the app. It asks first during a recording, then saves the review's edits, lets the
-/// engine go and closes the connection, in that order. The engine leaves by itself, after
-/// finishing any note model load, so nothing is killed mid-GPU.
+/// Shuts down in order. It confirms if recording, saves review edits, releases the engine and
+/// closes the connection. The engine exits itself after any note model load, so nothing is killed
+/// mid-GPU.
 /// </summary>
 internal sealed class AppShutdown(
-    ConsultationViewModel session, IDialogService dialogs, EngineConnection connection,
+    IConsultation session, IDialogService dialogs, EngineConnection connection,
     IEngineHost host, ILogger<AppShutdown> logger)
 {
     /// <summary>False when the clinician chose to keep recording.</summary>

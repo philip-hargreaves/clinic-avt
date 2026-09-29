@@ -96,7 +96,6 @@ public class EngineSupervisorTest
 
         public FakeProcess Current => Launcher.Launched[^1];
 
-        // Crashes and waits out the policy's delay before the relaunch
         public void CrashAndWait(int exitCode)
         {
             var count = Launcher.Launched.Count;
@@ -116,7 +115,7 @@ public class EngineSupervisorTest
         Assert.Equal(new[] { EngineStatus.Running }, h.Statuses);
         Assert.Equal(1234, h.Host.EnginePid);
 
-        // A first crash after 90 s relaunches at once, and the report says what was going on
+        // A first crash after 90 s relaunches at once, and the report records the in-flight state
         h.Clock.Now += TimeSpan.FromSeconds(90);
         h.InFlight = "session/stop";
         h.Session.SessionPhase = "Finalising:Note";
@@ -201,7 +200,7 @@ public class EngineSupervisorTest
         Assert.Equal(EngineStatus.Stopped, h.Host.Status);
     }
 
-    // A closed app leaves its engine to finish a load. The next one takes it over
+    // A closed app's engine may still be finishing a load, and the next app adopts it
     [Fact]
     public void AnEngineStillServingIsTakenOverRatherThanCounted()
     {
@@ -217,7 +216,7 @@ public class EngineSupervisorTest
         Assert.Single(h.Launcher.Launched);
     }
 
-    // A reopened app finds its old engine busy with a first compile: it holds the pipe but
+    // A reopened app finds its old engine busy with a first compile. It holds the pipe but
     // cannot be adopted until it finishes. The app waits for it instead of counting crashes
     [Fact]
     public void AnEngineThatCannotBeAdoptedYetIsWaitedForNotCounted()

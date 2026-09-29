@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Core.Features.Guidance;
 using ClinicAVT.App.Features.Guidance;
 
@@ -38,14 +37,14 @@ public sealed partial class ReviewSurfaceView : UserControl
 
     public ReviewSurfaceView(
         TranscriptPaneView transcript, NoteEditorView note, PatientEditorView patient,
-        GuidanceSectionView guidance, ConsultationViewModel consultation, PageView page)
+        GuidanceSectionView guidance, PageViewModel pageView, PageView page)
     {
         _transcript = transcript;
         _note = note;
         _patient = patient;
         _guidance = guidance;
         _page = page;
-        _pageView = consultation.PageView;
+        _pageView = pageView;
         InitializeComponent();
 
         NarrowTabs.Add("Clinical note", _narrow[0]);
@@ -143,7 +142,6 @@ public sealed partial class ReviewSurfaceView : UserControl
         Fit();
     }
 
-    // The Guidelines tab shows only while the section has content
     private void PlaceGuidelines()
     {
         var shown = _guidance.ViewModel.Visible;

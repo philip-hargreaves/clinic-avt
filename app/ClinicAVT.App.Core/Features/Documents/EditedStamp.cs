@@ -22,6 +22,6 @@ public static class EditedStamp
             : local.ToString("d MMM", CultureInfo.CurrentCulture));
     }
 
-    public static string Now() =>
-        "Edited " + DateTimeOffset.Now.ToString("HH:mm", CultureInfo.CurrentCulture);
+    public static string Now(TimeProvider time) =>
+        "Edited " + time.GetLocalNow().ToString("HH:mm", CultureInfo.CurrentCulture);
 }

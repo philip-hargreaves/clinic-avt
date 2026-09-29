@@ -13,7 +13,7 @@ public interface IProcessMetrics
     long? PeakWorkingSetMbOf(string processName);
 
     /// <summary>
-    /// Memory held by this process plus every process of the named images, in GB: committed
+    /// Memory held by this process plus every process of the named images, in GB. Counts committed
     /// private bytes, which an idle process keeps when Windows trims its working set.
     /// </summary>
     double CommittedGb(params string[] processNames);

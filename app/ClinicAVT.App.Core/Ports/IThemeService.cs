@@ -1,7 +1,8 @@
+using ClinicAVT.App.Core.Preferences;
+
 namespace ClinicAVT.App.Core.Ports;
 
-/// <summary>Applies "system", "light" or "dark" to the window.</summary>
 public interface IThemeService
 {
-    void Apply(string theme);
+    void Apply(AppTheme theme);
 }

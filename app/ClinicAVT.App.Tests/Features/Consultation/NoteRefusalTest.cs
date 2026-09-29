@@ -10,7 +10,8 @@ public class NoteRefusalTest
     [Fact]
     public async Task ARefusalStaysOnTheRecordScreenSaysWhyAndOffersToWriteAnyway()
     {
-        var (session, engine, note) = TestSession.Create();
+        var shell = TestSession.Create();
+        var (session, engine, note) = shell;
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
@@ -20,11 +21,11 @@ public class NoteRefusalTest
         Assert.True(note.NoteRefused);
         Assert.Equal("a cooking video", note.RefusalReason);
         Assert.Equal(SessionState.Refused, session.State);
-        Assert.StartsWith("No note", session.Status.LatestActivity);
+        Assert.StartsWith("No note", shell.Line.LatestActivity);
         Assert.True(note.CanWriteAnyway);
-        Assert.True(note.WriteAnywayCommand.CanExecute(null));
+        Assert.True(shell.Commands.WriteAnywayCommand.CanExecute(null));
 
-        await note.WriteAnywayCommand.ExecuteAsync(null);
+        await shell.Commands.WriteAnywayCommand.ExecuteAsync(null);
 
         var request = Assert.Single(engine.Requests, r => r.Method == "note/regenerate");
         Assert.Contains("\"confirmed\":true", request.Params);
@@ -37,8 +38,9 @@ public class NoteRefusalTest
     [Fact]
     public async Task ATooShortRecordingIsRefusedWithoutTheOverrideAndDoneReturnsToIdle()
     {
-        var (session, engine, note) = TestSession.Create();
-        var controls = new SessionControlsViewModel(session, TestSession.Mic());
+        var shell = TestSession.Create();
+        var (session, engine, note) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
         await session.StartRecordingAsync();
         await session.StopRecordingAsync();
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
@@ -48,7 +50,7 @@ public class NoteRefusalTest
         Assert.True(note.NoteRefused);
         Assert.Equal("12 words; a note needs at least 25", note.RefusalReason);
         Assert.False(note.CanWriteAnyway);
-        Assert.False(note.WriteAnywayCommand.CanExecute(null));
+        Assert.False(shell.Commands.WriteAnywayCommand.CanExecute(null));
         Assert.Equal(SessionState.Refused, session.State);
         Assert.DoesNotContain(engine.Requests, r => r.Method == "note/regenerate");
         Assert.True(controls.RefusedVisible);

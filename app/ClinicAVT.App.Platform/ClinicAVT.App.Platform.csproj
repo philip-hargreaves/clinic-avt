@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The Win32, registry and WMI adapters of the Core ports. Core stays free of them -->
+  <!-- The Win32, registry, WMI and file adapters of the Core ports. Core stays free of them -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Platforms>AnyCPU;x64</Platforms>

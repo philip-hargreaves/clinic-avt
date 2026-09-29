@@ -2,10 +2,10 @@ using ClinicAVT.App.Core.Hosting;
 
 namespace ClinicAVT.App.Composition;
 
-/// <summary>Where the app keeps its files. One per-user folder, because unpackaged runs have no ApplicationData.</summary>
+/// <summary>One per-user folder, because unpackaged runs have no ApplicationData.</summary>
 public sealed record AppPaths(string LocalState)
 {
-    // LOCALAPPDATA first, as the engine reads it, so both keep to one folder when it is redirected
+    // LOCALAPPDATA first, as the engine does, so both use the same folder when it is redirected
     public static AppPaths Default { get; } = new(Path.Combine(
         Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } local
             ? local

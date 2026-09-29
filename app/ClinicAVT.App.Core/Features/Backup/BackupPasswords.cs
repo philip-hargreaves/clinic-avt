@@ -2,7 +2,6 @@ using System.Text;
 
 namespace ClinicAVT.App.Core.Features.Backup;
 
-/// <summary>The rules for the password a backup is locked with.</summary>
 public static class BackupPasswords
 {
     public const int MinimumLength = 8;
@@ -18,7 +17,7 @@ public static class BackupPasswords
         "clinicavt", "clinicavt1", "clinicavt123",
     ];
 
-    /// <summary>What is wrong with the password, or empty. The second box counts once typed in.</summary>
+    /// <summary>What is wrong, or empty. A mismatch counts once the second box has text.</summary>
     public static string Problem(string password, string again)
     {
         if (password.Length == 0)

@@ -43,7 +43,7 @@
             </controls:PageHeader.Commands>
         </controls:PageHeader>
 
-        <!-- The record control holds this region until stop, then the documents take it -->
+        <!-- Record control until stop, then the documents -->
         <Grid Grid.Row="1" Margin="24,0,24,16">
             <!-- The 2* and 3* rows put the record control at the optical centre, two fifths down. The
                  footnote hangs below it without moving it -->

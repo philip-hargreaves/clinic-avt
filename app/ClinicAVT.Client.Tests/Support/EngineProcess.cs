@@ -3,9 +3,6 @@ using System.Text;
 
 namespace ClinicAVT.Client.Tests.Support;
 
-/// <summary>
-/// Launches the real clinicavt_engine.exe and connects a verified client to it.
-/// </summary>
 internal sealed class EngineProcess : IAsyncDisposable
 {
     private const string DefaultPipeName = EngineInfo.PipeName;
@@ -107,8 +104,8 @@ internal sealed class EngineProcess : IAsyncDisposable
         return PipeTransport.ConnectAsync(_pipeName, ConnectTimeout, (uint)_process.Id);
     }
 
-    // Asks the engine to leave and waits, never kills: an engine stopped mid-GPU can wedge
-    // the driver. One that will not leave fails the test and is left running
+    // Asks the engine to leave and waits. It never kills, because an engine stopped mid-GPU can
+    // wedge the driver. One that will not leave fails the test and is left running
     public async ValueTask DisposeAsync()
     {
         if (!_process.HasExited)
@@ -149,7 +146,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         }
         catch (Exception e)
         {
-            // May have exited already; the wait checks
+            // May have exited already. The wait checks
             return $"engine/exit not delivered: {e.Message}";
         }
     }

@@ -6,4 +6,6 @@ namespace ClinicAVT.App.Core.Ports;
 public interface IMachineInfoProvider
 {
     MachineInfo Describe();
+
+    string MachineName { get; }
 }

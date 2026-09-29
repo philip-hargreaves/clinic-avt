@@ -15,7 +15,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="ClinicAVT" Subtitle="{x:Bind Status.DemoLabel, Mode=OneWay}" />
+        <TitleBar x:Name="AppTitleBar" Title="ClinicAVT" Subtitle="{x:Bind Status.SampleLabel, Mode=OneWay}" />
 
         <!-- A rail that starts closed and pushes the content aside. The pane stays on Mica and
              the content sits on the layer, with one hairline and square corners between them -->

@@ -1,28 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using ClinicAVT.App.Core.Features.Appraisal;
-using ClinicAVT.App.Core.Features.Sessions;
 using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Core.Shell;
 
-/// <summary>
-/// Navigation between the pages, with what leaving one and arriving at another means.
-/// </summary>
-public sealed partial class ShellViewModel : ObservableObject
+/// <summary>Page navigation, including what leaving and entering each page triggers.</summary>
+public sealed partial class ShellViewModel(INavigationService navigation, IEnumerable<INavigationGuard> guards)
+    : ObservableObject
 {
-    private readonly INavigationService _navigation;
-    private readonly SessionsViewModel _sessions;
-    private readonly AppraisalsViewModel _appraisals;
+    private readonly IReadOnlyList<INavigationGuard> _guards = [.. guards];
     private string? _current;
-
-    public ShellViewModel(
-        INavigationService navigation, SessionsViewModel sessions, AppraisalsViewModel appraisals)
-    {
-        _navigation = navigation;
-        _sessions = sessions;
-        _appraisals = appraisals;
-    }
 
     /// <summary>
     /// Shows the page with that key. Leaving Appraisal saves whatever reflection is open.
@@ -31,18 +18,13 @@ public sealed partial class ShellViewModel : ObservableObject
     [RelayCommand]
     public async Task NavigateAsync(string key)
     {
-        if (_current == Routes.Appraisals && key != Routes.Appraisals)
+        foreach (var guard in _guards)
         {
-            await _appraisals.LeaveAsync().ConfigureAwait(true);
-        }
-
-        if (key == Routes.Consultation)
-        {
-            await _sessions.CloseStoredReviewAsync().ConfigureAwait(true);
+            await guard.OnNavigatingAsync(_current, key).ConfigureAwait(true);
         }
 
         _current = key;
-        _navigation.NavigateTo(key);
+        navigation.NavigateTo(key);
     }
 
     [RelayCommand]
