@@ -3,8 +3,8 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
-/// Settings that would disturb a consultation being recorded or finalised wait until it is over.
-/// The engine refuses, with its reason, anything that clashes with its own work still running.
+/// Blocks settings changes that would disturb a consultation being recorded or finalised. The
+/// engine refuses other clashes itself.
 /// </summary>
 internal static class ConsultationGuard
 {

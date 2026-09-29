@@ -8,7 +8,6 @@ using static ClinicAVT.App.Tests.Support.Wire;
 
 namespace ClinicAVT.App.Tests.Shell;
 
-/// <summary>The live numbers behind the status bar's model chips.</summary>
 public class StatusBarMetricsTest
 {
     private static (TestShell Shell, ModelChips Status, FakeEngineClient Engine) Create()
@@ -18,9 +17,9 @@ public class StatusBarMetricsTest
         return (shell, shell.Chips, engine);
     }
 
-    // A load behind a ready app stays off the status line: nothing waits on it. The time is
-    // counted for the places that do wait, and a switch's idle step cannot end the count. A first
-    // move to the NPU compiles for minutes, so its line counts the time and never looks hung
+    // A background load with the app ready stays off the status line. Its time is still counted and
+    // a switch's idle step cannot end it. A first NPU move compiles for minutes, so its line shows
+    // the time
     [Fact]
     public void AModelLoadAndADeviceMoveCountTheirTimeUntilTheyEnd()
     {
@@ -32,7 +31,7 @@ public class StatusBarMetricsTest
         shell.Host.RaiseStatus(EngineStatus.Running);
 
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "loading" }));
-        // A switch announces idle between the old model and the new: no flash of Ready
+        // A switch announces idle between the old model and the new, so Ready must not flash
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "idle" }));
         engine.RaiseNotification("note/model", Params(new { tier = "accuracy", state = "loading" }));
         clock.Advance(TimeSpan.FromSeconds(48));
@@ -78,8 +77,8 @@ public class StatusBarMetricsTest
         Assert.Equal(15.3, status.TokensPerSecond);
         Assert.Contains("15.3 tok/s", status.NoteChip);
 
-        // The ready event carries the whole generation's average, which
-        // holds and is labelled as what it is
+        // note/ready carries the whole-generation average, which the chip keeps and labels as an
+        // average
         engine.RaiseNotification("note/ready",
             Params(new { text = "The note.", tokensPerSecond = 14.2 }));
         Assert.Equal(14.2, status.TokensPerSecond);
@@ -87,7 +86,7 @@ public class StatusBarMetricsTest
         Assert.False(status.NoteActive);
         Assert.Contains("Averaged 14.2 tok/s", status.NoteChip);
 
-        // The translator is another model: its rate never reaches the note chip
+        // The translator is another model, so its rate never reaches the note chip
         engine.RaiseNotification("translate/partial", Params(new { text = "Twoja", tokensPerSecond = 95.2 }));
         engine.RaiseNotification("translate/ready", Params(new { text = "Twoja notatka.", language = "Polish", tokensPerSecond = 98.1 }));
         Assert.Equal(14.2, status.TokensPerSecond);

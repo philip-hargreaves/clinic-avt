@@ -2,7 +2,6 @@ using System.Text.Json;
 
 namespace ClinicAVT.App.Tests.Support;
 
-/// <summary>Waiting for fire-and-forget work to land, by its effect.</summary>
 internal static class Waits
 {
     private static readonly TimeSpan DefaultLimit = TimeSpan.FromSeconds(5);

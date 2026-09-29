@@ -9,7 +9,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>Privacy settings: history switch, erase all and sample data.</summary>
 public sealed partial class PrivacySettings : ObservableObject
 {
     private readonly AppPreferences _preferences;
@@ -107,7 +106,6 @@ public sealed partial class PrivacySettings : ObservableObject
     private void PersistKeepConsultations(bool value) =>
         _preferences.Update(p => p.KeepConsultations = value);
 
-    /// <summary>The Back up card's line: what a backup is, and when the last one was made.</summary>
     public string BackupDescription =>
         "Save consultations to a password-protected file. "
         + (_preferences.LastBackup is { } last

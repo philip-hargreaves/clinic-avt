@@ -6,7 +6,7 @@
     IsHitTestVisible="False">
 
     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-        <!-- Readings arrive ten times a second; the transitions glide between them -->
+        <!-- Readings arrive at 10 Hz and the transitions smooth between them -->
         <Ellipse x:Name="Glow">
             <Ellipse.ScaleTransition>
                 <Vector3Transition Duration="0:0:0.12" />

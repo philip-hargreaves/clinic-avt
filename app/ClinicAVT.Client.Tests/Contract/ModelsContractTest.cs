@@ -2,9 +2,6 @@ using ClinicAVT.Client.Tests.Support;
 
 namespace ClinicAVT.Client.Tests.Contract;
 
-/// <summary>
-/// The engine/models method against the real engine and staged manifests.
-/// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
 public class ModelsContractTest

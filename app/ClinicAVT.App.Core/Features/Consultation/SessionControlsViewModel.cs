@@ -104,12 +104,13 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public ReviewCommandsViewModel Commands { get; }
 
-    // Idle only: the device is pinned from Record, and Finish consultation takes the cell in review
+    // Shown only when idle. The mic is fixed from Record, and Finish consultation takes this slot
+    // in review
     public bool MicPickerVisible => _session.State == SessionState.Idle;
 
     public string MicTip => _mic.FullName;
 
-    // The centre holds until the note streams. Panes and centre never show together
+    // Shown until the note starts streaming, never together with the panes
     public bool CentreStageVisible =>
         _session.State is SessionState.Idle or SessionState.Recording or SessionState.Refused
         || _session.State == SessionState.Finalising && _session.Phase != FinalisePhase.Streaming;
@@ -135,11 +136,10 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     private bool CanStartRecording() =>
         _session.State == SessionState.Idle && _session.EngineReady && _session.ModelsReady;
 
-    /// <summary>Opens the import dialog, on the dropped file when given one.</summary>
     [RelayCommand(CanExecute = nameof(CanImportRecording))]
     private Task ImportRecording(string? path) => _session.ImportRecordingAsync(path);
 
-    // From idle, or from a review the import then ends
+    // An import can also start from review, which it ends
     private bool CanImportRecording() =>
         _session.State is SessionState.Idle or SessionState.Review or SessionState.Refused
         && _session.EngineReady && _session.ModelsReady;

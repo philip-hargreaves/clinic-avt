@@ -15,7 +15,6 @@ public class DocumentExportViewModelTest
         return (shell.Get<DocumentExportViewModel>(), shell.Note, shell.Clipboard, shell.Picker, shell.Line, shell);
     }
 
-    // The patient takes the sheet home in their language, and the record shows what they were given
     [Fact]
     public async Task CopyPutsTheDocumentOnTheClipboardWithItsTranslationOnceThereIsOne()
     {

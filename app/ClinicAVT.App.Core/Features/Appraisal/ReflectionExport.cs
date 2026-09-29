@@ -3,9 +3,7 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
-/// <summary>
-/// One appraisal reflection as it leaves the device, without identifiers and dated to the month.
-/// </summary>
+/// <summary>One reflection as exported, without identifiers and dated to the month.</summary>
 public sealed record ReflectionEntry(
     string Title, string Month, string Summary, string Happened, string Learned, string Next)
 {

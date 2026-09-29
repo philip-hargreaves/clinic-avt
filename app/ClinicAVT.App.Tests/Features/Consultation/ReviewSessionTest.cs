@@ -7,7 +7,6 @@ using ClinicAVT.App.Tests.TestDoubles;
 
 namespace ClinicAVT.App.Tests.Features.Consultation;
 
-/// <summary>A stored session opened for review through the consultation VM.</summary>
 public class ReviewSessionTest
 {
     [Fact]

@@ -41,7 +41,6 @@ public class AppraisalsViewModelTest
         Assert.Equal("Sep", page.Months[8].Name);
         Assert.Equal(DateTimeOffset.Now.Year == 2026 ? 1 : 0, page.Months.Count(m => m.Current));
 
-        // Pressing a month narrows the year to it and pressing it again widens it
         page.ToggleMonth(9);
         Assert.Equal(9, page.MonthFilter);
         Assert.Equal(["a", "b"], page.Cards.Select(c => c.Id));

@@ -1,6 +1,5 @@
 namespace ClinicAVT.App.Core.Features.Consultation;
 
-/// <summary>The consultation under review and what the store holds for it.</summary>
 public sealed class ReviewedSession
 {
     /// <summary>The session the documents belong to, null before a stop or an open.</summary>
@@ -25,6 +24,6 @@ public sealed class ReviewedSession
     /// </summary>
     public bool Regenerating { get; set; }
 
-    // The stored note while an example case stands in for it, so it can come back
+    // The stored note, kept while an example case replaces it
     public string? OriginalNote { get; set; }
 }

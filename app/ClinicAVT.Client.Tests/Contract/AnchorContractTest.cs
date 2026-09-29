@@ -3,17 +3,13 @@ using ClinicAVT.Client.Tests.Support;
 
 namespace ClinicAVT.Client.Tests.Contract;
 
-/// <summary>
-/// The anchor methods against the real engine.
-/// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
 public class AnchorContractTest
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
-    // Two seconds of silence stand in for the microphone. The window elapses with no speech
-    // heard, and the outcome says so without seeding a print
+    // With 2 s of silence as the mic, enrolment reports no speech and stores no voiceprint
     [Fact]
     public async Task AFreshStoreHasNoVoiceprintClearIsIdempotentAndEnrolmentRefusesHonestly()
     {

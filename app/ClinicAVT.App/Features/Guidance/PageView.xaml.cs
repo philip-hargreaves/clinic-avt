@@ -8,7 +8,6 @@ using ClinicAVT.App.Adapters;
 
 namespace ClinicAVT.App.Features.Guidance;
 
-/// <summary>A page of an added document with the cited lines marked.</summary>
 public sealed partial class PageView : UserControl
 {
     // Glyph boxes are tight, so a mark reaches a little past the letters

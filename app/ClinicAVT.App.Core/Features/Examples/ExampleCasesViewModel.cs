@@ -58,13 +58,12 @@ public sealed partial class ExampleCasesViewModel : ObservableObject
     public IReadOnlyList<string> ExampleCaseTitles =>
         [OriginalNoteTitle, .. ExampleCases.Select(c => c.Title)];
 
-    /// <summary>True while an example case shows in place of the stored note.</summary>
     public bool ExampleShown => _review.OriginalNote is not null;
 
     /// <summary>
-    /// A written case stands in for the note of a sample record and is searched as the
-    /// note is. The stored note is kept aside and written back by
-    /// <see cref="RestoreOriginalNoteAsync"/> or on leaving.
+    /// Shows an example case in place of a sample record's note and searches guidance for it as
+    /// for a note. The stored note is written back by <see cref="RestoreOriginalNoteAsync"/> or
+    /// on leaving.
     /// </summary>
     public async Task ApplyExampleCaseAsync(ExampleCase example)
     {

@@ -5,9 +5,8 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Core.Features.Consultation;
 
 /// <summary>
-/// The heading over the live review. It says when the consultation started, worded as the
-/// inbox lists it. The engine's label shows only in Sessions, so the heading never changes
-/// underfoot.
+/// Shows the start time formatted as in the inbox, because the engine's label can change while
+/// the review is open.
 /// </summary>
 public sealed partial class ConsultationHeaderViewModel : ObservableObject
 {
@@ -31,7 +30,6 @@ public sealed partial class ConsultationHeaderViewModel : ObservableObject
             Title = Words.LocalTime(import.StartedAt) is { } started ? SessionText.Heading(started) : "";
     }
 
-    /// <summary>"Thursday 25 September, 15:09", set as a recording or an import starts.</summary>
     [ObservableProperty]
     public partial string Title { get; private set; } = "";
 

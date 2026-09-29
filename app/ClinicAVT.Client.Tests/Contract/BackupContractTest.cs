@@ -4,7 +4,7 @@ using ClinicAVT.Client.Tests.Support;
 namespace ClinicAVT.Client.Tests.Contract;
 
 /// <summary>
-/// Back up, delete everything, restore: the round trip against the real engine and file.
+/// Back up, delete everything and restore, against the real engine and file.
 /// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]

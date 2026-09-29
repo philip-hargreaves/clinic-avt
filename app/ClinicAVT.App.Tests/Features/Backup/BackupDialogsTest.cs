@@ -125,8 +125,8 @@ public class BackupDialogsTest
         Assert.Equal("", saving.OneDriveLine);
     }
 
-    // Appraisal entries alone: counted, named and worded as reflections, with nothing to remove and
-    // no change to when consultations were last backed up
+    // A reflections-only backup is worded as reflections, removes nothing and keeps the
+    // consultation backup date
     [Fact]
     public async Task AReflectionsOnlyBackupHoldsNoConsultationAndRestoresAsReflections()
     {
@@ -227,7 +227,7 @@ public class BackupDialogsTest
         Assert.StartsWith("The backup could not be saved there.", backup.Error);
         Assert.EndsWith("Nothing on this computer has changed.", backup.Error);
 
-        // Every fixed code has its own words, and none of them uses the engine's vocabulary
+        // Each code has its own message, free of engine terms
         foreach (var code in Enum.GetValues<ArchiveError>())
         {
             foreach (var job in new[] { ArchiveJob.Backup, ArchiveJob.Restore })

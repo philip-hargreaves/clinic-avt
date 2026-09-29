@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ClinicAVT.Client;
 
-// Engine reply records. Defaults let sparse replies parse; a null string means the field
+// Engine reply records. Defaults let sparse replies parse. A null string means the field
 // was absent
 
 public sealed record EngineReadiness(bool FirstUse = false, bool Ready = true, bool StrayNoteHost = false)
@@ -33,8 +33,8 @@ public sealed record AudioInput(
     bool Bluetooth = false);
 
 /// <summary>
-/// An audio file's length, and when it was recorded as an ISO UTC instant: the container's
-/// own time, else the file's modified time.
+/// An audio file's length, and when it was recorded as an ISO UTC instant. That is the
+/// container's own time, else the file's modified time.
 /// </summary>
 public sealed record RecordingInfo(double Seconds = 0, string? RecordedAt = null);
 
@@ -98,7 +98,6 @@ public sealed record GuidancePage(
     public IReadOnlyList<PassageBox> Boxes { get; init; } = [];
 }
 
-/// <summary>One recommendation of a guidance search, as the wire gives it.</summary>
 public sealed record GuidanceResult(
     string? Corpus = null, string? ChunkId = null, string? Code = null, string? Number = null,
     string? Title = null, string? Section = null, string? Text = null, string? Url = null,

@@ -4,9 +4,7 @@ namespace ClinicAVT.App.Core.Common;
 
 public static class FilePickerExtensions
 {
-    /// <summary>
-    /// Asks where to save and writes the text there. The path, or null when cancelled.
-    /// </summary>
+    /// <summary>Returns the path, or null when cancelled.</summary>
     public static async Task<string?> SaveTextAsync(
         this IFilePicker picker, ITextFiles files, string suggestedName, string typeLabel, string extension,
         string text)

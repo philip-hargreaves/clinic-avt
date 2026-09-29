@@ -7,7 +7,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
 
-/// <summary>The saves, rewrites, translation and reflection of the documents under review.</summary>
 public sealed class DocumentActions(
     INoteApi engine, IStatusLine status, ReviewedSession review, SessionRecorder recorder,
     NoteViewModel note, PatientSheetViewModel patient, GuidanceViewModel guidance,

@@ -8,10 +8,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
 
-/// <summary>
-/// The consultation under review, just sealed or reopened from the store: opening it, leaving it
-/// and saving what was edited in place.
-/// </summary>
 public sealed class SessionReview
 {
     private readonly ISessionStoreApi _engine;
@@ -74,8 +70,7 @@ public sealed class SessionReview
     }
 
     /// <summary>
-    /// A stored session becomes the review as if it had just been sealed. The same panes show,
-    /// and regenerate, translate and save act on it. It is refused while recording. Unsaved
+    /// Opens a stored session in review as if just sealed. It is refused while recording. Unsaved
     /// edits to the previous review are saved first.
     /// </summary>
     public async Task<bool> OpenStoredSessionAsync(string id, string startedLabel = "",
@@ -156,8 +151,8 @@ public sealed class SessionReview
     }
 
     /// <summary>
-    /// Leaves the review or a refusal. Edits are saved and the panes clear. Telling the engine
-    /// deletes a refused session.
+    /// Leaves the review or a refusal. It saves edits, clears the panes and closes the session,
+    /// which deletes a refused one.
     /// </summary>
     public async Task CloseReviewAsync()
     {
@@ -181,8 +176,7 @@ public sealed class SessionReview
         _status.Append("Ready");
     }
 
-    // In-place edits persist without a click. Whatever differs from the store when the
-    // clinician moves on is saved as their wording
+    // On leaving, edits that differ from the store are saved as the clinician's wording
     private async Task AutosaveReviewAsync()
     {
         if (_recorder.State != SessionState.Review || _review.FinalisedSessionId is null)

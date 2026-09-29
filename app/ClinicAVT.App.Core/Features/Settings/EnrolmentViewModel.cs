@@ -20,7 +20,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
     /// <summary>What the engine needs before it will make a print.</summary>
     public const double NeededSpeechSeconds = 20;
 
-    /// <summary>Where the bar fills: five seconds past what the engine needs, so the reading
+    /// <summary>Where the bar fills. Five seconds past what the engine needs, so the reading
     /// is never rushed.</summary>
     public const double TargetSpeechSeconds = NeededSpeechSeconds + 5;
 
@@ -72,7 +72,6 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 
     public bool Recording => State == EnrolmentState.Recording;
 
-    /// <summary>Clear speech captured against the target, 0 to 1.</summary>
     public double Progress => Math.Clamp(Speech / TargetSpeechSeconds, 0, 1);
 
     public bool EnoughCaptured => Speech >= TargetSpeechSeconds;
@@ -110,7 +109,6 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 
     private async Task Start()
     {
-        // Without the engine there is nothing to record into
         if (!_engine.Connected)
         {
             Fail("recording is not available yet");

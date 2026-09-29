@@ -5,7 +5,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
 
-/// <summary>The guidance search for the note under review, and the results that come back.</summary>
 public sealed class ReviewGuidanceSearch(
     IGuidanceApi engine, IStatusLine status, IUiDispatcher dispatcher, TimeProvider time,
     ReviewedSession review, SessionRecorder recorder, DocumentActions documents, GuidanceViewModel guidance)
@@ -18,8 +17,8 @@ public sealed class ReviewGuidanceSearch(
     /// </summary>
     public TimeSpan DocumentsSettle { get; set; } = TimeSpan.FromSeconds(3);
 
-    // A batch of documents finishing one after another searches once, after the last lands.
-    // Every change starts a new generation and only the latest one's timer acts
+    // One search runs after the last document in a batch finishes. Each change bumps the generation
+    // and only the latest timer fires
     public void SearchAfterDocumentsSettle()
     {
         var generation = ++_documentsGeneration;

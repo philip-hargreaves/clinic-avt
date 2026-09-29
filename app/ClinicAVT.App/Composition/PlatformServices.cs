@@ -6,7 +6,6 @@ using ClinicAVT.App.Platform;
 
 namespace ClinicAVT.App.Composition;
 
-/// <summary>The WinUI and Win32 adapters behind the Core ports.</summary>
 internal static class PlatformServices
 {
     public static IServiceCollection AddPlatform(this IServiceCollection services, AppPaths paths)

@@ -1,9 +1,6 @@
 namespace ClinicAVT.Client;
 
-/// <summary>
-/// The engine as the shell uses it, with one method per request and typed replies.
-/// Method names and wire shapes live only in EngineApi.
-/// </summary>
+/// <summary>Typed engine requests. Wire names and shapes live only in EngineApi.</summary>
 public interface IEngineApi
     : IEngineControl, IRecordingApi, ISessionStoreApi, INoteApi, IGuidanceApi, IEnrolmentApi,
         IReflectionApi, IArchiveApi
@@ -21,12 +18,11 @@ public interface IEngineLink
     event Action<EngineNotification>? NotificationReceived;
 }
 
-/// <summary>Engine readiness, models and devices.</summary>
 public interface IEngineControl : IEngineLink
 {
     Task<EngineReadiness> ReadinessAsync();
 
-    /// <summary>Asks the engine to leave once this shell disconnects, as soon as no load keeps it.</summary>
+    /// <summary>Asks the engine to exit when idle after this shell disconnects.</summary>
     Task RequestExitAsync();
 
     Task<IReadOnlyList<ModelInfo>> ListModelsAsync();
@@ -64,7 +60,6 @@ public interface IRecordingApi : IEngineLink
     Task<string> ImportRecordingAsync(string path, string startedAt, bool retain);
 }
 
-/// <summary>Stored consultations and their documents.</summary>
 public interface ISessionStoreApi : IEngineLink
 {
     Task OpenSessionAsync(string id);
@@ -87,8 +82,8 @@ public interface ISessionStoreApi : IEngineLink
     Task DeleteSessionAsync(string id);
 
     /// <summary>
-    /// Erases every stored consultation and returns how many went. Reflections, with their case
-    /// summary, stay unless asked to go too.
+    /// Deletes all consultations and returns the count. Reflections are kept unless
+    /// deleteReflections is set.
     /// </summary>
     Task<int> DeleteAllSessionsAsync(bool deleteReflections = false);
 
@@ -116,7 +111,6 @@ public interface INoteApi : IEngineLink
     Task<IReadOnlyList<string>> LanguagesAsync();
 }
 
-/// <summary>Guidance search, corpora and added documents.</summary>
 public interface IGuidanceApi : IEngineLink
 {
     Task<CorporaStatus> GuidanceCorporaAsync();
@@ -141,7 +135,6 @@ public interface IGuidanceApi : IEngineLink
     Task SetResearchGuidanceAsync(bool include);
 }
 
-/// <summary>Voice enrolment.</summary>
 public interface IEnrolmentApi : IEngineLink
 {
     Task<AnchorStatus> AnchorStatusAsync();
@@ -155,7 +148,6 @@ public interface IEnrolmentApi : IEngineLink
     Task FinishEnrolmentAsync();
 }
 
-/// <summary>Appraisal reflections.</summary>
 public interface IReflectionApi : IEngineLink
 {
     Task<IReadOnlyList<ReflectionListing>> ListReflectionsAsync();
@@ -184,8 +176,8 @@ public interface IArchiveApi : IEngineLink
         string periodStart, string periodEnd, ArchiveCoverage? covered = null);
 
     /// <summary>
-    /// Starts a backup. archive/progress, then archive/done or archive/failed follow. Reflections
-    /// only writes just the appraisal entries, and backs up no consultation.
+    /// Starts a backup. Progress arrives as archive/progress, then archive/done or archive/failed.
+    /// reflectionsOnly writes appraisal entries only.
     /// </summary>
     Task BackUpAsync(
         string periodStart, string periodEnd, string path, string password, bool reflectionsOnly = false);
@@ -193,6 +185,8 @@ public interface IArchiveApi : IEngineLink
     /// <summary>Starts a restore, or on a dry run only reads the file and counts.</summary>
     Task RestoreAsync(string path, string password, bool dryRun);
 
-    /// <summary>Erases the given consultations, as after a checked backup, and returns how many went.</summary>
+    /// <summary>
+    /// Deletes the given consultations (e.g. after a verified backup) and returns the count.
+    /// </summary>
     Task<int> RemoveSessionsAsync(IReadOnlyList<string> ids, bool deleteReflections);
 }

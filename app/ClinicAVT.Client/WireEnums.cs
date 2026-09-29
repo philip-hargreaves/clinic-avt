@@ -141,9 +141,9 @@ public enum ArchiveError
 }
 
 /// <summary>
-/// An enum as the wire spells it: the camel-case member name, or the name its
-/// JsonStringEnumMemberName gives. A string this build does not know, or null, reads as the
-/// default member.
+/// An enum as the wire spells it, which is the camel-case member name or the name its
+/// JsonStringEnumMemberName gives. A string this build does not know, or null, reads as the default
+/// member.
 /// </summary>
 public sealed class WireEnumConverter<T> : JsonConverter<T>
     where T : struct, Enum

@@ -29,7 +29,6 @@ public class ReadinessAndGuardsTest
         Assert.Contains(log.Lines, line => line.Contains("translate/languages failed"));
     }
 
-    // A missing model is reported on connect, and the refused start gives the reason
     [Fact]
     public async Task AMissingModelIsNamedOnConnectAndWhenRecordingIsRefused()
     {

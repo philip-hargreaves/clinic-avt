@@ -10,8 +10,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
 /// <summary>
-/// The guidance a reflection refers to: the consultation's guidance, ticked, and lines the
-/// clinician added. Every change is saved through the owning reflection.
+/// The guidance a reflection refers to. That is the consultation's guidance the clinician ticked
+/// and the lines they added. Every change is saved through the owning reflection.
 /// </summary>
 public sealed partial class ReflectionReferencesViewModel : ObservableObject
 {
@@ -104,7 +104,6 @@ public sealed partial class ReflectionReferencesViewModel : ObservableObject
         _savedAdded = AddedTitles();
     }
 
-    // The ticked rows, then what the clinician added, each a reference of its own
     public List<ReflectionReference> Ticked() =>
         [.. References.Where(r => r.Ticked).Select(r => r.Stored), .. Added.Select(r => r.Stored)];
 

@@ -8,10 +8,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>
-/// The theme, the transcription device and the developer tools. The tools are the metrics
-/// chips, the performance log and its report.
-/// </summary>
 public sealed partial class AppearanceAndDiagnostics : ObservableObject
 {
     private readonly AppPreferences _preferences;
@@ -113,7 +109,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         }
     }
 
-    /// <summary>The engine's word on a move in progress.</summary>
     private void Apply(AsrDeviceState state)
     {
         if (state.State == ModelState.Ready)
@@ -139,7 +134,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         }
     }
 
-    // A move that could not happen leaves the toggle and the saved choice where they were
+    // Revert the toggle and the saved choice after a failed move
     private void TakeBack(bool npu, string reason)
     {
         _reverting = true;
@@ -184,7 +179,6 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
     [NotifyPropertyChangedFor(nameof(ExportDescription))]
     public partial string ExportResult { get; private set; } = "";
 
-    /// <summary>The Export row's line, which shows the last outcome once there is one.</summary>
     public string ExportDescription =>
         ExportResult.Length > 0 ? ExportResult : "Saves the report as an HTML file";
 

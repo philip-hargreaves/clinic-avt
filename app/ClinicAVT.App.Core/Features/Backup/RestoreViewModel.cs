@@ -114,7 +114,6 @@ public sealed partial class RestoreViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string DoneLine { get; private set; } = "";
 
-    // What the dry run found to add
     private int ToAdd { get; set; }
 
     [RelayCommand]

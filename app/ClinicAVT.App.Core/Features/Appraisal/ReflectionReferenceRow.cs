@@ -18,7 +18,6 @@ public sealed partial class ReflectionReferenceRow : ObservableObject
         Ticked = ticked;
     }
 
-    /// <summary>A row from one review card, with the words the export needs.</summary>
     public static ReflectionReferenceRow From(GuidanceCard card, bool ticked)
     {
         var first = card.Recommendations[0];
@@ -40,9 +39,7 @@ public sealed partial class ReflectionReferenceRow : ObservableObject
     /// <summary>"NG100", empty for an added document.</summary>
     public string Reference => Stored.Reference;
 
-    /// <summary>
-    /// The guideline or document title, after the reference unless it is the reference.
-    /// </summary>
+    /// <summary>The title, empty when it is the same as the reference.</summary>
     public string Title => Stored.Title == Stored.Reference ? "" : Stored.Title;
 
     /// <summary>"NICE", or "Added document, pages 19 and 21".</summary>

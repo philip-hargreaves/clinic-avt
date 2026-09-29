@@ -67,9 +67,8 @@ public sealed partial class SessionsViewModel : ObservableObject, INavigationGua
     partial void OnQueryChanged(string value) => Regroup();
 
     /// <summary>
-    /// True when Keep consultations is off and nothing is stored, so the page explains itself
-    /// instead of showing a bare empty list. Existing history always shows, and only the
-    /// clinician empties it.
+    /// True when Keep consultations is off and nothing is stored, so the page explains the empty
+    /// list. Existing history still shows.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectHintVisible), nameof(NoneOpen))]
@@ -86,12 +85,10 @@ public sealed partial class SessionsViewModel : ObservableObject, INavigationGua
         }
     }
 
-    /// <summary>True while the selected session is open in the panes.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectHintVisible), nameof(NoneOpen))]
     public partial bool DetailOpen { get; private set; }
 
-    /// <summary>The hint in the reading pane when nothing is open.</summary>
     public bool SelectHintVisible => !DetailOpen && !EmptyBecauseOff;
 
     /// <summary>True when consultations are kept and there are none yet.</summary>
@@ -99,7 +96,6 @@ public sealed partial class SessionsViewModel : ObservableObject, INavigationGua
     [NotifyPropertyChangedFor(nameof(NoneOpen))]
     public partial bool NothingStored { get; private set; }
 
-    /// <summary>True when there is a list and nothing from it is open.</summary>
     public bool NoneOpen => SelectHintVisible && !NothingStored;
 
     /// <summary>The open session's label. Editing it renames the session.</summary>
@@ -260,7 +256,6 @@ public sealed partial class SessionsViewModel : ObservableObject, INavigationGua
         }
     }
 
-    /// <summary>Commits an edited title as the session's label.</summary>
     public async Task RenameAsync()
     {
         if (Selected is not { } row)

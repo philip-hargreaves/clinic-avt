@@ -45,10 +45,9 @@ public sealed class StatusBarViewModel : ObservableObject
 
     public ModelChips Chips { get; }
 
-    // One status on screen, replaced as things happen. A storage fault outranks everything
-    // while the engine runs, abnormal readiness outranks activity, and activity outranks Ready.
-    // A note model loading behind a ready app is not shown here: nothing waits on it, and the
-    // places that do wait say so themselves
+    // One status shows at a time. A storage fault while the engine runs comes first, then abnormal
+    // readiness, then activity, then Ready. A background note model load is not shown, because the
+    // screens that wait on it show their own line
     public string DisplayLabel =>
         _engine.Running && _line.StorageFault.Length > 0 ? _line.StorageFault
         : _engine.Running && ShowsSetup ? _models.SetupLine

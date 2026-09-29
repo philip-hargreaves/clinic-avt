@@ -5,7 +5,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>One document in the guidelines folder, as Settings lists it.</summary>
 public sealed partial class DocumentRow : ObservableObject
 {
     public DocumentRow(DocumentInfo document, IRelayCommand<DocumentRow> remove)
@@ -40,7 +39,7 @@ public sealed partial class DocumentRow : ObservableObject
     [ObservableProperty]
     public partial double Progress { get; private set; }
 
-    // What the ingest last said it was doing, Unknown before it starts
+    // The ingest's last reported phase, Unknown before it starts
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Waiting))]
     public partial IngestPhase Phase { get; private set; }

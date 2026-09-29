@@ -131,7 +131,6 @@ public sealed partial class SessionRecorder : ObservableObject
             : "Recording interrupted - consultation kept");
     }
 
-    // Back to idle with nothing of the live session left
     private void DropSession()
     {
         State = SessionState.Idle;
@@ -176,7 +175,8 @@ public sealed partial class SessionRecorder : ObservableObject
         _metrics.SessionStarted();
     }
 
-    /// <summary>An import begins: the audio is the file's length and nothing is metered yet.</summary>
+    /// <summary>An import begins. The audio is the file's length and nothing is metered
+    /// yet.</summary>
     internal void BeginImport(double seconds)
     {
         AudioSeconds = seconds;

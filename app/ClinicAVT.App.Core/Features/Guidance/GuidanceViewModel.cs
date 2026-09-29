@@ -8,8 +8,7 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Guidance;
 
 /// <summary>
-/// The Guidelines section of the review. The consultation view model owns the
-/// engine and feeds this from the wire. Nothing here talks to it.
+/// Fed from the wire by the consultation view model. It never calls the engine itself.
 /// </summary>
 public sealed partial class GuidanceViewModel : ObservableObject
 {
@@ -90,7 +89,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
     /// <summary>A typed query's cards while one shows, otherwise the note's.</summary>
     public ObservableCollection<GuidanceCard> Cards { get; } = [];
 
-    /// <summary>Raised when the section is reset for the next consultation.</summary>
     public event Action? Cleared;
 
     public bool Visible => Section != GuidanceSection.Hidden;
@@ -141,13 +139,11 @@ public sealed partial class GuidanceViewModel : ObservableObject
 
     public bool CaptionVisible => StateCaption.Length > 0 && !QueryShown;
 
-    /// <summary>A typed query is on screen in place of the note's cards.</summary>
     public bool QueryShown => _queryText.Length > 0;
 
     public string QueryHeader => QueryShown ? $"Search: '{_queryText}'" : "";
 
-    // What the section says when it has nothing to show. That is the search's own state, or
-    // why the engine cannot search yet
+    // With no cards, the caption gives the search state or why the engine cannot search yet
     public string StateCaption => Section switch
     {
         GuidanceSection.Hidden or GuidanceSection.Results => "",
@@ -212,7 +208,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
         ShowCards();
     }
 
-    /// <summary>The note arrived. A result or failure that beat it stands.</summary>
+    /// <summary>The note arrived. Any earlier result or failure is kept.</summary>
     public void NoteReady()
     {
         if (Section == GuidanceSection.FollowsNote)
@@ -242,7 +238,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Marks the result stale on guidance/documentsChanged. A note edit stays the stronger reason.
+    /// Marks the result stale on guidance/documentsChanged, unless a note edit already has.
     /// </summary>
     public void DocumentsChanged()
     {
@@ -290,7 +286,8 @@ public sealed partial class GuidanceViewModel : ObservableObject
 
     public void ApplyFailed() => Section = GuidanceSection.Failed;
 
-    /// <summary>A typed query's cards in place of the note's. Null results while it runs.</summary>
+    /// <summary>Shows a typed query's cards in place of the note's. Results are null while it
+    /// runs.</summary>
     public void ShowQuery(string text, IReadOnlyList<GuidanceRecommendation>? results)
     {
         _queryText = text;
@@ -298,7 +295,6 @@ public sealed partial class GuidanceViewModel : ObservableObject
         QueryChanged();
     }
 
-    /// <summary>Puts the note's cards back in place of a typed query.</summary>
     public void ClearQuery()
     {
         _queryText = "";

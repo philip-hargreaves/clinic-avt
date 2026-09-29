@@ -36,7 +36,7 @@ public sealed partial class PageViewModel(
     [NotifyPropertyChangedFor(nameof(SheetVisible), nameof(PlaceholderVisible))]
     public partial bool Loading { get; private set; }
 
-    /// <summary>Past a second and a half a caption says the page is still coming.</summary>
+    /// <summary>Set after 1.5 s without the page, for a still-loading caption.</summary>
     [ObservableProperty]
     public partial bool Slow { get; private set; }
 

@@ -8,8 +8,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Guidance;
 
 /// <summary>
-/// The Guidelines section's searches: the typed query, whose cards stand in for the note's, and
-/// searching the note again.
+/// The Guidelines section's searches. These are the typed query, whose cards replace the note's
+/// while it shows, and searching the note again.
 /// </summary>
 public sealed partial class GuidanceSearchViewModel : ObservableObject
 {
@@ -61,7 +61,7 @@ public sealed partial class GuidanceSearchViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(QueryCaption), nameof(QueryCaptionVisible))]
     public partial bool QueryFailed { get; private set; }
 
-    /// <summary>The box waits while either search runs. The button also needs a query.</summary>
+    /// <summary>Disabled while either search runs. The button also needs a query.</summary>
     public bool QueryBoxEnabled => _availability.Readiness == GuidanceReadiness.Ready && _guidance.Visible
         && !_guidance.Searching && !QuerySearching;
 
@@ -112,7 +112,7 @@ public sealed partial class GuidanceSearchViewModel : ObservableObject
 
     private bool CanClearQuery() => _guidance.QueryShown;
 
-    // A query reply after Clear or a new consultation belongs to nothing on screen
+    // Drop a query reply that arrives after Clear or a new consultation
     public void ApplyReady(GuidanceRecord result)
     {
         if (!QuerySearching)

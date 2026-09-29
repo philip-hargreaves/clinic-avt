@@ -6,7 +6,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
 
-/// <summary>The engine's pushes, each handed to the part of the consultation it concerns.</summary>
 public sealed class NotificationRouter
 {
     private readonly SessionRecorder _recorder;
@@ -67,7 +66,7 @@ public sealed class NotificationRouter
                 _import.OnImportProgress(progress);
                 break;
             case NotePartial chunk when NoteExpected:
-                // Writing is claimed only once tokens stream
+                // Show "Writing" only once tokens arrive
                 if (_note.ClinicalNoteText.Length == 0)
                 {
                     _status.Append("Writing clinical note", busy: true);
@@ -89,9 +88,8 @@ public sealed class NotificationRouter
                 _guidance.NoteReady();
                 SessionMetrics?.NoteReady(ready.TokensPerSecond);
                 break;
-            // A recording too short or not clinical leaves nothing to review, so the record
-            // region says why and offers the override. A refusal while already reviewing
-            // shows in the note pane instead
+            // After a stop, a refusal shows in the record area with the override.
+            // In review it shows in the note pane
             case NoteRefused refused when NoteExpected:
                 _note.RefusalReason = refused.Reason;
                 _note.WriteAnywayAvailable = refused.Overridable;
@@ -161,8 +159,8 @@ public sealed class NotificationRouter
             case GuidanceModelChanged:
                 _ = _readiness.LoadGuidanceReadinessAsync();
                 break;
-            // Results are keyed to the consultation on screen. A typed query has no id.
-            // A search replaced by a newer one says so and changes nothing
+            // Results are keyed to the consultation on screen. A typed query has no id. A
+            // superseded search changes nothing
             case GuidanceReady { Record.Detail: "superseded" }:
                 break;
             case GuidanceReady { Record.Id: null } ready:

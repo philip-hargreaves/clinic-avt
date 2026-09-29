@@ -6,7 +6,6 @@ using ClinicAVT.App.Core.Features.Appraisal;
 
 namespace ClinicAVT.App.Features.Appraisal;
 
-/// <summary>One journal card. It shows the entry's text when closed and the editor when open.</summary>
 public sealed partial class ReflectionCardView : UserControl
 {
     public static readonly DependencyProperty CardProperty = DependencyProperty.Register(

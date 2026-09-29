@@ -40,7 +40,6 @@ public class ReflectionViewModelTest
         reflection.Happened = "Mrs Patel was upset";
         Assert.Contains("Mrs Patel", reflection.Warning);
 
-        // Stored answers and summary come back as they were
         engine.ReflectionSummary = "A patient in their thirties with a cough.";
         engine.ReflectionAnswers = ("h", "l", "n");
         await reflection.LoadAsync("abc");
@@ -230,8 +229,6 @@ public class ReflectionViewModelTest
         Assert.Equal(mine, reflection.CaseStudy.Summary);
     }
 
-    // Summary requested during model load shows a wait placeholder.
-    // An engine restart drops the pending summary and clears the wait
     [Fact]
     public async Task ASummaryInFlightSaysWhatItWaitsForAndEndsWhenTheEngineGoes()
     {

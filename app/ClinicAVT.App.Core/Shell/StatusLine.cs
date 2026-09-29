@@ -32,7 +32,6 @@ public sealed partial class StatusLine : ObservableObject, IStatusLine
     /// <summary>Log-only detail, to the file. The displayed status stays concise.</summary>
     public void Log(string line) => _logger.Line(line);
 
-    /// <summary>Sets the status line and logs it.</summary>
     public void Append(string line, bool busy = false)
     {
         _logger.Line(line);
@@ -54,6 +53,5 @@ public sealed partial class StatusLine : ObservableObject, IStatusLine
         _logger.Line(StorageFault);
     }
 
-    /// <summary>A new consultation starts with the storage fault line cleared.</summary>
     private void ClearStorageFault() => StorageFault = "";
 }

@@ -7,7 +7,7 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Shell;
 
 /// <summary>
-/// The waits the status line counts: a note model load, a switch the user started and
+/// The waits the status line counts, which are a note model load, a switch the user started and
 /// first-time setup. One clock ticks while any of them runs.
 /// </summary>
 public sealed partial class ModelActivity : ObservableObject, IModelActivity
@@ -18,7 +18,7 @@ public sealed partial class ModelActivity : ObservableObject, IModelActivity
     private DateTimeOffset _loadSince;
     private bool _preparing;
     private DateTimeOffset _setupSince;
-    // A switch in progress: its status line, with {time} standing for the elapsed clock
+    // A switch in progress. Its status line has {time} standing for the elapsed clock
     private string? _switchLine;
     private DateTimeOffset _switchSince;
     private ITimer? _tick;
@@ -36,7 +36,7 @@ public sealed partial class ModelActivity : ObservableObject, IModelActivity
                 Resident?.Invoke();
             }
         });
-        // A load in progress is lost with the engine that was running it
+        // An engine restart loses any load in progress
         events.SubscribeConnection(connected =>
         {
             if (!connected)
@@ -47,10 +47,10 @@ public sealed partial class ModelActivity : ObservableObject, IModelActivity
         });
     }
 
-    /// <summary>The lane named the model it is loading or serving.</summary>
+    /// <summary>Raised with the name of the model the lane is loading or serving.</summary>
     public event Action<string>? Named;
 
-    /// <summary>A note/model notification said the lane's model is ready.</summary>
+    /// <summary>Raised when a note/model notification reports the lane's model ready.</summary>
     public event Action? Resident;
 
     /// <summary>A note model is loading. Loads can take minutes, so the line counts the time.</summary>

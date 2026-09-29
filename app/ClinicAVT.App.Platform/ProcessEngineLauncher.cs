@@ -10,9 +10,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Platform;
 
 /// <summary>
-/// Launches the engine without a race. The process starts suspended, joins a
-/// kill-on-close job and only then resumes, so nothing it spawns can escape the
-/// job. Engine stderr goes to a log file so failures can be diagnosed.
+/// Starts the engine suspended and resumes it only after it joins the kill-on-close job, so no
+/// child escapes the job. Stderr goes to a log file.
 /// </summary>
 public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
     string? stderrPath = null, Func<IEnumerable<string>>? extraArguments = null)
@@ -95,7 +94,7 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
 
         var handle = new SafeProcessHandle(opened.DangerousGetHandle(), ownsHandle: true);
         opened.SetHandleAsInvalid();
-        // Another program squatting on the pipe is never taken for the engine
+        // Reject another program holding the pipe
         if (!string.Equals(ImagePath(handle), Path.GetFullPath(exePath),
                 StringComparison.OrdinalIgnoreCase))
         {
@@ -109,7 +108,7 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
         }
         catch (Win32Exception)
         {
-            // Already in another app's job: it is watched all the same
+            // Already in another job. It is still watched through the handle
         }
 
         return new EngineProcess(handle, pid);
@@ -158,7 +157,6 @@ public sealed class ProcessEngineLauncher(string exePath, string arguments = "",
         }
     }
 
-    // An argument with a space is one argument to the engine
     private static string Quote(string argument) =>
         argument.Contains(' ') ? $"\"{argument}\"" : argument;
 

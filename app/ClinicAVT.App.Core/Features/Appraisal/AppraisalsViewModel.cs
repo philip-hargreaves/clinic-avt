@@ -9,7 +9,7 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
-/// <summary>The Appraisal page, a journal of reflections shown one year at a time.</summary>
+/// <summary>Shows reflections one year at a time.</summary>
 public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJournal, INavigationGuard
 {
     private readonly IReflectionApi _engine;
@@ -44,7 +44,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJ
     [ObservableProperty]
     public partial string CountLabel { get; private set; } = "";
 
-    /// <summary>True when there are no entries at all, so the page shows its empty state.</summary>
+    /// <summary>No reflections in any year.</summary>
     [ObservableProperty]
     public partial bool Empty { get; private set; } = true;
 
@@ -59,7 +59,6 @@ public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJ
 
     public string YearLabel => Year == 0 ? "" : Year.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>Pressing the year shows all of it.</summary>
     [RelayCommand]
     private void ShowWholeYear()
     {
@@ -92,9 +91,6 @@ public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJ
 
     private bool CanGoToNextYear() => _all.Any(c => c.Started.Year > Year);
 
-    /// <summary>
-    /// Pressing a month narrows the year to it. Pressing it again shows the year.
-    /// </summary>
     public void ToggleMonth(int month)
     {
         if (_all.All(c => c.Started.Year != Year || c.Started.Month != month))
@@ -142,7 +138,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJ
         }).ConfigureAwait(true);
     }
 
-    /// <summary>Opens one card and closes any other, which saves it.</summary>
+    /// <summary>Opens or closes the card. Opening it closes and saves any other.</summary>
     public async Task ToggleAsync(ReflectionCard card)
     {
         if (card.Expanded)
@@ -171,9 +167,7 @@ public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJ
             _status.Append("Reflection removed");
         });
 
-    /// <summary>
-    /// The Export reflections dialog. An open card saves first, so the file has its latest words.
-    /// </summary>
+    /// <summary>Saves any open card first so the export has its latest text.</summary>
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportReflections()
     {

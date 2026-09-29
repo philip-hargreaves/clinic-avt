@@ -28,7 +28,7 @@ public class MicViewModelTest
         Assert.Equal("No microphone found - connect one to record", mic.NoDevicesText);
         Assert.Equal("", mic.MicId);
 
-        // A single-microphone laptop, the common clinical case, reads cleanly
+        // Single built-in microphone, the common case
         engine.AudioInputs = [Array()];
         await mic.RefreshAsync();
         Assert.Equal("Microphone Array", mic.Label);
@@ -67,8 +67,7 @@ public class MicViewModelTest
         Assert.Equal("{bb}", preferences.MicId);
         Assert.Equal([false, true], mic.Rows.Select(r => r.IsChecked));
 
-        // With the headset unplugged the default stands in, and the saved
-        // choice survives for when it comes back
+        // An unplugged headset falls back to the default and keeps the saved choice
         engine.AudioInputs = [Array()];
         await mic.RefreshAsync();
         Assert.Equal("{aa}", mic.MicId);

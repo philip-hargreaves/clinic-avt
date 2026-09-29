@@ -4,9 +4,7 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Core.Shell;
 
-/// <summary>
-/// Navigation between the pages, with what leaving one and arriving at another means.
-/// </summary>
+/// <summary>Page navigation, including what leaving and entering each page triggers.</summary>
 public sealed partial class ShellViewModel(INavigationService navigation, IEnumerable<INavigationGuard> guards)
     : ObservableObject
 {

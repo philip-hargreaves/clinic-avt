@@ -28,7 +28,7 @@ public class EnrolmentViewModelTest
         Assert.True(enrolment.KeepsOpen);
         Assert.Equal("Cancel", enrolment.CloseText);
 
-        // Progress before Start belongs to someone else's window
+        // Progress before Start comes from another window and is ignored
         engine.RaiseNotification("anchor/progress",
             Params(new { elapsed = 3.0, speech = 1.0, level = 0.9, clipped = true }));
         Assert.Equal(0, enrolment.Level);

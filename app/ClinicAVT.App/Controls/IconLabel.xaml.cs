@@ -3,7 +3,6 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace ClinicAVT.App.Controls;
 
-/// <summary>A glyph and a label side by side, the content of a button or link.</summary>
 public sealed partial class IconLabel : UserControl
 {
     public static readonly DependencyProperty GlyphProperty = DependencyProperty.Register(

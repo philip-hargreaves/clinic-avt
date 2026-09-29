@@ -69,7 +69,6 @@ public class NoteModelSettingsTest
         Assert.Equal(
             "Loading the note model · 0:00 · this can take a few minutes",
             settings.NoteModelCaption);
-        // A switch the user asked for says so on the status bar, with the time it has taken
         Assert.Equal("Switching to Qwen3.5 4B · 0:00", status.LatestActivity);
         Assert.True(shell.Status.Busy);
 
@@ -81,7 +80,6 @@ public class NoteModelSettingsTest
         Assert.Equal("", settings.NoteModelStatus);
         Assert.StartsWith("Larger models", settings.NoteModelCaption);
         Assert.Equal(0, settings.NoteModelIndex);
-        // The status bar's busy line ends with the load
         Assert.Equal("Ready", status.LatestActivity);
         Assert.False(shell.Status.Busy);
     }
@@ -131,8 +129,8 @@ public class NoteModelSettingsTest
         Assert.Contains("not installed", uninstalled.NoteModelStatus);
     }
 
-    // A refusal, as while a note is being written, leaves the resident model as it was, so
-    // nothing is sent again and the load that began optimistically ends
+    // A refused switch, as while a note is being written, keeps the resident model. Nothing is
+    // resent and the optimistic loading state ends
     [Fact]
     public void AFailedLoadOrARefusedSwitchRevertsToTheTierThatWorked()
     {
@@ -164,9 +162,8 @@ public class NoteModelSettingsTest
         Assert.StartsWith("Could not switch", settings.NoteModelStatus);
     }
 
-    // Never chosen: the engine picks for the machine, and the control shows its pick without
-    // saving it, so a machine that changes is picked for again. A choice is saved, and the engine
-    // stays authoritative about what is resident
+    // Until the user chooses, the engine's pick shows unsaved, so a changed machine is picked for
+    // again. A saved choice still defers to the engine on what is resident
     [Fact]
     public void TheEnginesOwnPickIsShownUnsavedAndOnceChosenTheEngineStillSaysWhatIsResident()
     {

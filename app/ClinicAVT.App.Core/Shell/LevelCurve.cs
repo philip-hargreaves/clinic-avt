@@ -1,13 +1,12 @@
 namespace ClinicAVT.App.Core.Shell;
 
 /// <summary>
-/// How the level ring answers the microphone. The engine's level spans 60 dB, where room noise
-/// sits near a fifth and speech near two thirds, so the speech range is spread over the whole
-/// swing: a soft glow brightens and reaches further, and one ring eases outward.
+/// Maps mic level to the level ring. The engine's level spans 60 dB with room noise near 0.2 and
+/// speech near 0.67, so the speech range is stretched over the full output.
 /// </summary>
 public static class LevelCurve
 {
-    private const double SpeechFloor = 0.25;  // below this is room noise: the ring rests
+    private const double SpeechFloor = 0.25;  // below this is room noise and the ring rests
     private const double SpeechSpan = 0.55;   // loud speech reaches the top of the swing
     private const double GlowReach = 0.75;    // glow diameter beyond the disc at full level, as a fraction of it
     private const double RingReach = 0.38;    // ring swell at full level, as a fraction

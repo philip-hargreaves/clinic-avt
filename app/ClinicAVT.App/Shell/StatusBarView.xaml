@@ -31,7 +31,7 @@
                 TextWrapping="NoWrap"
                 Visibility="{x:Bind ViewModel.ConsentVisible, Mode=OneWay}" />
 
-            <!-- First-time setup can take minutes: the bar moves while the line counts the time -->
+            <!-- Setup can take minutes, so an indeterminate bar shows beside the elapsed time -->
             <ProgressBar
                 Grid.Column="1"
                 Width="120"

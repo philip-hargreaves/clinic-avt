@@ -3,9 +3,6 @@ using ClinicAVT.Client.Tests.Support;
 
 namespace ClinicAVT.Client.Tests.Contract;
 
-/// <summary>
-/// The record, read back, delete loop against the real engine.
-/// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
 public class SessionReadbackContractTest
@@ -61,7 +58,7 @@ public class SessionReadbackContractTest
             Assert.Equal(JsonValueKind.Null, note.GetProperty("editedAt").ValueKind);
             Assert.Equal("", sessions[0].GetProperty("label").GetString());
 
-            // A WinUI text box ends its lines with CR alone; the store keeps LF
+            // A WinUI text box ends its lines with CR alone. The store keeps LF
             await client.RequestAsync("note/update", new { id, text = "Plan\redited\r\n" }, Timeout);
             note = await client.RequestAsync("session/note", new { id }, Timeout);
             Assert.Equal("Plan\nedited\n", note.GetProperty("text").GetString());

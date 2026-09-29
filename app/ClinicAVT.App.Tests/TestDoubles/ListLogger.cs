@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging;
 
 namespace ClinicAVT.App.Tests.TestDoubles;
 
-/// <summary>Keeps every line logged, formatted, for a test to read.</summary>
 internal sealed class ListLogger : ILogger
 {
     public List<string> Lines { get; } = [];

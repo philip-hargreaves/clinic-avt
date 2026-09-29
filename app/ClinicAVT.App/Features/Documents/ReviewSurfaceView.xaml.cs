@@ -142,7 +142,6 @@ public sealed partial class ReviewSurfaceView : UserControl
         Fit();
     }
 
-    // The Guidelines tab shows only while the section has content
     private void PlaceGuidelines()
     {
         var shown = _guidance.ViewModel.Visible;

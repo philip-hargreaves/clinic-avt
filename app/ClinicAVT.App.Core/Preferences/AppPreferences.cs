@@ -7,13 +7,11 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Core.Preferences;
 
 /// <summary>
-/// One small json document of app preferences. Absent means defaults, unreadable means
-/// defaults and a log line. Values the shell cannot render or the engine would refuse never
-/// leave the load boundary.
+/// App preferences as one small json document. A missing document means defaults. An unreadable one
+/// means defaults and a log line. Values the shell or engine would reject are dropped on load.
 /// </summary>
 public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = null)
 {
-    /// <summary>The json as written, with named fields and a schema version.</summary>
     private sealed record PreferencesFile
     {
         public int SchemaVersion { get; init; } = CurrentSchema;
@@ -51,7 +49,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// <summary>The note model tiers the engine's store can resolve, in ladder order.</summary>
     public static readonly IReadOnlyList<string> NoteTiers = ["constrained", "default", "accuracy"];
 
-    /// <summary>A note model never chosen: the engine picks one for the machine.</summary>
+    /// <summary>A note model never chosen. The engine picks one for the machine.</summary>
     public const string AutoNoteTier = "auto";
 
     /// <summary>
@@ -143,7 +141,6 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
         return preferences;
     }
 
-    /// <summary>Applies a change and saves.</summary>
     public void Update(Action<AppPreferences> change)
     {
         change(this);

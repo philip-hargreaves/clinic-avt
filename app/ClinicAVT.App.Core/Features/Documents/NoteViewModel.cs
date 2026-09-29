@@ -4,10 +4,6 @@ using ClinicAVT.App.Core.Preferences;
 
 namespace ClinicAVT.App.Core.Features.Documents;
 
-/// <summary>
-/// The clinical note under review and the document pipeline that writes it and then the
-/// patient sheet.
-/// </summary>
 public sealed partial class NoteViewModel : ObservableObject
 {
     private string _noteSnapshot = "";
@@ -15,7 +11,8 @@ public sealed partial class NoteViewModel : ObservableObject
 
     public NoteViewModel(AppPreferences preferences)
     {
-        // Saved options are applied before anyone listens, so restoring them is not itself a change
+        // Saved options are applied before any handler subscribes, so restoring them is not a
+        // change
         Style = preferences.NoteStyle;
         Detail = preferences.NoteDetail;
     }
@@ -80,7 +77,6 @@ public sealed partial class NoteViewModel : ObservableObject
     /// <summary>Raised when style or detail changes, for persistence.</summary>
     public event Action? OptionsChanged;
 
-    /// <summary>Raised when the documents are cleared for the next text.</summary>
     public event Action? Cleared;
 
     public bool NoteRefused => PipelineState == NotePipelineState.NoteRefused;
@@ -97,8 +93,6 @@ public sealed partial class NoteViewModel : ObservableObject
     public bool NoteDocumentReady =>
         PipelineState is NotePipelineState.AllReady or NotePipelineState.PatientFailed;
 
-    // The panes show a quiet affordance while a document is being prepared
-    // and nothing has streamed yet. Computed here so it is testable
     public bool NotePreparing =>
         PipelineState == NotePipelineState.NoteWriting && ClinicalNoteText.Length == 0;
 
@@ -131,10 +125,8 @@ public sealed partial class NoteViewModel : ObservableObject
         NoteEditing = false;
     }
 
-    /// <summary>Ends an edit so its text can be saved.</summary>
     public void FinishEditing() => NoteEditing = false;
 
-    /// <summary>The pane returns to its writing look for a rewrite.</summary>
     public void BeginRegenerate() => ClearDocuments(NotePipelineState.NoteWriting);
 
     /// <summary>

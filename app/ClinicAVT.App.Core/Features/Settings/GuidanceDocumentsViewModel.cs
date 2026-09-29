@@ -81,7 +81,6 @@ public sealed partial class GuidanceDocumentsViewModel : ObservableObject
 
     public bool DocumentsPresent => Documents.Count > 0;
 
-    /// <summary>A document changed, or an ingest reported progress.</summary>
     private void Apply(EngineNotification notification)
     {
         switch (notification)

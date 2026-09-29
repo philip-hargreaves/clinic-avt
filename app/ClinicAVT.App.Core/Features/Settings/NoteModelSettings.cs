@@ -9,9 +9,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Settings;
 
 /// <summary>
-/// The note model tier. It lists the staged models as a ladder, makes the switch, and takes a
-/// failed switch back. The engine's store resolves a tier to a model. Until the user chooses,
-/// the preference is "auto" and the control shows the model the engine picked.
+/// Lists the staged models in tier order, switches between them and reverts a failed switch.
+/// The tier stays "auto", showing the engine's pick, until the user chooses.
 /// </summary>
 public sealed partial class NoteModelSettings : ObservableObject
 {
@@ -64,8 +63,8 @@ public sealed partial class NoteModelSettings : ObservableObject
     [NotifyPropertyChangedFor(nameof(PickerEnabled))]
     public partial bool NoteModelEnabled { get; set; }
 
-    /// <summary>A load cannot be interrupted, so the picker waits for any load, including one
-    /// that began before this page did.</summary>
+    /// <summary>Disabled during any load, including one started before this page opened.
+    /// Loads cannot be interrupted.</summary>
     public bool PickerEnabled => NoteModelEnabled && !ModelLoading;
 
     /// <summary>Lane status, empty when nothing is happening.</summary>
@@ -78,18 +77,15 @@ public sealed partial class NoteModelSettings : ObservableObject
         : string.IsNullOrEmpty(NoteModelStatus) ? "Larger models are more accurate and use more memory."
         : NoteModelStatus;
 
-    /// <summary>A load is running: the picker waits and a bar shows under it.</summary>
     public bool ModelLoading => _models.ModelLoading;
 
     private bool Automatic => _noteTier == AppPreferences.AutoNoteTier;
 
-    // The tier the control shows: the choice, or while automatic the engine's pick
+    // The choice, or while automatic the engine's pick
     private string? ShownTier => Automatic ? _residentTier : _noteTier;
 
-    /// <summary>On connect the options load from the engine's store.</summary>
     private void Connected() => _ = LoadNoteModelsAsync();
 
-    /// <summary>The lane's state drives the control.</summary>
     private void Apply(NoteModelState model) =>
         ApplyNoteModel(model.State, model.Tier, model.Detail ?? "");
 
@@ -158,7 +154,7 @@ public sealed partial class NoteModelSettings : ObservableObject
             return;
         }
 
-        // The switch ends the resident model. A consultation needs it
+        // Switching unloads the model a consultation needs
         if (ConsultationGuard.Blocks(_session, _status, "changing the note model"))
         {
             Reselect(ShownTier);
@@ -203,8 +199,8 @@ public sealed partial class NoteModelSettings : ObservableObject
         }
     }
 
-    // The engine refused the request, so the resident model never changed: the selection goes
-    // back and the load that began optimistically ends. Nothing is sent again
+    // A refusal leaves the resident model unchanged, so the selection is restored and the
+    // optimistic load ends. Nothing is resent
     private void RefuseTier(string reason)
     {
         var back = _revertTier;
@@ -229,7 +225,7 @@ public sealed partial class NoteModelSettings : ObservableObject
         var back = _revertTier;
         _revertTier = null;
         _models.EndSwitch();
-        // Without a switch in hand this is the model failing where it is
+        // With no switch pending, the current model itself failed
         NoteModelStatus = back is null ? reason : $"Could not switch: {reason}";
         _status.Append(back is null ? $"Note model: {reason}" : $"Could not switch note model: {reason}");
         if (back is null)

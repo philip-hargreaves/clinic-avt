@@ -11,8 +11,7 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
 /// <summary>
-/// Export reflections dialog. Writes a period's reflections to one plain text file in the Copy
-/// format, without samples.
+/// Writes a period's reflections to one plain text file in the Copy format, without samples.
 /// </summary>
 public sealed partial class ExportReflectionsViewModel : ObservableObject
 {
@@ -104,7 +103,6 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         ChosenFrom is { } from ? DateOnly.FromDateTime(from.Date) : null,
         ChosenTo is { } to ? DateOnly.FromDateTime(to.Date) : null);
 
-    /// <summary>How many reflections the period holds, and its dates.</summary>
     [ObservableProperty]
     public partial string CountLine { get; private set; } = "";
 

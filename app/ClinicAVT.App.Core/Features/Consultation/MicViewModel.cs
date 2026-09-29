@@ -81,7 +81,7 @@ public sealed partial class MicViewModel : ObservableObject, IMicrophoneChoice
         ?? Devices.FirstOrDefault(d => d.IsDefault)
         ?? Devices.FirstOrDefault();
 
-    /// <summary>Reloads the device list. Called when the picker opens.</summary>
+    /// <summary>Called when the picker opens.</summary>
     [RelayCommand]
     public async Task RefreshAsync()
     {

@@ -23,7 +23,7 @@ internal static class StartupTasks
         return services;
     }
 
-    // The engine host reads the session through LiveSessionState, which follows the view model
+    // LiveSessionState mirrors the view model so the engine host can read the session
     private sealed class AttachSessionState(LiveSessionState state, IConsultation session) : IStartupTask
     {
         public string Name => "attach session state";

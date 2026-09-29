@@ -3,7 +3,6 @@ using ClinicAVT.App.Core.Features.Consultation;
 
 namespace ClinicAVT.App.Core.Ports;
 
-/// <summary>The consultation on the Consultation page, and the stored one opened for review.</summary>
 public interface IConsultation : ISessionState, INotifyPropertyChanged
 {
     SessionState State { get; }
@@ -32,7 +31,6 @@ public interface IConsultation : ISessionState, INotifyPropertyChanged
     /// </summary>
     string? LiveReviewId { get; }
 
-    /// <summary>The session the engine is recording into.</summary>
     string? RecordingSessionId { get; }
 
     /// <summary>Raised when a stop or import seals a session.</summary>

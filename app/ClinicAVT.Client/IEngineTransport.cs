@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace ClinicAVT.Client;
 
-/// <summary>The raw JSON-RPC link to the engine. The shell speaks through IEngineApi.</summary>
+/// <summary>Raw JSON-RPC link to the engine. The shell calls it through IEngineApi.</summary>
 public interface IEngineTransport : IAsyncDisposable
 {
     event Action<string, JsonElement>? NotificationReceived;

@@ -4,10 +4,6 @@ using ClinicAVT.App.Themes;
 
 namespace ClinicAVT.App.Controls;
 
-/// <summary>
-/// An accent border marks a box in edit mode, and the box takes focus. Otherwise it keeps the
-/// flat document look.
-/// </summary>
 internal static class EditingChrome
 {
     public static void Show(TextBox box, bool editing)

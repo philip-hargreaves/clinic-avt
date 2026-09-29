@@ -31,7 +31,6 @@ public sealed partial class ConsultationViewModel : ObservableObject, IConsultat
         _dialogs = dialogs;
         _imports = imports;
 
-        // The parts' properties are this object's, under the same names
         recorder.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
         import.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
         readiness.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
@@ -139,7 +138,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, IConsultat
             _ = dialog.UseFileAsync(path);
         }
 
-        // Add closes the dialog; the consultation page then shows the finalise
+        // Add closes the dialog and the consultation page shows the finalise
         if (!await _dialogs.ShowAsync(dialog).ConfigureAwait(true) || dialog.Result is not { } import)
         {
             return;

@@ -7,9 +7,8 @@ public enum RecoveryAction
 }
 
 /// <summary>
-/// Decides what follows an engine death. The engine restarts up to a crash-storm cutoff, with
-/// a growing wait between launches. Mid-consultation the shell resumes the stored session on
-/// the new engine, so a restart saves the consultation.
+/// Relaunches the engine with a growing backoff until a crash-storm cutoff. A consultation in
+/// progress resumes on the new engine.
 /// </summary>
 public static class RestartPolicy
 {

@@ -60,7 +60,7 @@ public class ImportRecordingTest
         import.Time = new TimeSpan(9, 30, 0);
         Assert.Equal("2026-09-25T08:30:00Z", import.Result!.StartedAt);
 
-        // The clock reads 10:00 in London: 11:00 today has not happened yet
+        // The clock reads 10:00 in London, so 11:00 today has not happened yet
         Assert.Equal(new DateTime(2026, 9, 27), import.Today.Date);
         import.Day = import.Today;
         import.Time = new TimeSpan(11, 0, 0);
@@ -69,7 +69,7 @@ public class ImportRecordingTest
         import.Time = new TimeSpan(9, 45, 0);
         Assert.Equal("2026-09-27T08:45:00Z", import.Result!.StartedAt);
 
-        // The shell refuses on the inspected length; the engine has no length rule
+        // The shell refuses on the inspected length. The engine has no length rule
         engine.RecordingSeconds = 29.4;
         await import.UseFileAsync(@"C:\Users\clinician\Downloads\Voice memo.wav");
         Assert.True(import.TooShort);
@@ -83,7 +83,6 @@ public class ImportRecordingTest
         Assert.False(import.CanImport);
     }
 
-    // A bundled example goes through the same inspection and import as a chosen file
     [Fact]
     public async Task AnExampleImportsLikeAChosenFileAndAChosenFileReplacesIt()
     {
@@ -155,7 +154,7 @@ public class ImportRecordingTest
         var methods = engine.Requests.Select(r => r.Method).ToList();
         Assert.True(methods.LastIndexOf("session/close") < methods.IndexOf("session/import"),
             "the review closes first");
-        // Keep consultations goes with it, as with a recording
+        // Import sends Keep consultations, as a recording does
         Assert.True(JsonElement.DeepEquals(ImportSent, engine.Sent("session/import")));
         Assert.Equal(
             [FinalisePhase.Sealing, FinalisePhase.Transcript, FinalisePhase.Speakers, FinalisePhase.Turns,
@@ -164,7 +163,6 @@ public class ImportRecordingTest
         Assert.Equal(SessionState.Finalising, session.State);
         Assert.True(controls.FinalisingVisible);
         Assert.Equal("12:40", controls.ElapsedLabel);
-        // Headed with the import's own time
         Assert.Equal(SessionText.Heading(DateTimeOffset.Parse(FixtureStartedAt, CultureInfo.InvariantCulture)), header.Title);
 
         engine.RaiseNotification("note/partial", Params(new { text = "The" }));
@@ -189,7 +187,7 @@ public class ImportRecordingTest
         Assert.True(controls.ImportCancelVisible);
         Assert.True(controls.CancelImportCommand.CanExecute(null));
 
-        // Reading the file and finding the speech both prepare
+        // reading and speech stages both show as Preparing
         engine.ImportProgress("reading", 3);
         Assert.Equal("Preparing · 3%", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
@@ -200,7 +198,7 @@ public class ImportRecordingTest
         Assert.Equal("Transcribing · 60%", controls.FinalisingLabel);
         Assert.Equal("Transcribing · 60%", shell.Line.LatestActivity);
 
-        // The figure's last five points are the finalise, which names no percentage
+        // Finalising (last 5%) shows no percentage
         engine.ImportProgress("finalising", 95);
         Assert.Equal("Finalising", controls.FinalisingLabel);
         Assert.Equal("Finalising", shell.Line.LatestActivity);

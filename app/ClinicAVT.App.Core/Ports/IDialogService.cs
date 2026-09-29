@@ -1,9 +1,6 @@
 namespace ClinicAVT.App.Core.Ports;
 
-/// <summary>
-/// The dialogs the shell shows on a view model's behalf. Confirmations default
-/// to cancel.
-/// </summary>
+/// <summary>Confirmations default to cancel.</summary>
 public interface IDialogService
 {
     /// <summary>True when the primary button was chosen. The other button cancels.</summary>
@@ -16,6 +13,6 @@ public interface IDialogService
     Task<bool?> ConfirmWithOptionAsync(
         string title, string content, string tick, string primary, string cancel = "Cancel");
 
-    /// <summary>Shows the dialog for the view model until it closes. True when its primary button closed it.</summary>
+    /// <summary>Returns true when its primary button closed it.</summary>
     Task<bool> ShowAsync(object viewModel);
 }

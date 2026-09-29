@@ -8,7 +8,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>The installed guidance corpora, as the engine reports them.</summary>
 public sealed partial class GuidanceCorporaViewModel : ObservableObject
 {
     private readonly AppPreferences _preferences;

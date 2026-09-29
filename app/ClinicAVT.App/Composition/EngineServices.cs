@@ -8,7 +8,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Composition;
 
-/// <summary>The engine process, its supervision and the typed connection to it.</summary>
 internal static class EngineServices
 {
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);

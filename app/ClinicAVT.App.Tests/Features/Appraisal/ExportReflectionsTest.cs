@@ -44,7 +44,7 @@ public class ExportReflectionsTest
         var export = Dialog(Engine(), new FakeFilePicker());
         await export.LoadAsync();
 
-        // Samples are left out, as a backup leaves them out
+        // Samples are left out, as in a backup
         Assert.Equal("4 reflections on this computer.", export.CountLine);
         Assert.Equal(["a", "b", "c", "d"], export.Chosen().Select(r => r.Id));
         Assert.True(export.PrimaryEnabled);
@@ -103,7 +103,7 @@ public class ExportReflectionsTest
             await export.PrimaryCommand.ExecuteAsync(null);
 
             Assert.Equal(["ClinicAVT reflections 1 Aug to 31 Aug 2026"], picker.SuggestedNames.Distinct());
-            // An untitled reflection takes its month as its title, as Copy gives it
+            // An untitled reflection takes the month as its title, as Copy does
             Assert.Equal(
                 "Check each summary for identifying details before sharing.\n"
                 + "\n"

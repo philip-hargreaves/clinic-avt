@@ -113,7 +113,7 @@ public class ImportContractTest
         }
     }
 
-    // The import's last word, which may come before the answer to session/import
+    // Waits for session/imported or importFailed, which can arrive before the session/import reply
     private static Task<(string Method, JsonElement Params)> ImportEnd(PipeTransport client)
     {
         var end = new TaskCompletionSource<(string, JsonElement)>(TaskCreationOptions.RunContinuationsAsynchronously);

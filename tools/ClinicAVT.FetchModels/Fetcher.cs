@@ -5,10 +5,9 @@ using System.Text.Json.Nodes;
 namespace ClinicAVT.FetchModels;
 
 /// <summary>
-/// Downloads and installs one pack. Shards resume from the bytes on disk,
-/// every shard and every reassembled file is hash-verified, and the pack
-/// reaches its target directory only when whole. A failure leaves the previous
-/// state untouched, and the next run continues where this one stopped.
+/// Downloads and installs one pack. Shards resume from disk and every shard and file is
+/// hash-verified. The target changes only when the pack is whole. A failed run leaves it untouched
+/// and the next run resumes.
 /// </summary>
 public sealed class Fetcher(HttpClient http, Action<string> log)
 {

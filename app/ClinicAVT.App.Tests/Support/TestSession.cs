@@ -8,7 +8,7 @@ namespace ClinicAVT.App.Tests.Support;
 
 internal static class TestSession
 {
-    /// <summary>A consultation over a quiet fake engine, with its lines going to the log when one is given.</summary>
+    /// <summary>The consultation over a fake engine that sends no notifications unprompted. Log lines go to the given log.</summary>
     public static TestShell Create(
         AppPreferences? preferences = null, FakeDialogService? dialogs = null,
         FakeEngineClient? engine = null, IReadOnlyList<ExampleCase>? exampleCases = null,
@@ -31,8 +31,8 @@ internal static class TestSession
     }
 
     /// <summary>
-    /// The app's graph with default preferences, for the pages that change them. A given session
-    /// stands in for the consultation.
+    /// The app's graph with default preferences. A given session replaces the consultation's
+    /// state.
     /// </summary>
     public static TestShell Settings(
         FakeEngineClient? engine = null, AppPreferences? preferences = null, ISessionState? session = null,
@@ -56,8 +56,8 @@ internal static class TestSession
         });
 
     /// <summary>
-    /// The status bar's graph over an engine that is not connected, so it hears nothing until a
-    /// test raises it.
+    /// The app's graph over a disconnected engine, so no notification arrives until a test raises
+    /// one.
     /// </summary>
     public static TestShell Offline(ListLogger? log = null, Func<string, bool>? logged = null)
     {

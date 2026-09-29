@@ -11,8 +11,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Shell;
 
 /// <summary>
-/// The testing chips: the models doing the clinician's work with their live numbers, and the
-/// memory the product holds.
+/// The testing chips. They show the models doing the clinician's work with their live numbers, and
+/// the memory the product holds.
 /// </summary>
 public sealed partial class ModelChips : ObservableObject
 {
@@ -37,8 +37,8 @@ public sealed partial class ModelChips : ObservableObject
     private bool _laneNamed;
 
     /// <summary>
-    /// The bar meters generation live. Whichever lane streams sends one partial per token, so
-    /// the number moves with every token. Without a memory probe there is no memory chip.
+    /// Meters generation live, one partial per token from whichever lane streams. There is no
+    /// memory chip without a memory probe.
     /// </summary>
     public ModelChips(
         IEngineControl engine, IEngineEvents events, ModelActivity models, ConsultationActivity activity,
@@ -122,8 +122,6 @@ public sealed partial class ModelChips : ObservableObject
 
     public bool NoteActive => TokensStreaming;
 
-    // The resting dot is the visible-inverse half of the colour pair the view
-    // swaps, exposed as a property for XAML binding
     public bool AsrResting => !AsrActive;
 
     public bool NoteResting => !NoteActive;
@@ -206,7 +204,6 @@ public sealed partial class ModelChips : ObservableObject
         }
     }
 
-    /// <summary>A new consultation meters from nothing.</summary>
     private void ResetThroughput()
     {
         _meter.Reset();

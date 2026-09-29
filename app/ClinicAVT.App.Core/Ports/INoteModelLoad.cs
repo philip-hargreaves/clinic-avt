@@ -2,7 +2,6 @@ using System.ComponentModel;
 
 namespace ClinicAVT.App.Core.Ports;
 
-/// <summary>A note model load in progress, with its elapsed time.</summary>
 public interface INoteModelLoad : INotifyPropertyChanged
 {
     bool ModelLoading { get; }

@@ -19,8 +19,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Composition;
 
 /// <summary>
-/// The view models, one instance each, over whatever ports the host registers. Kept here so
-/// a test can build the same graph over fakes and prove every constructor still resolves.
+/// Lives in Core so a test can build the same graph over fakes and check every constructor
+/// resolves.
 /// </summary>
 public static class CoreServices
 {
@@ -40,7 +40,6 @@ public static class CoreServices
         return services;
     }
 
-    // Every role resolves to the one EngineApi
     private static void AddEngineRoles(this IServiceCollection services)
     {
         services.AddSingleton<IEngineLink>(sp => sp.GetRequiredService<IEngineApi>());
@@ -105,7 +104,7 @@ public static class CoreServices
         services.AddSingleton<ShellViewModel>();
         services.AddSingleton<AppraisalsViewModel>();
         services.AddSingleton<SessionsViewModel>();
-        // Run in this order, so an open reflection is saved before a stored review closes
+        // Registered in this order so an open reflection is saved before a stored review closes
         services.AddSingleton<INavigationGuard>(sp => sp.GetRequiredService<AppraisalsViewModel>());
         services.AddSingleton<INavigationGuard>(sp => sp.GetRequiredService<SessionsViewModel>());
         services.AddSingleton<NoteModelSettings>();
@@ -118,7 +117,6 @@ public static class CoreServices
         services.AddSingleton<HelpViewModel>();
     }
 
-    // A new view model for each dialog
     private static void AddDialogs(this IServiceCollection services)
     {
         services.AddFactory<BackupViewModel>();
@@ -129,7 +127,8 @@ public static class CoreServices
         services.AddFactory<ReflectionViewModel>();
     }
 
-    // Not tracked by the container, which would hold each disposable instance until the app exits
+    // The container does not track these instances. It would otherwise hold each disposable one
+    // until the app exits
     private static void AddFactory<T>(this IServiceCollection services)
         where T : class =>
         services.AddSingleton<Func<T>>(sp => () => ActivatorUtilities.CreateInstance<T>(sp));

@@ -48,7 +48,7 @@ public class SessionCommandsTest
         Assert.Equal("01:15", controls.ElapsedLabel);
         Assert.Equal(0.5, controls.Level);
 
-        // Once sealed and before the note streams, the centre holds and says why
+        // Between the stop and the first token the centre stays up with a label
         await controls.StopRecordingCommand.ExecuteAsync(null);
         Assert.True(controls.CentreStageVisible);
         Assert.True(controls.FinalisingVisible);
@@ -56,7 +56,6 @@ public class SessionCommandsTest
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         Assert.False(controls.MicPickerVisible);
 
-        // The first token opens the panes, with the note already filling
         engine.RaiseNotification("note/partial", Params(new { text = "The" }));
         Assert.True(controls.PanesVisible);
         Assert.False(controls.FinalisingVisible);
@@ -74,8 +73,8 @@ public class SessionCommandsTest
         Assert.True(controls.MicPickerVisible, "back for the next consultation");
     }
 
-    // No partial streams for a thin recording, so note/ready must open the panes on its own or
-    // the centre would spin forever, and nothing may claim to be writing
+    // A thin recording sends no note/partial, so note/ready must open the panes and "Writing" never
+    // shows
     [Fact]
     public async Task AThinRecordingOpensThePanesOnTheCannedNoteAndNeverClaimsToBeWriting()
     {
@@ -189,25 +188,23 @@ public class SessionCommandsTest
             Assert.Equal("Writing transcript", controls.FinalisingLabel);  // an unknown stage changes nothing
             engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
             Assert.Equal("Labelling speakers", controls.FinalisingLabel);
-            // The per-turn re-decode is transcript work again, and on the
-            // NPU the longest stage, so the spinner says what it is doing
+            // turns is a transcript re-decode and the longest NPU stage, so label it as transcript
             engine.RaiseNotification("session/progress", Params(new { stage = "turns" }));
             Assert.Equal("Writing transcript", controls.FinalisingLabel);
         };
         await session.StopRecordingAsync();
         engine.BeforeReply = null;
 
-        // Once sealed the caption names the prefill, and a late stage cannot go back
+        // After the seal the phase is Preparing note, and a late stage cannot move it back
         Assert.Equal(FinalisePhase.Note, session.Phase);
         Assert.Equal("Preparing note", controls.FinalisingLabel);
-        // A note that waits on the model's load says so
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "loading" }));
         Assert.Equal("Waiting for the note model · 0:00", controls.FinalisingLabel);
         engine.RaiseNotification("note/model", Params(new { tier = "default", state = "ready" }));
         Assert.Equal("Preparing note", controls.FinalisingLabel);
         engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
         Assert.Equal(FinalisePhase.Note, session.Phase);
-        // Start resets to None, then the stop walks forward only
+        // Phases only move forward after the reset to None
         Assert.Collection(phases.SkipWhile(p => p == FinalisePhase.None),
             p => Assert.Equal(FinalisePhase.Sealing, p),
             p => Assert.Equal(FinalisePhase.Transcript, p),
@@ -227,7 +224,8 @@ public class SessionCommandsTest
         Assert.Equal(FinalisePhase.Note, session.Phase);
     }
 
-    // A resume the engine dies during stays recording, and the next reconnect retries it
+    // If the engine dies during a resume, the state stays Recording and the resume is retried on
+    // the next reconnect
     [Fact]
     public async Task ARestartedEngineResumesTheLiveSessionUntilItTakesButNothingWhileIdle()
     {

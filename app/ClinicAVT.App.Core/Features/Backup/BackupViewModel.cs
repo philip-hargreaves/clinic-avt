@@ -139,7 +139,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
         ChosenFrom is { } from ? DateOnly.FromDateTime(from.Date) : null,
         ChosenTo is { } to ? DateOnly.FromDateTime(to.Date) : null);
 
-    /// <summary>How many the period holds, and its dates.</summary>
     [ObservableProperty]
     public partial string CountLine { get; private set; } = "";
 
@@ -187,7 +186,6 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     private TimeZoneInfo Zone => _clock.LocalTimeZone;
 
-    /// <summary>Counts the default period as the dialog opens.</summary>
     public Task LoadAsync() => CountAsync();
 
     [RelayCommand]

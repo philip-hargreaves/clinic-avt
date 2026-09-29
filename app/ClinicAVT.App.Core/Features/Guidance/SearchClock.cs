@@ -1,6 +1,5 @@
 namespace ClinicAVT.App.Core.Features.Guidance;
 
-/// <summary>Times a guidance search from its request to its reply.</summary>
 internal static class SearchClock
 {
     // A search the clock never timed, such as a stored record, shows nothing

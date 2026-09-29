@@ -4,10 +4,7 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Adapters;
 
-/// <summary>
-/// Swaps the host's content between pages. Pages are singletons, so each keeps its state
-/// between visits.
-/// </summary>
+/// <summary>Pages are singletons, so each keeps its state between visits.</summary>
 public sealed class NavigationService(IReadOnlyDictionary<string, Func<UIElement>> pages)
     : INavigationService
 {

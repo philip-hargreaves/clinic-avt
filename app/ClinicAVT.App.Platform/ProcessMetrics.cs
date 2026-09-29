@@ -3,7 +3,7 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Platform;
 
-/// <summary>Memory figures through System.Diagnostics, where a process that has exited reads as null.</summary>
+/// <summary>Process memory figures, null once the process has exited.</summary>
 public sealed class ProcessMetrics : IProcessMetrics
 {
     private const long Mebibyte = 1024 * 1024;

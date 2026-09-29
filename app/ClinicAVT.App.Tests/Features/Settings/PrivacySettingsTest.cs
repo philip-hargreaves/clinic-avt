@@ -71,7 +71,7 @@ public class PrivacySettingsTest
         Assert.Single(settings.Documents.Documents);  // guideline documents are not consultations
     }
 
-    // A date cannot say what a backup holds, so the engine counts what is in no backup
+    // The engine counts the sessions in no backup, because a backup date cannot show that
     [Fact]
     public async Task DeleteAllSaysWhatNoBackupHoldsAndKeepsReflectionsUnlessTicked()
     {

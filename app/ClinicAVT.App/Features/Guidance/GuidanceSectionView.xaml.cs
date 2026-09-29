@@ -9,7 +9,6 @@ using ClinicAVT.App.Adapters;
 
 namespace ClinicAVT.App.Features.Guidance;
 
-/// <summary>The Guidelines section, a tab of the consultation review.</summary>
 public sealed partial class GuidanceSectionView : UserControl
 {
     private readonly FocusReturn _focus;

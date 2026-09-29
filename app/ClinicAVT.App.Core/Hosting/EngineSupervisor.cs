@@ -3,9 +3,8 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Core.Hosting;
 
 /// <summary>
-/// Runs the engine and applies RestartPolicy when it dies unexpectedly. It never kills the
-/// engine: releasing it asks it to leave. Status events are raised outside the lock, after the
-/// state has settled.
+/// Runs the engine and applies RestartPolicy on an unexpected exit. It never kills the engine.
+/// Release asks it to exit. Status events are raised outside the lock, after the state settles.
 /// </summary>
 public sealed class EngineSupervisor(
     IEngineLauncher launcher, ISessionState session, TimeProvider clock, ICrashLog crashLog,
@@ -70,11 +69,10 @@ public sealed class EngineSupervisor(
         process?.Dispose();
     }
 
-    // Stops watching. Whatever owns the launcher decides whether the engine outlives it
+    // This only stops watching. The launcher's owner decides whether the engine keeps running
     public void Dispose() => Detach()?.Dispose();
 
-    // Asks while the connection is still up. Stopped then drops it, and the
-    // engine, alone, leaves
+    // Ask before the connection drops. The engine exits on its own once it has no clients
     private async Task<IEngineProcess?> LetGoAsync()
     {
         if (askToExit is not null && Status == EngineStatus.Running)
@@ -85,7 +83,7 @@ public sealed class EngineSupervisor(
             }
             catch (Exception)
             {
-                // An engine that cannot be asked still leaves once idle and alone
+                // Ignored, because the engine still exits once idle with no clients
             }
         }
 
@@ -161,8 +159,8 @@ public sealed class EngineSupervisor(
         var exitCode = process.ExitCode;
         process.Dispose();
 
-        // An engine a closed app left to finish a load still serves the pipe. It is taken
-        // over rather than counted as a crash
+        // An engine left running by a closed app may still be finishing a load and own the pipe. It
+        // is adopted and does not count as a crash
         if (exitCode == AlreadyServing && launcher.Adopt() is { } running)
         {
             _process = running;
@@ -178,7 +176,7 @@ public sealed class EngineSupervisor(
         }
 
         var now = clock.GetUtcNow();
-        // The engine holding the pipe could not be adopted yet: it is finishing work it cannot
+        // The engine holding the pipe could not be adopted yet. It is finishing work it cannot
         // cancel, such as a first NPU compile, and accepts again once done. Waiting is not a crash
         if (exitCode == AlreadyServing)
         {

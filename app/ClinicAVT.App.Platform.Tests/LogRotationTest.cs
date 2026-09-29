@@ -8,13 +8,12 @@ public sealed class LogRotationTest : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    // Twelve quick launches once rotated away the only log of a stuck process, so a log is
-    // appended to until it is large
+    // Rotate by size, not per launch, so quick relaunches cannot rotate away a stuck process's log
     [Fact]
     public void ALogIsAppendedUntilLargeAndEachRotationShiftsRunsDownToTheKeepLimit()
     {
         LogRotation.Rotate(Log("engine.log"), keep: 3, atBytes: 0);
-        Assert.Empty(Directory.GetFiles(_dir));  // nothing to rotate yet
+        Assert.Empty(Directory.GetFiles(_dir));
 
         File.WriteAllText(Log("engine.log"), "run 1");
         LogRotation.Rotate(Log("engine.log"), keep: 3, atBytes: 100);

@@ -16,7 +16,7 @@ namespace ClinicAVT.App.Composition;
 
 /// <summary>
 /// Pages are singletons because the navigation service keeps them on its back stack, so their
-/// view model subscriptions last as long as the app. Views inside a page are transient because
+/// view model subscriptions last as long as the app. Views inside pages are transient because
 /// an element can have only one parent.
 /// </summary>
 internal static class ViewServices
@@ -36,7 +36,7 @@ internal static class ViewServices
         services.AddSingleton<AppraisalsView>();
         services.AddSingleton<SettingsView>();
         services.AddSingleton<HelpView>();
-        // The platform adapters reach the window through the accessor from the moment it exists
+        // Set the accessor as soon as the window exists, because the platform adapters use it
         services.AddSingleton(sp =>
         {
             var window = ActivatorUtilities.CreateInstance<MainWindow>(sp);

@@ -4,10 +4,6 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace ClinicAVT.App.Core.Features.Documents;
 
-/// <summary>
-/// The review's document buttons that reach the engine: save, rewrite, translate and reflect.
-/// Each is enabled from the state of the note and the sheet.
-/// </summary>
 public sealed partial class ReviewCommandsViewModel : ObservableObject
 {
     private static readonly HashSet<string?> Gates =
@@ -61,8 +57,7 @@ public sealed partial class ReviewCommandsViewModel : ObservableObject
         await _actions.RegenerateNoteAsync().ConfigureAwait(true);
     }
 
-    // An edited note is the clinician's wording. Regenerating replaces it,
-    // so it asks first. An unedited note regenerates straight away
+    // An edited note is the clinician's wording, so confirm before regenerating over it
     [RelayCommand(CanExecute = nameof(CanRegenerate))]
     private Task Regenerate()
     {

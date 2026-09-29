@@ -92,9 +92,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
         }
     }
 
-    /// <summary>
-    /// The note lane's model changed. A first-use compile gates recording while it runs.
-    /// </summary>
+    /// <summary>A first-use compile gates recording while it runs.</summary>
     public void NoteModelChanged(NoteModelState model)
     {
         // The gate only matters before a recording starts

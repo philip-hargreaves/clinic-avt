@@ -14,7 +14,6 @@
 
         <Border Style="{StaticResource InnerCardSurface}" Padding="0">
             <StackPanel>
-                <!-- Closed card -->
                 <Button
                     AutomationProperties.Name="{x:Bind Card.Title, Mode=OneWay}"
                     Padding="16,12"

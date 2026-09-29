@@ -11,7 +11,7 @@ using static ClinicAVT.App.Tests.Support.Waits;
 namespace ClinicAVT.App.Tests.Features.Guidance;
 
 /// <summary>
-/// The Guidelines section's behaviour, driven through the consultation view model.
+/// Driven through the consultation view model.
 /// </summary>
 public class GuidanceViewModelTest
 {
@@ -38,7 +38,7 @@ public class GuidanceViewModelTest
         return shell;
     }
 
-    // Reopens stored consultation "abc". A record means its note was searched and null that it never was
+    // Reopens stored consultation "abc". A null record means its note was never searched
     private static async Task<TestShell> ReopenedAsync(JsonElement? record = null, ListLogger? log = null)
     {
         var shell = TestSession.Create(log: log);
@@ -78,7 +78,7 @@ public class GuidanceViewModelTest
         Assert.False(guidance.Stale);
     }
 
-    // The note-edit caption wins over changed documents, whether the record loads stale or goes stale
+    // Note-edit caption beats documents-changed, whether stale on load or later
     [Fact]
     public async Task ChangedDocumentsMarkAStoredResultStaleWithTheirOwnCaptionUntilTheNoteIsEditedAndSearchAgainByThemselves()
     {
@@ -554,7 +554,7 @@ public class GuidanceViewModelTest
         Assert.All(guidance.Cards.Single().Recommendations, r => Assert.False(r.MatchedVisible));
         Assert.Equal(GuidanceSection.Results, guidance.Section);
 
-        // The note's own result lands behind the query and shows only after Clear
+        // The note's result, arriving during a typed query, shows only after Clear
         engine.RaiseNotification("guidance/ready",
             Ready("abc", [Result("fx100-1_1_2"), Result("fx100-1_1_3")]));
         Assert.Equal(["fx200-1_1_1", "fx200-1_1_2"], Shown(guidance));

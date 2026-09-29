@@ -5,7 +5,6 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Backup;
 
-/// <summary>The backup and restore dialogs' wording.</summary>
 public static class BackupWords
 {
     public const string Includes =

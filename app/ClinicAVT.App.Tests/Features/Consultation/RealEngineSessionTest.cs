@@ -12,9 +12,6 @@ using static ClinicAVT.App.Tests.Support.Waits;
 
 namespace ClinicAVT.App.Tests.Features.Consultation;
 
-/// <summary>
-/// Consultations through the whole shell stack against the real engine and real models.
-/// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]
 public class RealEngineSessionTest
@@ -63,12 +60,12 @@ public class RealEngineSessionTest
             }
             catch (IOException)
             {
-                // The engine may still hold the wav for a moment, and temp cleans itself
+                // The engine may still hold the wav, so temp cleanup removes it
             }
         }
     }
 
-    // The import dialog's example list is the one demo path, so an example goes end to end
+    // Examples are the only demo path, so test one end to end
     [Fact]
     public async Task AnExampleImportsToALabelledTranscriptANoteAndASheet()
     {
@@ -135,7 +132,6 @@ public class RealEngineSessionTest
         var stored = await connection.RequestAsync("session/note", new { id = sealedId }, Timeout);
         Assert.Equal(note, stored.GetProperty("text").GetString());
 
-        // The patient information follows the note
         var patient = await patientReady.Task.WaitAsync(TimeSpan.FromSeconds(300));
         Assert.Contains("Your appointment today", patient);
         var storedPatient =
@@ -173,12 +169,12 @@ public class RealEngineSessionTest
             }
         };
 
-        // A replayed file stands in for the microphone, which a resume carries on from
+        // A replay file stands in for the microphone, and the resume continues it
         var started = await connection.RequestAsync(
             "session/start", new { replay = new { path = track, speed = 16.0 } }, Timeout);
         var firstId = started.GetProperty("sessionId").GetString();
 
-        // Mid-consult, the engine dies the way the driver fault kills it
+        // Kill the engine mid-consult to mimic the driver fault
         await Task.Delay(TimeSpan.FromSeconds(8));
         Process.GetProcessById(host.EnginePid!.Value).Kill();
         await RetryAsync(() => connection.RequestAsync("engine/echo", new { payload = "back" }, Timeout));
@@ -254,7 +250,6 @@ public class RealEngineSessionTest
         Assert.True(crashes == 0, $"{crashes}/6 accelerated session starts crashed the engine");
     }
 
-    // The consultation page over the real engine, with the import dialog answering as the given one
     private static (ConsultationViewModel Session, TranscriptViewModel Transcript, NoteViewModel Note) Session(
         EngineConnection connection, ImportRecordingViewModel dialog)
     {

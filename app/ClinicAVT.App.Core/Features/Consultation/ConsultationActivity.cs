@@ -3,8 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace ClinicAVT.App.Core.Features.Consultation;
 
 /// <summary>
-/// What the live consultation is doing, set by the recorder and read by the status bar and the
-/// record controls.
+/// Set by the recorder and read by the status bar and the record controls.
 /// </summary>
 public sealed partial class ConsultationActivity : ObservableObject
 {
@@ -12,7 +11,6 @@ public sealed partial class ConsultationActivity : ObservableObject
     [ObservableProperty]
     public partial bool Idle { get; set; } = true;
 
-    /// <summary>Audio is flowing from the microphone.</summary>
     [ObservableProperty]
     public partial bool Listening { get; set; }
 
@@ -27,7 +25,6 @@ public sealed partial class ConsultationActivity : ObservableObject
     [ObservableProperty]
     public partial bool Decoding { get; set; }
 
-    /// <summary>True while a seeded sample is under review.</summary>
     [ObservableProperty]
     public partial bool ShowingSample { get; set; }
 
@@ -36,7 +33,6 @@ public sealed partial class ConsultationActivity : ObservableObject
 
     public void Start() => Started?.Invoke();
 
-    /// <summary>The microphone stopped, so its level drops to zero.</summary>
     public void StopListening()
     {
         Listening = false;

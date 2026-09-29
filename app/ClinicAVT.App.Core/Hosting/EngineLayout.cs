@@ -1,6 +1,5 @@
 namespace ClinicAVT.App.Core.Hosting;
 
-/// <summary>The engine's files beside the app, and its processes by name.</summary>
 public static class EngineLayout
 {
     public const string EngineExe = "clinicavt_engine.exe";

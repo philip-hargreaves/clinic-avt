@@ -4,8 +4,7 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Core.Features.Consultation;
 
 /// <summary>
-/// The session as the engine host sees it, mirrored from the consultation view model. The
-/// host is built before the view model, so this stands between them.
+/// Mirrored from the consultation view model, because the host is built before the view model.
 /// </summary>
 public sealed class LiveSessionState : ISessionState
 {

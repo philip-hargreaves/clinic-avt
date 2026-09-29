@@ -1,6 +1,5 @@
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>The Settings page, one view model per group.</summary>
 public sealed class SettingsViewModel(
     NoteModelSettings noteModel, GuidanceCorporaViewModel corpora, GuidanceDocumentsViewModel documents,
     PrivacySettings privacy, AppearanceAndDiagnostics appearance)

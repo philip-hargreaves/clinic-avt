@@ -34,8 +34,8 @@ public class PowerThrottlingTest
         Assert.True(GetProcessInformation(
             process.SafeHandle, ProcessPowerThrottling, ref state,
             (uint)Marshal.SizeOf<ThrottlingState>()));
-        Assert.Equal(ExecutionSpeed, state.ControlMask & ExecutionSpeed);  // decided, not left to Windows
-        Assert.Equal(0u, state.StateMask & ExecutionSpeed);  // and decided off
+        Assert.Equal(ExecutionSpeed, state.ControlMask & ExecutionSpeed);  // explicitly controlled
+        Assert.Equal(0u, state.StateMask & ExecutionSpeed);  // throttling off
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]

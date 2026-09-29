@@ -8,9 +8,8 @@ namespace ClinicAVT.App.Tests.Features.Settings;
 
 public class SettingsViewModelTest
 {
-    // Everything that restarts or reconfigures the engine waits for the consultation to end. A
-    // finished one on screen blocks nothing, and deleting everything closes its review first so
-    // the screen never shows erased data
+    // Engine restarts and reconfigures wait for a live consultation. A finished one on screen
+    // blocks nothing. Delete all closes the review first so erased data is never shown
     [Fact]
     public async Task EngineChangesWaitForTheConsultationToEndAndDeleteAllClosesTheReviewOnScreen()
     {

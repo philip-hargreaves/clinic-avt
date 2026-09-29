@@ -85,7 +85,7 @@ internal sealed class RealEngine : IAsyncDisposable
         }
         catch (IOException)
         {
-            // Engine may still hold the store; left for temp cleanup
+            // Engine may still hold the store. Left for temp cleanup
         }
     }
 }

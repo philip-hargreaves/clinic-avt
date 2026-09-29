@@ -81,9 +81,6 @@ public sealed partial class ReflectionViewModel : ObservableObject, IDisposable
 
     public string SessionId { get; private set; } = "";
 
-    /// <summary>
-    /// The title as shown and exported. It is the label, or the month until there is one.
-    /// </summary>
     public string DisplayTitle => Title.Trim().Length > 0 ? Title.Trim() : Month;
 
     /// <summary>What in the text may identify the patient, empty when nothing was found.</summary>

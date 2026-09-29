@@ -4,7 +4,6 @@ using ClinicAVT.App.Tests.Support;
 
 namespace ClinicAVT.App.Tests.Features.Examples;
 
-/// <summary>A written case standing in as the note of a sample record.</summary>
 public class ExampleCaseTest
 {
     private static readonly ExampleCase Gout = new("Case 3, gout", "38-year-old man with recurrent effusions.");

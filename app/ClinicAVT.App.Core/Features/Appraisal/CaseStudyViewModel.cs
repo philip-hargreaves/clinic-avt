@@ -43,7 +43,6 @@ public sealed partial class CaseStudyViewModel : ObservableObject, IDisposable
         : _load.ModelLoading ? $"Waiting for the note model to load · {_load.ModelLoadElapsed}"
         : "Writing the case study";
 
-    /// <summary>Why there is no summary, when the engine could not write one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSummaryProblem))]
     public partial string SummaryProblem { get; private set; } = "";

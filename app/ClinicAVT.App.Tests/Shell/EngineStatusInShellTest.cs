@@ -63,8 +63,7 @@ public class EngineStatusInShellTest
         Assert.Equal(logged + 2, log.Lines.Count);
     }
 
-    // A full disk must not pass unnoticed. The line stays through other activity until the
-    // next consultation starts
+    // A storage fault line stays through other activity until the next consultation
     [Fact]
     public async Task AStorageFaultHoldsTheLineUntilTheNextConsultation()
     {

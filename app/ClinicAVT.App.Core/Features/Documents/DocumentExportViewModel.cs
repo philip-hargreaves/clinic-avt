@@ -5,7 +5,6 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Core.Features.Documents;
 
-/// <summary>Copy and Export for the note and the patient sheet.</summary>
 public sealed partial class DocumentExportViewModel(
     NoteViewModel note, PatientSheetViewModel patient, IClipboard clipboard, IFilePicker picker,
     ITextFiles files, IStatusLine status)
@@ -23,7 +22,6 @@ public sealed partial class DocumentExportViewModel(
     [RelayCommand]
     private Task ExportPatient() => ExportAsync("patient-sheet.txt", PatientSheet());
 
-    // The sheet and its translation travel together to the patient
     private string PatientSheet()
     {
         var text = patient.PatientInfoText;

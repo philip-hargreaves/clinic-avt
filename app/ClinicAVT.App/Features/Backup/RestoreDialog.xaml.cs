@@ -5,7 +5,9 @@ using ClinicAVT.App.Core.Features.Backup;
 
 namespace ClinicAVT.App.Features.Backup;
 
-/// <summary>Open reads the file and shows what it holds; Restore then adds what is not here.</summary>
+/// <summary>
+/// Open reads the file and shows what it holds. Restore then adds what is not here.
+/// </summary>
 public sealed partial class RestoreDialog : ContentDialog
 {
     public RestoreDialog(RestoreViewModel viewModel)

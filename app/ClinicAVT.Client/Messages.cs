@@ -79,7 +79,7 @@ public static class JsonElements
         root.Find(path) is { ValueKind: JsonValueKind.String } s ? s.GetString() : null;
 }
 
-/// <summary>An import the clinician cancelled. Nothing of it was kept.</summary>
+/// <summary>The clinician cancelled the import and nothing was kept.</summary>
 public sealed class ImportCancelledException() : Exception("the import was cancelled");
 
 /// <summary>

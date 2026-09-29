@@ -5,7 +5,6 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Core.Features.Documents;
 
-/// <summary>The patient sheet written from the note, and its translation.</summary>
 public sealed partial class PatientSheetViewModel : ObservableObject
 {
     // By the names the translation model lists
@@ -52,7 +51,6 @@ public sealed partial class PatientSheetViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(TranslationRightToLeft), nameof(TranslationCaption))]
     public partial string TranslationLanguage { get; set; } = "";
 
-    /// <summary>The translation reads right to left, so its box flows that way.</summary>
     public bool TranslationRightToLeft => RightToLeftLanguages.Contains(TranslationLanguage);
 
     [ObservableProperty]
@@ -64,8 +62,8 @@ public sealed partial class PatientSheetViewModel : ObservableObject
     public partial bool TranslationRunning { get; set; }
 
     /// <summary>
-    /// The note has been edited since the sheet was written from it, so the sheet may not say
-    /// what the note says. Cleared when the sheet is rewritten.
+    /// True when the note was edited after the sheet was written from it. It clears when the sheet
+    /// is rewritten.
     /// </summary>
     [ObservableProperty]
     public partial bool PatientStale { get; set; }
@@ -103,10 +101,8 @@ public sealed partial class PatientSheetViewModel : ObservableObject
 
     public bool PatientCaptionVisible => PatientStateCaption.Length > 0;
 
-    // The output box shows only while translating or holding a result
     public bool TranslationVisible => TranslationRunning || TranslationText.Length > 0;
 
-    /// <summary>Copy and Export take the sheet, with its translation once there is one.</summary>
     public string PatientCopyTip =>
         TranslationText.Length > 0 ? "Copies the patient information and its translation" : "Copies the patient information";
 
@@ -129,10 +125,8 @@ public sealed partial class PatientSheetViewModel : ObservableObject
         PatientEditing = false;
     }
 
-    /// <summary>Ends an edit so its text can be saved.</summary>
     public void FinishEditing() => PatientEditing = false;
 
-    /// <summary>A stored session's sheet and translation, ready for review.</summary>
     public void LoadStored(string patient, string translation, string translationLanguage)
     {
         TranslationLanguage = translationLanguage;
