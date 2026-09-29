@@ -1,6 +1,7 @@
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
-using ClinicAVT.App.Core.Shell;
+using ClinicAVT.App.Core.Metrics;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
@@ -9,22 +10,32 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 public sealed class NotificationRouter
 {
     private readonly SessionRecorder _recorder;
-    private readonly SessionReview _review;
+    private readonly SessionImport _import;
+    private readonly ReviewedSession _review;
     private readonly ConsultationReadiness _readiness;
     private readonly NoteViewModel _note;
+    private readonly PatientSheetViewModel _patient;
     private readonly GuidanceViewModel _guidance;
-    private readonly StatusBarViewModel _status;
-    private readonly Metrics.PerformanceCollector? _metrics;
+    private readonly ReviewGuidanceSearch _search;
+    private readonly GuidanceSearchViewModel _query;
+    private readonly IStatusLine _status;
+    private readonly PerformanceCollector _metrics;
 
     public NotificationRouter(
-        SessionRecorder recorder, SessionReview review, ConsultationReadiness readiness, NoteViewModel note,
-        GuidanceViewModel guidance, StatusBarViewModel status, Metrics.PerformanceCollector? metrics)
+        SessionRecorder recorder, SessionImport import, ReviewedSession review,
+        ConsultationReadiness readiness, NoteViewModel note, PatientSheetViewModel patient,
+        GuidanceViewModel guidance, ReviewGuidanceSearch search, GuidanceSearchViewModel query,
+        IStatusLine status, PerformanceCollector metrics)
     {
         _recorder = recorder;
+        _import = import;
         _review = review;
         _readiness = readiness;
         _note = note;
+        _patient = patient;
         _guidance = guidance;
+        _search = search;
+        _query = query;
         _status = status;
         _metrics = metrics;
     }
@@ -35,13 +46,13 @@ public sealed class NotificationRouter
     private bool NoteExpected => State is SessionState.Finalising or SessionState.Review;
 
     // A rewrite's timings stay out of the per-session metrics
-    private Metrics.PerformanceCollector? SessionMetrics => _review.Regenerating ? null : _metrics;
+    private PerformanceCollector? SessionMetrics => _review.Regenerating ? null : _metrics;
 
     public void Route(EngineNotification notification)
     {
-        if (notification is NoteModelState { State: "ready" } resident)
+        if (notification is NoteModelState { State: ModelState.Ready } resident)
         {
-            _metrics?.NoteModel(resident.Name, resident.Tier, resident.Seconds);
+            _metrics.NoteModel(resident.Name, resident.Tier, resident.Seconds);
         }
 
         switch (notification)
@@ -53,7 +64,7 @@ public sealed class NotificationRouter
                 _recorder.AdvancePhase(progress.Stage);
                 break;
             case ImportProgress progress:
-                _recorder.OnImportProgress(progress);
+                _import.OnImportProgress(progress);
                 break;
             case NotePartial chunk when NoteExpected:
                 // Writing is claimed only once tokens stream
@@ -100,27 +111,27 @@ public sealed class NotificationRouter
                 _review.Regenerating = false;
                 break;
             case PatientPartial chunk:
-                if (_note.PatientInfoText.Length == 0)
+                if (_patient.PatientInfoText.Length == 0)
                 {
                     _status.Append("Writing patient information", busy: true);
                 }
 
-                _note.PatientInfoText = chunk.Text;
+                _patient.PatientInfoText = chunk.Text;
                 SessionMetrics?.PatientPartial(chunk.TokensPerSecond);
                 break;
             case PatientReady ready:
                 if (ready.Text is { } patientText)
                 {
-                    _note.PatientInfoText = patientText;
+                    _patient.PatientInfoText = patientText;
                 }
 
                 _note.Apply(NotePipelineEvent.PatientInfoReady);
-                _review.LoadedPatient = _note.PatientInfoText;
-                _note.PatientStale = false;
+                _review.LoadedPatient = _patient.PatientInfoText;
+                _patient.PatientStale = false;
                 // A rewritten sheet no longer matches a translation of the old one
-                if (_note.TranslationVisible)
+                if (_patient.TranslationVisible)
                 {
-                    _note.TranslationStale = true;
+                    _patient.TranslationStale = true;
                 }
 
                 _status.Append("Ready for review");
@@ -135,30 +146,43 @@ public sealed class NotificationRouter
                 _review.Regenerating = false;
                 break;
             case TranslationPartial chunk:
-                _note.TranslationText = chunk.Text;
+                _patient.TranslationText = chunk.Text;
                 break;
             case TranslationReady ready:
-                _note.TranslationText = ready.Text;
-                _note.TranslationLanguage = ready.Language;
-                _note.TranslationRunning = false;
-                _status.Append($"Translated to {_note.TranslationLanguage}");
+                _patient.TranslationText = ready.Text;
+                _patient.TranslationLanguage = ready.Language;
+                _patient.TranslationRunning = false;
+                _status.Append($"Translated to {_patient.TranslationLanguage}");
                 break;
             case TranslationFailed:
-                _note.TranslationRunning = false;
+                _patient.TranslationRunning = false;
                 _status.Append("Translation failed");
                 break;
             case GuidanceModelChanged:
                 _ = _readiness.LoadGuidanceReadinessAsync();
                 break;
+            // Results are keyed to the consultation on screen. A typed query has no id.
+            // A search replaced by a newer one says so and changes nothing
+            case GuidanceReady { Record.Detail: "superseded" }:
+                break;
+            case GuidanceReady { Record.Id: null } ready:
+                _query.ApplyReady(ready.Record);
+                break;
             case GuidanceReady ready:
-                _review.ApplyGuidance(ready.Record);
+                _search.ApplyReady(ready.Record);
+                break;
+            case GuidanceFailed { Detail: "superseded" }:
+                break;
+            case GuidanceFailed { Id: null } failed:
+                _query.ApplyFailed();
+                _status.Log($"guidance search failed: {failed.Detail}");
                 break;
             case GuidanceFailed failed:
-                _review.ApplyGuidanceFailed(failed);
+                _search.ApplyFailed(failed);
                 break;
             case GuidanceDocumentsChanged:
                 _guidance.DocumentsChanged();
-                _review.SearchAfterDocumentsSettle();
+                _search.SearchAfterDocumentsSettle();
                 break;
             case AudioLevel level:
                 _recorder.OnAudioLevel(level);

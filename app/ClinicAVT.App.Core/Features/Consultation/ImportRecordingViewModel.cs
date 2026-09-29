@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Demo;
+using ClinicAVT.App.Core.Features.Examples;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.Client;
 
@@ -25,22 +25,22 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
 
     private const string FutureLine = "The date and time can't be in the future.";
 
-    private readonly IEngineApi _engine;
+    private readonly IRecordingApi _engine;
     private readonly IFilePicker _picker;
     private readonly TimeProvider _clock;
-    private readonly IReadOnlyList<DemoTrack> _examples;
-    private readonly ILogger? _logger;
+    private readonly IReadOnlyList<ExampleRecording> _examples;
+    private readonly ILogger<ImportRecordingViewModel> _logger;
     private bool _choosingExample;
     private int _inspection;
 
-    public ImportRecordingViewModel(IEngineApi engine, IFilePicker picker, TimeProvider? clock = null,
-        IReadOnlyList<DemoTrack>? examples = null, ILogger? logger = null)
+    public ImportRecordingViewModel(IRecordingApi engine, IFilePicker picker, TimeProvider clock,
+        IExampleLibrary library, ILogger<ImportRecordingViewModel> logger)
     {
         _engine = engine;
         _picker = picker;
-        _clock = clock ?? TimeProvider.System;
+        _clock = clock;
         _logger = logger;
-        _examples = examples ?? DemoTracks.Load(logger: logger);
+        _examples = library.LoadRecordings();
         ExampleNames = [.. _examples.Select(e => e.Display)];
     }
 

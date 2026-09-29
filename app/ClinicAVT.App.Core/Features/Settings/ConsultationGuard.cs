@@ -1,5 +1,4 @@
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Core.Shell;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
@@ -10,14 +9,14 @@ namespace ClinicAVT.App.Core.Features.Settings;
 internal static class ConsultationGuard
 {
     /// <summary>True, with a status line saying so, while a consultation is in progress.</summary>
-    public static bool Blocks(ISessionState? session, StatusBarViewModel? status, string action)
+    public static bool Blocks(ISessionState session, IStatusLine status, string action)
     {
-        if (session?.ConsultationInProgress != true)
+        if (!session.ConsultationInProgress)
         {
             return false;
         }
 
-        status?.Append($"finish the consultation before {action}");
+        status.Append($"finish the consultation before {action}");
         return true;
     }
 }

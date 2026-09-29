@@ -2,8 +2,9 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Features.Backup;
 using ClinicAVT.App.Core.Features.Documents;
+using ClinicAVT.App.Core.Features.Settings;
 using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Core.Shell;
@@ -16,31 +17,36 @@ namespace ClinicAVT.App.Core.Features.Sessions;
 /// consultation view model, so the shared panes show it and regenerate,
 /// translate and save act on it.
 /// </summary>
-public sealed partial class SessionsViewModel : ObservableObject
+public sealed partial class SessionsViewModel : ObservableObject, INavigationGuard
 {
-    private readonly IEngineApi _engine;
-    private readonly StatusBarViewModel _status;
-    private readonly ConsultationViewModel _consultation;
+    private readonly ISessionStoreApi _engine;
+    private readonly IStatusLine _status;
+    private readonly IConsultation _consultation;
     private readonly IDialogService _dialogs;
-    private readonly AppPreferences? _preferences;
+    private readonly Func<BackupViewModel> _backups;
+    private readonly AppPreferences _preferences;
+    private readonly TimeProvider _time;
 
     // Set while the list moves the selection itself, on a refresh or a rename, so the
     // reselection does not reopen the session
     private bool _reselecting;
 
     public SessionsViewModel(
-        IEngineApi engine, StatusBarViewModel status, ConsultationViewModel consultation,
-        IDialogService dialogs, AppPreferences? preferences = null)
+        ISessionStoreApi engine, IStatusLine status, IConsultation consultation, NoteViewModel note,
+        IDialogService dialogs, Func<BackupViewModel> backups, AppPreferences preferences, TimeProvider time)
     {
         _engine = engine;
         _status = status;
         _consultation = consultation;
+        Note = note;
         _dialogs = dialogs;
+        _backups = backups;
         _preferences = preferences;
+        _time = time;
         // The list is on screen while a recording ends, so it follows the store
-        consultation.Recorder.Sealed += id => _ = RefreshAsync();
+        consultation.Sealed += id => _ = RefreshAsync();
         // The line under the title names the note's style, which a rewrite changes
-        consultation.Note.PropertyChanged += (_, e) =>
+        note.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(NoteViewModel.Style) or nameof(NoteViewModel.Detail))
             {
@@ -103,7 +109,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     [ObservableProperty]
     public partial string DetailMeta { get; private set; } = "";
 
-    public NoteViewModel Note => _consultation.Note;
+    public NoteViewModel Note { get; }
 
     /// <summary>
     /// Enters the page with the list loaded and the most recent consultation open.
@@ -150,12 +156,11 @@ public sealed partial class SessionsViewModel : ObservableObject
                     SessionText.Duration(session.AudioSeconds, started, session.EndedAt),
                     EditedStamp.Label(started, session.EditedAt ?? ""),
                     started,
-                    session.Demo,
+                    session.Sample,
                     session.HasReflection));
             }
 
-            EmptyBecauseOff = Sessions.Count == 0
-                && _preferences is { KeepConsultations: false };
+            EmptyBecauseOff = Sessions.Count == 0 && !_preferences.KeepConsultations;
             NothingStored = Sessions.Count == 0 && !EmptyBecauseOff;
             Regroup();
 
@@ -207,7 +212,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         }
     }
 
-    private static string DayLabel(string startedAt)
+    private string DayLabel(string startedAt)
     {
         if (Words.LocalTime(startedAt) is not { } started)
         {
@@ -215,7 +220,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         }
 
         var date = started.Date;
-        var today = DateTime.Today;
+        var today = _time.GetLocalNow().Date;
         if (date == today)
         {
             return "Today";
@@ -238,7 +243,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         }
 
         DetailOpen = await _consultation.OpenStoredSessionAsync(
-                row.Id, row.Started, row.StartedAt, row.HasReflection, row.Demo)
+                row.Id, row.Started, row.StartedAt, row.HasReflection, row.Sample)
             .ConfigureAwait(true);
         if (DetailOpen)
         {
@@ -318,7 +323,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     [RelayCommand]
     private async Task BackUp()
     {
-        if (!_engine.Connected || Settings.ConsultationGuard.Blocks(_consultation, _status, "backing up"))
+        if (!_engine.Connected || ConsultationGuard.Blocks(_consultation, _status, "backing up"))
         {
             return;
         }
@@ -328,7 +333,7 @@ public sealed partial class SessionsViewModel : ObservableObject
             await LeaveAsync().ConfigureAwait(true);
         }
 
-        await _dialogs.RunBackupAsync().ConfigureAwait(true);
+        await _dialogs.RunBackupAsync(_backups).ConfigureAwait(true);
         await RefreshAsync().ConfigureAwait(true);
     }
 
@@ -346,4 +351,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     /// </summary>
     public Task CloseStoredReviewAsync() =>
         _consultation.ReviewingStored ? LeaveAsync() : Task.CompletedTask;
+
+    public Task OnNavigatingAsync(string? leaving, string arriving) =>
+        arriving == Routes.Consultation ? CloseStoredReviewAsync() : Task.CompletedTask;
 }

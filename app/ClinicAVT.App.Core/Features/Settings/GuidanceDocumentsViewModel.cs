@@ -4,141 +4,33 @@ using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Hosting;
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Core.Preferences;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>
-/// What the guidance search covers. That is the installed corpora as the engine reports them
-/// and the clinician's own documents in the guidelines folder.
-/// </summary>
-public sealed partial class GuidanceLibrary : ObservableObject
+/// <summary>The clinician's own documents in the guidelines folder, which guidance also searches.</summary>
+public sealed partial class GuidanceDocumentsViewModel : ObservableObject
 {
-    private readonly AppPreferences? _preferences;
-    private readonly IEngineApi? _client;
-    private readonly StatusBarViewModel? _status;
-    private readonly IDialogService? _dialogs;
-    private readonly IFilePicker? _picker;
-    private readonly ILauncher? _launcher;
-    private readonly bool _initialising;
+    private readonly IGuidanceApi _engine;
+    private readonly IStatusLine _status;
+    private readonly IDialogService _dialogs;
+    private readonly IFilePicker _picker;
+    private readonly ILauncher _launcher;
+    private readonly IOneDriveFolders _oneDrive;
     private bool _documentsNeededAttention;
 
-    public GuidanceLibrary(
-        AppPreferences? preferences, IEngineApi? client, StatusBarViewModel? status,
-        IDialogService? dialogs, IFilePicker? picker, ILauncher? launcher)
+    public GuidanceDocumentsViewModel(
+        IGuidanceApi engine, IEngineEvents events, IStatusLine status, IDialogService dialogs,
+        IFilePicker picker, ILauncher launcher, IOneDriveFolders oneDrive)
     {
-        _preferences = preferences;
-        _client = client;
+        _engine = engine;
         _status = status;
         _dialogs = dialogs;
         _picker = picker;
         _launcher = launcher;
-        // Restoring saved values is not the clinician changing them
-        _initialising = true;
-        IncludeResearchGuidance = preferences?.IncludeResearchGuidance ?? false;
-        _initialising = false;
-    }
-
-    /// <summary>
-    /// Reloads both lists from the engine when it connects or reloads its corpora.
-    /// </summary>
-    public void Connected()
-    {
-        _ = LoadGuidanceCorporaAsync();
-        _ = LoadDocumentsAsync();
-    }
-
-    /// <summary>A document changed, or an ingest reported progress.</summary>
-    public void Apply(EngineNotification notification)
-    {
-        switch (notification)
-        {
-            case GuidanceModelChanged:
-                Connected();
-                break;
-            case GuidanceDocumentChanged changed:
-                Upsert(changed.Document);
-                break;
-            case GuidanceProgress progress:
-                Documents.FirstOrDefault(r => r.Id == progress.Id)?.ApplyProgress(progress);
-                break;
-            default:
-                break;
-        }
-    }
-
-    /// <summary>The corpora the engine has, refused ones included.</summary>
-    public ObservableCollection<CorpusRow> GuidanceCorpora { get; } = [];
-
-    /// <summary>Why nothing is listed, empty when corpora are shown.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GuidanceCaptionVisible), nameof(GuidanceInstalledVisible))]
-    public partial string GuidanceCaption { get; set; } = "";
-
-    public bool GuidanceCaptionVisible => GuidanceCaption.Length > 0;
-
-    /// <summary>Hidden when nothing is installed, so no empty card shows.</summary>
-    public bool GuidanceInstalledVisible => GuidanceCorpora.Count > 0 || GuidanceCaption.Length > 0;
-
-    private async Task LoadGuidanceCorporaAsync()
-    {
-        if (!_client.IsConnected())
-        {
-            return;
-        }
-
-        if (!await EngineCall.LogAsync(_status, "guidance/corpora",
-                async () => ApplyGuidanceCorpora(await _client.GuidanceCorporaAsync().ConfigureAwait(true)))
-            .ConfigureAwait(true))
-        {
-            GuidanceCorpora.Clear();
-            GuidanceCaption = "Unavailable";
-        }
-    }
-
-    private void ApplyGuidanceCorpora(CorporaStatus reply)
-    {
-        GuidanceCorpora.Clear();
-        foreach (var corpus in reply.Corpora)
-        {
-            GuidanceCorpora.Add(RowFrom(corpus));
-        }
-
-        var detail = reply.Detail ?? "";
-        GuidanceCaption = reply.State switch
-        {
-            "loading" => "Loading",
-            "unavailable" => detail.Length > 0 ? $"Unavailable: {detail}" : "Unavailable",
-            _ => "",
-        };
-        OnPropertyChanged(nameof(GuidanceInstalledVisible));
-    }
-
-    // A refused corpus keeps its place, so unused guidance stays visible
-    private static CorpusRow RowFrom(CorpusInfo corpus)
-    {
-        var refused = corpus.Unavailable ?? "";
-        if (refused.Length > 0)
-        {
-            return new CorpusRow(corpus.Id, $"Not used: {refused}", "", true);
-        }
-
-        // The licence is not shown because the attribution line is what it asks for
-        var parts = new List<string>();
-        if (corpus.Chunks > 0)
-        {
-            parts.Add($"{corpus.Chunks:N0} passages");
-        }
-
-        var built = Words.ShortDate(corpus.BuiltAt ?? "");
-        if (built.Length > 0)
-        {
-            parts.Add(built);
-        }
-
-        return new CorpusRow(corpus.Name, string.Join(" · ", parts), corpus.Attribution ?? "", false);
+        _oneDrive = oneDrive;
+        events.OnConnected(() => _ = LoadDocumentsAsync());
+        events.Subscribe<EngineNotification>(Apply);
     }
 
     /// <summary>
@@ -189,23 +81,37 @@ public sealed partial class GuidanceLibrary : ObservableObject
 
     public bool DocumentsPresent => Documents.Count > 0;
 
+    /// <summary>A document changed, or an ingest reported progress.</summary>
+    private void Apply(EngineNotification notification)
+    {
+        switch (notification)
+        {
+            case GuidanceModelChanged:
+                _ = LoadDocumentsAsync();
+                break;
+            case GuidanceDocumentChanged changed:
+                Upsert(changed.Document);
+                break;
+            case GuidanceProgress progress:
+                Documents.FirstOrDefault(r => r.Id == progress.Id)?.ApplyProgress(progress);
+                break;
+            default:
+                break;
+        }
+    }
+
     [RelayCommand]
     private void OpenFolder()
     {
         if (GuidelinesFolder.Length > 0)
         {
-            _launcher?.RevealFolder(GuidelinesFolder);
+            _launcher.RevealFolder(GuidelinesFolder);
         }
     }
 
     [RelayCommand]
     private async Task AddDocuments()
     {
-        if (_picker is null)
-        {
-            return;
-        }
-
         var paths = await _picker.PickFilesAsync([".pdf", ".txt", ".md"]).ConfigureAwait(true);
         if (paths.Count > 0)
         {
@@ -215,14 +121,14 @@ public sealed partial class GuidanceLibrary : ObservableObject
 
     private async Task AddPathsAsync(IReadOnlyList<string> paths)
     {
-        if (!_client.IsConnected())
+        if (!_engine.Connected)
         {
             return;
         }
 
         if (!await EngineCall.LogAsync(_status, "guidance/documents/add", async () =>
             {
-                var added = await _client.AddDocumentsAsync(paths).ConfigureAwait(true);
+                var added = await _engine.AddDocumentsAsync(paths).ConfigureAwait(true);
                 foreach (var document in added.Documents)
                 {
                     Upsert(document);
@@ -260,17 +166,17 @@ public sealed partial class GuidanceLibrary : ObservableObject
 
     private async Task LoadDocumentsAsync()
     {
-        if (!_client.IsConnected())
+        if (!_engine.Connected)
         {
             return;
         }
 
         if (!await EngineCall.LogAsync(_status, "guidance/documents", async () =>
             {
-                var list = await _client.ListDocumentsAsync().ConfigureAwait(true);
+                var list = await _engine.ListDocumentsAsync().ConfigureAwait(true);
                 GuidelinesFolder = list.Folder ?? "";
                 FolderMissing = !list.Found;
-                FolderInOneDrive = InOneDrive(GuidelinesFolder, OneDriveRoots());
+                FolderInOneDrive = OneDrive.Holds(GuidelinesFolder, _oneDrive.Roots());
                 var unsupported = list.Unsupported;
                 Documents.Clear();
                 foreach (var document in list.Documents)
@@ -294,7 +200,7 @@ public sealed partial class GuidanceLibrary : ObservableObject
     private void Upsert(DocumentInfo document)
     {
         var row = Documents.FirstOrDefault(r => r.Id == document.Id);
-        if (document.State == "removed")
+        if (document.State == DocumentState.Removed)
         {
             if (row is not null)
             {
@@ -338,19 +244,6 @@ public sealed partial class GuidanceLibrary : ObservableObject
         return i;
     }
 
-    private static readonly string[] OneDriveVariables =
-        ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"];
-
-    private static IEnumerable<string> OneDriveRoots() =>
-        OneDriveVariables.Select(Environment.GetEnvironmentVariable)
-            .Where(root => !string.IsNullOrEmpty(root))
-            .Select(root => root!);
-
-    // A folder under a OneDrive root syncs to the cloud, which the caption states
-    public static bool InOneDrive(string folder, IEnumerable<string> roots) =>
-        folder.Length > 0
-        && roots.Any(root => folder.StartsWith(root, StringComparison.OrdinalIgnoreCase));
-
     // The summary follows every change. The first failure opens the list once. Work in
     // progress does not, since documents are checked again at every launch
     private void RefreshBatch()
@@ -369,12 +262,12 @@ public sealed partial class GuidanceLibrary : ObservableObject
     [RelayCommand]
     private async Task RemoveDocument(DocumentRow? row)
     {
-        if (row is null || !_client.IsConnected())
+        if (row is null || !_engine.Connected)
         {
             return;
         }
 
-        if (_dialogs is not null && !await _dialogs.ConfirmAsync($"Remove {row.Name}?",
+        if (!await _dialogs.ConfirmAsync($"Remove {row.Name}?",
                 "The file is moved to the Recycle Bin and no longer searched. To keep the file, "
                 + "move it out of the folder instead. Guidance already saved with a consultation "
                 + "is unchanged.", "Remove").ConfigureAwait(true))
@@ -383,18 +276,18 @@ public sealed partial class GuidanceLibrary : ObservableObject
         }
 
         await EngineCall.LogAsync(_status, "guidance/documents/remove",
-            () => _client.RemoveDocumentAsync(row.Id)).ConfigureAwait(true);
+            () => _engine.RemoveDocumentAsync(row.Id)).ConfigureAwait(true);
     }
 
     [RelayCommand]
     private async Task RemoveAllDocuments()
     {
-        if (!_client.IsConnected() || Documents.Count == 0)
+        if (!_engine.Connected || Documents.Count == 0)
         {
             return;
         }
 
-        if (_dialogs is not null && !await _dialogs.ConfirmAsync(
+        if (!await _dialogs.ConfirmAsync(
                 Documents.Count == 1 ? "Remove the document?" : $"Remove all {Documents.Count} documents?",
                 "Every file in the folder is moved to the Recycle Bin and no longer searched. "
                 + "Guidance already saved with consultations is unchanged.", "Remove all")
@@ -403,39 +296,7 @@ public sealed partial class GuidanceLibrary : ObservableObject
             return;
         }
 
-        await EngineCall.LogAsync(_status, "guidance/documents/removeAll", _client.RemoveAllDocumentsAsync)
+        await EngineCall.LogAsync(_status, "guidance/documents/removeAll", _engine.RemoveAllDocumentsAsync)
             .ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Shows the switch for the local research corpus, the NICE demo, in a debug build only.
-    /// </summary>
-    public bool ResearchToggleVisible { get; } = BuildFlags.Debug;
-
-    [ObservableProperty]
-    public partial bool IncludeResearchGuidance { get; set; }
-
-    partial void OnIncludeResearchGuidanceChanged(bool value)
-    {
-        if (_initialising)
-        {
-            return;
-        }
-
-        _preferences.Update(p => p.IncludeResearchGuidance = value);
-        _ = ApplyResearchAsync(value);
-    }
-
-    // The engine reloads its corpora live and announces the change, so the
-    // list follows without a restart
-    private async Task ApplyResearchAsync(bool include)
-    {
-        if (!_client.IsConnected())
-        {
-            return;
-        }
-
-        await EngineCall.LogAsync(_status, "guidance/research",
-            () => _client.SetResearchGuidanceAsync(include)).ConfigureAwait(true);
     }
 }

@@ -2,8 +2,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Features.Guidance;
+using ClinicAVT.App.Core.Ports;
 using ClinicAVT.App.Core.Preferences;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
@@ -14,26 +14,39 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 /// </summary>
 public sealed partial class ConsultationReadiness : ObservableObject
 {
-    private readonly IEngineApi _engine;
-    private readonly StatusBarViewModel _status;
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+
+    private readonly IEngineControl _engine;
+    private readonly INoteApi _notes;
+    private readonly IGuidanceApi _guidanceApi;
+    private readonly IStatusLine _status;
+    private readonly IModelActivity _models;
     private readonly NoteViewModel _note;
-    private readonly GuidanceViewModel _guidance;
+    private readonly PatientSheetViewModel _patient;
+    private readonly GuidanceAvailability _guidance;
     private readonly SessionRecorder _recorder;
-    private readonly AppPreferences? _preferences;
-    private readonly TimeSpan _pollInterval;
+    private readonly AppPreferences _preferences;
+    private readonly TimeProvider _time;
     private bool _checking;
 
     public ConsultationReadiness(
-        IEngineApi engine, StatusBarViewModel status, NoteViewModel note, GuidanceViewModel guidance,
-        SessionRecorder recorder, AppPreferences? preferences, TimeSpan pollInterval)
+        IEngineControl engine, INoteApi notes, IGuidanceApi guidanceApi, IStatusLine status,
+        IModelActivity models, NoteViewModel note, PatientSheetViewModel patient,
+        GuidanceAvailability guidance, SessionRecorder recorder, AppPreferences preferences,
+        TimeProvider time)
     {
         _engine = engine;
+        _notes = notes;
+        _guidanceApi = guidanceApi;
         _status = status;
+        _models = models;
         _note = note;
+        _patient = patient;
         _guidance = guidance;
         _recorder = recorder;
         _preferences = preferences;
-        _pollInterval = pollInterval;
+        _time = time;
+        note.OptionsChanged += NoteOptionsChanged;
     }
 
     /// <summary>
@@ -56,7 +69,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
     {
         var before = (_guidance.Readiness, _guidance.ReadinessDetail, _guidance.RefusedCorpora.Count);
         if (!await EngineCall.LogAsync(_status, "guidance/corpora",
-                async () => _guidance.ApplyCorpora(await _engine.GuidanceCorporaAsync().ConfigureAwait(true)))
+                async () => _guidance.ApplyCorpora(await _guidanceApi.GuidanceCorporaAsync().ConfigureAwait(true)))
             .ConfigureAwait(true))
         {
             _guidance.CorporaUnavailable();
@@ -90,12 +103,12 @@ public sealed partial class ConsultationReadiness : ObservableObject
             return;
         }
 
-        if (model.State == "loading" && model.FirstUse)
+        if (model.State == ModelState.Loading && model.FirstUse)
         {
             ModelsReady = false;
-            _status.SetSettingUp(true);
+            _models.SetSettingUp(true);
         }
-        else if (model.State is "ready" or "failed")
+        else if (model.State is ModelState.Ready or ModelState.Failed)
         {
             GateLifted();
         }
@@ -106,12 +119,12 @@ public sealed partial class ConsultationReadiness : ObservableObject
         if (!ModelsReady)
         {
             ModelsReady = true;
-            _status.SetSettingUp(false);
+            _models.SetSettingUp(false);
             _status.Append("Ready");
         }
     }
 
-    public void NoteOptionsChanged()
+    private void NoteOptionsChanged()
     {
         _preferences.Update(p =>
         {
@@ -138,12 +151,11 @@ public sealed partial class ConsultationReadiness : ObservableObject
             // Use the reply's model state, since the shell may reconnect mid-load
             await EngineCall.TryAsync(_status, "note/tier", async () =>
             {
-                var reply = await _engine.SetNoteTierAsync(_preferences?.NoteTier ?? AppPreferences.AutoNoteTier)
-                    .ConfigureAwait(true);
-                _status.ApplyNoteModel(reply.State, firstUse: null, reply.Name);
+                var reply = await _engine.SetNoteTierAsync(_preferences.NoteTier).ConfigureAwait(true);
+                _models.ApplyNoteModel(reply.State, firstUse: null, reply.Name);
             }).ConfigureAwait(true);
             await EngineCall.TryAsync(_status, "note/options",
-                () => _engine.SetNoteOptionsAsync(_note.Style, _note.Detail)).ConfigureAwait(true);
+                () => _notes.SetNoteOptionsAsync(_note.Style, _note.Detail)).ConfigureAwait(true);
         }
     }
 
@@ -188,10 +200,10 @@ public sealed partial class ConsultationReadiness : ObservableObject
                         if (ModelsReady)
                         {
                             ModelsReady = false;
-                            _status.SetSettingUp(true);
+                            _models.SetSettingUp(true);
                         }
 
-                        await Task.Delay(_pollInterval).ConfigureAwait(true);
+                        await Task.Delay(PollInterval, _time).ConfigureAwait(true);
                         readiness = await _engine.ReadinessAsync().ConfigureAwait(true);
                     }
 
@@ -199,7 +211,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
                 }).ConfigureAwait(true))
             {
                 ModelsReady = true;
-                _status.SetSettingUp(false);
+                _models.SetSettingUp(false);
             }
         }
         finally
@@ -212,11 +224,11 @@ public sealed partial class ConsultationReadiness : ObservableObject
     private async Task LoadLanguagesAsync() =>
         await EngineCall.LogAsync(_status, "translate/languages", async () =>
         {
-            var languages = await _engine.LanguagesAsync().ConfigureAwait(true);
-            _note.Languages.Clear();
+            var languages = await _notes.LanguagesAsync().ConfigureAwait(true);
+            _patient.Languages.Clear();
             foreach (var language in languages)
             {
-                _note.Languages.Add(language);
+                _patient.Languages.Add(language);
             }
         }).ConfigureAwait(true);
 }

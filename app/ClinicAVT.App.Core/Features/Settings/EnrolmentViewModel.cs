@@ -32,23 +32,21 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         + "check your blood pressure and listen to your chest, and then we can talk about what "
         + "happens next. Do you have any questions before we start?";
 
-    private readonly IEngineApi _engine;
-    private readonly IUiDispatcher? _dispatcher;
-    private readonly ILogger? _logger;
+    private readonly IEnrolmentApi _engine;
+    private readonly ILogger<EnrolmentViewModel> _logger;
     private readonly string _micId;
-    private readonly double _seconds;
+    private readonly IDisposable _notifications;
     private readonly TaskCompletionSource<bool> _outcome =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public EnrolmentViewModel(IEngineApi engine, string micId = "",
-        double seconds = DefaultSeconds, IUiDispatcher? dispatcher = null, ILogger? logger = null)
+    public EnrolmentViewModel(
+        IEnrolmentApi engine, IEngineEvents events, IMicrophoneChoice microphone,
+        ILogger<EnrolmentViewModel> logger)
     {
         _engine = engine;
-        _micId = micId;
-        _seconds = seconds;
-        _dispatcher = dispatcher;
+        _micId = microphone.MicId;
         _logger = logger;
-        _engine.NotificationReceived += OnNotification;
+        _notifications = events.Subscribe<EngineNotification>(OnNotification);
     }
 
     [ObservableProperty]
@@ -124,7 +122,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         Detail = "";
         try
         {
-            await _engine.StartEnrolmentAsync(_seconds, _micId).ConfigureAwait(true);
+            await _engine.StartEnrolmentAsync(DefaultSeconds, _micId).ConfigureAwait(true);
         }
         catch (Exception e)
         {
@@ -141,7 +139,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         catch (Exception e)
         {
             // The engine will report the outcome, or the dialog is closing anyway
-            _logger?.StepFailed("anchor/enrol/cancel", e.Message);
+            _logger.StepFailed("anchor/enrol/cancel", e.Message);
         }
     }
 
@@ -179,7 +177,7 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        _engine.NotificationReceived -= OnNotification;
+        _notifications.Dispose();
         _outcome.TrySetResult(State == EnrolmentState.Succeeded);
     }
 
@@ -188,10 +186,10 @@ public sealed partial class EnrolmentViewModel : ObservableObject, IDisposable
         switch (notification)
         {
             case EnrolmentProgress progress:
-                _dispatcher.PostOrRun(() => Apply(progress));
+                Apply(progress);
                 break;
             case EnrolmentDone done:
-                _dispatcher.PostOrRun(() => Apply(done));
+                Apply(done);
                 break;
             default:
                 break;

@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Guidance;
@@ -13,8 +12,8 @@ namespace ClinicAVT.App.Core.Features.Guidance;
 /// passage with its lines marked, and can be turned from there.
 /// </summary>
 public sealed partial class PageViewModel(
-    IEngineApi engine, ILauncher launcher, IClipboard clipboard, StatusBarViewModel status)
-    : ObservableObject
+    IGuidanceApi engine, ILauncher launcher, IClipboard clipboard, IStatusLine status, TimeProvider time)
+    : ObservableObject, IDocumentPages
 {
     private static readonly TimeSpan SlowAfter = TimeSpan.FromMilliseconds(1500);
 
@@ -235,7 +234,7 @@ public sealed partial class PageViewModel(
 
     private async Task MarkSlowAsync(int load)
     {
-        await Task.Delay(SlowAfter).ConfigureAwait(true);
+        await Task.Delay(SlowAfter, time).ConfigureAwait(true);
         if (load == _load && Loading)
         {
             Slow = true;

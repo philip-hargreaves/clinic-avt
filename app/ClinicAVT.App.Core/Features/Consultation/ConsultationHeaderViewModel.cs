@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ClinicAVT.App.Core.Common;
+using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
 
@@ -10,23 +11,23 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 /// </summary>
 public sealed partial class ConsultationHeaderViewModel : ObservableObject
 {
-    private readonly ConsultationViewModel _session;
-    private readonly Func<DateTimeOffset> _clock;
+    private readonly IConsultation _session;
+    private readonly TimeProvider _time;
     private string _id = "";
 
-    public ConsultationHeaderViewModel(ConsultationViewModel session, Func<DateTimeOffset>? clock = null)
+    public ConsultationHeaderViewModel(IConsultation session, TimeProvider time)
     {
         _session = session;
-        _clock = clock ?? (() => DateTimeOffset.Now);
+        _time = time;
         _session.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(ConsultationViewModel.State))
+            if (e.PropertyName is nameof(IConsultation.State))
             {
                 OnStateChanged();
             }
         };
         // An import never records, so its heading is the time chosen for it
-        _session.Recorder.ImportStarted += import =>
+        _session.ImportStarted += import =>
             Title = Words.LocalTime(import.StartedAt) is { } started ? SessionText.Heading(started) : "";
     }
 
@@ -36,11 +37,11 @@ public sealed partial class ConsultationHeaderViewModel : ObservableObject
 
     private void OnStateChanged()
     {
-        var id = _session.Recorder.RecordingSessionId ?? "";
+        var id = _session.RecordingSessionId ?? "";
         if (_session.State == SessionState.Recording && id != _id)
         {
             _id = id;
-            Title = SessionText.Heading(_clock());
+            Title = SessionText.Heading(_time.GetLocalNow());
         }
     }
 }

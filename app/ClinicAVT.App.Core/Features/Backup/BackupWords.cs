@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ClinicAVT.App.Core.Common;
-using ClinicAVT.App.Core.Features.Settings;
+using ClinicAVT.App.Core.Ports;
+using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Backup;
 
@@ -32,35 +33,35 @@ public static class BackupWords
     }
 
     /// <summary>A failed backup or restore in plain words, from the engine's fixed code.</summary>
-    public static string Failure(string job, string code)
+    public static string Failure(ArchiveJob job, ArchiveError code)
     {
-        var backup = job == "backup";
+        var backup = job == ArchiveJob.Backup;
         return code switch
         {
-            "wrong-password" => "The password does not match this backup.",
-            "not-a-backup" => "This is not a ClinicAVT backup.",
-            "newer-version" =>
+            ArchiveError.WrongPassword => "The password does not match this backup.",
+            ArchiveError.NotABackup => "This is not a ClinicAVT backup.",
+            ArchiveError.NewerVersion =>
                 "This backup was made by a newer version of ClinicAVT. Update ClinicAVT, then try again.",
-            "damaged" when backup =>
+            ArchiveError.Damaged when backup =>
                 "The backup did not pass its check, so it was not kept. Try again, or save it somewhere else. "
                 + "Nothing on this computer has changed.",
-            "damaged" => "This file is damaged or incomplete. Nothing was restored.",
-            "weak-password" => $"Use a password of {BackupPasswords.MinimumLength} characters or more.",
-            "write-failed" when backup =>
+            ArchiveError.Damaged => "This file is damaged or incomplete. Nothing was restored.",
+            ArchiveError.WeakPassword => $"Use a password of {BackupPasswords.MinimumLength} characters or more.",
+            ArchiveError.WriteFailed when backup =>
                 "The backup could not be saved there. Check there is space and that you can save to "
                 + "that folder, then try again. Nothing on this computer has changed.",
-            "write-failed" =>
+            ArchiveError.WriteFailed =>
                 "Restoring stopped before the end. Restore again to finish; consultations already "
                 + "here are left as they are.",
-            "read-failed" => "The file could not be read. Check the drive is still connected, then try again.",
+            ArchiveError.ReadFailed => "The file could not be read. Check the drive is still connected, then try again.",
             _ when backup => "The backup could not be made. Nothing on this computer has changed.",
             _ => "The backup could not be restored. Nothing was restored.",
         };
     }
 
     /// <summary>A request the engine refused before the job started, such as during a recording.</summary>
-    public static string Refused(string job, Exception e, ILogger? logger = null) =>
-        job == "backup"
+    public static string Refused(ArchiveJob job, Exception e, ILogger logger) =>
+        job == ArchiveJob.Backup
             ? $"The backup could not start: {EngineWords.Reason(e, logger)}. Nothing on this computer has changed."
             : $"The backup could not be opened: {EngineWords.Reason(e, logger)}.";
 
@@ -68,26 +69,26 @@ public static class BackupWords
     /// The standing line for a folder that syncs to OneDrive, empty for any other. A work
     /// OneDrive may be approved by the practice; a personal one is not.
     /// </summary>
-    public static string OneDriveLine(string folder, Func<string, string?> environment)
+    public static string OneDriveLine(string folder, IOneDriveFolders oneDrive)
     {
-        if (InRoot(folder, environment("OneDriveCommercial")))
+        if (InRoot(folder, oneDrive.Work))
         {
             return "This folder is in your work OneDrive, so the backup will be copied there. "
                 + "Check that your practice allows this.";
         }
 
-        if (InRoot(folder, environment("OneDriveConsumer")))
+        if (InRoot(folder, oneDrive.Personal))
         {
             return "This folder is in a personal OneDrive, so the backup will be copied to the "
                 + "cloud. Choose a place your practice has approved.";
         }
 
-        return InRoot(folder, environment("OneDrive"))
+        return InRoot(folder, oneDrive.Primary)
             ? "This folder is in OneDrive, so the backup will be copied to the cloud. Check that "
                 + "your practice allows this."
             : "";
     }
 
     private static bool InRoot(string folder, string? root) =>
-        !string.IsNullOrEmpty(root) && GuidanceLibrary.InOneDrive(folder, [root]);
+        !string.IsNullOrEmpty(root) && OneDrive.Holds(folder, [root]);
 }

@@ -20,23 +20,25 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
 
     private const string Rule = "----------------------------------------";
 
-    private readonly IEngineApi _engine;
+    private readonly IReflectionApi _engine;
     private readonly IFilePicker _picker;
+    private readonly ITextFiles _files;
     private readonly ILauncher _launcher;
     private readonly TimeProvider _clock;
-    private readonly ILogger? _logger;
+    private readonly ILogger<ExportReflectionsViewModel> _logger;
     private IReadOnlyList<ReflectionListing> _all = [];
     private bool _loaded;
     private string _folder = "";
 
-    public ExportReflectionsViewModel(IEngineApi engine, IFilePicker picker, ILauncher launcher,
-        TimeProvider? clock = null, ILogger? logger = null)
+    public ExportReflectionsViewModel(IReflectionApi engine, IFilePicker picker, ITextFiles files,
+        ILauncher launcher, TimeProvider clock, ILogger<ExportReflectionsViewModel> logger)
     {
         _engine = engine;
         _logger = logger;
         _picker = picker;
+        _files = files;
         _launcher = launcher;
-        _clock = clock ?? TimeProvider.System;
+        _clock = clock;
         PeriodOptions = Enumerable.Range(0, BackupPeriod.Kinds.Count)
             .Select(i => BackupPeriod.Label(i, Today)).ToArray();
     }
@@ -128,7 +130,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         CountLine = "Counting reflections…";
         try
         {
-            _all = (await _engine.ListReflectionsAsync().ConfigureAwait(true)).Where(r => !r.Demo).ToList();
+            _all = (await _engine.ListReflectionsAsync().ConfigureAwait(true)).Where(r => !r.Sample).ToList();
             _loaded = true;
             Recount();
         }
@@ -157,7 +159,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
     }
 
     /// <summary>The file: the warning, then each reflection as Copy writes it.</summary>
-    public static string Compose(IEnumerable<ReflectionEntry> entries)
+    private static string Compose(IEnumerable<ReflectionEntry> entries)
     {
         var text = new StringBuilder(Warning).Append("\n\n");
         text.AppendJoin($"\n{Rule}\n\n", entries.Select(ReflectionExport.Format));
@@ -227,7 +229,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
 
         try
         {
-            await File.WriteAllTextAsync(path, Compose(entries)).ConfigureAwait(true);
+            await _files.WriteAsync(path, Compose(entries)).ConfigureAwait(true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

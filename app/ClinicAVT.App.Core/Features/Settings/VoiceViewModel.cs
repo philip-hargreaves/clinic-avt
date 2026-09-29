@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Core.Shell;
 using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
@@ -16,21 +15,23 @@ public sealed partial class VoiceViewModel : ObservableObject
     // Below this the automatic print is still settling, and the copy says so
     private const int LearnedAfterSessions = 5;
 
-    private readonly IEngineApi _engine;
+    private readonly IEnrolmentApi _engine;
     private readonly IDialogService _dialogs;
-    private readonly ISessionState? _session;
-    private readonly StatusBarViewModel? _status;
+    private readonly Func<EnrolmentViewModel> _enrolments;
+    private readonly ISessionState _session;
+    private readonly IStatusLine _status;
     private readonly TimeProvider _clock;
 
-    public VoiceViewModel(IEngineApi engine, IDialogService dialogs, ISessionState? session = null,
-        StatusBarViewModel? status = null, TimeProvider? clock = null)
+    public VoiceViewModel(IEnrolmentApi engine, IEngineEvents events, IDialogService dialogs,
+        Func<EnrolmentViewModel> enrolments, ISessionState session, IStatusLine status, TimeProvider clock)
     {
         _engine = engine;
         _dialogs = dialogs;
+        _enrolments = enrolments;
         _session = session;
         _status = status;
-        _clock = clock ?? TimeProvider.System;
-        _engine.ConnectedChanged += connected =>
+        _clock = clock;
+        events.SubscribeConnection(connected =>
         {
             SetUpVoiceCommand.NotifyCanExecuteChanged();
             ForgetVoiceCommand.NotifyCanExecuteChanged();
@@ -38,14 +39,13 @@ public sealed partial class VoiceViewModel : ObservableObject
             {
                 _ = RefreshAsync();
             }
-        };
+        });
     }
 
-    /// <summary>"none", "accrued" or "enrolled", as the engine reports it.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Headline), nameof(HasVoice), nameof(SetUpLabel))]
     [NotifyCanExecuteChangedFor(nameof(ForgetVoiceCommand))]
-    public partial string Origin { get; private set; } = "none";
+    public partial AnchorOrigin Origin { get; private set; } = AnchorOrigin.None;
 
     /// <summary>Consultations that refined the print since it began.</summary>
     [ObservableProperty]
@@ -61,16 +61,16 @@ public sealed partial class VoiceViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(SetUpVoiceCommand), nameof(ForgetVoiceCommand))]
     public partial bool Busy { get; private set; }
 
-    public bool HasVoice => Origin != "none";
+    public bool HasVoice => Origin != AnchorOrigin.None;
 
     public string SetUpLabel => HasVoice ? "Redo" : "Set up";
 
     public string Headline => Origin switch
     {
-        "enrolled" => EnrolledDescription(),
-        "accrued" when Sessions < LearnedAfterSessions =>
+        AnchorOrigin.Enrolled => EnrolledDescription(),
+        AnchorOrigin.Accrued when Sessions < LearnedAfterSessions =>
             $"Learning automatically, {Words.Count(Sessions, "consultation")} so far",
-        "accrued" => $"Learned automatically from {Words.Count(Sessions, "consultation")}",
+        AnchorOrigin.Accrued => $"Learned automatically from {Words.Count(Sessions, "consultation")}",
         _ => "Tells you apart from the patient. Learned automatically, or set up now.",
     };
 
@@ -102,11 +102,17 @@ public sealed partial class VoiceViewModel : ObservableObject
         Busy = true;
         try
         {
-            var made = await _dialogs.RunEnrolmentAsync().ConfigureAwait(true);
+            bool made;
+            using (var enrolment = _enrolments())
+            {
+                await _dialogs.ShowAsync(enrolment).ConfigureAwait(true);
+                made = await enrolment.Outcome.ConfigureAwait(true);
+            }
+
             await RefreshAsync().ConfigureAwait(true);
             if (made)
             {
-                _status?.Append("voice enrolment complete");
+                _status.Append("voice enrolment complete");
             }
         }
         finally
@@ -140,7 +146,7 @@ public sealed partial class VoiceViewModel : ObservableObject
                     _engine.ClearAnchorAsync).ConfigureAwait(true))
             {
                 await RefreshAsync().ConfigureAwait(true);
-                _status?.Append("voice enrolment forgotten");
+                _status.Append("voice enrolment forgotten");
             }
         }
         finally

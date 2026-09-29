@@ -9,7 +9,7 @@ namespace ClinicAVT.App.Core.Features.Consultation;
 /// </summary>
 public sealed class LiveSessionState : ISessionState
 {
-    private ConsultationViewModel? _session;
+    private IConsultation? _session;
 
     public bool ConsultationInProgress { get; private set; }
 
@@ -19,22 +19,22 @@ public sealed class LiveSessionState : ISessionState
 
     public string SessionPhase { get; private set; } = "";
 
-    public void Follow(ConsultationViewModel session)
+    public void Follow(IConsultation session)
     {
         _session = session;
         Mirror(session);
         session.PropertyChanged += (_, e) => OnChanged(session, e);
     }
 
-    private void OnChanged(ConsultationViewModel session, PropertyChangedEventArgs e)
+    private void OnChanged(IConsultation session, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(ConsultationViewModel.State) or nameof(ConsultationViewModel.Phase))
+        if (e.PropertyName is nameof(IConsultation.State) or nameof(IConsultation.Phase))
         {
             Mirror(session);
         }
     }
 
-    private void Mirror(ConsultationViewModel session)
+    private void Mirror(IConsultation session)
     {
         ConsultationInProgress = session.ConsultationInProgress;
         SessionPhase = session.SessionPhase;
