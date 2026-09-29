@@ -1,9 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
-using ClinicAVT.App.Platform;
 
-namespace ClinicAVT.App.Tests.Hosting;
+namespace ClinicAVT.App.Platform.Tests;
 
 public class PowerThrottlingTest
 {

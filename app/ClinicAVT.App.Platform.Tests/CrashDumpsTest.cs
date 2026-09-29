@@ -1,7 +1,6 @@
 using Microsoft.Win32;
-using ClinicAVT.App.Platform;
 
-namespace ClinicAVT.App.Tests.Hosting;
+namespace ClinicAVT.App.Platform.Tests;
 
 public sealed class CrashDumpsTest : IDisposable
 {

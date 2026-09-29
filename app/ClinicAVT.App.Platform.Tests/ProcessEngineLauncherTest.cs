@@ -1,8 +1,7 @@
 using System.Diagnostics;
 using ClinicAVT.App.Core.Ports;
-using ClinicAVT.App.Platform;
 
-namespace ClinicAVT.App.Tests.Hosting;
+namespace ClinicAVT.App.Platform.Tests;
 
 [Trait("Requires", "Processes")]
 public class ProcessEngineLauncherTest

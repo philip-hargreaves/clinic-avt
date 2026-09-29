@@ -1,6 +1,4 @@
-using ClinicAVT.App.Core.Hosting;
-
-namespace ClinicAVT.App.Tests.Hosting;
+namespace ClinicAVT.App.Platform.Tests;
 
 public sealed class LogRotationTest : IDisposable
 {

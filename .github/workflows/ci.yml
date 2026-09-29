@@ -107,9 +107,13 @@ jobs:
         run: dotnet test app/ClinicAVT.Client.Tests --no-build --filter "Requires!=Engine&Requires!=MediaFoundation" --blame-hang-timeout 120s
       - name: Test app view models
         run: dotnet test app/ClinicAVT.App.Tests --no-build --filter "Requires!=Engine&Requires!=CrashBattery&Requires!=Processes" --blame-hang-timeout 120s
+      - name: Test platform adapters
+        run: dotnet test app/ClinicAVT.App.Platform.Tests --no-build --filter "Requires!=Processes" --blame-hang-timeout 120s
       # Supervises stand-in processes (ping.exe) in place of the engine
       - name: Test process supervision
         run: dotnet test app/ClinicAVT.App.Tests --no-build --filter "Requires=Processes" --blame-hang-timeout 120s
+      - name: Test process adapters
+        run: dotnet test app/ClinicAVT.App.Platform.Tests --no-build --filter "Requires=Processes" --blame-hang-timeout 120s
       - name: Test model fetch tool
         run: dotnet test tools/ClinicAVT.FetchModels.Tests --no-build --blame-hang-timeout 120s
 

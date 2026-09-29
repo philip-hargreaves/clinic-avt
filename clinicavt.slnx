@@ -10,6 +10,9 @@
     <Project Path="app/ClinicAVT.App.Platform/ClinicAVT.App.Platform.csproj">
       <Platform Solution="*|x64" Project="x64" />
     </Project>
+    <Project Path="app/ClinicAVT.App.Platform.Tests/ClinicAVT.App.Platform.Tests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
     <Project Path="app/ClinicAVT.App.Tests/ClinicAVT.App.Tests.csproj">
       <Platform Solution="*|x64" Project="x64" />
     </Project>
