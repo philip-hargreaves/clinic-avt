@@ -23,7 +23,7 @@ SqliteSessionStore::SqliteSessionStore(const std::filesystem::path& root,
 
 SqliteSessionStore::~SqliteSessionStore() {
     writer_.Stop();
-    // Destruction does not finalise; an open session stays recoverable
+    // An open session is left recording, so it stays recoverable
     if (open_.has_value()) {
         try {
             CommitPending();
@@ -43,10 +43,10 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
     session.cipher.emplace(ChunkCipher::Generate());
     const std::vector<std::uint8_t> wrapped = session.cipher->Wrapped();
 
-    // Session row and key in one transaction
     Db::Transaction txn(db_);
     Db::Stmt insert = db_.Prepare(
-        "INSERT INTO sessions(id, started_at, state, sample_rate, device_id, device_name, retain)"
+        "INSERT INTO consultations(id, started_at, state, sample_rate, device_id, device_name, "
+        "saved)"
         " VALUES(?, ?, 'recording', ?, ?, ?, ?)");
     insert.BindText(1, session.id);
     insert.BindText(2, meta.started_at.empty() ? Iso8601Now() : meta.started_at);
@@ -66,7 +66,7 @@ SessionId SqliteSessionStore::Begin(const SessionMeta& meta) {
     return open_->id;
 }
 
-// Timing in plaintext for queries; speaker and text encrypted
+// Timings stay plaintext for the audio length in the list. Speaker and text are sealed
 void SqliteSessionStore::InsertTurn(const SessionId& id, std::int64_t seq,
                                     const ChunkCipher& cipher, const asr::Turn& turn) {
     const std::string content =
@@ -74,7 +74,7 @@ void SqliteSessionStore::InsertTurn(const SessionId& id, std::int64_t seq,
     const std::vector<std::uint8_t> sealed =
         cipher.Seal(Domain::kTurns, id, static_cast<std::uint64_t>(seq), AsBytes(content));
     Db::Stmt insert = db_.Prepare(
-        "INSERT INTO turns(session_id, seq, first_frame, frame_count, payload)"
+        "INSERT INTO turns(consultation_id, sequence, first_frame, frame_count, encrypted_turn)"
         " VALUES(?, ?, ?, ?, ?)");
     insert.BindText(1, id);
     insert.BindInt64(2, seq);
@@ -89,19 +89,18 @@ void SqliteSessionStore::ReplaceTurns(const SessionId& id, std::span<const asr::
     Open& session = RequireOpen(id);
 
     Db::Transaction txn(db_);
-    Db::Stmt erase = db_.Prepare("DELETE FROM turns WHERE session_id = ?");
+    Db::Stmt erase = db_.Prepare("DELETE FROM turns WHERE consultation_id = ?");
     erase.BindText(1, session.id);
     erase.Step();
     for (const asr::Turn& turn : turns) {
-        // Sequence numbers continue from the last, so each sealed payload's AAD
-        // is unique for the session
+        // Sequences continue past the replaced turns, so no IV is used twice
         InsertTurn(session.id, session.next_turn_seq, *session.cipher, turn);
         session.next_turn_seq += 1;
     }
     txn.Commit();
 }
 
-// Sealing erases the audio; it was kept only for crash recovery
+// The audio was kept only to resume after a crash, so it is erased here
 void SqliteSessionStore::Finalise(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Open& session = RequireOpen(id);
@@ -109,11 +108,12 @@ void SqliteSessionStore::Finalise(const SessionId& id) {
     const std::uint64_t lost = session.lost_committed + session.held_lost;
 
     Db::Transaction txn(db_);
-    Db::Stmt erase = db_.Prepare("DELETE FROM chunks WHERE session_id = ?");
+    Db::Stmt erase = db_.Prepare("DELETE FROM audio_chunks WHERE consultation_id = ?");
     erase.BindText(1, session.id);
     erase.Step();
     Db::Stmt update = db_.Prepare(
-        "UPDATE sessions SET ended_at = ?, state = 'finalised', lost_frames = ? WHERE id = ?");
+        "UPDATE consultations SET ended_at = ?, state = 'finalised', dropped_frames = ?"
+        " WHERE id = ?");
     update.BindText(1, Iso8601Now());
     update.BindInt64(2, static_cast<std::int64_t>(lost));
     update.BindText(3, session.id);
@@ -129,7 +129,7 @@ void SqliteSessionStore::Abandon(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     RequireOpen(id);
     CommitPending();
-    // State stays 'recording', which marks it recoverable
+    // The row stays in the recording state, which lists it for recovery
     open_.reset();
     ClosePending();
 }
@@ -150,9 +150,9 @@ void SqliteSessionStore::Delete(const SessionId& id) {
     Erase(id);
 }
 
-// Key row cascades with the session; leftover ciphertext in free pages is unreadable without it
+// The key row goes with the session, so ciphertext left in free pages cannot be read
 void SqliteSessionStore::Erase(const SessionId& id) {
-    Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE id = ?");
+    Db::Stmt erase = db_.Prepare("DELETE FROM consultations WHERE id = ?");
     erase.BindText(1, id);
     if (EraseWhere(erase) == 0) throw StoreError(StoreCode::kNotFound, "no session " + id);
 }
@@ -166,7 +166,8 @@ std::size_t SqliteSessionStore::EraseWhere(Db::Stmt& erase) {
 
 void SqliteSessionStore::EraseUnretained() {
     std::lock_guard<std::mutex> lock(mutex_);
-    Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE retain = 0 AND state = 'finalised'");
+    Db::Stmt erase =
+        db_.Prepare("DELETE FROM consultations WHERE saved = 0 AND state = 'finalised'");
     EraseWhere(erase);
 }
 
@@ -174,21 +175,23 @@ void SqliteSessionStore::RequireStored(const SessionId& id) {
     if (open_.has_value() && open_->id == id) {
         throw StoreError(StoreCode::kBusy, id + " is still recording");
     }
-    Db::Stmt select = db_.Prepare("SELECT 1 FROM session_keys WHERE session_id = ?");
+    Db::Stmt select = db_.Prepare("SELECT 1 FROM consultation_keys WHERE consultation_id = ?");
     select.BindText(1, id);
     if (!select.Step()) throw StoreError(StoreCode::kNotFound, "no session " + id);
 }
 
 ChunkCipher SqliteSessionStore::CipherFor(const SessionId& id) {
     RequireStored(id);
-    Db::Stmt select = db_.Prepare("SELECT wrapped FROM session_keys WHERE session_id = ?");
+    Db::Stmt select =
+        db_.Prepare("SELECT wrapped_key FROM consultation_keys WHERE consultation_id = ?");
     select.BindText(1, id);
     select.Step();
     return ChunkCipher::FromWrapped(select.ColumnBlob(0));
 }
 
 void SqliteSessionStore::InsertKey(const SessionId& id, std::span<const std::uint8_t> wrapped) {
-    Db::Stmt key = db_.Prepare("INSERT INTO session_keys(session_id, wrapped) VALUES(?, ?)");
+    Db::Stmt key =
+        db_.Prepare("INSERT INTO consultation_keys(consultation_id, wrapped_key) VALUES(?, ?)");
     key.BindText(1, id);
     key.BindBlob(2, wrapped);
     key.Step();
@@ -203,8 +206,9 @@ std::vector<asr::Turn> SqliteSessionStore::ReadTurns(const SessionId& id) {
 std::vector<asr::Turn> SqliteSessionStore::ReadTurnsLocked(const SessionId& id,
                                                            const ChunkCipher& cipher) {
     Db::Stmt select = db_.Prepare(
-        "SELECT seq, first_frame, frame_count, payload FROM turns WHERE session_id = ?"
-        " ORDER BY seq");
+        "SELECT sequence, first_frame, frame_count, encrypted_turn FROM turns"
+        " WHERE consultation_id = ?"
+        " ORDER BY sequence");
     select.BindText(1, id);
     std::vector<asr::Turn> turns;
     while (select.Step()) {
@@ -225,8 +229,9 @@ std::vector<asr::Turn> SqliteSessionStore::ReadTurnsLocked(const SessionId& id,
 std::vector<float> SqliteSessionStore::ReadAudio(const SessionId& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     const ChunkCipher cipher = CipherFor(id);
-    Db::Stmt select =
-        db_.Prepare("SELECT seq, payload FROM chunks WHERE session_id = ? ORDER BY seq");
+    Db::Stmt select = db_.Prepare(
+        "SELECT sequence, encrypted_audio FROM audio_chunks WHERE consultation_id = ?"
+        " ORDER BY sequence");
     select.BindText(1, id);
     std::vector<float> audio;
     while (select.Step()) {

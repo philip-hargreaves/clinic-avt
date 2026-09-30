@@ -96,10 +96,11 @@ Db::Db(const std::filesystem::path& path, Mode mode) {
             // page_size only takes effect if it runs before the first table is created
             if (mode == Mode::kSession) Exec("PRAGMA page_size=8192");
             Exec("PRAGMA journal_mode=WAL");
-            // Index is derived data; a lost transaction only costs a rescan
+            // The index is derived data, so a lost transaction only costs a rescan
             Exec(mode == Mode::kSession ? "PRAGMA synchronous=FULL" : "PRAGMA synchronous=NORMAL");
             Exec("PRAGMA foreign_keys=ON");
-            // Zero freed cells (freed pages leave at vacuum); truncate the journal to keep it small
+            // Deleted cells are overwritten with zeros. The journal is cut back to 4 MB after a
+            // checkpoint
             Exec("PRAGMA secure_delete=FAST");
             Exec("PRAGMA journal_size_limit=4194304");
         } else if (mode == Mode::kImmutableReadOnly) {

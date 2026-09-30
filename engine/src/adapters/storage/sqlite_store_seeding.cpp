@@ -5,7 +5,6 @@ namespace clinicavt::store {
 
 using rows::RandomId;
 
-// Row, key and turns in one transaction, already finalised
 SessionId SqliteSessionStore::Seed(const SessionSeed& seed) {
     std::lock_guard<std::mutex> lock(mutex_);
     const SessionId id = RandomId();
@@ -13,11 +12,11 @@ SessionId SqliteSessionStore::Seed(const SessionSeed& seed) {
 
     Db::Transaction txn(db_);
     Db::Stmt insert = db_.Prepare(
-        "INSERT INTO sessions(id, started_at, ended_at, state, sample_rate, retain, demo)"
+        "INSERT INTO consultations(id, started_at, ended_at, state, sample_rate, saved, sample)"
         " VALUES(?, ?, ?, 'finalised', ?, 1, 1)");
     insert.BindText(1, id);
     insert.BindText(2, seed.started_at);
-    insert.BindText(3, seed.ended_at);
+    insert.BindTextOrNull(3, seed.ended_at);
     insert.BindInt64(4, seed.sample_rate);
     insert.Step();
     InsertKey(id, cipher.Wrapped());
@@ -32,7 +31,7 @@ SessionId SqliteSessionStore::Seed(const SessionSeed& seed) {
 
 std::size_t SqliteSessionStore::ClearDemo() {
     std::lock_guard<std::mutex> lock(mutex_);
-    Db::Stmt erase = db_.Prepare("DELETE FROM sessions WHERE demo = 1");
+    Db::Stmt erase = db_.Prepare("DELETE FROM consultations WHERE sample = 1");
     return EraseWhere(erase);
 }
 

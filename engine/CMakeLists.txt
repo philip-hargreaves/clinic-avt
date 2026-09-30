@@ -147,10 +147,12 @@ target_compile_definitions(sqlite3 PRIVATE
 # Not ours to keep warning-clean
 set_target_properties(sqlite3 PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
 
-# The schema is a SQL file, embedded so the engine stays a single binary
+# The schema and its upgrade steps are SQL files, embedded so the engine stays a single binary
 set(clinicavt_schema_dir ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/storage/schema)
 file(READ ${clinicavt_schema_dir}/clinicavt.sql CLINICAVT_SCHEMA_SQL)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${clinicavt_schema_dir}/clinicavt.sql)
+file(READ ${clinicavt_schema_dir}/migrate-6-to-7.sql CLINICAVT_MIGRATE_6_TO_7_SQL)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${clinicavt_schema_dir}/clinicavt.sql ${clinicavt_schema_dir}/migrate-6-to-7.sql)
 configure_file(src/adapters/storage/schema.hpp.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/adapters/storage/schema.hpp @ONLY)
 

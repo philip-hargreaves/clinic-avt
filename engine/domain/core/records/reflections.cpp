@@ -50,11 +50,8 @@ void Reflections::Update(const store::SessionId& id, const ReflectionEdit& edit)
 void Reflections::Delete(const store::SessionId& id) {
     sessions_.DeleteDocument(id, DocumentKind::kReflection);
     sessions_.DeleteDocument(id, DocumentKind::kSummary);
-    // A cleared consultation exists only for its appraisal entry, so erase it too
-    if (sessions_.ReadTurns(id).empty() &&
-        sessions_.ReadDocument(id, DocumentKind::kNote).revision == 0) {
-        sessions_.Delete(id);
-    }
+    // A cleared consultation was kept only for its appraisal entry
+    if (sessions_.Cleared(id)) sessions_.Delete(id);
 }
 
 std::vector<ReflectionRow> Reflections::List() {
@@ -72,7 +69,7 @@ std::vector<ReflectionRow> Reflections::List() {
                             .created_at = reflection.generated_at.empty() ? summary.generated_at
                                                                           : reflection.generated_at,
                             .edited_at = reflection.edited_at,
-                            .demo = session.demo});
+                            .sample = session.sample});
         } catch (const std::exception&) {  // NOLINT(bugprone-empty-catch) not listed
             // Skip sessions still recording or missing a key
         }
