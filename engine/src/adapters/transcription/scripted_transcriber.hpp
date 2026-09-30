@@ -13,8 +13,8 @@ namespace clinicavt::asr {
 // CI stand-in when no ASR model is staged. One chunk per clip, numbered in decode order
 class ScriptedTranscriber : public ITranscriber {
    public:
-    std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
-                                       std::uint64_t first_frame) override {
+    std::vector<Turn> DecodeClipChunks(std::span<const float> frames, std::uint64_t first_frame,
+                                       const StopFn& /*stop*/) override {
         Turn turn;
         turn.first_frame = first_frame;
         turn.frame_count = frames.size();

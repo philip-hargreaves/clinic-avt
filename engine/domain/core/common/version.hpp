@@ -3,6 +3,7 @@
 namespace clinicavt {
 
 inline constexpr const char* kName = "clinicavt";
-inline constexpr const char* kVersion = "0.1.0";
+// From the VERSION file at the repo root
+inline constexpr const char* kVersion = CLINICAVT_VERSION;
 
 }  // namespace clinicavt

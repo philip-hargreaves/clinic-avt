@@ -24,14 +24,16 @@ void Finaliser::StageClock::operator()(const char* name) const {
 }
 
 Finaliser::Finaliser(SessionState& state, CaptureLane& capture, NoteLane& note_lane,
-                     ISessionEvents& events, store::ISessionStore& store,
-                     asr::ITranscriber& transcriber, diar::IDiariser& diariser,
-                     note::INoteWriter* note_writer, metrics::Registry* metrics)
+                     ICaptureEvents& events, store::IRecordingStore& store,
+                     store::ISessionCatalog& catalog, asr::ITranscriber& transcriber,
+                     diar::IDiariser& diariser, note::INoteWriter* note_writer,
+                     metrics::Registry* metrics)
     : state_(state),
       capture_(capture),
       note_lane_(note_lane),
       events_(events),
       store_(store),
+      catalog_(catalog),
       transcriber_(transcriber),
       diariser_(diariser),
       note_writer_(note_writer),
@@ -101,8 +103,9 @@ Outcome Finaliser::SettleCapture(Outcome outcome, const ImportHooks* import,
         if (capture != nullptr) {
             capture->Settle(
                 state_.session_audio,
-                [this, import, reporting, total](std::span<const float> clip, std::uint64_t first) {
-                    auto chunks = transcriber_.DecodeClipChunks(clip, first);
+                [this, import, reporting, total, &cancelled](std::span<const float> clip,
+                                                             std::uint64_t first) {
+                    auto chunks = transcriber_.DecodeClipChunks(clip, first, cancelled);
                     if (reporting) {
                         import->progress(ImportStage::kTranscribing,
                                          static_cast<double>(first + clip.size()) / total);
@@ -221,7 +224,7 @@ void Finaliser::DeleteResumedFrom() {
     }
     if (!resumed.empty()) {
         try {
-            store_.Delete(resumed);
+            catalog_.Delete(resumed);
         } catch (...) {  // NOLINT(bugprone-empty-catch) the session stays, as if kept
         }
     }

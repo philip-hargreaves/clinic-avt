@@ -30,7 +30,7 @@ class CaptureLane {
     // Runs on the capture thread when the source fails or loses its device after audio arrived
     using Interrupted = std::function<void(const audio::SourceEnd& end)>;
 
-    CaptureLane(SessionState& state, ISessionEvents& events, store::ISessionStore& store,
+    CaptureLane(SessionState& state, ICaptureEvents& events, store::IRecordingStore& store,
                 asr::ITranscriber& transcriber, diar::IDiariser& diariser,
                 note::INoteWriter* note_writer, const NoteLane& note_lane,
                 std::uint64_t diar_advance_frames, Interrupted interrupted);
@@ -63,8 +63,8 @@ class CaptureLane {
     void DiarLoop();
 
     SessionState& state_;
-    ISessionEvents& events_;
-    store::ISessionStore& store_;
+    ICaptureEvents& events_;
+    store::IRecordingStore& store_;
     asr::ITranscriber& transcriber_;
     diar::IDiariser& diariser_;
     note::INoteWriter* note_writer_;

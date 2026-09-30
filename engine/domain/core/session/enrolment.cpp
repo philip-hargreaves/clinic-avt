@@ -12,7 +12,7 @@
 namespace clinicavt::session {
 
 Enrolment::Enrolment(const SourceFactory& factory, audio::IStreamingVad& vad,
-                     diar::IDiariser& diariser, ISessionEvents& events)
+                     diar::IDiariser& diariser, IEnrolmentEvents& events)
     : factory_(factory), vad_(vad), diariser_(diariser), events_(events) {}
 
 Enrolment::~Enrolment() {

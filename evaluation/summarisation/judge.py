@@ -1,6 +1,6 @@
 """The note judge: one isolated LLM judge per note, with the frozen prompt (judge-prompt.md) and
-output schema (judge-schema.json). Each judge sees one task file and nothing else, so the last
-note is judged exactly like the first.
+output schema (judge-schema.json). Each judge sees only its task file, so no note is judged
+with context from another.
 
   tasks    one self-contained task per note under judge/tasks/<tag>/<cid>.md: the prompt,
            the transcript the note was written from, the note, and the consultation's checklist

@@ -13,7 +13,7 @@
 
 namespace clinicavt::session {
 
-CaptureLane::CaptureLane(SessionState& state, ISessionEvents& events, store::ISessionStore& store,
+CaptureLane::CaptureLane(SessionState& state, ICaptureEvents& events, store::IRecordingStore& store,
                          asr::ITranscriber& transcriber, diar::IDiariser& diariser,
                          note::INoteWriter* note_writer, const NoteLane& note_lane,
                          std::uint64_t diar_advance_frames, Interrupted interrupted)
@@ -141,14 +141,16 @@ void CaptureLane::DiarLoop() {
             note_writer_->Prepare();
         }
         try {
-            const auto decode = [this](std::span<const float> clip,
-                                       std::uint64_t first) -> std::vector<asr::Turn> {
-                {
-                    std::lock_guard<std::mutex> guard(state_.mutex);
-                    // Skip speculative decodes once stopping
-                    if (diarisation_.Stopping()) return {};
-                }
-                return transcriber_.DecodeClipChunks(clip, first);
+            // Speculative decodes are skipped once stopping, and one already waiting for the GPU
+            // is dropped, so Stop and Cancel never wait for another model's load
+            const auto stopping = [this] {
+                std::lock_guard<std::mutex> guard(state_.mutex);
+                return diarisation_.Stopping();
+            };
+            const auto decode = [this, &stopping](std::span<const float> clip,
+                                                  std::uint64_t first) -> std::vector<asr::Turn> {
+                if (stopping()) return {};
+                return transcriber_.DecodeClipChunks(clip, first, stopping);
             };
             auto* const capture = diariser_.Capture();
             if (capture != nullptr) capture->Advance(audio, decode);

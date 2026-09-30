@@ -119,7 +119,7 @@ TEST(AsrWer, ProductionPathHoldsTheBaseline) {
     std::size_t outside = 0;
     const auto texts = diar::DecodeTurnTexts(
         turns, frames, [&transcriber, &outside](std::span<const float> clip, std::uint64_t first) {
-            auto chunks = transcriber.DecodeClipChunks(clip, first);
+            auto chunks = transcriber.DecodeClipChunks(clip, first, {});
             for (const auto& chunk : chunks) {
                 if (chunk.text.empty() || chunk.first_frame < first ||
                     chunk.first_frame + chunk.frame_count >

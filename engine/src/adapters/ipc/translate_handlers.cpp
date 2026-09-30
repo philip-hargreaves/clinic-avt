@@ -7,7 +7,7 @@
 namespace clinicavt::ipc {
 
 void RegisterTranslateMethods(PipeServer& server, const EngineServices& services) {
-    auto& sessions = services.sessions;
+    auto& documents = services.documents;
     auto* const translator = services.translator;
     auto* const translate_lane = services.translate_lane;
     if (translator == nullptr || translate_lane == nullptr) return;
@@ -15,25 +15,25 @@ void RegisterTranslateMethods(PipeServer& server, const EngineServices& services
         return json{{"languages", translator->Languages()}};
     });
     // Runs off the RPC thread and sends results as translate/partial, then translate/ready
-    server.RegisterMethod("patient/translate", [&sessions, translate_lane](const json& params) {
+    server.RegisterMethod("patient/translate", [&documents, translate_lane](const json& params) {
         return WithSession(params, [&](const std::string& session_id) -> std::variant<json, Error> {
             if (!params.contains("language") || !params["language"].is_string()) {
                 return InvalidParams("language must be a string");
             }
             const auto text =
-                sessions.ReadDocument(session_id, clinicavt::store::DocumentKind::kPatient).text;
+                documents.ReadDocument(session_id, clinicavt::store::DocumentKind::kPatient).text;
             if (text.empty()) {
                 return SessionError("no patient information to translate");
             }
             // Store before translate/ready so a read after it sees the translation
-            const auto on_ready = [&sessions, session_id](const std::string& translated,
-                                                          const std::string& language) {
+            const auto on_ready = [&documents, session_id](const std::string& translated,
+                                                           const std::string& language) {
                 try {
                     clinicavt::store::Document document;
                     document.text = translated;
                     document.language = language;
-                    sessions.SaveDocument(session_id, clinicavt::store::DocumentKind::kTranslation,
-                                          document);
+                    documents.SaveDocument(session_id, clinicavt::store::DocumentKind::kTranslation,
+                                           document);
                 } catch (...) {  // NOLINT(bugprone-empty-catch) storing is best effort
                 }
             };

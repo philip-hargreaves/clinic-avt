@@ -14,4 +14,7 @@ std::filesystem::path ExeDir();
 // one level below
 std::filesystem::path DefaultModelsRoot();
 
+// %LOCALAPPDATA%\ClinicAVT, for the store and the compile cache. Throws when LOCALAPPDATA is unset
+std::filesystem::path LocalDataRoot();
+
 }  // namespace clinicavt::system

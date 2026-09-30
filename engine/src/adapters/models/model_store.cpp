@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "adapters/system/exe_paths.hpp"
 #include "core/common/strings.hpp"
 
 namespace clinicavt::models {
@@ -80,10 +81,12 @@ ModelStore::ModelStore(const std::filesystem::path& root) {
     std::error_code error;
     auto canonical = std::filesystem::canonical(root, error);
     if (error) canonical = root;
+    const auto cache_root = system::LocalDataRoot() / "cache";
     for (const auto& entry : std::filesystem::directory_iterator(canonical)) {
         if (!entry.is_directory()) continue;
         if (!std::filesystem::exists(entry.path() / "manifest.json")) continue;
-        models_.push_back(ParseManifest(entry.path()));
+        auto& info = models_.emplace_back(ParseManifest(entry.path()));
+        info.cache_dir = cache_root / info.id;
     }
     std::sort(models_.begin(), models_.end(),
               [](const ModelInfo& a, const ModelInfo& b) { return a.id < b.id; });

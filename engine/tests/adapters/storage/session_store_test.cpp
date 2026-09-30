@@ -926,7 +926,7 @@ TEST(SessionStore, ClearedIsOneRuleForTheListDeleteAllRestoreAndReflections) {
     TempRoot root;
     SqliteSessionStore store(root.path, kNever);
     JsonReflectionCodec codec;
-    records::Reflections reflections(store, codec);
+    records::Reflections reflections(store, store, codec);
     const SessionId id = store.Begin({16000, "", ""});
     store.Finalise(id);
     store.SaveDocument(id, DocumentKind::kPatient, {.text = "a sheet"});

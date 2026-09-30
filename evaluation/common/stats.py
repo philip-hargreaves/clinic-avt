@@ -1,4 +1,4 @@
-"""Paired bootstrap interval of a mean, shared by the stages that report one."""
+"""Paired bootstrap interval of a mean."""
 
 import numpy as np
 

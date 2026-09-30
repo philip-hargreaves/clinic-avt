@@ -3,8 +3,8 @@
 # Zip the folder and it is the whole release. Build the release preset first: the launcher and
 # the engine come from build\release.
 #
-# Model .cache dirs stay out: they are compiled for this machine's GPU and driver, and every
-# machine builds its own on first use.
+# Compile caches live under %LOCALAPPDATA%\ClinicAVT\cache, and every machine builds its own on
+# first use. A model .cache dir left by an older build stays out.
 #
 #   stage-release.ps1 [-Out <folder>] [-SmallNoteModel]      default build\clinicavt
 #   -SmallNoteModel ships only the constrained-tier note model, for a much smaller download.

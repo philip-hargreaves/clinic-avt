@@ -13,7 +13,8 @@ namespace ClinicAVT.App.Core.Hosting;
 public sealed class EngineConnection : IEngineTransport
 {
     private const string ShellName = "clinicavt-shell";
-    private const string ShellVersion = "0.1.0";
+    private static readonly string ShellVersion =
+        typeof(EngineConnection).Assembly.GetName().Version!.ToString(3);
 
     // The engine binds its pipe before model verification and compilation, and
     // answers the buffered hello only once those finish

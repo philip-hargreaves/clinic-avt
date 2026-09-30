@@ -1,6 +1,5 @@
 #include "composition/engine_config.hpp"
 
-#include <cstdlib>
 #include <stdexcept>
 
 #include "adapters/system/exe_paths.hpp"
@@ -13,13 +12,7 @@ namespace {
 
 std::filesystem::path StoreRoot(const std::vector<std::string>& args) {
     if (args.size() > 1) return utf8::ToPath(args[1]);
-    char* local_app_data = nullptr;
-    if (_dupenv_s(&local_app_data, nullptr, "LOCALAPPDATA") != 0 || local_app_data == nullptr) {
-        throw std::runtime_error("LOCALAPPDATA is not set and no store root was given");
-    }
-    const auto root = std::filesystem::path(local_app_data) / "ClinicAVT" / "store";
-    std::free(local_app_data);
-    return root;
+    return system::LocalDataRoot() / "store";
 }
 
 }  // namespace

@@ -3,8 +3,8 @@
 Content WER discounts discourse-filler backchannels but keeps those answering a question
 (Doctor: "any pain?" Patient: "yeah" counts). A filler token is droppable when it is in
 DISCOURSE and not in the leading run of an utterance that follows the other speaker's
-question. The reference is tokenised per segment, so speaker and question structure maps onto
-tokens, and that tokenisation is shared by both metrics, so they always compare.
+question. The reference is tokenised per segment to keep speaker and question structure.
+Both metrics use that tokenisation so they are comparable.
 """
 from rapidfuzz.distance import Levenshtein
 

@@ -6,19 +6,17 @@
 
 namespace clinicavt::test {
 
-// A file of the PriMock consultation day1_consultation01, which is not in the repo. The tests
-// that read it skip when it is missing
+// PriMock consultation day1_consultation01. The recording comes with the example recordings
+// and the reference transcript is a fixture. Tests skip when a file is missing
 struct PrimockFile {
     const char* variable;  // overrides the default path when set
     const char* fallback;
 };
 
-inline constexpr PrimockFile kPrimockMixed{
-    "CLINICAVT_PRIMOCK_MIXED",
-    "C:/dev/intelliscribe/bench/transcription/mixed/day1_consultation01_mixed.wav"};
-inline constexpr PrimockFile kPrimockReference{
-    "CLINICAVT_PRIMOCK_REFERENCE",
-    "C:/dev/intelliscribe/bench/transcription/references/day1_consultation01.json"};
+inline constexpr PrimockFile kPrimockMixed{"CLINICAVT_PRIMOCK_MIXED",
+                                           CLINICAVT_PRIMOCK_MIXED_DEFAULT};
+inline constexpr PrimockFile kPrimockReference{"CLINICAVT_PRIMOCK_REFERENCE",
+                                               CLINICAVT_PRIMOCK_REFERENCE_DEFAULT};
 
 inline std::string PrimockLocation(const PrimockFile& file) {
 #pragma warning(suppress : 4996)

@@ -28,7 +28,7 @@ using StageFn = std::function<void(const char*)>;
 // Diarises, decodes each merged turn (mostly from the capture cache), re-splits edge chunks by
 // voice, names roles and tidies. Anchor similarities run on the CPU alongside the GPU decode
 Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& diariser,
-                               asr::ITranscriber& transcriber, ISessionEvents& events,
+                               asr::ITranscriber& transcriber, ICaptureEvents& events,
                                metrics::Registry* metrics, const StageFn& stage);
 
 }  // namespace clinicavt::session

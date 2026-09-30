@@ -7,10 +7,10 @@
 
 namespace clinicavt::session {
 
-// Session events, delivered on the audio pipeline thread behind the capture ring
-class ISessionEvents {
+// Capture events, delivered on the audio pipeline thread behind the capture ring
+class ICaptureEvents {
    public:
-    virtual ~ISessionEvents() = default;
+    virtual ~ICaptureEvents() = default;
 
     virtual void OnLevel(const audio::LevelReading& reading) = 0;
 
@@ -20,30 +20,57 @@ class ISessionEvents {
     // stopping thread, and only for work that actually runs
     virtual void OnProgress(const std::string&) {}
 
-    // Enrolment: the level and speech captured so far, then the outcome
+    // The store could not write (disk full, I/O). Recording continues
+    virtual void OnStorageFault(const std::string& /*detail*/) {}
+};
+
+// Enrolment: the level and speech captured so far, then the outcome
+class IEnrolmentEvents {
+   public:
+    virtual ~IEnrolmentEvents() = default;
+
     virtual void OnEnrolProgress(const audio::EnrolProgress&) {}
     virtual void OnEnrolDone(bool, const std::string&, double) {}
+};
 
-    // The note lane, delivered on its own thread after finalise
+// The note lane, delivered on its own thread after finalise
+class INoteEvents {
+   public:
+    virtual ~INoteEvents() = default;
+
     virtual void OnNotePartial(const std::string&) {}
     virtual void OnNoteReady(const std::string&) {}
     virtual void OnNoteFailed(const std::string&) {}
     virtual void OnNoteSaved(const std::string& /*session*/, const store::Document& /*note*/) {}
 
-    // The store could not write (disk full, I/O). Recording continues
-    virtual void OnStorageFault(const std::string& /*detail*/) {}
     // No note was written. overridable is true when the model judged it not a consultation and
     // false when the transcript was too short
     virtual void OnNoteRefused(const std::string&, bool) {}
+};
 
-    // Patient information follows the note on the same thread
+// Patient information follows the note on the same thread
+class IPatientEvents {
+   public:
+    virtual ~IPatientEvents() = default;
+
     virtual void OnPatientPartial(const std::string&) {}
     virtual void OnPatientReady(const std::string&) {}
     virtual void OnPatientFailed(const std::string&) {}
+};
 
-    // The appraisal case summary, written on request for a stored session
+// The appraisal case summary, written on request for a stored session
+class ISummaryEvents {
+   public:
+    virtual ~ISummaryEvents() = default;
+
     virtual void OnSummaryReady(const std::string& /*session*/, const std::string& /*text*/) {}
     virtual void OnSummaryFailed(const std::string& /*session*/, const std::string& /*detail*/) {}
 };
+
+class ISessionEvents : public ICaptureEvents,
+                       public IEnrolmentEvents,
+                       public INoteEvents,
+                       public IPatientEvents,
+                       public ISummaryEvents {};
 
 }  // namespace clinicavt::session

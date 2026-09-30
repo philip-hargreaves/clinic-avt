@@ -20,7 +20,7 @@ class WireEvents : public session::ISessionEvents {
    public:
     // The translator warms up after the note, and guidance search starts once the note is stored.
     // Either may be null
-    WireEvents(PipeServer& server, store::ISessionStore& sessions,
+    WireEvents(PipeServer& server, store::IDocumentStore& documents,
                translate::ITranslator* translator = nullptr,
                guidance::IGuidanceLane* guidance = nullptr);
 
@@ -51,7 +51,7 @@ class WireEvents : public session::ISessionEvents {
     double Seconds(std::chrono::steady_clock::time_point now) const;
 
     PipeServer& server_;
-    store::ISessionStore& sessions_;
+    store::IDocumentStore& documents_;
     translate::ITranslator* translator_;
     guidance::IGuidanceLane* guidance_;
     std::mutex throttle_mutex_;

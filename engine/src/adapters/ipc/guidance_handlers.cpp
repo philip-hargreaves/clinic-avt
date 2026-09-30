@@ -48,24 +48,23 @@ json GuidanceCorporaJson(const clinicavt::guidance::Readiness& readiness,
     return result;
 }
 
-clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISessionStore& sessions,
-                                                         const std::string& session,
-                                                         clinicavt::store::Document note, int limit,
-                                                         const Notify& notify) {
+clinicavt::guidance::SearchRequest GuidanceSearchRequest(
+    clinicavt::store::IDocumentStore& documents, const std::string& session,
+    clinicavt::store::Document note, int limit, const Notify& notify) {
     clinicavt::guidance::SearchRequest request;
     request.session = session;
     request.note = std::move(note.text);
     request.limit = limit;
     const auto revision = note.revision;
-    request.on_ready = [&sessions, session, revision,
+    request.on_ready = [&documents, session, revision,
                         notify](const clinicavt::guidance::Results& results) {
         using clinicavt::store::DocumentKind;
         const clinicavt::guidance::Record record{results, revision};
         json body = GuidanceReadyJson(session, record);
         if (!session.empty()) {
             try {
-                sessions.SaveDocument(session, DocumentKind::kGuidance,
-                                      {.text = clinicavt::guidance::Dump(record)});
+                documents.SaveDocument(session, DocumentKind::kGuidance,
+                                       {.text = clinicavt::guidance::Dump(record)});
             } catch (const clinicavt::store::StoreError& e) {
                 if (e.Code() == clinicavt::store::StoreCode::kNotFound) {
                     log::Printf("clinicavt-engine: guidance for %s dropped, session gone\n",
@@ -79,7 +78,7 @@ clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISess
             // Leave stale unset if the note cannot be read
             try {
                 body["stale"] =
-                    sessions.ReadDocument(session, DocumentKind::kNote).revision != revision;
+                    documents.ReadDocument(session, DocumentKind::kNote).revision != revision;
             } catch (const clinicavt::store::StoreError& e) {
                 if (e.Code() == clinicavt::store::StoreCode::kNotFound) return;
             } catch (const std::exception&) {  // NOLINT(bugprone-empty-catch) stale stays unknown
@@ -93,7 +92,7 @@ clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISess
     return request;
 }
 
-std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::IDocumentStore& documents,
                                                clinicavt::guidance::IGuidanceLane& lane,
                                                const json& params, const Notify& notify) {
     int limit = kGuidanceLimit;
@@ -124,13 +123,13 @@ std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::ISessionStore& 
         if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
         session = std::get<std::string>(id);
         try {
-            note = sessions.ReadDocument(session, clinicavt::store::DocumentKind::kNote);
+            note = documents.ReadDocument(session, clinicavt::store::DocumentKind::kNote);
         } catch (const std::exception& e) {
             return SessionError(e.what());
         }
     }
     if (note.text.empty()) return SessionError("no note to search");
-    auto request = GuidanceSearchRequest(sessions, session, std::move(note), limit, notify);
+    auto request = GuidanceSearchRequest(documents, session, std::move(note), limit, notify);
     request.as_note = as_note;
     lane.Run(std::move(request));
     return json::object();
@@ -155,12 +154,12 @@ bool DocumentsChangedSince(const clinicavt::guidance::Record& record,
 
 }  // namespace
 
-std::variant<json, Error> HandleSessionGuidance(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionGuidance(clinicavt::store::IDocumentStore& documents,
                                                 const json& params,
                                                 clinicavt::guidance::IDocumentIngest* ingest) {
     return WithSession(params, [&](const std::string& session) {
         using clinicavt::store::DocumentKind;
-        const auto stored = sessions.ReadDocument(session, DocumentKind::kGuidance);
+        const auto stored = documents.ReadDocument(session, DocumentKind::kGuidance);
         if (stored.text.empty()) return json{{"guidance", nullptr}};
         const json parsed = json::parse(stored.text, nullptr, false);
         std::optional<clinicavt::guidance::Record> record;
@@ -177,7 +176,7 @@ std::variant<json, Error> HandleSessionGuidance(clinicavt::store::ISessionStore&
         }
         json guidance = clinicavt::guidance::ToJson(*record);
         guidance["stale"] =
-            record->note_revision != sessions.ReadDocument(session, DocumentKind::kNote).revision;
+            record->note_revision != documents.ReadDocument(session, DocumentKind::kNote).revision;
         guidance["documentsChanged"] = ingest != nullptr && DocumentsChangedSince(*record, *ingest);
         return json{{"guidance", guidance}};
     });
@@ -322,12 +321,12 @@ std::variant<json, Error> HandleDocumentsOpen(clinicavt::guidance::IDocumentInge
     }
 }
 
-void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::ISessionStore& sessions,
+void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::IDocumentStore& documents,
                              clinicavt::guidance::IGuidanceRetriever& retriever,
                              clinicavt::guidance::IGuidanceLane& lane,
                              clinicavt::guidance::IDocumentIngest& ingest) {
-    server.RegisterMethod("guidance/search", [&server, &sessions, &lane](const json& params) {
-        return HandleGuidanceSearch(sessions, lane, params, PushTo(server));
+    server.RegisterMethod("guidance/search", [&server, &documents, &lane](const json& params) {
+        return HandleGuidanceSearch(documents, lane, params, PushTo(server));
     });
     server.RegisterMethod("guidance/corpora", [&retriever](const json&) {
         return GuidanceCorporaJson(retriever.Status(), retriever.Corpora());
@@ -344,8 +343,8 @@ void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::ISessionStore
                                                       GuidanceModelJson(retriever.Status()));
                               return json::object();
                           });
-    server.RegisterMethod("session/guidance", [&sessions, &ingest](const json& params) {
-        return HandleSessionGuidance(sessions, params, &ingest);
+    server.RegisterMethod("session/guidance", [&documents, &ingest](const json& params) {
+        return HandleSessionGuidance(documents, params, &ingest);
     });
     server.RegisterMethod("guidance/documents/add", [&ingest](const json& params) {
         return HandleDocumentsAdd(ingest, params);

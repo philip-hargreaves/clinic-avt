@@ -30,7 +30,8 @@ struct ImportHooks {
 class Finaliser {
    public:
     Finaliser(SessionState& state, CaptureLane& capture, NoteLane& note_lane,
-              ISessionEvents& events, store::ISessionStore& store, asr::ITranscriber& transcriber,
+              ICaptureEvents& events, store::IRecordingStore& store,
+              store::ISessionCatalog& catalog, asr::ITranscriber& transcriber,
               diar::IDiariser& diariser, note::INoteWriter* note_writer,
               metrics::Registry* metrics);
 
@@ -70,8 +71,9 @@ class Finaliser {
     SessionState& state_;
     CaptureLane& capture_;
     NoteLane& note_lane_;
-    ISessionEvents& events_;
-    store::ISessionStore& store_;
+    ICaptureEvents& events_;
+    store::IRecordingStore& store_;
+    store::ISessionCatalog& catalog_;
     asr::ITranscriber& transcriber_;
     diar::IDiariser& diariser_;
     note::INoteWriter* note_writer_;

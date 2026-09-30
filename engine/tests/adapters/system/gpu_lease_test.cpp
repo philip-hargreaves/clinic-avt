@@ -153,5 +153,24 @@ TEST(GpuLease, TheWatchAsksItsOwnHostOnceAfterTheProbeTime) {
     EXPECT_FALSE(waiting(kProbeAfterSeconds));
 }
 
+// A caller that stops mid-wait is released within a poll, not at the next slice
+TEST(GpuLease, AWaiterToldToGiveUpLeavesWithinAPoll) {
+    const std::string name = Name("giveup");
+    GpuLease holder(name, milliseconds(5000));
+    GpuLease waiter(name, milliseconds(5000));
+    const auto held = holder.Acquire();
+
+    std::atomic<bool> give_up{false};
+    GpuLease::Guard guard;
+    std::thread other([&] { guard = waiter.Acquire({}, [&] { return give_up.load(); }); });
+    std::this_thread::sleep_for(milliseconds(150));
+    const auto told = std::chrono::steady_clock::now();
+    give_up = true;
+    other.join();
+
+    EXPECT_FALSE(guard.Held());
+    EXPECT_LT(std::chrono::steady_clock::now() - told, milliseconds(1000));
+}
+
 }  // namespace
 }  // namespace clinicavt::system

@@ -1,4 +1,4 @@
-"""Judges blind what plain punctuation does to the sentences it changes.
+"""Blind judge check of the sentences plain punctuation changes.
 
     python plain_punctuation_check.py translate     both paths over the changed sentences
     python plain_punctuation_check.py tasks         two-way judge tasks per language
@@ -102,7 +102,6 @@ def tasks():
             by_language[row["language"]].append(row)
     for language, rows in by_language.items():
         items = [(r["source"], [("before", r["before"]), ("after", r["after"])]) for r in rows]
-        # Ten items per task
         for part in range(0, len(items), 10):
             judge.write_task("plain", f"plain__{language}__{part // 10}", language, items[part:part + 10])
     print({k: len(v) for k, v in by_language.items()})

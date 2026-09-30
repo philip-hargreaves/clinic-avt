@@ -1,5 +1,5 @@
-"""The engine's diarisation run offline over the mixed PriMock tracks (diar_eval_runner), and the
-time-weighted attribution rule both runner scripts share.
+"""Offline diarisation over the mixed PriMock tracks (diar_eval_runner), and the time-weighted
+attribution rule both runner scripts share.
 
 Gold is the PriMock reference segments longer than 0.2 s, labelled doctor (1) or patient (0).
 """

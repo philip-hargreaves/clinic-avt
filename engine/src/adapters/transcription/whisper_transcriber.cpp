@@ -29,8 +29,8 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
     const std::string requested = device_override.empty() ? info.device : device_override;
     // Only GPU work takes the lease; NPU Whisper runs alongside the note model
     const bool on_gpu = requested.rfind("GPU", 0) == 0;
-    const auto take_gpu = [on_gpu, &gpu](const char* who) {
-        return on_gpu ? gpu.Acquire(system::WatchForStuckHosts(who, gpu))
+    const auto take_gpu = [on_gpu, &gpu](const char* who, const StopFn& stop = {}) {
+        return on_gpu ? gpu.Acquire(system::WatchForStuckHosts(who, gpu), stop)
                       : system::GpuLease::Guard{};
     };
     // Taken before device discovery (seconds) so Whisper is ready before the note
@@ -53,10 +53,12 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 
     // initial_prompt (transcript-tail conditioning) was tested and rejected because it
     // worsened WER even with register effects folded out
-    return [pipeline, config, take_gpu](std::span<const float> frames, std::uint64_t first_frame) {
+    return [pipeline, config, take_gpu](std::span<const float> frames, std::uint64_t first_frame,
+                                        const StopFn& stop) -> std::vector<Turn> {
         const ov::genai::RawSpeechInput audio(frames.begin(), frames.end());
         // If a stuck holder wedged the lease, decode anyway alongside it
-        const auto lease = take_gpu("asr");
+        const auto lease = take_gpu("asr", stop);
+        if (stop && stop()) return {};
         if (lease.Waited() > 0.25) {
             log::Printf("clinicavt-engine: asr waited %.2f s for the GPU lease\n", lease.Waited());
         }
@@ -137,12 +139,13 @@ std::vector<std::uint64_t> WhisperTranscriber::TakeClipCuts() {
 }
 
 std::vector<Turn> WhisperTranscriber::DecodeClipChunks(std::span<const float> frames,
-                                                       std::uint64_t first_frame) {
+                                                       std::uint64_t first_frame,
+                                                       const StopFn& stop) {
     std::future<std::vector<Turn>> chunks;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (worker_.Stopping()) return {};  // the worker no longer serves clips
-        clips_.push_back({{frames.begin(), frames.end()}, first_frame, {}});
+        clips_.push_back({{frames.begin(), frames.end()}, first_frame, stop, {}});
         chunks = clips_.back().chunks.get_future();
     }
     cv_.notify_all();
@@ -216,10 +219,10 @@ void WhisperTranscriber::WorkerLoop() {
         std::vector<std::uint64_t> cuts;
         // A failed decode loses only this clip's text; the audio is already stored
         try {
-            if (decode_) {
+            if (decode_ && !(clip.stop && clip.stop())) {
                 const auto t0 = std::chrono::steady_clock::now();
                 const std::uint64_t clip_end = clip.first_frame + clip.frames.size();
-                for (const Turn& turn : decode_(clip.frames, clip.first_frame)) {
+                for (const Turn& turn : decode_(clip.frames, clip.first_frame, clip.stop)) {
                     if (turn.text.empty()) continue;
                     chunks.push_back(turn);
                     // Chunk edges mark a short answer's start and end inside a long clip

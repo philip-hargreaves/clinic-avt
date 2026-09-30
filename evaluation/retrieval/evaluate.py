@@ -61,8 +61,8 @@ def metrics(ranked_ids: list[str], expected: set[str]) -> dict:
     first = next((i for i, h in enumerate(hits) if h), None)
     dcg = sum(h / math.log2(i + 2) for i, h in enumerate(hits[:10]))
     ideal = sum(1 / math.log2(i + 2) for i in range(min(len(expected), 10)))
-    # s@k: at least one labelled recommendation in the top k (success rate). rec@k: the share of
-    # the labels there (recall). r50 is the first stage's whole job, the label reaching the union
+    # s@k: any label in the top k. rec@k: share of labels in the top k.
+    # r50: a label reaches the first-stage union
     return {"r5": int(any(hits[:5])), "r10": int(any(hits[:10])), "r50": int(any(hits[:50])),
             "rec10": sum(hits[:10]) / len(expected), "rec50": sum(hits[:50]) / len(expected),
             "p1": hits[0] if hits else 0,

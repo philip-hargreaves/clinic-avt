@@ -9,7 +9,7 @@
 namespace clinicavt::session {
 
 // Logs every store failure and raises OnStorageFault for disk-full or I/O errors
-inline void ReportStoreFailure(ISessionEvents& events, const char* what, const std::exception& e) {
+inline void ReportStoreFailure(ICaptureEvents& events, const char* what, const std::exception& e) {
     log::Printf("clinicavt-engine: store %s failed: %s\n", what, e.what());
     const auto* fault = dynamic_cast<const store::StoreError*>(&e);
     if (fault != nullptr &&

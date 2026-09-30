@@ -46,8 +46,9 @@ struct ReflectionRow {
 // clinical record. Summaries are scrubbed on every read and write
 class Reflections {
    public:
-    Reflections(store::ISessionStore& sessions, const IReflectionCodec& codec)
-        : sessions_(sessions), codec_(codec) {}
+    Reflections(store::IDocumentStore& documents, store::ISessionCatalog& catalog,
+                const IReflectionCodec& codec)
+        : documents_(documents), catalog_(catalog), codec_(codec) {}
 
     // Throws for an unknown session
     Reflection Get(const store::SessionId& id);
@@ -63,7 +64,8 @@ class Reflections {
     std::vector<ReflectionRow> List();
 
    private:
-    store::ISessionStore& sessions_;
+    store::IDocumentStore& documents_;
+    store::ISessionCatalog& catalog_;
     const IReflectionCodec& codec_;
 };
 

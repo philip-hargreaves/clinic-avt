@@ -85,8 +85,8 @@ struct SessionStoreFixture {
     clinicavt::store::JsonReflectionCodec codec;
     clinicavt::demo::JsonSampleSource samples{CLINICAVT_DEMO_DIR};
     clinicavt::records::SessionRecords records{*store};
-    clinicavt::records::Reflections reflections{*store, codec};
-    clinicavt::demo::DemoSamples demo{*store, codec, samples};
+    clinicavt::records::Reflections reflections{*store, *store, codec};
+    clinicavt::demo::DemoSamples demo{*store, *store, *store, codec, samples};
 
     ~SessionStoreFixture() {
         store.reset();
@@ -401,7 +401,8 @@ struct ServicesRig {
     EngineServices Services(AsrSwitch switch_asr = {}) {
         return {.controller = controller,
                 .models = models,
-                .sessions = *fixture.store,
+                .documents = *fixture.store,
+                .catalog = *fixture.store,
                 .records = fixture.records,
                 .reflections = fixture.reflections,
                 .demo = fixture.demo,

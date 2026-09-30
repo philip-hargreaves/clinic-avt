@@ -6,15 +6,16 @@
 
 namespace clinicavt::session {
 
-Review::Review(SessionState& state, NoteLane& note_lane, store::ISessionStore& store)
-    : state_(state), note_lane_(note_lane), store_(store) {}
+Review::Review(SessionState& state, NoteLane& note_lane, store::IDocumentStore& documents,
+               store::ISessionCatalog& catalog)
+    : state_(state), note_lane_(note_lane), documents_(documents), catalog_(catalog) {}
 
 bool Review::Open(const store::SessionId& id) {
     if (state_.Running() || note_lane_.Busy()) {
         return false;
     }
     try {
-        (void)store_.ReadTurns(id);
+        (void)catalog_.ReadTurns(id);
     } catch (...) {
         return false;
     }
@@ -41,13 +42,13 @@ void Review::Close() {
     }
     if (!refused.empty()) {
         try {
-            store_.Delete(refused);
+            catalog_.Delete(refused);
         } catch (...) {  // NOLINT(bugprone-empty-catch) the session stays, as if kept
         }
     }
     if (!state_.Running()) {
         try {
-            store_.EraseUnretained();
+            catalog_.EraseUnretained();
         } catch (...) {  // NOLINT(bugprone-empty-catch) retried at the next start
         }
     }
@@ -63,7 +64,7 @@ bool Review::RegenerateNote(note::NoteOptions options) {
     }
     std::vector<asr::Turn> turns;
     try {
-        turns = store_.ReadTurns(id);
+        turns = catalog_.ReadTurns(id);
     } catch (...) {
         return false;
     }
@@ -107,7 +108,7 @@ bool Review::RegeneratePatient() {
 // Empty when the session has no note or cannot be read
 std::string Review::StoredNote(const store::SessionId& id) const {
     try {
-        return store_.ReadDocument(id, store::DocumentKind::kNote).text;
+        return documents_.ReadDocument(id, store::DocumentKind::kNote).text;
     } catch (...) {
         return {};
     }

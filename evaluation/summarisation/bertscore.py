@@ -1,5 +1,5 @@
-"""BERTScore on the 100 MTS-Dialog validation pairs, in the previous system's exact configuration,
-for continuity with its reported numbers. Not a quality measure for selection: the judge is.
+"""BERTScore on the 100 MTS-Dialog validation pairs in the previous system's exact configuration,
+for continuity with its reported numbers only. Model selection uses the judge.
 
   generate  summaries with the previous system's prompt as the system turn and the dialogue as
             the user turn, sampled at temperature 0.3, 1024 tokens -> bertscore/<model>.csv

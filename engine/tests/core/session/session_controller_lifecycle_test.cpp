@@ -389,9 +389,10 @@ TEST(SessionController, FinaliseStagesAndDiariseTimingReachTheMetrics) {
 // Every decode leaves a chunk edge behind, as whisper's worker does
 struct CuttingTranscriber : FakeTranscriber {
     std::vector<asr::Turn> DecodeClipChunks(std::span<const float> frames,
-                                            std::uint64_t first_frame) override {
+                                            std::uint64_t first_frame,
+                                            const asr::StopFn& stop) override {
         clip_cuts.push_back(first_frame + frames.size() / 2);
-        return FakeTranscriber::DecodeClipChunks(frames, first_frame);
+        return FakeTranscriber::DecodeClipChunks(frames, first_frame, stop);
     }
 };
 
@@ -416,6 +417,56 @@ TEST(SessionController, NothingOneFinaliseLeavesBehindReachesTheNextSession) {
     EXPECT_TRUE(rig.diariser.cut_points.empty())
         << "the last finalise's chunk edges are not cut points in this recording";
     EXPECT_EQ(rig.registry.Take().diar_ticks, 0) << "capture ticks count per session";
+}
+
+// A capture decode that waits for the GPU while another model loads, as whisper's does
+struct GpuWaitingTranscriber : FakeTranscriber {
+    std::atomic<bool> waiting{false};
+    std::atomic<bool> dropped{false};
+
+    std::vector<asr::Turn> DecodeClipChunks(std::span<const float> frames,
+                                            std::uint64_t first_frame,
+                                            const asr::StopFn& stop) override {
+        waiting = true;
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (std::chrono::steady_clock::now() < until) {
+            if (stop && stop()) {
+                dropped = true;
+                return {};
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return FakeTranscriber::DecodeClipChunks(frames, first_frame, stop);
+    }
+};
+
+// Decodes on every capture tick, as the real diariser does
+struct DecodingDiariser : FakeDiariser {
+    void Advance(std::span<const float> audio, const diar::DecodeClipFn& decode) override {
+        FakeDiariser::Advance(audio, decode);
+        decode(audio.first(std::min<std::size_t>(audio.size(), kSampleRate)), 0);
+    }
+};
+
+// The note model's first compile holds the GPU for tens of seconds. Cancel must not wait for it
+TEST(SessionController, CancelDoesNotWaitForACaptureDecodeWaitingForTheGpu) {
+    Rig rig;
+    GpuWaitingTranscriber transcriber;
+    DecodingDiariser diariser;
+    SessionController controller(FactoryFor(Script::kStreamUntilStopped), rig.events, rig.store,
+                                 transcriber, rig.vad, diariser, kTestSettle,
+                                 LevelMeter::kWindowFrames, nullptr, &rig.registry);
+
+    ASSERT_TRUE(controller.Start());
+    ASSERT_TRUE(WaitFor([&] { return transcriber.waiting.load(); }));
+    const auto t0 = std::chrono::steady_clock::now();
+    controller.Cancel();
+
+    EXPECT_LT(std::chrono::steady_clock::now() - t0, std::chrono::seconds(2));
+    EXPECT_TRUE(transcriber.dropped.load());
+    EXPECT_FALSE(controller.Running());
+    const auto calls = rig.store.Calls();
+    EXPECT_NE(std::find(calls.begin(), calls.end(), "cancel s1"), calls.end());
 }
 
 }  // namespace
