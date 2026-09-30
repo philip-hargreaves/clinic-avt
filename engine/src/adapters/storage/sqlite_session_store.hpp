@@ -15,8 +15,8 @@
 
 namespace clinicavt::store {
 
-// One clinicavt.db, each blob encrypted under a per-session key. A writer thread commits per
-// interval. The layout is in schema/clinicavt.sql
+// Stores sessions in clinicavt.db with each blob sealed under its session's key. A writer thread
+// commits the audio once per interval. The tables are in schema/clinicavt.sql
 class SqliteSessionStore : public ISessionStore {
    public:
     explicit SqliteSessionStore(
@@ -44,6 +44,7 @@ class SqliteSessionStore : public ISessionStore {
     std::size_t ClearDemo() override;
     std::size_t DeleteAll(bool keep_reflections = false) override;
     void Clear(const SessionId& id) override;
+    bool Cleared(const SessionId& id) override;
     SessionRecord ReadRecord(const SessionId& id) override;
     AddOutcome AddRecord(const SessionRecord& record) override;
     void SetFaultListener(std::function<void(const StoreError&)> listener) override;
@@ -92,7 +93,7 @@ class SqliteSessionStore : public ISessionStore {
     void ClearLocked(const SessionId& id);    // Clear inside the caller's transaction
     void Erase(const SessionId& id);          // key row and everything under the session
     std::size_t EraseWhere(Db::Stmt& erase);  // steps a delete, checkpoints, counts
-    void Checkpoint();                        // after an erase, so no page image outlives it
+    void Checkpoint();                        // after an erase, so the WAL keeps no old page
     void TakePending(Open& session);          // moves the capture buffer into held
     void ClosePending();                      // no session accepts audio
     bool CommitPending();                     // seals held as one chunk, false when empty

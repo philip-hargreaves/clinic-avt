@@ -48,7 +48,7 @@ std::size_t SeedSampleYear(store::ISessionStore& sessions, const records::IRefle
 
 bool HasSamples(store::ISessionStore& sessions) {
     for (const auto& session : sessions.ListSessions()) {
-        if (session.demo) return true;
+        if (session.sample) return true;
     }
     return false;
 }

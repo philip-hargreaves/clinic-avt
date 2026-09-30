@@ -29,7 +29,7 @@ TEST(Handlers, TheSampleYearSeedsOnceAndClearsCleanly) {
     EXPECT_EQ(sessions.size(), 9u);
     std::size_t samples = 0;
     for (const auto& s : sessions) {
-        if (s["demo"].get<bool>()) {
+        if (s["sample"].get<bool>()) {
             samples += 1;
             EXPECT_FALSE(s["label"].get<std::string>().empty());
             EXPECT_GT(s["audioSeconds"].get<double>(), 300.0);
@@ -40,7 +40,7 @@ TEST(Handlers, TheSampleYearSeedsOnceAndClearsCleanly) {
     EXPECT_EQ(samples, 8u);
     const json entries = HandleReflectionList(fixture.reflections)["reflections"];
     ASSERT_EQ(entries.size(), 8u);
-    for (const auto& e : entries) EXPECT_TRUE(e["demo"].get<bool>());
+    for (const auto& e : entries) EXPECT_TRUE(e["sample"].get<bool>());
     const auto sample = entries[0]["id"].get<std::string>();
     EXPECT_FALSE(fixture.store->ReadDocument(sample, DocumentKind::kNote).text.empty());
     EXPECT_FALSE(fixture.store->ReadDocument(sample, DocumentKind::kPatient).text.empty());

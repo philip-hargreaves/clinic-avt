@@ -89,6 +89,16 @@ std::unique_ptr<audio::IStreamingVad> BuildVad(const models::ModelStore& store,
     return std::make_unique<models::MissingVad>();
 }
 
+std::string VoiceprintModel(const models::ModelStore& store) {
+    try {
+        const models::ModelInfo& info = store.Resolve("diarisation", "default");
+        const auto weights = info.file_hashes.find("model.bin");
+        return weights == info.file_hashes.end() ? info.id : info.id + " " + weights->second;
+    } catch (const std::exception&) {
+        return {};
+    }
+}
+
 std::unique_ptr<diar::IDiariser> BuildDiariser(const models::ModelStore& store,
                                                models::OvRuntime& runtime,
                                                diar::AnchorStore& anchors,

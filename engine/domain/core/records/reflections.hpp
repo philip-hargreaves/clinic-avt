@@ -39,7 +39,7 @@ struct ReflectionRow {
     std::string summary;  // scrubbed
     std::string created_at;
     std::string edited_at;
-    bool demo = false;
+    bool sample = false;
 };
 
 // Appraisal reflections and case summaries on stored sessions. They are not part of the

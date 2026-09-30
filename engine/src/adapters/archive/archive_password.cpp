@@ -28,7 +28,7 @@ std::wstring Wide(std::string_view utf8) {
 std::wstring Nfc(const std::wstring& wide) {
     const int length = static_cast<int>(wide.size());
     int size = NormalizeString(NormalizationC, wide.data(), length, nullptr, 0);
-    // The first size is an estimate; a short buffer returns a better one, negated
+    // The first size is an estimate. A short buffer returns a better one, negated
     for (int attempt = 0; attempt < 8 && size > 0; ++attempt) {
         std::wstring normal(static_cast<std::size_t>(size), L'\0');
         const int got = NormalizeString(NormalizationC, wide.data(), length, normal.data(), size);

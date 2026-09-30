@@ -75,7 +75,7 @@ class Db {
     Stmt Prepare(const char* sql);
     std::int64_t QueryInt64(const char* sql);
 
-    // Header fields (transactional): application id and schema version
+    // The application id and schema version in the file header. Both are transactional
     std::int64_t ApplicationId();
     void SetApplicationId(std::int64_t id);
     std::int64_t UserVersion();

@@ -8,7 +8,7 @@
 
 namespace clinicavt::store {
 
-// Keeps IVs disjoint per stream. Each domain counts seq from zero
+// Each IV starts with its domain, so two streams under one key never share an IV
 enum class Domain : std::uint8_t {
     kAudio = 0,
     kTurns = 1,
@@ -22,8 +22,20 @@ enum class Domain : std::uint8_t {
     kArchive = 9,  // a backup file, under its own password-derived key
 };
 
-// AES-256-GCM, one key per session or backup. IV = domain + sequence, both authenticated with
-// the context (session id or backup header). Deleting the key makes the data unreadable
+// A stored payload opens only under the number it was sealed with
+static_assert(static_cast<int>(Domain::kAudio) == 0);
+static_assert(static_cast<int>(Domain::kTurns) == 1);
+static_assert(static_cast<int>(Domain::kNote) == 2);
+static_assert(static_cast<int>(Domain::kPatient) == 3);
+static_assert(static_cast<int>(Domain::kTranslation) == 4);
+static_assert(static_cast<int>(Domain::kLabel) == 5);
+static_assert(static_cast<int>(Domain::kSummary) == 6);
+static_assert(static_cast<int>(Domain::kReflection) == 7);
+static_assert(static_cast<int>(Domain::kGuidance) == 8);
+static_assert(static_cast<int>(Domain::kArchive) == 9);
+
+// AES-256-GCM, one key per session or backup. The IV is the domain and sequence, and both are
+// authenticated with the context (session id or backup header)
 class ChunkCipher {
    public:
     static ChunkCipher Generate();

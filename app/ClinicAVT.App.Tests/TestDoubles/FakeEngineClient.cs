@@ -225,7 +225,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
                     summary = r.Summary,
                     createdAt = r.StartedAt,
                     editedAt = (string?)null,
-                    demo = SampleReflections.Contains(r.Id),
+                    sample = SampleReflections.Contains(r.Id),
                 }).ToArray(),
             }));
         }

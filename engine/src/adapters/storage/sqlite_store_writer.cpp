@@ -45,7 +45,8 @@ bool SqliteSessionStore::CommitPending() {
 
     Db::Transaction txn(db_);
     Db::Stmt insert = db_.Prepare(
-        "INSERT INTO chunks(session_id, seq, first_frame, frame_count, lost_before, payload)"
+        "INSERT INTO audio_chunks(consultation_id, sequence, first_frame, frame_count,"
+        " dropped_before, encrypted_audio)"
         " VALUES(?, ?, ?, ?, ?, ?)");
     insert.BindText(1, session.id);
     insert.BindInt64(2, session.next_seq);
@@ -65,8 +66,8 @@ bool SqliteSessionStore::CommitPending() {
 }
 
 // Failed commits keep their audio for the next tick. Past kPendingBound the
-// oldest frames are dropped as lost and the timeline shifts. The fault is
-// reported once per episode
+// oldest frames are dropped as lost and the timeline shifts. The fault is reported once, until
+// a commit succeeds again
 void SqliteSessionStore::WriterLoop() {
     std::unique_lock<std::mutex> lock(mutex_);
     while (!writer_.Stopping()) {

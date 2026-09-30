@@ -124,7 +124,7 @@ json HandleReflectionList(clinicavt::records::Reflections& reflections) {
                         {"summary", row.summary},
                         {"createdAt", NullWhenEmpty(row.created_at)},
                         {"editedAt", NullWhenEmpty(row.edited_at)},
-                        {"demo", row.demo}});
+                        {"sample", row.sample}});
     }
     return json{{"reflections", std::move(list)}};
 }

@@ -17,15 +17,14 @@ bool Within(const Period& period, const std::string& at) {
     return (period.from.empty() || at >= period.from) && (period.to.empty() || at < period.to);
 }
 
-// Finalised non-demo sessions, cleared ones included
+// Finalised sessions other than samples, cleared ones included
 bool Eligible(const store::SessionSummary& session) {
-    return session.state == store::SessionState::kFinalised && !session.demo;
+    return session.state == store::SessionState::kFinalised && !session.sample;
 }
 
 bool HasAppraisal(const store::SessionRecord& record) {
     return std::ranges::any_of(record.documents, [](const store::RecordDocument& entry) {
-        return entry.kind == store::DocumentKind::kReflection ||
-               entry.kind == store::DocumentKind::kSummary;
+        return store::IsAppraisal(entry.kind);
     });
 }
 
@@ -64,7 +63,7 @@ void Report(const Progress& progress, Phase phase, std::size_t done, std::size_t
 Counts Summarise(store::ISessionStore& store, const Period& period) {
     Counts counts;
     for (const store::SessionSummary& session : store.ListSessions()) {
-        if (session.demo || !Within(period, session.started_at)) continue;
+        if (session.sample || !Within(period, session.started_at)) continue;
         if (!Eligible(session)) {
             counts.unfinished += 1;
             continue;
@@ -110,6 +109,8 @@ BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveS
     for (const store::SessionId& id : selected) {
         store::SessionRecord record = store.ReadRecord(id);
         if (reflections_only) record = Stripped(std::move(record));
+        // Restore refuses the whole file for one invalid record
+        if (!ValidRecord(record)) throw ArchiveError(ArchiveCode::kDamaged);
         sink.Add(record);
         if (HasAppraisal(record)) result.reflections += 1;
         // A reflections-only backup holds no consultations

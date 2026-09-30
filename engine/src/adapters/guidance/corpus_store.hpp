@@ -12,7 +12,7 @@
 namespace clinicavt::guidance {
 
 inline constexpr std::uint32_t kCorpusApplicationId = 0x414D4247;  // "AMBG"
-inline constexpr int kCorpusFormat = 1;
+inline constexpr int kCorpusFormat = 2;
 inline constexpr int kShardVectors = 256;  // 1 MB a shard at 1024 dimensions
 inline constexpr const char* kCorpusFile = "corpus.db";
 inline constexpr const char* kManifestFile = "manifest.json";
@@ -30,7 +30,7 @@ struct CorpusInfo {
     std::string built_at;
     std::string sha256;  // of corpus.db, from the manifest, verified at open
     int dim = 0;
-    std::int64_t chunk_count = 0;
+    std::int64_t passage_count = 0;
 };
 
 // Result fields that need no DB read
@@ -49,9 +49,9 @@ struct ChunkText {
     std::string update_tag;
 };
 
-// A read-only corpus with its vectors resident as one matrix and text read on demand. Every
-// manifest field is checked against the file and the embedder, and a failed check marks the
-// corpus unavailable with a reason. Single-threaded
+// A read-only corpus with its vectors resident as one matrix and text read on demand. The
+// manifest fields the file also holds must match it, and the embedder fields must match the
+// staged embedder. A failed check leaves the corpus unavailable with a reason. Single-threaded
 class CorpusStore {
    public:
     static std::unique_ptr<CorpusStore> Open(const std::filesystem::path& dir,

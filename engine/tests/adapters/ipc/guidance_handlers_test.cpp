@@ -413,7 +413,7 @@ TEST(Handlers, GuidanceSearchRunsAStoredNoteOrFreeText) {
         id, clinicavt::store::DocumentKind::kNote,
         {.text = "Six weeks of synovitis in the small joints of both hands.",
          .style = "prose",
-         .detail = "standard"});
+         .detail = "concise"});
     EchoRetriever retriever;
     Sent sent;
     clinicavt::guidance::GuidanceLane lane(retriever);

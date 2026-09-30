@@ -45,7 +45,7 @@ public sealed partial class EngineState : ObservableObject
         OnPropertyChanged(nameof(Running));
 
         // Silent restarts stay out of the activity log. Faults go in
-        if (status == EngineStatus.Faulted)
+        if (status is EngineStatus.Faulted or EngineStatus.StoreNewer or EngineStatus.StoreTooOld)
         {
             _line.Append(EngineStateLabel);
         }
@@ -61,6 +61,10 @@ public sealed partial class EngineState : ObservableObject
             EngineStatus.Running => "Ready",
             EngineStatus.Restarting => "Recovering",
             EngineStatus.Faulted => "Recording is unavailable - please restart the app",
+            EngineStatus.StoreNewer =>
+                "Your consultations were saved by a newer version of ClinicAVT. Update ClinicAVT to open them.",
+            EngineStatus.StoreTooOld =>
+                "Your consultations were saved by a version of ClinicAVT too old for this one to open.",
             _ => "Not running",
         };
     }

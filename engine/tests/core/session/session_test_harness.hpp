@@ -456,6 +456,10 @@ struct FakeSessionStore : store::ISessionStore {
 
     void Clear(const store::SessionId&) override {}
 
+    bool Cleared(const store::SessionId&) override {
+        return false;
+    }
+
     store::SessionRecord ReadRecord(const store::SessionId& id) override {
         throw store::StoreError(store::StoreCode::kNotFound, "no session " + id);
     }

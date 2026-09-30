@@ -14,16 +14,17 @@
 // Row helpers shared by the files that implement SqliteSessionStore
 namespace clinicavt::store::rows {
 
-// Max audio buffered in memory while commits fail. Older frames are dropped and counted as lost
+// Max audio buffered in memory while commits fail. Older frames are dropped and counted
 inline constexpr std::chrono::seconds kPendingBound(30);
 inline constexpr std::int64_t kSqlitePageLimit = 1073741823;  // the default max_page_count
 
 struct KindSpec {
     const char* name;  // documents.kind
-    Domain domain;     // sealing domain
+    Domain domain;
 };
 
-inline KindSpec SpecFor(DocumentKind kind) {
+// Stored data depends on these pairs, so they never change
+inline constexpr KindSpec SpecFor(DocumentKind kind) {
     switch (kind) {
         case DocumentKind::kNote:
             return {"note", Domain::kNote};
@@ -43,6 +44,35 @@ inline KindSpec SpecFor(DocumentKind kind) {
     throw std::invalid_argument("unknown document kind");
 }
 
+// For an IN list: 'label', 'summary'
+inline std::string KindList(std::span<const DocumentKind> kinds) {
+    std::string list;
+    for (const DocumentKind kind : kinds) {
+        if (!list.empty()) list += ", ";
+        list += std::format("'{}'", SpecFor(kind).name);
+    }
+    return list;
+}
+
+// ISessionStore::Cleared as SQL, for the consultations row aliased c
+inline const std::string& ClearedSql() {
+    static const std::string kSql = std::format(
+        "(c.state = 'finalised'"
+        " AND NOT EXISTS(SELECT 1 FROM turns t WHERE t.consultation_id = c.id)"
+        " AND NOT EXISTS(SELECT 1 FROM documents d WHERE d.consultation_id = c.id"
+        " AND d.kind NOT IN ({})))",
+        KindList(kKeptOnClear));
+    return kSql;
+}
+
+// True when the consultations row aliased c has an appraisal document
+inline const std::string& HasAppraisalSql() {
+    static const std::string kSql = std::format(
+        "EXISTS(SELECT 1 FROM documents a WHERE a.consultation_id = c.id AND a.kind IN ({}))",
+        KindList(kAppraisalKinds));
+    return kSql;
+}
+
 inline std::string RandomId() {
     std::random_device device;
     std::string id;
@@ -50,8 +80,7 @@ inline std::string RandomId() {
     return id;
 }
 
-// New slots start at a random sequence below 2^62 so a deleted and rewritten
-// slot never reuses an IV
+// A random odd value below 2^62, so a deleted and rewritten slot never reuses an IV
 inline std::int64_t FreshSlotSequence() {
     std::random_device device;
     const std::uint64_t high = device();

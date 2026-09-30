@@ -13,7 +13,7 @@ struct KindName {
     const char* name;
 };
 
-// Same kind names as the session store
+// Part of the backup format, so they never change
 constexpr KindName kKinds[] = {
     {store::DocumentKind::kNote, "note"},
     {store::DocumentKind::kPatient, "patient"},
@@ -181,6 +181,10 @@ store::SessionRecord RecordFromJson(const json& j) {
         doc.language = Str(d, "language");
         doc.style = Str(d, "style");
         doc.detail = Str(d, "detail");
+        // Older backups call the concise note length standard
+        if (document.kind == store::DocumentKind::kNote && doc.detail == "standard") {
+            doc.detail = "concise";
+        }
         doc.generated_at = Str(d, "generatedAt");
         doc.edited_at = Str(d, "editedAt");
         doc.revision = Signed(d, "revision", 0, std::numeric_limits<std::int64_t>::max());

@@ -1,0 +1,55 @@
+table audio_chunks
+  column consultation_id TEXT not null key 1
+  column sequence INTEGER not null key 2
+  column first_frame INTEGER not null
+  column frame_count INTEGER not null
+  column dropped_before INTEGER not null
+  column encrypted_audio BLOB not null
+  foreign key consultation_id -> consultations(id) on delete CASCADE
+  index unique (pk) consultation_id sequence
+table consultation_keys
+  column consultation_id TEXT key 1
+  column wrapped_key BLOB not null
+  foreign key consultation_id -> consultations(id) on delete CASCADE
+  index unique (pk) consultation_id
+table consultations
+  column id TEXT key 1
+  column started_at TEXT not null
+  column ended_at TEXT
+  column state TEXT not null
+  column sample_rate INTEGER not null
+  column device_id TEXT
+  column device_name TEXT
+  column dropped_frames INTEGER not null default 0
+  column saved INTEGER not null
+  column sample INTEGER not null default 0
+  index unique (pk) id
+  check state IN ('recording', 'finalised')
+  check saved IN (0, 1)
+  check sample IN (0, 1)
+  check state = 'recording' OR ended_at IS NOT NULL
+table documents
+  column consultation_id TEXT not null key 1
+  column kind TEXT not null key 2
+  column revision INTEGER not null
+  column language TEXT not null
+  column encrypted_text BLOB not null
+  column style TEXT
+  column detail TEXT
+  column generated_at TEXT
+  column edited_at TEXT
+  foreign key consultation_id -> consultations(id) on delete CASCADE
+  index unique (pk) consultation_id kind
+  check kind IN ('note', 'patient', 'translation', 'label', 'summary', 'reflection', 'guidance')
+  check revision > 0
+  check style IN ('prose', 'soap')
+  check detail IN ('concise', 'detailed')
+  check kind = 'note' OR (style IS NULL AND detail IS NULL)
+table turns
+  column consultation_id TEXT not null key 1
+  column sequence INTEGER not null key 2
+  column first_frame INTEGER not null
+  column frame_count INTEGER not null
+  column encrypted_turn BLOB not null
+  foreign key consultation_id -> consultations(id) on delete CASCADE
+  index unique (pk) consultation_id sequence

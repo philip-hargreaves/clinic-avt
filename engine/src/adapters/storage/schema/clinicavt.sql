@@ -1,72 +1,61 @@
--- ClinicAVT session store. One database, one writer thread.
+-- ClinicAVT consultation store, schema version 7.
 --
--- Content (audio, transcript, documents) is AES-256-GCM under a per-session key.
--- The cipher authenticates domain, session id and sequence, so a blob moved
--- between rows or sessions is detected. Metadata (timing, state, options) is
--- plaintext so it can be queried without a key. Deleting the key row makes the
--- session's content unreadable.
+-- Audio, turns and document text are sealed with AES-256-GCM under a key per consultation.
+-- Each seal authenticates the domain, the consultation id and the sequence. Deleting the key
+-- row leaves the consultation's ciphertext unreadable. All other columns are plaintext.
+-- Times are ISO 8601 UTC.
 
-CREATE TABLE sessions (
-    id           TEXT    PRIMARY KEY,             -- random 128-bit hex
-    started_at   TEXT    NOT NULL,                -- ISO 8601 UTC
-    ended_at     TEXT,                            -- NULL while recording or after a crash
-    state        TEXT    NOT NULL
-                 CHECK (state IN ('recording', 'finalised')),
-    sample_rate  INTEGER NOT NULL,
-    device_id    TEXT,                            -- capture device at the time, a snapshot
-    device_name  TEXT,
-    lost_frames  INTEGER NOT NULL DEFAULT 0,      -- frames the device dropped
-    retain       INTEGER NOT NULL DEFAULT 1,      -- 0: erased once the consultation is left
-    demo         INTEGER NOT NULL DEFAULT 0       -- 1: a seeded sample, never a real record
+CREATE TABLE consultations (
+    id              TEXT    PRIMARY KEY,              -- 32 lowercase hex digits
+    started_at      TEXT    NOT NULL,
+    ended_at        TEXT,
+    state           TEXT    NOT NULL CHECK (state IN ('recording', 'finalised')),
+    sample_rate     INTEGER NOT NULL,
+    device_id       TEXT,                             -- the microphone used
+    device_name     TEXT,
+    dropped_frames  INTEGER NOT NULL DEFAULT 0,       -- by the device or a failed disk write
+    saved           INTEGER NOT NULL CHECK (saved IN (0, 1)),
+    sample          INTEGER NOT NULL DEFAULT 0 CHECK (sample IN (0, 1)),  -- 1 when seeded
+    CHECK (state = 'recording' OR ended_at IS NOT NULL)
 );
 
-CREATE TABLE session_keys (
-    session_id   TEXT    PRIMARY KEY REFERENCES sessions (id) ON DELETE CASCADE,
-    wrapped      BLOB    NOT NULL                 -- AES key, DPAPI-wrapped for the user
+CREATE TABLE consultation_keys (
+    consultation_id TEXT    PRIMARY KEY REFERENCES consultations (id) ON DELETE CASCADE,
+    wrapped_key     BLOB    NOT NULL                  -- wrapped with DPAPI for the user
 );
 
--- Audio write-ahead log, committed every second while recording, used to resume after a
--- crash and erased when the transcript is sealed
-CREATE TABLE chunks (
-    session_id   TEXT    NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
-    seq          INTEGER NOT NULL,                -- also the nonce sequence
-    first_frame  INTEGER NOT NULL,                -- position on the session timeline
-    frame_count  INTEGER NOT NULL,
-    lost_before  INTEGER NOT NULL,                -- frames dropped before this chunk
-    payload      BLOB    NOT NULL,                -- sealed float32 frames, domain 0
-    PRIMARY KEY (session_id, seq)
+-- Kept only while recording, to resume after a crash
+CREATE TABLE audio_chunks (
+    consultation_id TEXT    NOT NULL REFERENCES consultations (id) ON DELETE CASCADE,
+    sequence        INTEGER NOT NULL,
+    first_frame     INTEGER NOT NULL,
+    frame_count     INTEGER NOT NULL,
+    dropped_before  INTEGER NOT NULL,
+    encrypted_audio BLOB    NOT NULL,                 -- float32 samples
+    PRIMARY KEY (consultation_id, sequence)
 );
 
--- The transcript: live turns during capture, replaced in one transaction by
--- the speaker-attributed turns at finalise
 CREATE TABLE turns (
-    session_id   TEXT    NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
-    seq          INTEGER NOT NULL,
-    first_frame  INTEGER NOT NULL,
-    frame_count  INTEGER NOT NULL,
-    payload      BLOB    NOT NULL,                -- sealed {speaker, text}, domain 1
-    PRIMARY KEY (session_id, seq)
+    consultation_id TEXT    NOT NULL REFERENCES consultations (id) ON DELETE CASCADE,
+    sequence        INTEGER NOT NULL,
+    first_frame     INTEGER NOT NULL,
+    frame_count     INTEGER NOT NULL,
+    encrypted_turn  BLOB    NOT NULL,                 -- JSON speaker and text
+    PRIMARY KEY (consultation_id, sequence)
 );
 
--- One text of each kind per session; a rewrite replaces it
+-- At most one document of each kind per consultation
 CREATE TABLE documents (
-    session_id   TEXT    NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
-    kind         TEXT    NOT NULL
-                 CHECK (kind IN ('note', 'patient', 'translation', 'label',
-                                 'summary', 'reflection', 'guidance')),
-    seq          INTEGER NOT NULL DEFAULT 0,      -- nonce sequence of this payload; a rewrite adds one
-    language     TEXT    NOT NULL,                -- BCP 47
-    payload      BLOB    NOT NULL,                -- sealed text, domain 2..8 by kind
-    generated_at TEXT,                            -- when the model wrote it
-    edited_at    TEXT,                            -- NULL until a person changed it
-    PRIMARY KEY (session_id, kind)
-);
-
--- Options the note was written with, one row per note document
-CREATE TABLE note_options (
-    session_id   TEXT    PRIMARY KEY,
-    kind         TEXT    NOT NULL DEFAULT 'note' CHECK (kind = 'note'),
-    style        TEXT    NOT NULL,                -- prose | soap
-    detail       TEXT    NOT NULL,                -- concise | standard | detailed
-    FOREIGN KEY (session_id, kind) REFERENCES documents (session_id, kind) ON DELETE CASCADE
+    consultation_id TEXT    NOT NULL REFERENCES consultations (id) ON DELETE CASCADE,
+    kind            TEXT    NOT NULL CHECK (kind IN ('note', 'patient', 'translation', 'label',
+                                                     'summary', 'reflection', 'guidance')),
+    revision        INTEGER NOT NULL CHECK (revision > 0),  -- sequence the text is sealed at
+    language        TEXT    NOT NULL,                 -- a language name for a translation, else en
+    encrypted_text  BLOB    NOT NULL,
+    style           TEXT    CHECK (style IN ('prose', 'soap')),
+    detail          TEXT    CHECK (detail IN ('concise', 'detailed')),
+    generated_at    TEXT,                             -- for a reflection, when it was created
+    edited_at       TEXT,
+    PRIMARY KEY (consultation_id, kind),
+    CHECK (kind = 'note' OR (style IS NULL AND detail IS NULL))
 );

@@ -93,7 +93,7 @@ public class SessionsViewModelTest
                     sampleRate = 16000,
                     label = "",
                     editedAt = (string?)null,
-                    demo = true,
+                    sample = true,
                     hasReflection = true,
                 },
             },

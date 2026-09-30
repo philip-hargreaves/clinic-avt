@@ -35,7 +35,7 @@ Corpus Describe(const CorpusInfo& info) {
     c.research = info.research;
     c.embedder = info.embedder_id;
     c.sha256 = info.sha256;
-    c.chunks = static_cast<int>(info.chunk_count);
+    c.chunks = static_cast<int>(info.passage_count);
     c.built_at = info.built_at;
     return c;
 }

@@ -144,14 +144,16 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
     // Every acked chunk survived the kill, decrypts, and carries the exact
     // frames that were appended
     Db db(root.path / "clinicavt.db");
-    Db::Stmt key = db.Prepare("SELECT wrapped FROM session_keys WHERE session_id = ?");
+    Db::Stmt key =
+        db.Prepare("SELECT wrapped_key FROM consultation_keys WHERE consultation_id = ?");
     key.BindText(1, session_id);
     ASSERT_TRUE(key.Step()) << "the key row was committed with the session";
     const ChunkCipher cipher = ChunkCipher::FromWrapped(key.ColumnBlob(0));
 
     Db::Stmt select = db.Prepare(
-        "SELECT seq, first_frame, frame_count, payload FROM chunks WHERE session_id = ?"
-        " ORDER BY seq");
+        "SELECT sequence, first_frame, frame_count, encrypted_audio FROM audio_chunks"
+        " WHERE consultation_id = ?"
+        " ORDER BY sequence");
     select.BindText(1, session_id);
     std::int64_t expected_seq = 0;
     std::uint64_t expected_frame = 0;
@@ -173,7 +175,8 @@ TEST(StoreRecovery, AHardKilledSessionRecoversEveryAckedChunk) {
     EXPECT_GE(expected_seq, acked) << "an acked commit was lost";
 
     // Turns commit synchronously, so those written before the kill survive too
-    Db::Stmt turns = db.Prepare("SELECT seq, payload FROM turns WHERE session_id = ? ORDER BY seq");
+    Db::Stmt turns = db.Prepare(
+        "SELECT sequence, encrypted_turn FROM turns WHERE consultation_id = ? ORDER BY sequence");
     turns.BindText(1, session_id);
     std::int64_t turn_seq = 0;
     while (turns.Step()) {
@@ -204,8 +207,8 @@ TEST(StoreRecovery, AHardKillAfterCancelLeavesNothing) {
     SqliteSessionStore reopened(root.path, std::chrono::hours(1));
     EXPECT_TRUE(reopened.ListSessions().empty());
     Db db(root.path / "clinicavt.db");
-    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM session_keys"), 0) << "the key went first";
-    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM chunks"), 0);
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM consultation_keys"), 0) << "the key went first";
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM audio_chunks"), 0);
 }
 
 }  // namespace

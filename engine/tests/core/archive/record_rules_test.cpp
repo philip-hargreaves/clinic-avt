@@ -20,6 +20,8 @@ store::SessionRecord Valid() {
     store::Document note;
     note.text = "Swollen left elbow.";
     note.revision = 3;
+    note.style = "soap";
+    note.detail = "detailed";
     note.generated_at = "2026-09-01T09:13:00Z";
     record.documents.push_back({store::DocumentKind::kNote, note});
     store::Document label;
@@ -72,6 +74,9 @@ TEST(RecordRules, EachFieldTheStoreReliesOnIsChecked) {
          }},
         {"a bad generated time", [](auto& r) { r.documents[0].document.generated_at = "today"; }},
         {"a bad edited time", [](auto& r) { r.documents[1].document.edited_at = "2026-09-02"; }},
+        {"an unknown note style", [](auto& r) { r.documents[0].document.style = "bullets"; }},
+        {"the old detail name", [](auto& r) { r.documents[0].document.detail = "standard"; }},
+        {"a style on a label", [](auto& r) { r.documents[1].document.style = "prose"; }},
     };
     for (const auto& row : rows) {
         store::SessionRecord record = Valid();

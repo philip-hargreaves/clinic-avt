@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "adapters/archive/archive_record.hpp"
 #include "adapters/storage/chunk_cipher.hpp"
 
 #define WIN32_LEAN_AND_MEAN
@@ -474,6 +475,18 @@ TEST(ArchiveFile, TheV1GoldenBackupStillOpensWithEveryField) {
     const auto read = Drain(source);
     ASSERT_EQ(read.size(), records.size());
     for (std::size_t i = 0; i < records.size(); ++i) ExpectSame(read[i], records[i]);
+}
+
+// Older backups call the concise note length standard
+TEST(ArchiveRecord, AnOlderBackupsStandardNoteReadsAsConcise) {
+    store::SessionRecord record;
+    record.id = std::string(32, 'a');
+    store::Document note{.text = "a note", .style = "prose", .detail = "standard", .revision = 1};
+    store::Document label{.text = "standard", .revision = 1};
+    record.documents = {{store::DocumentKind::kNote, note}, {store::DocumentKind::kLabel, label}};
+    const store::SessionRecord read = RecordFromJson(ToJson(record));
+    EXPECT_EQ(read.documents[0].document.detail, "concise");
+    EXPECT_EQ(read.documents[1].document.text, "standard");
 }
 
 }  // namespace
