@@ -52,7 +52,7 @@ def majority():
         chosen = []
         for item in zip(*votes):
             top, count = collections.Counter(item).most_common(1)[0]
-            # With no majority the rubric's tie rule applies: the essential category wins
+            # With no majority, the essential category wins, as the rubric's tie rule says
             if count < 2:
                 top = next((x for x in item if x in DEFINITIONS["essential"]), top)
             chosen.append(top)

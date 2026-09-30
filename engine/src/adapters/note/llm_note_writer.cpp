@@ -38,7 +38,7 @@ const char* StyleFile(const NoteOptions& options) {
     return options.style == NoteStyle::kSoap ? "note-soap.md" : "note-narrative.md";
 }
 
-// SOAP has one length of its own; the Concise and Detailed files are Prose's
+// SOAP has one length file. The Concise and Detailed files are for Prose
 std::string DetailFile(const NoteOptions& options) {
     if (options.style == NoteStyle::kSoap) return "detail-soap.md";
     return std::string("detail-") + NoteDetailName(options.detail) + ".md";

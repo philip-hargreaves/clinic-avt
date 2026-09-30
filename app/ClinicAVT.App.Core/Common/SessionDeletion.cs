@@ -11,7 +11,7 @@ public static class SessionDeletion
     public static async Task<bool> ConfirmAndDeleteAsync(
         IDialogService dialogs, ISessionStoreApi engine, IStatusLine status, string id, Func<Task> closeReview)
     {
-        // Deletion is crypto-erase, so it is confirmed first
+        // Deleting cannot be undone, so it is confirmed first
         if (!await dialogs.ConfirmAsync("Delete this consultation?",
                 "The transcript, note and patient information are erased and cannot be recovered.",
                 "Delete", "Keep").ConfigureAwait(true))

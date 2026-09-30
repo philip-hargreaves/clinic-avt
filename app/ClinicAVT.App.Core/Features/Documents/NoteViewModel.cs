@@ -32,7 +32,7 @@ public sealed partial class NoteViewModel : ObservableObject
     /// <summary>SOAP has one length, so the detail choice applies to prose only.</summary>
     public bool DetailApplies => Style != "soap";
 
-    /// <summary>The note style menu's label: "Prose · Concise", or "SOAP", which has one length.</summary>
+    /// <summary>The note style menu's label, such as "Prose · Concise" or "SOAP".</summary>
     public string StyleLabel => DetailApplies
         ? $"{NoteOptions.Style(Style).Name} · {NoteOptions.Detail(Detail).Name}"
         : NoteOptions.Style(Style).Name;
