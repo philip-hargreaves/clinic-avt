@@ -4,8 +4,8 @@
 
 **On-device ambient voice technology for clinical consultations**
 
-Records the consultation, identifies who spoke, drafts the clinical note and patient
-information, then retrieves the relevant clinical guidance.
+Drafts the clinical note and patient information from a consultation, and retrieves the
+relevant clinical guidance.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/philip-hargreaves/clinic-avt/ci.yml?branch=main&label=CI)](https://github.com/philip-hargreaves/clinic-avt/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-0078D4)
@@ -24,14 +24,16 @@ before use.
 
 ## Features
 
-- **Private by design.** All models run on the device. No audio, text or usage data leaves the computer, and audio is discarded once processed.
-- **Speaker-attributed transcripts.** Speech is transcribed with Whisper and each turn is attributed to the clinician or the patient. Optional voice enrolment improves attribution over time.
-- **Clinical notes.** Structured notes in SOAP or narrative form, at two lengths, from a choice of three local language models sized to the hardware.
-- **Patient information.** A plain-English summary for the patient, written to a UK reading age of about 8, with translation into 24 languages including right-to-left scripts.
-- **Guideline references.** Local guideline documents are indexed and searched against each consultation, with the relevant passages shown beside the note.
-- **Appraisal reflections.** Consultations can be summarised and reflected on for appraisal, then exported as text.
-- **Encrypted storage and backups.** Saved consultations are encrypted at rest. Password-protected backups can hold full consultations or reflections only.
-- **Recording import.** Existing audio files can be imported, and four example consultations are bundled for demonstration.
+<table>
+<tr><td><strong>Private by design</strong></td><td>All models run on the device. No audio, text or usage data leaves the computer, and audio is discarded once processed.</td></tr>
+<tr><td><strong>Speaker-attributed transcripts</strong></td><td>Speech is transcribed with Whisper and each turn is attributed to the clinician or the patient. Optional voice enrolment improves attribution over time.</td></tr>
+<tr><td><strong>Clinical notes</strong></td><td>Structured notes in SOAP form, or in narrative form at two lengths, from a choice of three local language models sized to the hardware.</td></tr>
+<tr><td><strong>Patient information</strong></td><td>A plain-English summary for the patient, written to a UK reading age of about 9, with translation into 24 languages including right-to-left scripts.</td></tr>
+<tr><td><strong>Guideline references</strong></td><td>Local guideline documents are indexed and searched against each consultation, with the relevant passages shown beside the note.</td></tr>
+<tr><td><strong>Appraisal reflections</strong></td><td>Consultations can be summarised and reflected on for appraisal, then exported as text.</td></tr>
+<tr><td><strong>Encrypted storage and backups</strong></td><td>Saved consultations are encrypted at rest. Password-protected backups can hold full consultations or reflections only.</td></tr>
+<tr><td><strong>Recording import</strong></td><td>Existing audio files can be imported, and five example consultations are bundled for demonstration.</td></tr>
+</table>
 
 ## How it works
 
@@ -86,25 +88,25 @@ processes, which keeps a fault in either away from the recording.
 | Guideline search | GTE-large | INT8 | CPU |
 
 The note model is chosen automatically: the 9B on computers with enough memory, otherwise the 4B.
-The 35B is available in Settings for high-memory systems.
+The 35B is for high-memory systems and is not in the standard release.
 
 ## Requirements
 
 - Windows 11, 64-bit
 - Intel Core Ultra Series 2 or later with Intel Arc graphics
 - 16 GB RAM (24 GB for the 9B note model, 32 GB for the 35B)
-- 40 GB free disk space
+- 25 GB free disk space
 
 ## Getting started
 
 1. Update the Intel graphics driver and, in Intel Graphics Software, set **Shared GPU Memory
    Override** to the maximum.
-2. Download and extract a release, then open `ClinicAVT.exe`.
+2. Download a release and install the `.msix` package. For the zip release, extract it and open
+   `ClinicAVT.exe`.
 3. To try it without recording, choose **Import the file** and select an example consultation.
 
 The first launch compiles the models for the computer's graphics hardware, which takes a few
-minutes once. Releases come in two sizes: a full build with all three note models, and a smaller
-build with the 4B model only.
+minutes once. A release includes the 4B and 9B note models.
 
 <details>
 <summary><strong>Building from source</strong></summary>
@@ -132,8 +134,9 @@ dotnet build clinicavt.slnx -p:Platform=x64
 
 Or open `clinicavt.slnx` in Visual Studio, set `ClinicAVT.App` as the startup project with the x64
 platform, and run. The shell always uses the release engine, since a debug engine distorts timings.
-To produce a release folder, run `tools\stage-release.ps1`; add `-SmallNoteModel` for the 4B-only
-build.
+To produce a release, run `tools\stage-release.ps1` for the zip folder or `tools\pack-msix.ps1` for
+an unsigned MSIX. Both include the 4B and 9B note models. Pass `-Tiers` to choose others.
+`tools\release\SIGNING.txt` describes how the MSIX is signed.
 
 </details>
 
@@ -165,6 +168,7 @@ ClinicAVT/
 ├── engine/                      C++20 engine
 │   ├── domain/                  its own include root, so core cannot include an adapter
 │   │   ├── core/                pure pipeline logic, one folder per stage
+│   │   │   ├── common/          shared helpers such as logging, text encoding and the worker thread
 │   │   │   ├── audio/           capture ring, level metering and voice enrolment
 │   │   │   ├── diarisation/     speaker turns, per-turn decoding and role naming
 │   │   │   ├── note/            note gating, labelling and failure handling
@@ -172,6 +176,8 @@ ClinicAVT/
 │   │   │   ├── translate/       patient information translation
 │   │   │   ├── archive/         backup and restore
 │   │   │   ├── records/         session history, deletion and appraisal reflections
+│   │   │   ├── demo/            sample consultations for Seed data
+│   │   │   ├── metrics/         timings for the performance report
 │   │   │   └── session/         consultation lifecycle, import and the note lane
 │   │   └── ports/               interfaces the core depends on
 │   ├── src/
@@ -181,16 +187,19 @@ ClinicAVT/
 │   │   ├── note_host_main.cpp   isolated note-generation process
 │   │   └── ingest_host_main.cpp isolated PDF parsing process
 │   ├── tests/                   GoogleTest suites mirroring domain/ and src/
-│   ├── tools/                   guideline corpus builder
+│   ├── tools/                   guideline corpus builder and a check of how a PDF is indexed
 │   └── licences/                third-party notices shipped with the app
 ├── app/                         .NET 10 shell
 │   ├── ClinicAVT.App/           WinUI 3 views, themes and controls
 │   ├── ClinicAVT.App.Core/      view models, one folder per feature, no WinUI dependency
 │   ├── ClinicAVT.App.Platform/  Win32 adapters
 │   ├── ClinicAVT.Client/        typed JSON-RPC client for the engine
+│   ├── TestSupport/             helpers shared by the test projects
 │   └── *.Tests/                 xUnit suites for each project
 ├── launcher/                    ClinicAVT.exe, which starts the app from a release folder
 ├── evaluation/                  evaluation suites
+│   ├── common/                  configuration, engine client and statistics shared by the suites
+│   ├── knowledge/               clinical knowledge of candidate note models
 │   ├── transcription/           transcription accuracy
 │   ├── diarisation/             speaker attribution
 │   ├── summarisation/           note quality, including the LLM judge
@@ -199,9 +208,12 @@ ClinicAVT/
 │   └── performance/             latency and memory across note models
 ├── schema/                      wire messages shared by engine and shell tests, and the version rule
 ├── prompts/                     note and patient information prompts
-├── demo/                        example consultations (PriMock57)
+├── demo/                        example recordings, sample consultations for Seed data and test cases
+├── rag/                         gold sets for the guideline search evaluation
 ├── weights/                     model pack manifests with SHA-256 hashes
-├── tools/                       toolchain, model fetching and release staging scripts
+├── tools/                       toolchain, model fetching, release staging and packaging scripts
+├── VERSION                      the version of the engine, the shell and the package
+├── .github/workflows/ci.yml     builds, tests and static checks on every pull request
 ├── CMakeLists.txt               engine and launcher build
 └── clinicavt.slnx               shell solution
 ```
@@ -213,5 +225,7 @@ ClinicAVT/
 The source code is released under the [MIT Licence](LICENSE). Model weights and third-party
 libraries keep their own licences, listed in `engine/licences/THIRD-PARTY-NOTICES.txt` and on the
 application's About page. The NLLB-200 translation model is licensed for non-commercial use only.
+The example recordings, the sample consultations and the speech test fixtures come from PriMock57
+(Babylon Health), used under CC BY 4.0.
 
 Copyright © 2026 Philip Hargreaves.
