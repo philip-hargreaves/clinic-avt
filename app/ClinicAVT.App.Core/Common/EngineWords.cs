@@ -23,6 +23,15 @@ public static partial class EngineWords
             return Reworded("something went wrong", e, logger);
         }
 
+        // Windows reports most causes as a call and an error code, which go to the log. The
+        // privacy setting is the only cause a clinician can act on
+        if (e is EngineErrorException { Code: Protocol.CaptureFailedCode })
+        {
+            return e.Message.StartsWith("microphone access denied", StringComparison.OrdinalIgnoreCase)
+                ? "microphone access is off in Windows Settings, under Privacy & security, Microphone"
+                : Reworded("the microphone could not be opened", e, logger);
+        }
+
         // A store lookup names the missing id, which means nothing to a clinician
         var text = NoSuchSession().Replace(e.Message, "that consultation is no longer on this computer");
         text = Sessions().Replace(text, "consultations");

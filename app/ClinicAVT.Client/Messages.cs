@@ -13,6 +13,9 @@ public static class Protocol
     // The engine's code for a refusal whose data is its reason
     public const int SessionErrorCode = -32001;
 
+    // The engine's code for a microphone that could not be opened, with the cause as its data
+    public const int CaptureFailedCode = -32000;
+
     // Non-ASCII patient and drug names go on the wire as readable UTF-8 without \uXXXX escapes
     public static JsonSerializerOptions JsonOptions { get; } = new()
     {

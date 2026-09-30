@@ -52,4 +52,31 @@ public class ReadinessAndGuardsTest
             shell.Line.LatestActivity);
         Assert.Contains(log.Lines, line => line.Contains("session/start failed"));
     }
+
+    [Fact]
+    public async Task AMicrophoneThatCannotOpenSaysWhyWhenRecordingIsRefused()
+    {
+        var engine = new FakeEngineClient(autoNotify: false);
+        var shell = TestSession.Create(engine: engine);
+        var (session, _, _) = shell;
+
+        engine.FailNext = method => method == "session/start"
+            ? new EngineErrorException(Protocol.CaptureFailedCode, "Capture failed",
+                JsonSerializer.SerializeToElement("microphone access denied in Windows privacy settings"))
+            : null;
+        await session.StartRecordingAsync();
+
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.Equal(
+            "Recording could not start: microphone access is off in Windows Settings, under Privacy & security, Microphone",
+            shell.Line.LatestActivity);
+
+        engine.FailNext = method => method == "session/start"
+            ? new EngineErrorException(Protocol.CaptureFailedCode, "Capture failed",
+                JsonSerializer.SerializeToElement("IAudioClient::Initialize failed, hr=0x8889000A"))
+            : null;
+        await session.StartRecordingAsync();
+
+        Assert.Equal("Recording could not start: the microphone could not be opened", shell.Line.LatestActivity);
+    }
 }

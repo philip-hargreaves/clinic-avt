@@ -257,7 +257,7 @@ public class ImportRecordingTest
 
         await session.CancelRecordingAsync();
         engine.FailNext = method => method == "session/import"
-            ? new EngineErrorException(-32000, "recording too short", null)
+            ? new EngineErrorException(Protocol.SessionErrorCode, "recording too short", null)
             : null;
         await controls.ImportRecordingCommand.ExecuteAsync(null);
         Assert.Equal(SessionState.Idle, session.State);
