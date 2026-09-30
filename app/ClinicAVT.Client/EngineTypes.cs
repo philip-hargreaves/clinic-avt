@@ -41,7 +41,7 @@ public sealed record RecordingInfo(double Seconds = 0, string? RecordedAt = null
 public sealed record SessionSummary(
     string Id = "", string StartedAt = "", string EndedAt = "", string? Label = null,
     string? EditedAt = null, double AudioSeconds = 0,
-    [property: JsonPropertyName("demo")] bool Sample = false, bool HasReflection = false);
+    bool Sample = false, bool HasReflection = false);
 
 public sealed record TranscriptTurn(
     string Speaker = "", ulong FirstFrame = 0, string Text = "");
@@ -145,7 +145,7 @@ public sealed record StoredReflection(
 public sealed record ReflectionListing(
     string Id = "", string StartedAt = "", string? Label = null, string? Happened = null,
     string? Learned = null, string? Next = null, string? Summary = null, string? EditedAt = null,
-    [property: JsonPropertyName("demo")] bool Sample = false);
+    bool Sample = false);
 
 /// <summary>
 /// What a backup of a period would hold. Unfinished consultations are counted and left out.

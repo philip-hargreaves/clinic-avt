@@ -69,7 +69,7 @@ public class FixtureTest
             .GetProperty("result").GetProperty("sessions")[0];
         Assert.False(string.IsNullOrEmpty(session.GetProperty("label").GetString()));
         Assert.Equal(JsonValueKind.Null, session.GetProperty("editedAt").ValueKind);
-        Assert.False(session.GetProperty("demo").GetBoolean());
+        Assert.False(session.GetProperty("sample").GetBoolean());
 
         var seeded = Fixtures.Load("demo-seed.json").GetProperty("result");
         var cleared = Fixtures.Load("demo-clear.json").GetProperty("result");
@@ -78,7 +78,7 @@ public class FixtureTest
         var note = Fixtures.Load("session-note.json").GetProperty("result");
         Assert.False(string.IsNullOrEmpty(note.GetProperty("text").GetString()));
         Assert.Equal("prose", note.GetProperty("style").GetString());
-        Assert.Equal("standard", note.GetProperty("detail").GetString());
+        Assert.Equal("concise", note.GetProperty("detail").GetString());
         Assert.True(DateTimeOffset.TryParse(note.GetProperty("generatedAt").GetString(), out _));
         Assert.True(DateTimeOffset.TryParse(note.GetProperty("editedAt").GetString(), out _));
 
@@ -123,7 +123,7 @@ public class FixtureTest
 
         var listed = Fixtures.Load("reflection-list.json")
             .GetProperty("result").GetProperty("reflections")[0];
-        Assert.False(listed.GetProperty("demo").GetBoolean());
+        Assert.False(listed.GetProperty("sample").GetBoolean());
         var update = Fixtures.Load("reflection-update.json").GetProperty("params");
         Assert.Equal(update.GetProperty("id").GetString(), listed.GetProperty("id").GetString());
         Assert.Equal(update.GetProperty("learned").GetString(), listed.GetProperty("learned").GetString());

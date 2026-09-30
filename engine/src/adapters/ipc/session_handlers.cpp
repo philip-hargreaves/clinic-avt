@@ -22,7 +22,7 @@ json HandleSessionList(clinicavt::records::SessionRecords& records) {
                         {"label", session.label},
                         {"editedAt", NullWhenEmpty(session.edited_at)},
                         {"audioSeconds", session.audio_seconds},
-                        {"demo", session.demo},
+                        {"sample", session.sample},
                         {"hasReflection", session.has_reflection}});
     }
     return json{{"sessions", std::move(list)}};
@@ -238,7 +238,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     server.RegisterMethod("session/patient", [&sessions](const json& params) {
         return HandleSessionPatient(sessions, params);
     });
-    // A typed label survives regeneration; until one is set, the note's first sentence is used
+    // A typed label survives regeneration. Until one is set, the note's first sentence is used
     server.RegisterMethod("session/label",
                           EditDocument(sessions, clinicavt::store::DocumentKind::kLabel));
     server.RegisterMethod(
