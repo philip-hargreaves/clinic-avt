@@ -4,8 +4,8 @@
 #   .\tools\run-gates.ps1 [-Build] [-WithMicrophone] [-List]
 #
 # -List checks the plumbing without running anything. Needs staged weights and
-# the Intel GPU. The model tests that read the PriMock consultation skip without it.
-# CLINICAVT_PRIMOCK_MIXED and CLINICAVT_PRIMOCK_REFERENCE override its default paths.
+# the Intel GPU. The model tests that read the PriMock consultation skip without its example
+# recording. CLINICAVT_PRIMOCK_MIXED and CLINICAVT_PRIMOCK_REFERENCE override the default paths.
 [CmdletBinding()]
 param(
     [switch]$Build,
@@ -20,9 +20,9 @@ $ctest = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\c
 if (-not (Test-Path $ctest)) { $ctest = (Get-Command ctest -ErrorAction SilentlyContinue).Source }
 if (-not $ctest) { throw 'ctest not found; install the CMake component or put ctest on PATH' }
 
-# The suites load real models, so they need the GPU to themselves. Nothing is killed: a
-# process stopped mid-GPU can wedge the driver, and a note host still here with its engine
-# gone already has, which only a restart clears
+# Suites load real models and need the GPU alone. Nothing is killed, because stopping a
+# process mid-GPU can wedge the driver. A note host running without its engine means the
+# driver is already wedged, and only a restart clears it
 $running = @(Get-Process 'ClinicAVT.App', 'clinicavt_engine', 'clinicavt_note_host' -ErrorAction SilentlyContinue)
 if ($running) {
     $names = ($running | ForEach-Object { "$($_.ProcessName) $($_.Id)" }) -join ', '
@@ -32,8 +32,8 @@ if ($running) {
 # ctest counts a skipped test as passed, so missing PriMock files are reported here.
 # The defaults match engine\tests\support\primock.hpp
 $primock = [ordered]@{
-    CLINICAVT_PRIMOCK_MIXED     = 'C:\dev\intelliscribe\bench\transcription\mixed\day1_consultation01_mixed.wav'
-    CLINICAVT_PRIMOCK_REFERENCE = 'C:\dev\intelliscribe\bench\transcription\references\day1_consultation01.json'
+    CLINICAVT_PRIMOCK_MIXED     = Join-Path $root 'demo\day1_consultation01_mixed.wav'
+    CLINICAVT_PRIMOCK_REFERENCE = Join-Path $root 'engine\tests\fixtures\transcription\day1_consultation01.json'
 }
 $missingPrimock = @($primock.GetEnumerator() | ForEach-Object {
     $path = [Environment]::GetEnvironmentVariable($_.Key)
@@ -76,6 +76,8 @@ if ($Build) {
         Set-Location $root
         cmake --build --preset release
         dotnet build clinicavt.slnx -p:Platform=x64
+        # The shell suite below runs --no-build from the AnyCPU output
+        dotnet build "$root\app\ClinicAVT.App.Tests"
     }
 }
 

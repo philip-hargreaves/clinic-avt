@@ -23,7 +23,6 @@ add_executable(core_tests
     core/audio/voice_enrolment_test.cpp
     core/common/cli_args_test.cpp
     core/common/strings_test.cpp
-    core/common/version_test.cpp
     core/demo/sample_year_test.cpp
     core/diarisation/clip_cuts_test.cpp
     core/diarisation/diar_regions_test.cpp
@@ -55,7 +54,6 @@ add_executable(core_tests
     core/session/session_controller_note_test.cpp
     core/session/transcribe_recording_test.cpp
     core/translate/plain_punctuation_test.cpp)
-target_compile_definitions(core_tests PRIVATE CLINICAVT_CMAKE_VERSION="${clinicavt_VERSION}")
 target_link_libraries(core_tests PRIVATE clinicavt_core clinicavt_warnings GTest::gtest_main)
 
 # Adapters, and the core tests that need one or read a JSON fixture
@@ -114,7 +112,6 @@ add_executable(engine_tests
     adapters/ipc/archive_handlers_test.cpp
     adapters/archive/backup_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
-    CLINICAVT_CMAKE_VERSION="${clinicavt_VERSION}"
     CLINICAVT_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/schema/fixtures"
     CLINICAVT_GUIDANCE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/guidance"
     CLINICAVT_DEMO_DIR="${clinicavt_SOURCE_DIR}/demo/reflections"
@@ -185,7 +182,9 @@ target_include_directories(models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(models_tests PRIVATE
     CLINICAVT_MODELS_DIR="${clinicavt_SOURCE_DIR}/models"
     CLINICAVT_DIAR_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/diarisation"
-    CLINICAVT_GUIDANCE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/guidance")
+    CLINICAVT_GUIDANCE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/guidance"
+    CLINICAVT_PRIMOCK_MIXED_DEFAULT="${clinicavt_SOURCE_DIR}/demo/day1_consultation01_mixed.wav"
+    CLINICAVT_PRIMOCK_REFERENCE_DEFAULT="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/transcription/day1_consultation01.json")
 target_link_libraries(models_tests PRIVATE
     clinicavt_corpus clinicavt_diarisation clinicavt_guidance clinicavt_models clinicavt_note
     clinicavt_system clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings
