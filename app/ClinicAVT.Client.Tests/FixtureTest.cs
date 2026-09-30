@@ -450,7 +450,7 @@ public class FixtureTest
             ("anchor-enrol.json", () => api.StartEnrolmentAsync(45, "{0.0.1}.{aa}")),
             ("anchor-enrol-cancel.json", () => api.CancelEnrolmentAsync()),
             ("anchor-enrol-finish.json", () => api.FinishEnrolmentAsync()),
-            ("asr-device.json", () => api.SetAsrDeviceAsync("NPU")),
+            ("asr-device.json", () => api.SetAsrDeviceAsync(AsrDevice.Npu)),
             ("audio-inputs.json", () => api.ListAudioInputsAsync()),
             ("engine-exit.json", () => api.RequestExitAsync()),
             ("engine-metrics.json", () => api.MetricsAsync()),
@@ -487,7 +487,7 @@ public class FixtureTest
         var api = new EngineApi(transport);
 
         transport.Reply = Result("asr-device.json");
-        Assert.Equal(new AsrDeviceState("NPU", "loading"), await api.SetAsrDeviceAsync("NPU"));
+        Assert.Equal(new AsrDeviceState(AsrDevice.Npu, ModelState.Loading), await api.SetAsrDeviceAsync(AsrDevice.Npu));
 
         transport.Reply = Result("audio-inputs.json");
         Assert.Equal(
@@ -516,7 +516,7 @@ public class FixtureTest
     {
         Assert.Equal(new EnrolmentProgress(0.5, 12.4, 9.1, false), Parse("anchor-progress.json"));
         Assert.Equal(new EnrolmentDone(true, ""), Parse("anchor-enrolled.json"));
-        Assert.Equal(new AsrDeviceState("NPU", "ready"), Parse("asr-device-notification.json"));
+        Assert.Equal(new AsrDeviceState(AsrDevice.Npu, ModelState.Ready), Parse("asr-device-notification.json"));
 
         Assert.Equal(new NotePartial("Swollen left elbow", 17.2), Parse("note-partial.json"));
         Assert.Equal(new NoteReady("Swollen left elbow for a week. No injury.", 16.8), Parse("note-ready.json"));
