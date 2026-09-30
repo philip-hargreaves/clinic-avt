@@ -30,7 +30,7 @@ class ArchiveLane {
     using Emit = std::function<void(const std::string& method, nlohmann::json params)>;
 
     // Only tests lower the iteration count
-    ArchiveLane(store::ISessionStore& store, Emit emit,
+    ArchiveLane(store::ISessionCatalog& catalog, store::IRecordStore& records, Emit emit,
                 std::uint32_t iterations = kBackupIterations);
     ~ArchiveLane();
 
@@ -57,7 +57,8 @@ class ArchiveLane {
     bool Launch(std::function<Outcome()> job);
     Progress Reporter(std::string job);
 
-    store::ISessionStore& store_;
+    store::ISessionCatalog& catalog_;
+    store::IRecordStore& records_;
     Emit emit_;
     std::uint32_t iterations_;
     std::mutex mutex_;

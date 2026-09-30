@@ -150,7 +150,8 @@ int wmain(int argc, wchar_t* argv[]) {
 
         clinicavt::ipc::PipeServer server(config.pipe_name);
         clinicavt::store::SqliteSessionStore session_store(config.store_root);
-        clinicavt::archive::ArchiveLane archive_lane(session_store, clinicavt::ipc::PushTo(server));
+        clinicavt::archive::ArchiveLane archive_lane(session_store, session_store,
+                                                     clinicavt::ipc::PushTo(server));
         // Retain-off sessions are erased even if the app was closed mid-consultation
         session_store.EraseUnretained();
         clinicavt::models::ModelStore model_store(config.models_root);
@@ -234,13 +235,15 @@ int wmain(int argc, wchar_t* argv[]) {
             };
         clinicavt::store::JsonReflectionCodec reflection_codec;
         clinicavt::records::SessionRecords records(session_store);
-        clinicavt::records::Reflections reflections(session_store, reflection_codec);
+        clinicavt::records::Reflections reflections(session_store, session_store, reflection_codec);
         clinicavt::demo::JsonSampleSource samples(config.models_root.parent_path() / "demo" /
                                                   "reflections");
-        clinicavt::demo::DemoSamples demo(session_store, reflection_codec, samples);
+        clinicavt::demo::DemoSamples demo(session_store, session_store, session_store,
+                                          reflection_codec, samples);
         clinicavt::ipc::RegisterMethods(server, {.controller = controller,
                                                  .models = model_store,
-                                                 .sessions = session_store,
+                                                 .documents = session_store,
+                                                 .catalog = session_store,
                                                  .records = records,
                                                  .reflections = reflections,
                                                  .demo = demo,

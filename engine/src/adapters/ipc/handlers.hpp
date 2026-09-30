@@ -60,13 +60,13 @@ std::variant<json, Error> HandleAnchorClear(clinicavt::diar::AnchorStore& anchor
 
 json HandleSessionList(clinicavt::records::SessionRecords& records);
 
-std::variant<json, Error> HandleSessionNote(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionNote(clinicavt::store::IDocumentStore& documents,
                                             const json& params);
 
-std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionPatient(clinicavt::store::IDocumentStore& documents,
                                                const json& params);
 
-std::variant<json, Error> HandleSessionTranscript(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionTranscript(clinicavt::store::ISessionCatalog& sessions,
                                                   const json& params);
 
 std::variant<json, Error> HandleReflectionGet(clinicavt::records::Reflections& reflections,
@@ -76,7 +76,7 @@ std::variant<json, Error> HandleReflectionUpdate(clinicavt::records::Reflections
 std::variant<json, Error> HandleReflectionDelete(clinicavt::records::Reflections& reflections,
                                                  const json& params);
 json HandleReflectionList(clinicavt::records::Reflections& reflections);
-std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionCatalog& sessions,
                                               const json& params);
 // Crypto-erases everything; refused while recording or during a backup. Without
 // deleteReflections, a session with an appraisal entry is cleared down to it
@@ -91,7 +91,7 @@ std::variant<json, Error> HandleSessionRemove(clinicavt::records::SessionRecords
 // archive/summary: contents of a backup of the period, and how many consultations
 // the last backup (covered) misses. archive/backup and archive/restore start a
 // lane job; refused while recording or another job runs
-std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionCatalog& sessions,
                                                const json& params);
 std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& lane,
                                               bool session_active, const json& params);
@@ -151,19 +151,18 @@ json GuidanceModelJson(const clinicavt::guidance::Readiness& readiness);
 // the record is stored first and the payload says whether the note changed. If
 // the session was erased meanwhile, nothing is sent; other store errors go in
 // the payload
-clinicavt::guidance::SearchRequest GuidanceSearchRequest(clinicavt::store::ISessionStore& sessions,
-                                                         const std::string& session,
-                                                         clinicavt::store::Document note, int limit,
-                                                         const Notify& notify);
+clinicavt::guidance::SearchRequest GuidanceSearchRequest(
+    clinicavt::store::IDocumentStore& documents, const std::string& session,
+    clinicavt::store::Document note, int limit, const Notify& notify);
 // session/guidance: stored record, null if never searched or unreadable. stale:
 // the note changed since. documentsChanged: the searched added documents differ
 // from those ready now
 std::variant<json, Error> HandleSessionGuidance(
-    clinicavt::store::ISessionStore& sessions, const json& params,
+    clinicavt::store::IDocumentStore& documents, const json& params,
     clinicavt::guidance::IDocumentIngest* ingest = nullptr);
 // guidance/search: searches a session's stored note or free text via the lane.
 // Replies immediately; results come as a notification
-std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::IDocumentStore& documents,
                                                clinicavt::guidance::IGuidanceLane& lane,
                                                const json& params, const Notify& notify);
 // Added-document row used by guidance/documents, guidance/document and progress
@@ -186,7 +185,7 @@ std::variant<json, Error> HandleDocumentsPage(clinicavt::guidance::IDocumentInge
                                               const json& params);
 std::variant<json, Error> HandleDocumentsOpen(clinicavt::guidance::IDocumentIngest& ingest,
                                               const json& params);
-void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::ISessionStore& sessions,
+void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::IDocumentStore& documents,
                              clinicavt::guidance::IGuidanceRetriever& retriever,
                              clinicavt::guidance::IGuidanceLane& lane,
                              clinicavt::guidance::IDocumentIngest& ingest);
@@ -207,7 +206,8 @@ std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool sessio
 struct EngineServices {
     clinicavt::session::SessionController& controller;
     const clinicavt::models::ModelStore& models;
-    clinicavt::store::ISessionStore& sessions;
+    clinicavt::store::IDocumentStore& documents;
+    clinicavt::store::ISessionCatalog& catalog;
     clinicavt::records::SessionRecords& records;
     clinicavt::records::Reflections& reflections;
     clinicavt::demo::DemoSamples& demo;

@@ -85,13 +85,13 @@ BackupResult BackUpTo(const std::filesystem::path& path, SqliteSessionStore& sto
                       const Period& period, const Progress& progress = {},
                       bool reflections_only = false) {
     ArchiveFileSink sink(path, kPassword, kLowIterations);
-    return BackUp(store, period, sink, progress, reflections_only);
+    return BackUp(store, store, period, sink, progress, reflections_only);
 }
 
 RestoreResult RestoreFrom(const std::filesystem::path& path, SqliteSessionStore& store,
                           bool dry_run = false) {
     ArchiveFileSource source(path, kPassword);
-    return Restore(store, source, dry_run, {});
+    return Restore(store, store, source, dry_run, {});
 }
 
 // Backs up the period's finished and cleared consultations and skips samples, a crashed recording

@@ -17,7 +17,7 @@ namespace clinicavt::session {
 class Enrolment {
    public:
     Enrolment(const SourceFactory& factory, audio::IStreamingVad& vad, diar::IDiariser& diariser,
-              ISessionEvents& events);
+              IEnrolmentEvents& events);
     ~Enrolment();
     Enrolment(const Enrolment&) = delete;
     Enrolment& operator=(const Enrolment&) = delete;
@@ -36,7 +36,7 @@ class Enrolment {
     const SourceFactory& factory_;
     audio::IStreamingVad& vad_;
     diar::IDiariser& diariser_;
-    ISessionEvents& events_;
+    IEnrolmentEvents& events_;
     mutable std::mutex mutex_;
     std::unique_ptr<audio::IAudioSource> source_;  // under mutex_
     std::thread thread_;

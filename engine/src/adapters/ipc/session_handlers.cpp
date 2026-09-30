@@ -28,17 +28,17 @@ json HandleSessionList(clinicavt::records::SessionRecords& records) {
     return json{{"sessions", std::move(list)}};
 }
 
-std::variant<json, Error> HandleSessionTranscript(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionTranscript(clinicavt::store::ISessionCatalog& sessions,
                                                   const json& params) {
     return WithSession(params, [&](const std::string& id) {
         return json{{"turns", TurnsJson(sessions.ReadTurns(id))}};
     });
 }
 
-std::variant<json, Error> HandleSessionNote(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionNote(clinicavt::store::IDocumentStore& documents,
                                             const json& params) {
     return WithSession(params, [&](const std::string& id) {
-        const auto note = sessions.ReadDocument(id, clinicavt::store::DocumentKind::kNote);
+        const auto note = documents.ReadDocument(id, clinicavt::store::DocumentKind::kNote);
         return json{{"text", note.text},
                     {"style", note.style},
                     {"detail", note.detail},
@@ -47,12 +47,12 @@ std::variant<json, Error> HandleSessionNote(clinicavt::store::ISessionStore& ses
     });
 }
 
-std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionPatient(clinicavt::store::IDocumentStore& documents,
                                                const json& params) {
     return WithSession(params, [&](const std::string& id) {
         using clinicavt::store::DocumentKind;
-        const auto patient = sessions.ReadDocument(id, DocumentKind::kPatient);
-        const auto translation = sessions.ReadDocument(id, DocumentKind::kTranslation);
+        const auto patient = documents.ReadDocument(id, DocumentKind::kPatient);
+        const auto translation = documents.ReadDocument(id, DocumentKind::kTranslation);
         // Both timestamps so the shell can flag a sheet edited after translation
         json result{{"text", patient.text},
                     {"generatedAt", NullWhenEmpty(patient.generated_at)},
@@ -67,7 +67,7 @@ std::variant<json, Error> HandleSessionPatient(clinicavt::store::ISessionStore& 
     });
 }
 
-std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionCatalog& sessions,
                                               const json& params) {
     return WithSession(params, [&](const std::string& id) {
         sessions.Delete(id);
@@ -120,21 +120,22 @@ std::variant<json, Error> HandleSessionRemove(clinicavt::records::SessionRecords
 
 namespace {
 
-auto EditDocument(clinicavt::store::ISessionStore& sessions, clinicavt::store::DocumentKind kind) {
-    return [&sessions, kind](const json& params) {
+auto EditDocument(clinicavt::store::IDocumentStore& documents,
+                  clinicavt::store::DocumentKind kind) {
+    return [&documents, kind](const json& params) {
         return WithSession(params, [&](const std::string& id) -> std::variant<json, Error> {
             if (!params.contains("text") || !params["text"].is_string()) {
                 return InvalidParams("text must be a string");
             }
-            sessions.EditDocument(id, kind,
-                                  clinicavt::strings::UnixLines(params["text"].get<std::string>()));
+            documents.EditDocument(
+                id, kind, clinicavt::strings::UnixLines(params["text"].get<std::string>()));
             return json::object();
         });
     };
 }
 
 // A stored session with no turns, e.g. restored without a transcript
-bool NoTranscript(clinicavt::store::ISessionStore& sessions, const std::string& id) {
+bool NoTranscript(clinicavt::store::ISessionCatalog& sessions, const std::string& id) {
     if (id.empty()) return false;
     try {
         return sessions.ReadTurns(id).empty();
@@ -223,30 +224,31 @@ std::variant<json, Error> HandleSessionStart(clinicavt::session::SessionControll
 
 void RegisterSessionMethods(PipeServer& server, const EngineServices& services) {
     auto& controller = services.controller;
-    auto& sessions = services.sessions;
+    auto& documents = services.documents;
+    auto& catalog = services.catalog;
     auto& records = services.records;
     auto* const translator = services.translator;
     const auto archive_busy = ArchiveBusy(services);
     server.RegisterMethod("session/list",
                           [&records](const json&) { return HandleSessionList(records); });
-    server.RegisterMethod("session/transcript", [&sessions](const json& params) {
-        return HandleSessionTranscript(sessions, params);
+    server.RegisterMethod("session/transcript", [&catalog](const json& params) {
+        return HandleSessionTranscript(catalog, params);
     });
-    server.RegisterMethod("session/note", [&sessions](const json& params) {
-        return HandleSessionNote(sessions, params);
+    server.RegisterMethod("session/note", [&documents](const json& params) {
+        return HandleSessionNote(documents, params);
     });
-    server.RegisterMethod("session/patient", [&sessions](const json& params) {
-        return HandleSessionPatient(sessions, params);
+    server.RegisterMethod("session/patient", [&documents](const json& params) {
+        return HandleSessionPatient(documents, params);
     });
     // A typed label survives regeneration. Until one is set, the note's first sentence is used
     server.RegisterMethod("session/label",
-                          EditDocument(sessions, clinicavt::store::DocumentKind::kLabel));
+                          EditDocument(documents, clinicavt::store::DocumentKind::kLabel));
     server.RegisterMethod(
         "session/delete",
-        [&sessions, &controller, archive_busy](const json& params) -> std::variant<json, Error> {
+        [&catalog, &controller, archive_busy](const json& params) -> std::variant<json, Error> {
             if (archive_busy()) return SessionError(kArchiveRunning);
             if (controller.Busy()) return SessionError("finish the consultation first");
-            return HandleSessionDelete(sessions, params);
+            return HandleSessionDelete(catalog, params);
         });
     // The shell confirms first
     server.RegisterMethod(
@@ -273,11 +275,11 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
         });
     server.RegisterMethod(
         "note/regenerate",
-        [&controller, &sessions](const json& params) -> std::variant<json, Error> {
+        [&controller, &catalog](const json& params) -> std::variant<json, Error> {
             const auto options = NoteOptionsFrom(params);
             if (std::holds_alternative<Error>(options)) return std::get<Error>(options);
             if (!controller.RegenerateNote(std::get<clinicavt::note::NoteOptions>(options))) {
-                if (NoTranscript(sessions, controller.LastFinalised())) {
+                if (NoTranscript(catalog, controller.LastFinalised())) {
                     return SessionError("this consultation has no transcript to write a note from");
                 }
                 return SessionError("no finalised session, or a note is already being written");
@@ -293,9 +295,9 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
             return json::object();
         });
     server.RegisterMethod("note/update",
-                          EditDocument(sessions, clinicavt::store::DocumentKind::kNote));
+                          EditDocument(documents, clinicavt::store::DocumentKind::kNote));
     server.RegisterMethod("patient/update",
-                          EditDocument(sessions, clinicavt::store::DocumentKind::kPatient));
+                          EditDocument(documents, clinicavt::store::DocumentKind::kPatient));
     server.RegisterMethod("session/cancel", [&controller](const json&) {
         controller.Cancel();
         return json::object();
@@ -304,7 +306,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
     // Recording closes the review. A stored sheet preloads the translator
     server.RegisterMethod(
         "session/open",
-        [&controller, &sessions, translator](const json& params) -> std::variant<json, Error> {
+        [&controller, &documents, translator](const json& params) -> std::variant<json, Error> {
             const auto id = IdFrom(params);
             if (std::holds_alternative<Error>(id)) return std::get<Error>(id);
             if (!controller.Open(std::get<std::string>(id))) {
@@ -312,7 +314,7 @@ void RegisterSessionMethods(PipeServer& server, const EngineServices& services) 
             }
             if (translator != nullptr) {
                 try {
-                    const auto sheet = sessions.ReadDocument(
+                    const auto sheet = documents.ReadDocument(
                         std::get<std::string>(id), clinicavt::store::DocumentKind::kPatient);
                     if (!sheet.text.empty()) translator->Prepare();
                 } catch (...) {  // NOLINT(bugprone-empty-catch) Translate loads it anyway

@@ -25,7 +25,7 @@ class NoteLane {
     // recording, so the note is refused
     static constexpr std::size_t kMinNoteWords = 25;
 
-    NoteLane(note::INoteWriter* writer, store::ISessionStore& store, ISessionEvents& events,
+    NoteLane(note::INoteWriter* writer, store::IDocumentStore& store, ISessionEvents& events,
              std::size_t min_note_words = kMinNoteWords);
     ~NoteLane();
     NoteLane(const NoteLane&) = delete;
@@ -62,7 +62,7 @@ class NoteLane {
     void SaveLabel(const store::SessionId& id, const std::string& note_text);
 
     note::INoteWriter* writer_;
-    store::ISessionStore& store_;
+    store::IDocumentStore& store_;
     ISessionEvents& events_;
     std::size_t min_note_words_;
     mutable std::mutex mutex_;  // options_ and thread_

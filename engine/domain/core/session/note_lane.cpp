@@ -23,7 +23,7 @@ std::size_t TranscriptWords(const std::vector<asr::Turn>& turns) {
 
 }  // namespace
 
-NoteLane::NoteLane(note::INoteWriter* writer, store::ISessionStore& store, ISessionEvents& events,
+NoteLane::NoteLane(note::INoteWriter* writer, store::IDocumentStore& store, ISessionEvents& events,
                    std::size_t min_note_words)
     : writer_(writer), store_(store), events_(events), min_note_words_(min_note_words) {}
 

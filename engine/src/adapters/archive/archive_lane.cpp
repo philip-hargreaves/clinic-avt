@@ -73,8 +73,9 @@ json ArchiveFailedJson(const std::string& job, const std::string& code) {
     return json{{"job", job}, {"code", code}};
 }
 
-ArchiveLane::ArchiveLane(store::ISessionStore& store, Emit emit, std::uint32_t iterations)
-    : store_(store), emit_(std::move(emit)), iterations_(iterations) {}
+ArchiveLane::ArchiveLane(store::ISessionCatalog& catalog, store::IRecordStore& records, Emit emit,
+                         std::uint32_t iterations)
+    : catalog_(catalog), records_(records), emit_(std::move(emit)), iterations_(iterations) {}
 
 ArchiveLane::~ArchiveLane() {
     std::thread worker;
@@ -124,8 +125,8 @@ bool ArchiveLane::BackUp(Period period, std::filesystem::path path, const std::s
                 sink.emplace(path, password, iterations_);
             }
             return {"archive/done",
-                    BackupDoneJson(archive::BackUp(store_, period, *sink, Reporter("backup"),
-                                                   reflections_only))};
+                    BackupDoneJson(archive::BackUp(catalog_, records_, period, *sink,
+                                                   Reporter("backup"), reflections_only))};
         } catch (...) {
             return {"archive/failed",
                     ArchiveFailedJson("backup", CodeOf(std::current_exception()))};
@@ -142,9 +143,9 @@ bool ArchiveLane::Restore(std::filesystem::path path, const std::string& passwor
                 WipeOnExit wipe{password};
                 source.emplace(path, password);
             }
-            return {"archive/done",
-                    RestoreDoneJson(archive::Restore(store_, *source, dry_run, Reporter("restore")),
-                                    dry_run)};
+            return {"archive/done", RestoreDoneJson(archive::Restore(catalog_, records_, *source,
+                                                                     dry_run, Reporter("restore")),
+                                                    dry_run)};
         } catch (...) {
             return {"archive/failed",
                     ArchiveFailedJson("restore", CodeOf(std::current_exception()))};

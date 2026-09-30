@@ -9,7 +9,7 @@ namespace clinicavt::records {
 
 class SessionRecords {
    public:
-    explicit SessionRecords(store::ISessionStore& sessions) : sessions_(sessions) {}
+    explicit SessionRecords(store::ISessionCatalog& sessions) : sessions_(sessions) {}
 
     // Cleared sessions are appraisal entries. Only reflection/list shows them
     std::vector<store::SessionSummary> Consultations();
@@ -23,7 +23,7 @@ class SessionRecords {
     std::size_t Remove(const std::vector<store::SessionId>& ids, bool keep_reflections);
 
    private:
-    store::ISessionStore& sessions_;
+    store::ISessionCatalog& sessions_;
 };
 
 }  // namespace clinicavt::records

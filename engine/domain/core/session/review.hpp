@@ -13,7 +13,8 @@ namespace clinicavt::session {
 // blocks on the note lane
 class Review {
    public:
-    Review(SessionState& state, NoteLane& note_lane, store::ISessionStore& store);
+    Review(SessionState& state, NoteLane& note_lane, store::IDocumentStore& documents,
+           store::ISessionCatalog& catalog);
 
     bool Open(const store::SessionId& id);
     void Close();
@@ -26,7 +27,8 @@ class Review {
 
     SessionState& state_;
     NoteLane& note_lane_;
-    store::ISessionStore& store_;
+    store::IDocumentStore& documents_;
+    store::ISessionCatalog& catalog_;
 };
 
 }  // namespace clinicavt::session

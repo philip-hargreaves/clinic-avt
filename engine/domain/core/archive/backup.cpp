@@ -60,9 +60,9 @@ void Report(const Progress& progress, Phase phase, std::size_t done, std::size_t
 
 }  // namespace
 
-Counts Summarise(store::ISessionStore& store, const Period& period) {
+Counts Summarise(store::ISessionCatalog& catalog, const Period& period) {
     Counts counts;
-    for (const store::SessionSummary& session : store.ListSessions()) {
+    for (const store::SessionSummary& session : catalog.ListSessions()) {
         if (session.sample || !Within(period, session.started_at)) continue;
         if (!Eligible(session)) {
             counts.unfinished += 1;
@@ -74,9 +74,10 @@ Counts Summarise(store::ISessionStore& store, const Period& period) {
     return counts;
 }
 
-std::size_t Uncovered(store::ISessionStore& store, const Period& covered, const std::string& at) {
+std::size_t Uncovered(store::ISessionCatalog& catalog, const Period& covered,
+                      const std::string& at) {
     std::size_t uncovered = 0;
-    for (const store::SessionSummary& session : store.ListSessions()) {
+    for (const store::SessionSummary& session : catalog.ListSessions()) {
         if (!Eligible(session)) continue;
         if (!Within(covered, session.started_at) || session.ended_at > at ||
             session.written_at > at) {
@@ -86,13 +87,14 @@ std::size_t Uncovered(store::ISessionStore& store, const Period& covered, const 
     return uncovered;
 }
 
-BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveSink& sink,
-                    const Progress& progress, bool reflections_only) {
+BackupResult BackUp(store::ISessionCatalog& catalog, store::IRecordStore& records,
+                    const Period& period, IArchiveSink& sink, const Progress& progress,
+                    bool reflections_only) {
     BackupResult result;
     result.manifest.created_at = Iso8601Now();
     result.manifest.reflections_only = reflections_only;
     std::vector<store::SessionId> selected;
-    for (const store::SessionSummary& session : store.ListSessions()) {
+    for (const store::SessionSummary& session : catalog.ListSessions()) {
         if (Eligible(session) && Within(period, session.started_at) &&
             (!reflections_only || session.has_reflection)) {
             selected.push_back(session.id);
@@ -107,7 +109,7 @@ BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveS
     sink.Begin(result.manifest);
     std::size_t written = 0;
     for (const store::SessionId& id : selected) {
-        store::SessionRecord record = store.ReadRecord(id);
+        store::SessionRecord record = records.ReadRecord(id);
         if (reflections_only) record = Stripped(std::move(record));
         // Restore refuses the whole file for one invalid record
         if (!ValidRecord(record)) throw ArchiveError(ArchiveCode::kDamaged);
@@ -122,14 +124,14 @@ BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveS
     return result;
 }
 
-RestoreResult Restore(store::ISessionStore& store, IArchiveSource& source, bool dry_run,
-                      const Progress& progress) {
+RestoreResult Restore(store::ISessionCatalog& catalog, store::IRecordStore& records,
+                      IArchiveSource& source, bool dry_run, const Progress& progress) {
     RestoreResult expected;
     expected.manifest = source.GetManifest();
     const std::size_t total = expected.manifest.consultations;
 
     std::map<store::SessionId, bool> stored;  // id to cleared
-    for (const store::SessionSummary& session : store.ListSessions()) {
+    for (const store::SessionSummary& session : catalog.ListSessions()) {
         stored.emplace(session.id, session.cleared);
     }
     std::set<store::SessionId> seen;
@@ -160,7 +162,7 @@ RestoreResult Restore(store::ISessionStore& store, IArchiveSource& source, bool 
     source.Rewind();
     std::size_t done = 0;
     while (const std::optional<store::SessionRecord> record = source.Next()) {
-        const store::AddOutcome outcome = store.AddRecord(*record);
+        const store::AddOutcome outcome = records.AddRecord(*record);
         if (outcome == store::AddOutcome::kAdded) result.added += 1;
         if (outcome == store::AddOutcome::kCompleted) result.completed += 1;
         if (outcome == store::AddOutcome::kSkipped) {

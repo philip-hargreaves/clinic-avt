@@ -18,9 +18,9 @@ double Rounded(double rate) {
 
 }  // namespace
 
-WireEvents::WireEvents(PipeServer& server, store::ISessionStore& sessions,
+WireEvents::WireEvents(PipeServer& server, store::IDocumentStore& documents,
                        translate::ITranslator* translator, guidance::IGuidanceLane* guidance)
-    : server_(server), sessions_(sessions), translator_(translator), guidance_(guidance) {}
+    : server_(server), documents_(documents), translator_(translator), guidance_(guidance) {}
 
 void WireEvents::OnLevel(const audio::LevelReading& reading) {
     server_.PushNotification("audio.level",
@@ -67,7 +67,7 @@ void WireEvents::OnNoteReady(const std::string& text) {
 void WireEvents::OnNoteSaved(const std::string& session, const store::Document& note) {
     if (guidance_ == nullptr) return;
     guidance_->Run(
-        GuidanceSearchRequest(sessions_, session, note, kGuidanceLimit, PushTo(server_)));
+        GuidanceSearchRequest(documents_, session, note, kGuidanceLimit, PushTo(server_)));
 }
 
 void WireEvents::OnStorageFault(const std::string& detail) {

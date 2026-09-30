@@ -45,7 +45,7 @@ bool StringParam(const json& params, const char* key) {
 
 }  // namespace
 
-std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionStore& sessions,
+std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionCatalog& sessions,
                                                const json& params) {
     const auto period = PeriodFrom(params);
     if (std::holds_alternative<Error>(period)) return std::get<Error>(period);
@@ -119,10 +119,10 @@ std::variant<json, Error> HandleArchiveRestore(clinicavt::archive::ArchiveLane& 
 
 void RegisterArchiveMethods(PipeServer& server, const EngineServices& services) {
     auto& controller = services.controller;
-    auto& sessions = services.sessions;
+    auto& catalog = services.catalog;
     auto* const lane = services.archive_lane;
-    server.RegisterMethod("archive/summary", [&sessions](const json& params) {
-        return HandleArchiveSummary(sessions, params);
+    server.RegisterMethod("archive/summary", [&catalog](const json& params) {
+        return HandleArchiveSummary(catalog, params);
     });
     // Both reply at once; the job reports on archive/progress, then archive/done or failed
     server.RegisterMethod("archive/backup", [&controller, lane](const json& params) {

@@ -24,11 +24,12 @@ struct Counts {
     std::size_t unfinished = 0;
 };
 
-Counts Summarise(store::ISessionStore& store, const Period& period);
+Counts Summarise(store::ISessionCatalog& catalog, const Period& period);
 
 // Consultations missing from a backup of `covered` made at `at`: outside its period, or ended
 // or written to since
-std::size_t Uncovered(store::ISessionStore& store, const Period& covered, const std::string& at);
+std::size_t Uncovered(store::ISessionCatalog& catalog, const Period& covered,
+                      const std::string& at);
 
 enum class Phase { kWriting, kChecking, kRestoring };
 using Progress = std::function<void(Phase phase, std::size_t done, std::size_t total)>;
@@ -43,8 +44,9 @@ struct BackupResult {
 // appraisal entry), then commits the sink, which checks the file. With reflections_only it writes
 // only those with an appraisal entry, stripped as on clear. A record Restore would refuse fails
 // the backup with kDamaged
-BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveSink& sink,
-                    const Progress& progress, bool reflections_only);
+BackupResult BackUp(store::ISessionCatalog& catalog, store::IRecordStore& records,
+                    const Period& period, IArchiveSink& sink, const Progress& progress,
+                    bool reflections_only);
 
 struct RestoreResult {
     std::size_t added = 0;
@@ -61,7 +63,7 @@ struct RestoreResult {
 // Validates every record before writing any, so a wrong password, damaged file or refused record
 // changes nothing. dry_run returns at that point with the counts. Each record is then added in its
 // own transaction, so an interrupted restore leaves whole consultations and a rerun completes it
-RestoreResult Restore(store::ISessionStore& store, IArchiveSource& source, bool dry_run,
-                      const Progress& progress);
+RestoreResult Restore(store::ISessionCatalog& catalog, store::IRecordStore& records,
+                      IArchiveSource& source, bool dry_run, const Progress& progress);
 
 }  // namespace clinicavt::archive

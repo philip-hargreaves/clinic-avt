@@ -36,7 +36,7 @@ struct SessionSummary {
     double audio_seconds = 0;     // From the turn timings
     bool has_reflection = false;  // Has an appraisal document
     bool sample = false;          // Seeded, never a real consultation
-    bool cleared = false;         // As ISessionStore::Cleared
+    bool cleared = false;         // As ISessionCatalog::Cleared
     std::string written_at;       // Latest write of any document, empty when none
 };
 
@@ -110,9 +110,9 @@ enum class AddOutcome {
 // Audio is committed every second and kept only to resume after a crash. Finalise stores the
 // transcript and erases the audio, Cancel keeps nothing, and a session left recording is listed
 // for recovery
-class ISessionStore {
+class IRecordingStore {
    public:
-    virtual ~ISessionStore() = default;
+    virtual ~IRecordingStore() = default;
 
     virtual SessionId Begin(const SessionMeta& meta) = 0;
 
@@ -128,7 +128,18 @@ class ISessionStore {
 
     virtual void Abandon(const SessionId& id) = 0;
 
-    virtual std::vector<SessionSummary> ListSessions() = 0;
+    // Stored capture in order, for resuming a crashed session. Refuses the session that is
+    // recording
+    virtual std::vector<float> ReadAudio(const SessionId& id) = 0;
+
+    // Called off the caller thread when an audio commit fails. Recording continues and retries
+    // NOLINTNEXTLINE(performance-unnecessary-value-param) the store keeps the sink
+    virtual void SetFaultListener(std::function<void(const StoreError&)>) {}
+};
+
+class IDocumentStore {
+   public:
+    virtual ~IDocumentStore() = default;
 
     // Save stores a generation, Edit the clinician's text over it. Reading an
     // unknown session throws
@@ -138,22 +149,21 @@ class ISessionStore {
 
     // Removes one kind. A kind the session never had is not an error
     virtual void DeleteDocument(const SessionId& id, DocumentKind kind) = 0;
+};
+
+class ISessionCatalog {
+   public:
+    virtual ~ISessionCatalog() = default;
+
+    virtual std::vector<SessionSummary> ListSessions() = 0;
 
     // These refuse the session that is recording
     virtual std::vector<asr::Turn> ReadTurns(const SessionId& id) = 0;
-
-    // Stored capture in order, for resuming a crashed session
-    virtual std::vector<float> ReadAudio(const SessionId& id) = 0;
-
     virtual void Delete(const SessionId& id) = 0;
 
     // Erases finalised retain-off sessions. Crashed ones are kept for recovery, so
     // the setting never loses audio
     virtual void EraseUnretained() = 0;
-
-    // ClearDemo removes every seeded sample
-    virtual SessionId Seed(const SessionSeed& seed) = 0;
-    virtual std::size_t ClearDemo() = 0;
 
     // Crypto-erases all sessions except one still recording. With keep_reflections,
     // sessions with an appraisal entry are cleared instead. Returns the count
@@ -165,6 +175,21 @@ class ISessionStore {
 
     // Finalised, with no turns and no document outside kKeptOnClear
     virtual bool Cleared(const SessionId& id) = 0;
+};
+
+class ISampleStore {
+   public:
+    virtual ~ISampleStore() = default;
+
+    // ClearDemo removes every seeded sample
+    virtual SessionId Seed(const SessionSeed& seed) = 0;
+    virtual std::size_t ClearDemo() = 0;
+};
+
+// Whole sessions without audio, for backup and restore
+class IRecordStore {
+   public:
+    virtual ~IRecordStore() = default;
 
     // For backup. Throws for an unknown or recording session
     virtual SessionRecord ReadRecord(const SessionId& id) = 0;
@@ -174,10 +199,12 @@ class ISessionStore {
     // missing documents and keeps its own. Any other stored id is skipped. Throws for a record
     // ValidRecord rejects
     virtual AddOutcome AddRecord(const SessionRecord& record) = 0;
-
-    // Called off the caller thread when an audio commit fails. Recording continues and retries
-    // NOLINTNEXTLINE(performance-unnecessary-value-param) the store keeps the sink
-    virtual void SetFaultListener(std::function<void(const StoreError&)>) {}
 };
+
+class ISessionStore : public IRecordingStore,
+                      public IDocumentStore,
+                      public ISessionCatalog,
+                      public ISampleStore,
+                      public IRecordStore {};
 
 }  // namespace clinicavt::store

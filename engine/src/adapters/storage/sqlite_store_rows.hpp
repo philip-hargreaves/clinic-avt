@@ -54,7 +54,7 @@ inline std::string KindList(std::span<const DocumentKind> kinds) {
     return list;
 }
 
-// ISessionStore::Cleared as SQL, for the consultations row aliased c
+// ISessionCatalog::Cleared as SQL, for the consultations row aliased c
 inline const std::string& ClearedSql() {
     static const std::string kSql = std::format(
         "(c.state = 'finalised'"

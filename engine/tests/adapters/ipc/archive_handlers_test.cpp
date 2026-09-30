@@ -58,7 +58,7 @@ struct Store {
         sessions =
             std::make_unique<store::SqliteSessionStore>(root / "store", std::chrono::hours(1));
         records = std::make_unique<records::SessionRecords>(*sessions);
-        reflections = std::make_unique<records::Reflections>(*sessions, codec);
+        reflections = std::make_unique<records::Reflections>(*sessions, *sessions, codec);
     }
 
     ~Store() {
@@ -153,7 +153,7 @@ TEST(ArchiveHandlers, BackUpAndRestoreRunOnTheLaneFromTheFixtureRequests) {
     Store store;
     store.Add("a1b2c3d4e5f60718293a4b5c6d7e8f90", true);
     Notices notices;
-    ArchiveLane lane(*store.sessions, notices.Emit(), kLowIterations);
+    ArchiveLane lane(*store.sessions, *store.sessions, notices.Emit(), kLowIterations);
 
     const json summary = LoadFixture("archive-summary.json");
     json asked = summary["request"]["params"];
@@ -214,7 +214,8 @@ TEST(ArchiveHandlers, JobsAndDeletesAreRefusedWhileBusyAndBadParamsNeverStartOne
     Store store;
     store.Add("a1b2c3d4e5f60718293a4b5c6d7e8f90", false);
     Notices notices;
-    ArchiveLane lane(*store.sessions, notices.Emit());  // the real count, so the job lasts
+    ArchiveLane lane(*store.sessions, *store.sessions,
+                     notices.Emit());  // the real count, so the job lasts
     const json backup{{"from", ""},
                       {"to", ""},
                       {"path", store.BackupPath()},

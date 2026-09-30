@@ -31,10 +31,10 @@ SessionController::SessionController(SourceFactory factory, ISessionEvents& even
                    finaliser_.Finish(Outcome::kAbandon);
                    events_.OnInterrupted(end.reason, end.detail);
                }),
-      finaliser_(state_, capture_, note_lane_, events, store, transcriber, diariser, note_writer,
-                 metrics),
+      finaliser_(state_, capture_, note_lane_, events, store, store, transcriber, diariser,
+                 note_writer, metrics),
       import_(state_, finaliser_, note_writer, metrics),
-      review_(state_, note_lane_, store) {
+      review_(state_, note_lane_, store, store) {
     store_.SetFaultListener(
         [this](const store::StoreError& fault) { events_.OnStorageFault(fault.what()); });
 }
