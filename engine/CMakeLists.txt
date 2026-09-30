@@ -29,6 +29,7 @@ add_library(clinicavt_core STATIC
     domain/core/session/transcribe_recording.cpp)
 target_include_directories(clinicavt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain)
 target_link_libraries(clinicavt_core PRIVATE clinicavt_warnings)
+target_compile_definitions(clinicavt_core PUBLIC CLINICAVT_VERSION="${clinicavt_VERSION}")
 
 add_library(clinicavt_adapters_root INTERFACE)
 target_include_directories(clinicavt_adapters_root INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -193,7 +194,7 @@ add_library(clinicavt_models STATIC
     src/adapters/system/sha256.cpp)
 target_link_libraries(clinicavt_models
     PUBLIC clinicavt_adapters_root nlohmann_json::nlohmann_json openvino::genai
-    PRIVATE clinicavt_warnings bcrypt)
+    PRIVATE clinicavt_system clinicavt_warnings bcrypt)
 
 add_library(clinicavt_transcription STATIC
     src/adapters/transcription/whisper_transcriber.cpp)

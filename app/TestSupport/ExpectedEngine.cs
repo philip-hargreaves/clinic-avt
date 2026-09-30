@@ -5,5 +5,6 @@ internal static class ExpectedEngine
 {
     public const string Name = "clinicavt";
 
-    public const string Version = "0.1.0";
+    // Engine and shell share the VERSION file
+    public static readonly string Version = typeof(ExpectedEngine).Assembly.GetName().Version!.ToString(3);
 }

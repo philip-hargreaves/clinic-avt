@@ -18,7 +18,7 @@ public class FixtureTest
         var result = Fixtures.Load("hello-response.json").GetProperty("result");
         var peer = result.Deserialize<PeerInfo>(Protocol.JsonOptions);
         Assert.Equal(
-            new PeerInfo(ExpectedEngine.Name, ExpectedEngine.Version, Protocol.ProtocolVersion), peer);
+            new PeerInfo(ExpectedEngine.Name, "0.1.0", Protocol.ProtocolVersion), peer);
 
         var echo = Fixtures.Load("echo-request-nonascii.json");
         var payload = echo.GetProperty("params").GetProperty("payload").GetString();
