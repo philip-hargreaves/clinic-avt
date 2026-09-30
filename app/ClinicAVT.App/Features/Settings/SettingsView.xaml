@@ -94,7 +94,7 @@
                         <ProgressBar IsIndeterminate="True" Visibility="{x:Bind ViewModel.NoteModel.ModelLoading, Mode=OneWay}" />
                     </StackPanel>
                 </toolkit:SettingsCard>
-                <toolkit:SettingsCard Description="Runs speech recognition on the NPU to save battery. Transcripts may take a little longer." Header="Low-power mode">
+                <toolkit:SettingsCard Description="Runs speech recognition on the NPU to save battery. Transcripts take a little longer, and the first switch takes several minutes." Header="Low-power mode">
                     <ToggleSwitch
                         MinWidth="0"
                         AutomationProperties.Name="Low-power mode"

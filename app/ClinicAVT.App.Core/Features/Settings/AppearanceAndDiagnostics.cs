@@ -103,7 +103,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         if (_engine.Connected)
         {
             _models.BeginSwitch(value
-                ? "Switching to the NPU · {time} · first time may take longer"
+                ? "Switching to the NPU · {time} · the first time takes several minutes"
                 : "Switching to the GPU · {time}");
             _ = MoveSpeechRecognitionAsync(value);
         }

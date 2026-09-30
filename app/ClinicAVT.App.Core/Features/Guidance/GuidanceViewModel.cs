@@ -147,8 +147,8 @@ public sealed partial class GuidanceViewModel : ObservableObject
     public string StateCaption => Section switch
     {
         GuidanceSection.Hidden or GuidanceSection.Results => "",
-        GuidanceSection.NothingMatched => "Nothing came close enough to show. "
-            + "Your documents or the installed guidance may still cover this condition.",
+        GuidanceSection.NothingMatched =>
+            "No guidance matched this note. Try searching for a condition or treatment.",
         GuidanceSection.NoCorpusAtSearch =>
             "No guideline documents yet. Add PDFs to the ClinicAVT guidelines folder in Documents, "
             + "then search again.",

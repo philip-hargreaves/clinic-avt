@@ -45,11 +45,11 @@ public class StatusBarMetricsTest
         Assert.False(models.ModelLoading);
         Assert.Equal("Ready", status.DisplayLabel);
 
-        models.BeginSwitch("Switching to the NPU · {time} · first time may take longer");
-        Assert.Equal("Switching to the NPU · 0:00 · first time may take longer", status.DisplayLabel);
+        models.BeginSwitch("Switching to the NPU · {time} · the first time takes several minutes");
+        Assert.Equal("Switching to the NPU · 0:00 · the first time takes several minutes", status.DisplayLabel);
         Assert.False(status.ConsentVisible, "no consent reminder over a wait");
         clock.Advance(TimeSpan.FromSeconds(72));
-        Assert.Equal("Switching to the NPU · 1:12 · first time may take longer", status.DisplayLabel);
+        Assert.Equal("Switching to the NPU · 1:12 · the first time takes several minutes", status.DisplayLabel);
         Assert.True(status.Busy);
 
         models.EndSwitch();
