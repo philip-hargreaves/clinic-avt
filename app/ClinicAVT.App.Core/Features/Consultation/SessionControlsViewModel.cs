@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.Input;
 using ClinicAVT.App.Core.Common;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Ports;
+using ClinicAVT.App.Core.Preferences;
+using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Consultation;
 
@@ -12,15 +14,24 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     private readonly MicViewModel _mic;
     private readonly ConsultationActivity _activity;
     private readonly INoteModelLoad _load;
+    private readonly ISessionStoreApi _store;
+    private readonly IStatusLine _status;
+    private readonly IDialogService _dialogs;
+    private readonly AppPreferences _preferences;
 
     public SessionControlsViewModel(
         IConsultation session, MicViewModel mic, ConsultationActivity activity, INoteModelLoad load,
-        NoteViewModel note, ReviewCommandsViewModel commands)
+        NoteViewModel note, ReviewCommandsViewModel commands, ISessionStoreApi store, IStatusLine status,
+        IDialogService dialogs, AppPreferences preferences)
     {
         _session = session;
         _mic = mic;
         _activity = activity;
         _load = load;
+        _store = store;
+        _status = status;
+        _dialogs = dialogs;
+        _preferences = preferences;
         Note = note;
         Commands = commands;
         _mic.PropertyChanged += (_, _) => OnPropertyChanged(nameof(MicTip));
@@ -36,6 +47,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 OnPropertyChanged(nameof(IdleVisible));
                 OnPropertyChanged(nameof(RecordingVisible));
                 OnPropertyChanged(nameof(ReviewVisible));
+                OnPropertyChanged(nameof(DiscardVisible));
                 OnPropertyChanged(nameof(MicPickerVisible));
                 OnPropertyChanged(nameof(CentreStageVisible));
                 OnPropertyChanged(nameof(PanesVisible));
@@ -51,6 +63,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
                 CancelRecordingCommand.NotifyCanExecuteChanged();
                 CancelImportCommand.NotifyCanExecuteChanged();
                 FinishConsultationCommand.NotifyCanExecuteChanged();
+                DiscardConsultationCommand.NotifyCanExecuteChanged();
             }
             else if (e.PropertyName is nameof(IConsultation.AudioSeconds))
             {
@@ -62,6 +75,13 @@ public sealed partial class SessionControlsViewModel : ObservableObject
             if (e.PropertyName is nameof(ConsultationActivity.Level))
             {
                 OnPropertyChanged(nameof(Level));
+            }
+        };
+        commands.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ReviewCommandsViewModel.Busy))
+            {
+                DiscardConsultationCommand.NotifyCanExecuteChanged();
             }
         };
         _load.PropertyChanged += (_, e) =>
@@ -97,6 +117,9 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public bool ReviewVisible => _session.State == SessionState.Review;
 
+    // With saving off, Finish erases the consultation
+    public bool DiscardVisible => ReviewVisible && _preferences.KeepConsultations;
+
     public bool RefusedVisible => _session.State == SessionState.Refused;
 
     /// <summary>The refusal card reads its reason and override from here.</summary>
@@ -104,7 +127,7 @@ public sealed partial class SessionControlsViewModel : ObservableObject
 
     public ReviewCommandsViewModel Commands { get; }
 
-    // Shown only when idle. The mic is fixed from Record, and Finish consultation takes this slot
+    // Shown only when idle. The mic is fixed from Record, and Finish takes this slot
     // in review
     public bool MicPickerVisible => _session.State == SessionState.Idle;
 
@@ -161,6 +184,18 @@ public sealed partial class SessionControlsViewModel : ObservableObject
     private void FinishConsultation() => _session.FinishConsultation();
 
     private bool CanFinishConsultation() => _session.State == SessionState.Review;
+
+    [RelayCommand(CanExecute = nameof(CanDiscardConsultation))]
+    private async Task DiscardConsultation()
+    {
+        if (_session.ReviewedSessionId is { } id)
+        {
+            await SessionDeletion.ConfirmAndDeleteAsync(_dialogs, _store, _status, id, _session.CloseReviewAsync)
+                .ConfigureAwait(true);
+        }
+    }
+
+    private bool CanDiscardConsultation() => DiscardVisible && !Commands.Busy;
 
     [RelayCommand(CanExecute = nameof(CanDone))]
     private Task Done() => _session.CloseReviewAsync();

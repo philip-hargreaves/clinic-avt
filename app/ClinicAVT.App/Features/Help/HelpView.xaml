@@ -94,11 +94,12 @@
                         <toolkit:SettingsCard ContentAlignment="Left">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource HelpText}" Text="Every document is a draft. Check it against what was said, then select Edit, correct it and select Save note." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Note style sets the format, prose or SOAP, and the length: Concise, about 80 words, or Detailed, about 160. Regenerate rewrites the note from the transcript, so change these before editing." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Note style sets the format, prose or SOAP, and the length of a prose note: Concise, about 80 words, or Detailed, up to 200. A SOAP note has one length, about 120 words. Regenerate rewrites the note from the transcript, so change these before editing." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="If a recording contains too little clinical content, no note is written. If it was a consultation, select Write a note anyway." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="Copy places the note on the clipboard as plain text for the patient record. Export saves it as a text file." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="Guidelines beside the note are relevant passages from your documents, for reference only; nothing from them is added to the note. To search them directly, type a question in the Guidelines section." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="When you have finished, select Finish consultation. Your changes are saved and the app is ready for the next patient." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="When you have finished, select Finish. Your changes are saved and the app is ready for the next patient." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="With Save consultation data turned on in Settings, Discard consultation appears beside it and erases the consultation, which cannot be recovered." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
@@ -137,7 +138,7 @@
                                 <TextBlock Style="{StaticResource HelpText}" Text="Sessions lists every consultation saved on this computer, newest first, with its transcript, note and patient information. Search finds a consultation by its name." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="Each consultation is named automatically from its note. To rename one, select its name at the top of the consultation and type a new one." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="Delete removes a single consultation. Delete all consultation data, in Settings, removes every consultation and cannot be undone." />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Consultations are stored encrypted on this computer, under your Windows account, and leave it only when you copy, export or back them up. If Save consultation data is turned off in Settings, each consultation is erased when you select Finish consultation, or when the app closes." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Consultations are stored encrypted on this computer, under your Windows account, and leave it only when you copy, export or back them up. If Save consultation data is turned off in Settings, each consultation is erased when you select Finish, or when the app closes." />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>

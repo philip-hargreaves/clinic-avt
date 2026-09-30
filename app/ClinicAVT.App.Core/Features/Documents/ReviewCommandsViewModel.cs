@@ -32,6 +32,13 @@ public sealed partial class ReviewCommandsViewModel : ObservableObject
     // so none may run while a document is being edited
     private bool AnyEditing => _note.NoteEditing || _patient.PatientEditing;
 
+    /// <summary>
+    /// True while a document is being edited, or a note, sheet or translation is still being written.
+    /// </summary>
+    public bool Busy => AnyEditing || _patient.TranslationRunning
+        || _note.PipelineState is NotePipelineState.Pending or NotePipelineState.NoteWriting
+            or NotePipelineState.NoteReadyPatientWriting;
+
     [RelayCommand(CanExecute = nameof(CanWriteAnyway))]
     private Task WriteAnyway() => _actions.WriteNoteAnywayAsync();
 
@@ -132,5 +139,6 @@ public sealed partial class ReviewCommandsViewModel : ObservableObject
         TranslateAgainCommand.NotifyCanExecuteChanged();
         SaveNoteCommand.NotifyCanExecuteChanged();
         SavePatientCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(Busy));
     }
 }
