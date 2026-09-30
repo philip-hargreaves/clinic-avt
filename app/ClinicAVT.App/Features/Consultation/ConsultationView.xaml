@@ -36,8 +36,13 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
                     <Button
+                        Command="{x:Bind Controls.DiscardConsultationCommand}"
+                        Content="Discard consultation"
+                        Style="{StaticResource TrayButton}"
+                        Visibility="{x:Bind Controls.DiscardVisible, Mode=OneWay}" />
+                    <Button
                         Command="{x:Bind Controls.FinishConsultationCommand}"
-                        Content="Finish consultation"
+                        Content="Finish"
                         Visibility="{x:Bind Controls.ReviewVisible, Mode=OneWay}" />
                 </StackPanel>
             </controls:PageHeader.Commands>

@@ -17,6 +17,7 @@
     python evaluation/summarisation/generate.py study --model qwen3.5-4b-int4-ov --prompt prompt-4b-safety.md --tag qwen3.5-4b-safety
 """
 import argparse
+from pathlib import Path
 import json
 import os
 import statistics
@@ -41,7 +42,12 @@ def notes_dir(name):
     return d
 
 
+PROMPT_OVERLAY = None  # --prompts: draft prompts that replace the app's file of the same name
+
+
 def app_prompt(name):
+    if PROMPT_OVERLAY and (PROMPT_OVERLAY / name).exists():
+        return (PROMPT_OVERLAY / name).read_text(encoding="utf-8")
     return (config.path("prompts") / name).read_text(encoding="utf-8")
 
 
@@ -62,10 +68,23 @@ def sealed_transcripts():
     return out
 
 
+def reference_transcripts():
+    # PriMock reference lines are "Doctor: text" / "Patient: text"
+    out = []
+    for m in read_json(data() / "prep" / "manifest.json"):
+        turns = []
+        for line in (data() / "prep" / m["transcript"]).read_text(encoding="utf-8").splitlines():
+            speaker, sep, text = line.partition(":")
+            if sep:
+                turns.append({"speaker": speaker.strip().lower(), "text": text.strip()})
+        out.append((m["consult_id"], turns))
+    return out
+
+
 def resolve_model(args):
     tiers = config.section("summarisation")["tiers"]
     if args.tier:
-        return tiers[args.tier], f"tier-{args.tier}"
+        return tiers[args.tier], args.tag or f"tier-{args.tier}"
     if not args.model:
         raise SystemExit("give --tier or --model")
     tier = next((t for t, m in tiers.items() if m == args.model), None)
@@ -76,10 +95,20 @@ def run_app(args):
     from common.llm import NoteModel
     name, tag = resolve_model(args)
     details = args.details.split(",")
+    global PROMPT_OVERLAY
+    if args.prompts:
+        PROMPT_OVERLAY = Path(args.prompts)
+        if not PROMPT_OVERLAY.is_dir():
+            raise SystemExit(f"no prompt folder {PROMPT_OVERLAY}")
     style, soap = app_prompt("note-narrative.md"), app_prompt("note-soap.md")
     detail = {d: app_prompt(f"detail-{d}.md") for d in DETAILS}
+    soap_detail = app_prompt("detail-soap.md")
     patient, label = app_prompt("patient-info.md"), app_prompt("label.md")
-    items = sealed_transcripts()[: args.limit or None]
+    items = reference_transcripts() if args.transcripts == "reference" else sealed_transcripts()
+    if args.consults:
+        wanted = set(args.consults.split(","))
+        items = [item for item in items if item[0] in wanted]
+    items = items[: args.limit or None]
     timings = data() / "notes" / "timings.jsonl"
     model = None
 
@@ -109,7 +138,7 @@ def run_app(args):
             run("sheet", cid, patient + concise + "\n")
             run("label", cid, label + concise + "\n", 16)
         if i <= args.soap:
-            run("soap", cid, soap + block + "\n" + detail["concise"])
+            run("soap", cid, soap + block + "\n" + soap_detail)
         print(f"[{tag}] {i}/{len(items)} {cid}", flush=True)
 
 
@@ -158,6 +187,10 @@ def main():
     app.add_argument("--tag")
     app.add_argument("--details", default=",".join(DETAILS))
     app.add_argument("--soap", type=int, default=0, help="SOAP notes for the first N consults")
+    app.add_argument("--consults", help="comma-separated consultation ids, e.g. a tuning set")
+    app.add_argument("--prompts", help="folder of draft prompts that replace the app's files of the same name")
+    app.add_argument("--transcripts", choices=["sealed", "reference"], default="sealed",
+                     help="the app's own transcripts, or PriMock's reference ones (the ceiling)")
     app.add_argument("--limit", type=int, default=0)
     app.add_argument("--device", default="GPU")
     study = sub.add_parser("study")

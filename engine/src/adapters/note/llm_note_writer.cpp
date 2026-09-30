@@ -38,6 +38,12 @@ const char* StyleFile(const NoteOptions& options) {
     return options.style == NoteStyle::kSoap ? "note-soap.md" : "note-narrative.md";
 }
 
+// SOAP has one length file. The Concise and Detailed files are for Prose
+std::string DetailFile(const NoteOptions& options) {
+    if (options.style == NoteStyle::kSoap) return "detail-soap.md";
+    return std::string("detail-") + NoteDetailName(options.detail) + ".md";
+}
+
 double Seconds(std::chrono::steady_clock::time_point since) {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - since).count();
 }
@@ -213,12 +219,11 @@ std::string LlmNoteWriter::Write(const std::vector<asr::Turn>& transcript,
         throw std::runtime_error("nothing to write: the transcript is empty");
     }
     // Confirmation goes after everything the capture-phase prefill covered
-    return Generate(
-        LoadPrompt(impl_->prompt_dir / StyleFile(options)) + TranscriptBlock(transcript) + "\n" +
-            LoadPrompt(impl_->prompt_dir /
-                       (std::string("detail-") + NoteDetailName(options.detail) + ".md")) +
-            (options.confirmed ? LoadPrompt(impl_->prompt_dir / "confirmed.md") : ""),
-        progress);
+    return Generate(LoadPrompt(impl_->prompt_dir / StyleFile(options)) +
+                        TranscriptBlock(transcript) + "\n" +
+                        LoadPrompt(impl_->prompt_dir / DetailFile(options)) +
+                        (options.confirmed ? LoadPrompt(impl_->prompt_dir / "confirmed.md") : ""),
+                    progress);
 }
 
 std::string LlmNoteWriter::WritePatient(const std::string& note, const Progress& progress) {

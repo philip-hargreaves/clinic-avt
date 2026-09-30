@@ -45,24 +45,46 @@ def transcript(cid, source, manifest):
     if source == "reference":
         return (data() / "prep" / manifest[cid]["transcript"]).read_text(encoding="utf-8")
     tag = config.section("summarisation")["transcript_tag"]
-    path = config.path("perf_loop") / "transcripts" / f"{tag}-{cid}_mixed.txt"
-    return path.read_text(encoding="utf-8") if path.exists() else None
+    path = config.path("perf_loop") / "transcripts" / f"{tag}-{cid}_mixed.json"
+    if not path.exists():
+        return None
+    # The dialogue only, in the reading copy's line format. The .txt copy appends the note and sheet
+    # written during the run, which a judge could take as evidence
+    return "".join(f"[{t['firstFrame'] / 16000:7.1f}s] {t['speaker'] or '?':8s} {t['text']}\n"
+                   for t in read_json(path)["turns"])
 
 
-def write_tasks(tag, source):
+def source_note(cid, note_tag):
+    path = data() / "notes" / note_tag / f"{cid}.md"
+    if not path.exists():
+        return None
+    return ("(This source is the clinical note the patient sheet was written from, not a transcript. "
+            "Judge the sheet's claims against this note.)\n\n" + path.read_text(encoding="utf-8").strip() + "\n")
+
+
+def write_tasks(tag, source, against=None):
+    # With a source note, the sheet is judged against the note it was written from, under <tag>-vsnote
     manifest = {m["consult_id"]: m for m in read_json(data() / "prep" / "manifest.json")}
     prompt = judge_prompt()
-    out = data() / "judge" / "tasks" / tag
+    out = data() / "judge" / "tasks" / (f"{tag}-vsnote" if against else tag)
     out.mkdir(parents=True, exist_ok=True)
     count = 0
     for path in sorted((data() / "notes" / tag).glob("*.md")):
         cid = path.stem
         note = path.read_text(encoding="utf-8").strip()
-        source_text = transcript(cid, source, manifest) if cid in manifest else None
+        if against:
+            source_text = source_note(cid, against)
+        else:
+            source_text = transcript(cid, source, manifest) if cid in manifest else None
         if note.startswith("NOT A CONSULTATION") or source_text is None:
             continue
-        checklist = manifest[cid]["checklist"]
-        items = read_json(data() / "prep" / checklist) if checklist else []
+        if against:
+            sheet_list = data() / "sheet-checklists" / against / f"{cid}.json"
+            items = [{k: i[k] for k in ("id", "text", "criticality")} for i in read_json(sheet_list)] \
+                if sheet_list.exists() else []
+        else:
+            checklist = manifest[cid]["checklist"]
+            items = read_json(data() / "prep" / checklist) if checklist else []
         (out / f"{cid}.md").write_text(
             prompt + "\n\n---\n\nTRANSCRIPT:\n" + source_text + "\n\n---\n\nNOTE:\n" + note +
             "\n\n---\n\nCHECKLIST (JSON; may be empty):\n" + json.dumps(items, ensure_ascii=False, indent=1) + "\n",
@@ -114,6 +136,8 @@ def main():
     t.add_argument("tag")
     t.add_argument("--transcripts", choices=["reference", "sealed"], default="reference",
                    help="what the notes were written from: PriMock reference or the app's sealed transcripts")
+    t.add_argument("--against", metavar="NOTE_TAG",
+                   help="judge patient sheets against the notes they were written from (tasks go to <tag>-vsnote)")
     p = sub.add_parser("pending")
     p.add_argument("tag")
     c = sub.add_parser("collect")
@@ -122,7 +146,7 @@ def main():
     c.add_argument("--judge", required=True, help="the judge model, recorded with every result")
     args = ap.parse_args()
     if args.cmd == "tasks":
-        write_tasks(args.tag, args.transcripts)
+        write_tasks(args.tag, args.transcripts, args.against)
     elif args.cmd == "pending":
         for cid, path in pending(args.tag):
             print(f"{args.tag}\t{cid}\t{path}")

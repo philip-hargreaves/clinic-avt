@@ -8,13 +8,19 @@ public class AppraisalsViewModelTest
 {
     private static (AppraisalsViewModel Page, FakeEngineClient Engine) Create()
     {
+        var shell = CreateShell();
+        return (shell.Get<AppraisalsViewModel>(), shell.Engine);
+    }
+
+    private static TestShell CreateShell()
+    {
         var engine = new FakeEngineClient();
         engine.Reflections.Add(("a", "2026-09-04T09:12:00Z", "Elbow swelling", "check the temperature\nand more", "A patient in their forties."));
         engine.Reflections.Add(("b", "2026-09-01T14:00:00Z", "Cough", "ask about smoking", ""));
         engine.Reflections.Add(("c", "2026-06-20T10:00:00Z", "Back pain", "", "A patient in their sixties with back pain."));
         engine.Reflections.Add(("d", "2025-11-03T10:00:00Z", "", "listen longer", ""));
         engine.SampleReflections.Add("c");
-        return (new TestShell(engine).Get<AppraisalsViewModel>(), engine);
+        return new TestShell(engine);
     }
 
     [Fact]
@@ -147,6 +153,24 @@ public class AppraisalsViewModelTest
 
         Assert.Contains(engine.Requests, r => r.Method == "reflection/delete" && r.Params.Contains("\"a\""));
         Assert.Equal(["b", "c"], page.Cards.Select(c => c.Id));
+    }
+
+    [Fact]
+    public async Task RemovingAReflectionAsksFirstAndKeepLeavesIt()
+    {
+        var shell = CreateShell();
+        var page = shell.Get<AppraisalsViewModel>();
+        var engine = shell.Engine;
+        var asked = 0;
+        shell.Dialogs.OnConfirm = () => asked++;
+        shell.Dialogs.Answer = false;
+        await page.RefreshAsync();
+
+        await page.DeleteAsync(page.Cards[0]);
+
+        Assert.Equal(1, asked);
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "reflection/delete");
+        Assert.Equal(3, page.Cards.Count);
     }
 
     [Fact]

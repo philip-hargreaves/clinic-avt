@@ -1,4 +1,5 @@
 using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using static ClinicAVT.App.Tests.Support.Waits;
@@ -37,7 +38,7 @@ public class SessionCommandsTest
         Assert.False(controls.IdleVisible);
         Assert.True(controls.RecordingVisible);
         Assert.True(controls.CentreStageVisible);
-        Assert.False(controls.MicPickerVisible, "gone from Record until Finish consultation");
+        Assert.False(controls.MicPickerVisible, "gone from Record until Finish");
 
         // The clock and the ring follow delivered audio
         for (var i = 0; i < 754; i++)
@@ -65,12 +66,78 @@ public class SessionCommandsTest
         Assert.False(controls.RecordingVisible);
         Assert.False(controls.CentreStageVisible);
         Assert.True(controls.FinishConsultationCommand.CanExecute(null));
-        Assert.False(controls.MicPickerVisible, "the cell is Finish consultation's now");
+        Assert.False(controls.MicPickerVisible, "the cell is Finish's now");
 
         controls.FinishConsultationCommand.Execute(null);
         Assert.Equal(SessionState.Idle, session.State);
         Assert.True(controls.IdleVisible);
         Assert.True(controls.MicPickerVisible, "back for the next consultation");
+    }
+
+    [Fact]
+    public async Task DiscardIsHiddenWhenConsultationsAreNotSaved()
+    {
+        var shell = TestSession.Create(new AppPreferences(new MemoryPreferencesStore()));
+        var controls = shell.Get<SessionControlsViewModel>();
+        await ReviewAsync(shell);
+
+        Assert.True(controls.ReviewVisible);
+        Assert.False(controls.DiscardVisible, "Finish erases it already");
+        Assert.False(controls.DiscardConsultationCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task DiscardWaitsForTheDocumentsAndKeepLeavesTheConsultation()
+    {
+        var shell = TestSession.Create();
+        var (session, engine, note) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
+        await session.StartRecordingAsync();
+        await session.StopRecordingAsync();
+        engine.RaiseNotification("note/ready", Params(new { text = "note" }));
+
+        Assert.True(controls.DiscardVisible);
+        Assert.False(controls.DiscardConsultationCommand.CanExecute(null), "the sheet is still being written");
+        engine.RaiseNotification("patient/ready", Params(new { text = "sheet" }));
+        Assert.True(controls.DiscardConsultationCommand.CanExecute(null));
+        note.EditNoteCommand.Execute(null);
+        Assert.False(controls.DiscardConsultationCommand.CanExecute(null), "not while the note is edited");
+        note.FinishEditing();
+        Assert.True(controls.DiscardConsultationCommand.CanExecute(null));
+
+        shell.Dialogs.Answer = false;
+        await controls.DiscardConsultationCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "session/delete");
+        Assert.Equal(SessionState.Review, session.State);
+    }
+
+    [Fact]
+    public async Task DiscardDeletesTheConsultationAfterClosingItsReview()
+    {
+        var shell = TestSession.Create();
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
+        await ReviewAsync(shell);
+        var id = session.ReviewedSessionId!;
+
+        await controls.DiscardConsultationCommand.ExecuteAsync(null);
+
+        var close = engine.Requests.FindLastIndex(r => r.Method == "session/close");
+        var delete = engine.Requests.FindIndex(r => r.Method == "session/delete");
+        Assert.True(close >= 0 && delete > close, "close precedes delete");
+        Assert.Contains(id, engine.Requests[delete].Params);
+        Assert.Equal(SessionState.Idle, session.State);
+        Assert.False(controls.DiscardVisible);
+        Assert.Equal("Consultation deleted", shell.Line.LatestActivity);
+    }
+
+    private static async Task ReviewAsync(TestShell shell)
+    {
+        await shell.Session.StartRecordingAsync();
+        await shell.Session.StopRecordingAsync();
+        shell.Engine.RaiseNotification("note/ready", Params(new { text = "note" }));
+        shell.Engine.RaiseNotification("patient/ready", Params(new { text = "sheet" }));
     }
 
     // A thin recording sends no note/partial, so note/ready must open the panes and "Writing" never

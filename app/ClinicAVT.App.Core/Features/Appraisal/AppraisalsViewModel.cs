@@ -155,8 +155,16 @@ public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJ
         card.Expanded = true;
     }
 
-    public Task DeleteAsync(ReflectionCard card) =>
-        EngineCall.ReportAsync(_status, "could not remove the reflection", async () =>
+    public async Task DeleteAsync(ReflectionCard card)
+    {
+        if (!await _dialogs.ConfirmAsync("Remove this reflection?",
+                "The reflection is deleted and cannot be recovered. The consultation is kept.",
+                "Remove", "Keep").ConfigureAwait(true))
+        {
+            return;
+        }
+
+        await EngineCall.ReportAsync(_status, "could not remove the reflection", async () =>
         {
             card.Editor?.Dispose();
             card.Editor = null;
@@ -165,7 +173,8 @@ public sealed partial class AppraisalsViewModel : ObservableObject, IReflectionJ
             _all.Remove(card);
             Rebuild();
             _status.Append("Reflection removed");
-        });
+        }).ConfigureAwait(true);
+    }
 
     /// <summary>Saves any open card first so the export has its latest text.</summary>
     [RelayCommand(CanExecute = nameof(CanExport))]

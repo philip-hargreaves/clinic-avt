@@ -6,7 +6,7 @@ public static class NoteOptions
     public static readonly IReadOnlyList<NoteOption> Styles =
         [new("prose", "Prose"), new("soap", "SOAP")];
 
-    // About 80 and 160 words. A saved "standard" falls back to concise
+    // Prose lengths. Settings saved before the rename to concise may still say "standard"
     public static readonly IReadOnlyList<NoteOption> Details =
         [new("concise", "Concise"), new("detailed", "Detailed")];
 

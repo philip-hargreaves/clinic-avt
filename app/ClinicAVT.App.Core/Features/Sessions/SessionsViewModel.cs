@@ -285,18 +285,10 @@ public sealed partial class SessionsViewModel : ObservableObject, INavigationGua
         }
     }
 
-    // Deletion is crypto-erase, so it is confirmed first
     [RelayCommand]
     private async Task Delete(SessionRow row)
     {
-        if (!await _dialogs.ConfirmAsync("Delete this consultation?",
-                "The transcript, note and patient information are erased and cannot be recovered.",
-                "Delete", "Keep").ConfigureAwait(true))
-        {
-            return;
-        }
-
-        await EngineCall.ReportAsync(_status, "could not delete consultation", async () =>
+        var deleted = await SessionDeletion.ConfirmAndDeleteAsync(_dialogs, _engine, _status, row.Id, async () =>
         {
             // Its review may be open here or, just recorded, on the Consultation page
             if (Selected?.Id == row.Id || _consultation.ReviewedSessionId == row.Id)
@@ -304,11 +296,11 @@ public sealed partial class SessionsViewModel : ObservableObject, INavigationGua
                 await _consultation.CloseReviewAsync().ConfigureAwait(true);
                 DetailOpen = false;
             }
-
-            await _engine.DeleteSessionAsync(row.Id).ConfigureAwait(true);
-            _status.Append("Consultation deleted");
-            await RefreshAsync().ConfigureAwait(true);
         }).ConfigureAwait(true);
+        if (deleted)
+        {
+            await RefreshAsync().ConfigureAwait(true);
+        }
     }
 
     /// <summary>
