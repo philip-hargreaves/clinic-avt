@@ -11,10 +11,8 @@ namespace ClinicAVT.App.Composition;
 /// <summary>The launch steps in order. Data comes first and the engine starts once the window shows.</summary>
 internal static class StartupTasks
 {
-    public static IServiceCollection AddStartupTasks(
-        this IServiceCollection services, AppPaths paths)
+    public static IServiceCollection AddStartupTasks(this IServiceCollection services)
     {
-        services.AddSingleton<IStartupTask>(_ => new RegisterCrashDumps(paths));
         services.AddSingleton<IStartupTask, AttachSessionState>();
         services.AddSingleton<IStartupTask, ApplyTheme>();
         services.AddSingleton<IStartupTask, StartEngine>();
@@ -31,17 +29,6 @@ internal static class StartupTasks
         public StartupStage Stage => StartupStage.BeforeWindow;
 
         public void Run() => state.Follow(session);
-    }
-
-    private sealed class RegisterCrashDumps(AppPaths paths) : IStartupTask
-    {
-        public string Name => "register crash dumps";
-
-        public StartupStage Stage => StartupStage.BeforeWindow;
-
-        public void Run() => CrashDumps.Register(
-            Microsoft.Win32.Registry.CurrentUser, paths.Dumps,
-            EngineLayout.EngineExe, EngineLayout.NoteHostExe);
     }
 
     // Before Activate, so a dark preference never flashes light

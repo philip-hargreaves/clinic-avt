@@ -4,8 +4,6 @@ public static class EngineLayout
 {
     public const string EngineExe = "clinicavt_engine.exe";
 
-    public const string NoteHostExe = "clinicavt_note_host.exe";
-
     public const string EngineProcess = "clinicavt_engine";
 
     public const string NoteHostProcess = "clinicavt_note_host";

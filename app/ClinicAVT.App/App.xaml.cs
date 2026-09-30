@@ -34,7 +34,7 @@ public partial class App : Application
             .AddEngine(paths)
             .AddCore()
             .AddViews()
-            .AddStartupTasks(paths)
+            .AddStartupTasks()
             .BuildServiceProvider(new ServiceProviderOptions
             {
                 ValidateOnBuild = BuildFlags.Debug,
