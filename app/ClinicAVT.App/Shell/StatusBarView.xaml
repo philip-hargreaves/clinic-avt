@@ -7,7 +7,7 @@
 
     <Border
         Padding="24,6"
-        Background="{ThemeResource LayerFillColorDefaultBrush}"
+        Background="{ThemeResource StatusBarBrush}"
         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
         BorderThickness="0,1,0,0">
         <Grid x:Name="Bar" ColumnSpacing="16" SizeChanged="OnBarSizeChanged">
