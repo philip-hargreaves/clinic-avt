@@ -22,7 +22,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
 
         public bool CollectPerformanceData { get; init; }
 
-        public bool KeepConsultations { get; init; }
+        public bool KeepConsultations { get; init; } = true;
 
         public bool ShowPerformanceMetrics { get; init; } = true;
 
@@ -64,10 +64,11 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     public bool CollectPerformanceData { get; set; }
 
     /// <summary>
-    /// Off by default, so the app saves nothing beyond the consultation unless the clinician
-    /// opts in. A change applies to consultations recorded after it.
+    /// On by default, because this build is used for demonstrations and the Sessions and
+    /// Appraisal pages need stored consultations. A change applies to consultations recorded
+    /// after it.
     /// </summary>
-    public bool KeepConsultations { get; set; }
+    public bool KeepConsultations { get; set; } = true;
 
     /// <summary>On by default, so evaluators see the status-bar timings from the first run.</summary>
     public bool ShowPerformanceMetrics { get; set; } = true;

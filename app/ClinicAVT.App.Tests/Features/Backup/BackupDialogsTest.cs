@@ -248,6 +248,7 @@ public class BackupDialogsTest
         var engine = new FakeEngineClient();
         var picker = new FakeFilePicker { OpenPath = @"E:\ClinicAVT backup 1 Jul to 30 Sep 2026.clinicavt" };
         var preferences = TempPreferences();
+        preferences.KeepConsultations = false;
         using var restore = Shell(engine, picker, preferences).Create<RestoreViewModel>();
 
         // A backup opens on any install, so the dialog says where it may be restored

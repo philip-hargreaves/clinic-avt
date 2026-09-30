@@ -7,7 +7,8 @@
     xmlns:vm="using:ClinicAVT.App.Core.Features.Documents">
 
     <Grid>
-        <!-- The item container is the card, so the platform hover and theme behaviour still apply -->
+        <!-- Each turn draws its own card. The item container has no background or border,
+             because its template draws square corners -->
         <ListView
             x:Name="TurnList"
             Margin="0,8,0,0"
@@ -20,21 +21,27 @@
                     <RepositionThemeTransition />
                 </TransitionCollection>
             </ListView.ItemContainerTransitions>
+            <ListView.Resources>
+                <!-- Turns cannot be selected, so the container's square hover and pressed
+                     fills are transparent -->
+                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="Transparent" />
+            </ListView.Resources>
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="Margin" Value="0,3" />
                     <Setter Property="Padding" Value="0" />
                     <Setter Property="MinHeight" Value="0" />
-                    <Setter Property="CornerRadius" Value="6" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                    <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
-                    <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
-                    <Setter Property="BorderThickness" Value="1" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="vm:TranscriptTurnItem">
-                    <Grid>
+                    <Grid
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="3" />
                             <ColumnDefinition Width="84" />

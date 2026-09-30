@@ -96,13 +96,12 @@
                         Content="Clear"
                         Style="{StaticResource CaptionLink}" />
                 </Grid>
-                <StackPanel
-                    Orientation="Horizontal"
-                    Spacing="8"
-                    Visibility="{x:Bind ViewModel.CaptionVisible, Mode=OneWay}">
+                <!-- A horizontal panel clipped a long caption -->
+                <StackPanel Spacing="2" Visibility="{x:Bind ViewModel.CaptionVisible, Mode=OneWay}">
                     <controls:BusyCaption
                         IsActive="{x:Bind ViewModel.Searching, Mode=OneWay}"
-                        Text="{x:Bind ViewModel.StateCaption, Mode=OneWay}" />
+                        Text="{x:Bind ViewModel.StateCaption, Mode=OneWay}"
+                        TextWrapping="Wrap" />
                     <HyperlinkButton
                         Command="{x:Bind Search.SearchNoteCommand}"
                         Content="Search again"

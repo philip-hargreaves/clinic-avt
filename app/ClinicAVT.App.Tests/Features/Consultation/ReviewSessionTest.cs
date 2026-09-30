@@ -234,7 +234,7 @@ public class ReviewSessionTest
     [Fact]
     public async Task StartCarriesTheKeepConsultationsSetting()
     {
-        var preferences = new AppPreferences(new MemoryPreferencesStore());
+        var preferences = new AppPreferences(new MemoryPreferencesStore()) { KeepConsultations = false };
         var shell = TestSession.Create(preferences);
         var (session, engine, _) = shell;
 

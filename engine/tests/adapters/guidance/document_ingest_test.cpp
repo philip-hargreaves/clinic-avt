@@ -450,6 +450,28 @@ TEST(DocumentIngest, AReadyDocumentIsListedAndSearchedAgainAfterARestart) {
     EXPECT_EQ(results.shown[0].source, "upload");
 }
 
+// The queue is in memory. A run that ends before reading a file leaves its row in the
+// indexing state
+TEST(DocumentIngest, AFileLeftUnreadByAnEarlierRunIsReadOnTheNext) {
+    fixture::TempDir dir{"ingest"};
+    {
+        Harness first(dir.path);
+        first.busy = true;
+        first.Write("guideline.md", kGuideline);
+        ASSERT_NE(first.IdOf("guideline.md"), 0);
+        ASSERT_EQ(first.ingest.List().documents[0].state, DocumentState::kIndexing);
+    }
+
+    Harness h(dir.path);
+    ASSERT_TRUE(h.WaitListed(1, DocumentState::kReady));
+    Results results;
+    ASSERT_TRUE(h.WaitUntil([&] {
+        results =
+            h.retriever.Search("Colchicine for an acute flare of gout.", 3, SearchMode::kQuery);
+        return !results.shown.empty();
+    }));
+}
+
 TEST(DocumentIngest, IndexingPausesWhileAConsultationRunsAndRemoveDuringItCancels) {
     fixture::TempDir dir{"ingest"};
     Harness h(dir.path);

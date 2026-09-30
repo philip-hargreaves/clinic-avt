@@ -72,7 +72,7 @@ public sealed partial class GuidanceSearchViewModel : ObservableObject
         : _queryResults is null ? ""
         : _queryResults.Count switch
         {
-            0 => "Nothing came close enough to show.",
+            0 => $"No guidance found for '{_queryText}'.",
             1 => "1 result",
             var n => $"{n} results",
         };

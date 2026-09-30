@@ -283,9 +283,11 @@ void DocumentIngest::SetListener(std::function<void(const IngestProgress&)> prog
 
 // Syncs the index to the folder. Removed files drop their document and new or
 // changed files start one. Files still being written, or seen only moments
-// ago and not in `fresh`, wait for the next scan
+// ago and not in `fresh`, wait for the next scan. A document an earlier run left
+// unread goes back on the queue
 void DocumentIngest::Scan(const std::set<std::string>& fresh) {
     std::vector<Queued> queued;
+    std::vector<Queued> unread;
     std::vector<DocumentInfo> changed;
     {
         std::lock_guard<std::mutex> lock(store_mutex_);
@@ -311,6 +313,10 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
 
         std::map<std::string, IndexedFile> known;
         for (auto& file : index_.Files()) known.emplace(file.path, std::move(file));
+        std::set<std::int64_t> indexing;
+        for (const auto& info : index_.List()) {
+            if (info.state == DocumentState::kIndexing) indexing.insert(info.id);
+        }
 
         // New and changed files first, so a rename moves the document before the old
         // path is released and it is not re-indexed
@@ -322,6 +328,10 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
             const auto was = known.find(path);
             if (was != known.end() && same(was->second)) {
                 pending_.erase(path);
+                // One path is enough when several hold the same document
+                if (indexing.erase(was->second.document) != 0) {
+                    unread.push_back({was->second.document, path});
+                }
                 continue;
             }
             const auto written = std::filesystem::file_time_type(
@@ -382,7 +392,15 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
     for (const auto& info : changed) Notify(info);
     std::lock_guard<std::mutex> lock(mutex_);
     for (auto& item : queued) queue_.push_back(std::move(item));
-    if (!queued.empty()) wake_.notify_all();
+    // The queue is in memory, so these were registered by a run that ended before reading them
+    for (auto& item : unread) {
+        const bool waiting =
+            item.id == current_ || std::ranges::any_of(queue_, [&item](const Queued& other) {
+                return other.id == item.id;
+            });
+        if (!waiting) queue_.push_back(std::move(item));
+    }
+    if (!queue_.empty()) wake_.notify_all();
 }
 
 bool DocumentIngest::Cancelled() {

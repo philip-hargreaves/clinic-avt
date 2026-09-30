@@ -11,6 +11,14 @@
             <!-- The platform card stroke is 6% black and vanishes between a white card and the
                  near-white layer. 10% gives the cards an edge. Dark restates the platform value -->
             <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#1A000000" />
+            <!-- The platform layer is half-transparent white, so a bright wallpaper tints the page
+                 through Mica and white cards barely show on it. A near-opaque cool grey keeps
+                 the page neutral, and solid white cards stand out on it -->
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#F2F4F6F9" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFF" />
+            <!-- The status bar is one step lighter than the page. Dark and high contrast get
+                 that from the layer fill, so they reuse it -->
+            <SolidColorBrush x:Key="StatusBarBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="DoctorBrush" Color="{StaticResource SpeakerDoctor}" />
             <SolidColorBrush x:Key="PatientBrush" Color="{StaticResource SpeakerPatient}" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="{StaticResource StatusSecure}" />
@@ -31,6 +39,7 @@
 
         <ResourceDictionary x:Key="Default">
             <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#19000000" />
+            <StaticResource x:Key="StatusBarBrush" ResourceKey="LayerFillColorDefaultBrush" />
             <SolidColorBrush x:Key="DoctorBrush" Color="#4CA0E0" />
             <SolidColorBrush x:Key="PatientBrush" Color="#A98BEA" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="#3FB56B" />
@@ -49,6 +58,7 @@
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="HighContrast">
+            <StaticResource x:Key="StatusBarBrush" ResourceKey="LayerFillColorDefaultBrush" />
             <SolidColorBrush x:Key="DoctorBrush" Color="{ThemeResource SystemColorHotlightColor}" />
             <SolidColorBrush x:Key="PatientBrush" Color="{ThemeResource SystemColorHotlightColor}" />
             <SolidColorBrush x:Key="OnDeviceBrush" Color="{ThemeResource SystemColorWindowTextColor}" />

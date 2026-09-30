@@ -55,7 +55,7 @@ public class AppPreferencesTest
         var corrupt = new MemoryPreferencesStore { Json = "{ this is not json" };
         var log = new ListLogger();
         loaded = AppPreferences.Load(corrupt, log);
-        Assert.False(loaded.KeepConsultations);
+        Assert.True(loaded.KeepConsultations);
         Assert.Equal(AppTheme.System, loaded.Theme);
         Assert.Contains(log.Lines, line => line.Contains("preferences unreadable"));
     }

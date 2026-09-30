@@ -14,13 +14,13 @@ namespace {
 // Also checks the scrub would change nothing the app shows
 TEST(SampleYear, TheShippedContentIsWholeAndSpreadOverTheYear) {
     const auto samples = JsonSampleSource(CLINICAVT_DEMO_DIR).Load();
-    ASSERT_EQ(samples.size(), 8u);
+    ASSERT_EQ(samples.size(), 6u);
     std::set<int> months;
     std::set<std::string> sources;
     for (const auto& s : samples) {
         months.insert(s.months_back);
         sources.insert(s.source);
-        EXPECT_GE(s.months_back, 1) << s.source;
+        EXPECT_GE(s.months_back, 0) << s.source;
         EXPECT_LE(s.months_back, 12) << s.source;
         EXPECT_FALSE(s.label.empty()) << s.source;
         EXPECT_FALSE(s.note.empty()) << s.source;
@@ -41,8 +41,9 @@ TEST(SampleYear, TheShippedContentIsWholeAndSpreadOverTheYear) {
             last_start = turn.first_frame;
         }
     }
-    EXPECT_EQ(months.size(), 8u) << "two samples in one month";
-    EXPECT_EQ(sources.size(), 8u) << "a consultation used twice";
+    EXPECT_EQ(months.size(), 5u) << "two in the current month, the rest a month each";
+    EXPECT_TRUE(months.contains(0)) << "the current month shows samples";
+    EXPECT_EQ(sources.size(), 6u) << "a consultation used twice";
 }
 
 }  // namespace

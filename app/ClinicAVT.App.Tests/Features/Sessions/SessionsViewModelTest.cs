@@ -200,11 +200,12 @@ public class SessionsViewModelTest
     [Fact]
     public async Task AnEmptyListExplainsItselfWhenRetentionIsOff()
     {
-        var (vm, _, engine, _, _) = Create(new AppPreferences(new MemoryPreferencesStore()));
+        var (vm, _, engine, _, _) = Create(
+            new AppPreferences(new MemoryPreferencesStore()) { KeepConsultations = false });
         engine.Responses["session/list"] = new { sessions = Array.Empty<object>() };
 
         await vm.RefreshAsync();
-        Assert.True(vm.EmptyBecauseOff, "keep is off by default and nothing is stored");
+        Assert.True(vm.EmptyBecauseOff, "keep is off and nothing is stored");
 
         ScriptOneSession(engine);  // history recorded while keep was on still shows
         await vm.RefreshAsync();

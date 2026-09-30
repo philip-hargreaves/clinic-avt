@@ -17,6 +17,10 @@ public sealed partial class BusyCaption : UserControl
         nameof(TextStyle), typeof(Style), typeof(BusyCaption),
         new PropertyMetadata(null, (d, e) => ((BusyCaption)d).Restyle((Style?)e.NewValue)));
 
+    public static readonly DependencyProperty TextWrappingProperty = DependencyProperty.Register(
+        nameof(TextWrapping), typeof(TextWrapping), typeof(BusyCaption),
+        new PropertyMetadata(TextWrapping.NoWrap));
+
     public BusyCaption() => InitializeComponent();
 
     public string Text
@@ -29,6 +33,13 @@ public sealed partial class BusyCaption : UserControl
     {
         get => (bool)GetValue(IsActiveProperty);
         set => SetValue(IsActiveProperty, value);
+    }
+
+    /// <summary>One line unless set. A long caption in a narrow pane needs Wrap.</summary>
+    public TextWrapping TextWrapping
+    {
+        get => (TextWrapping)GetValue(TextWrappingProperty);
+        set => SetValue(TextWrappingProperty, value);
     }
 
     /// <summary>The caption's text style. MicroText unless set.</summary>

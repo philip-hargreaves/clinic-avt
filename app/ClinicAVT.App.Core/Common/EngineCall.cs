@@ -83,7 +83,9 @@ public static class EngineCall
         catch (Exception e)
         {
             status.Log($"{step} failed: {e.Message}");
-            status.Append(refused is not null && e is EngineErrorException { Code: Protocol.SessionErrorCode }
+            var explained = e is EngineErrorException engine
+                && engine.Code is Protocol.SessionErrorCode or Protocol.CaptureFailedCode;
+            status.Append(refused is not null && explained
                 ? $"{refused}: {EngineWords.Reason(e)}"
                 : "A step failed - trying to continue");
             return default;

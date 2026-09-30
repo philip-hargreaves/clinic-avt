@@ -1,12 +1,12 @@
 {
   "source": "day5_consultation03",
-  "attribution": "Recording from PriMock57 (Babylon Health), CC BY 4.0, transcribed by the app; notes and case study by the app's accuracy tier at standard settings",
-  "monthsBack": 6,
-  "day": 12,
+  "attribution": "Recording from PriMock57 (Babylon Health), CC BY 4.0, transcribed by the app; clinical note, patient information and case study written by the app",
+  "monthsBack": 0,
+  "day": 8,
   "time": "10:30",
   "label": "Anxiety and sleep disturbance",
-  "note": "The patient, a 31-year-old female, presented with anxiety and sleep disturbance over two months, coinciding with a new job. She reports dread regarding work, insomnia with only three to four hours of sleep, low energy, and anhedonia. She experiences palpitations described as irregular and rapid, lasting minutes, without significant weight change. She denies suicidal thoughts but avoids social contact and hobbies.\n\nThe working diagnosis is anxiety disorder. The plan is to self-refer for NHS talking therapies and utilize online resources. Blood tests will be sent to rule out physiological causes for palpitations. A GP follow-up is arranged one week post-testing.",
-  "patient": "Your appointment today\nYou came to see us about feeling worried. You said you could not sleep well. You have felt low energy for two months. You also feel sad about things you used to enjoy. You feel your heart beat fast and irregular.\n\nYour assessment\nThe working diagnosis is anxiety disorder. This is a mental health condition. It causes worry and fear. It can affect your sleep and mood.\n\nYour treatment and next steps\nWe will send blood tests. These check your heart health. You must refer yourself to NHS talking therapies. You should use online resources for help. We will see you again in one week. This is after you get the blood test results.\n\nWhen to contact us\nWe did not agree any warning signs to watch for today.",
+  "note": "The patient presented with anxiety, nervousness, and sleep disturbance over two months linked to a new stressful job. She reported irregular, rapid heartbeats lasting minutes, low energy, and avoidance of social contact.\n\nAnxiety was suspected as the cause of palpitations. The patient was advised to self-refer for talking therapy and undergo basic blood tests. A follow-up appointment was arranged one week after the test results.",
+  "patient": "Your appointment today\nYou came because of anxiety and sleep trouble.\nYou said your heart beats fast and you feel tired.\nYou also said you avoid meeting people now.\n\nYour diagnosis\nWe suspect anxiety is the cause of your heart beats.\nAnxiety means you feel worried or scared often.\n\nYour treatment and next steps\nWe advised you to start talking therapy with a specialist.\nYou must book a therapy session yourself soon.\nWe will send you for basic blood tests to check.\nYou must come back to see us one week after tests.\n\nWhen to contact us\nCall us if you have more rapid heartbeats than before.\nCall us if your sleep problems get much worse than now.",
   "summary": "A patient in their thirties presented with anxiety, sleep disturbance, and palpitations. The working diagnosis was an anxiety disorder. The plan involved self-referral for talking therapies, online resources, and blood tests to rule out physiological causes.",
   "audioSeconds": 776.34,
   "answers": {

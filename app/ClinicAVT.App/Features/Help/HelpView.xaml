@@ -179,7 +179,7 @@
                                 <TextBlock Style="{StaticResource HelpText}" Text="ClinicAVT selects the note model that suits this computer. To change it, go to Settings, Note model." />
                                 <TextBlock Style="{StaticResource HelpText}" Text="&#x2022;  Qwen3.5 4B: quickest; minimum 16 GB of memory&#x0a;&#x2022;  Qwen3.5 9B: more accurate, slower; minimum 24 GB&#x0a;&#x2022;  Qwen3.6 35B: most accurate; similar speed to the 4B, but slower to load; minimum 32 GB" />
                                 <TextBlock Style="{StaticResource HelpHeading}" Text="Low-power mode" />
-                                <TextBlock Style="{StaticResource HelpText}" Text="Runs speech recognition on the NPU to save battery. Transcripts take a little longer." />
+                                <TextBlock Style="{StaticResource HelpText}" Text="Runs speech recognition on the NPU to save battery. Transcripts take a little longer. The first switch takes several minutes while ClinicAVT prepares the model for the NPU." />
                                 <TextBlock Style="{StaticResource HelpHeading}" Text="First-time setup" />
                                 <TextBlock Style="{StaticResource HelpText}" Text="The first time ClinicAVT starts, and the first time each note model is used, ClinicAVT optimises it for this computer. This happens once per model and can take a few minutes." />
                             </StackPanel>

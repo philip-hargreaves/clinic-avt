@@ -11,8 +11,8 @@
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <!-- Dev and stakeholder runs are unpackaged. MSIX returns with the
-         distribution work. Self-contained, so no runtime install is needed -->
+    <!-- Dev runs and the zip release are unpackaged. tools\pack-msix.ps1 sets this to MSIX.
+         Self-contained, so no runtime install is needed -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <!-- English-only satellite resources, otherwise ~90 culture folders -->
@@ -41,56 +41,42 @@
     <Content Include="..\..\engine\licences\THIRD-PARTY-NOTICES.txt" Link="licences\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <!-- The note worker. Without it the engine writes notes in-process -->
     <Content Include="..\..\build\$(EnginePreset)\engine\clinicavt_note_host.exe" Link="clinicavt_note_host.exe" CopyToOutputDirectory="PreserveNewest" Visible="false" Condition="Exists('..\..\build\$(EnginePreset)\engine\clinicavt_note_host.exe')" />
-    <!-- The engine's OpenVINO runtime, deployed beside it by the CMake build -->
-    <Content Include="..\..\build\$(EnginePreset)\engine\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <!-- The engine's OpenVINO runtime, deployed beside it by the CMake build. Models are IR or
+         ONNX, so the Paddle, PyTorch and TensorFlow frontends are left out -->
+    <Content Include="..\..\build\$(EnginePreset)\engine\*.dll" Exclude="..\..\build\$(EnginePreset)\engine\openvino_paddle_frontend.dll;..\..\build\$(EnginePreset)\engine\openvino_pytorch_frontend.dll;..\..\build\$(EnginePreset)\engine\openvino_tensorflow_frontend.dll;..\..\build\$(EnginePreset)\engine\openvino_tensorflow_lite_frontend.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <Content Include="..\..\build\$(EnginePreset)\engine\cache.json" Link="cache.json" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
-  <!-- Dev runs see the repo model store via a junction. Packaging replaces this -->
-  <Target Name="LinkModelStore" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\models') And !Exists('$(TargetDir)models')">
+  <!-- Dev runs reach the repo folders through junctions. An MSIX build skips them, because the
+       package would follow the junctions and take in every note model and the research
+       corpora -->
+  <PropertyGroup>
+    <LinkRepoFolders Condition="'$(WindowsPackageType)' != 'MSIX'">true</LinkRepoFolders>
+  </PropertyGroup>
+  <Target Name="LinkModelStore" AfterTargets="Build" Condition="'$(LinkRepoFolders)' == 'true' And Exists('$(MSBuildProjectDirectory)\..\..\models') And !Exists('$(TargetDir)models')">
     <Exec Command="mklink /J &quot;$(TargetDir)models&quot; &quot;$(MSBuildProjectDirectory)\..\..\models&quot;" />
   </Target>
 
-  <!-- Packaged F5 runs the engine from AppX, which needs the same link -->
-  <Target Name="LinkModelStoreAppX" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\models') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\models')">
-    <Exec Command="mklink /J &quot;$(TargetDir)AppX\models&quot; &quot;$(MSBuildProjectDirectory)\..\..\models&quot;" />
-  </Target>
-
   <!-- Prompts ride the same junction, so a repo edit applies to the next note -->
-  <Target Name="LinkPrompts" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\prompts') And !Exists('$(TargetDir)prompts')">
+  <Target Name="LinkPrompts" AfterTargets="Build" Condition="'$(LinkRepoFolders)' == 'true' And Exists('$(MSBuildProjectDirectory)\..\..\prompts') And !Exists('$(TargetDir)prompts')">
     <Exec Command="mklink /J &quot;$(TargetDir)prompts&quot; &quot;$(MSBuildProjectDirectory)\..\..\prompts&quot;" />
-  </Target>
-  <Target Name="LinkPromptsAppX" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\prompts') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\prompts')">
-    <Exec Command="mklink /J &quot;$(TargetDir)AppX\prompts&quot; &quot;$(MSBuildProjectDirectory)\..\..\prompts&quot;" />
   </Target>
 
   <!-- Demo tracks too, so every layout has demo\ beside the exe -->
-  <Target Name="LinkDemo" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\demo') And !Exists('$(TargetDir)demo')">
+  <Target Name="LinkDemo" AfterTargets="Build" Condition="'$(LinkRepoFolders)' == 'true' And Exists('$(MSBuildProjectDirectory)\..\..\demo') And !Exists('$(TargetDir)demo')">
     <Exec Command="mklink /J &quot;$(TargetDir)demo&quot; &quot;$(MSBuildProjectDirectory)\..\..\demo&quot;" />
-  </Target>
-  <Target Name="LinkDemoAppX" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\demo') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\demo')">
-    <Exec Command="mklink /J &quot;$(TargetDir)AppX\demo&quot; &quot;$(MSBuildProjectDirectory)\..\..\demo&quot;" />
   </Target>
 
   <!-- Built corpora, corpora\ beside the exe -->
-  <Target Name="LinkCorpora" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\rag\corpora') And !Exists('$(TargetDir)corpora')">
+  <Target Name="LinkCorpora" AfterTargets="Build" Condition="'$(LinkRepoFolders)' == 'true' And Exists('$(MSBuildProjectDirectory)\..\..\rag\corpora') And !Exists('$(TargetDir)corpora')">
     <Exec Command="mklink /J &quot;$(TargetDir)corpora&quot; &quot;$(MSBuildProjectDirectory)\..\..\rag\corpora&quot;" />
-  </Target>
-  <Target Name="LinkCorporaAppX" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\rag\corpora') And Exists('$(TargetDir)AppX') And !Exists('$(TargetDir)AppX\corpora')">
-    <Exec Command="mklink /J &quot;$(TargetDir)AppX\corpora&quot; &quot;$(MSBuildProjectDirectory)\..\..\rag\corpora&quot;" />
   </Target>
 
   <ItemGroup>
-    <Content Include="Assets\SplashScreen.scale-200.png" />
-    <Content Include="Assets\LockScreenLogo.scale-200.png" />
-    <Content Include="Assets\Square150x150Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
+    <!-- MSIX logos, written by tools\make-logo-assets.ps1 -->
+    <Content Include="Assets\*.png" />
     <!-- Read back at runtime by AppWindow.SetIcon, so it must ship -->
     <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <!-- Partner marks. The json decides what shows, per showcase -->
     <Content Include="Assets\logos\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

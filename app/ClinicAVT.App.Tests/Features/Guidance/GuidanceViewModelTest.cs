@@ -148,7 +148,7 @@ public class GuidanceViewModelTest
         await shell.Search.SearchQueryCommand.ExecuteAsync(null);
         engine.RaiseNotification("guidance/ready", Ready(null, [], stale: null));
 
-        Assert.Equal("Nothing came close enough to show.", shell.Search.QueryCaption);
+        Assert.Equal("No guidance found for 'nothing here'.", shell.Search.QueryCaption);
         Assert.False(shell.Search.QuerySearching);
         Assert.Empty(shell.Guidance.Cards);
         Assert.Equal("", shell.Guidance.Summary);
@@ -323,6 +323,9 @@ public class GuidanceViewModelTest
 
         engine.RaiseNotification("guidance/ready", Ready("s1", []));
         Assert.Equal(GuidanceSection.NothingMatched, shell.Guidance.Section);
+        Assert.Equal(
+            "No guidance matched this note. Try searching for a condition or treatment.",
+            shell.Guidance.StateCaption);
 
         engine.RaiseNotification("guidance/ready", Ready("s1", [], searched: false));
         Assert.Equal(GuidanceSection.NoCorpusAtSearch, shell.Guidance.Section);

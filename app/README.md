@@ -10,7 +10,7 @@ ClinicAVT.App  ->  ClinicAVT.App.Core  ->  ClinicAVT.Client  -> (named pipe) -> 
 |---|---|---|
 | `ClinicAVT.App` | XAML views, their code-behind, themes, and the WinUI implementations of Core's ports | The only project that references WinUI. If a file needs a XAML type to compile, it lives here. |
 | `ClinicAVT.App.Core` | View models, the ports they depend on, their service registrations, engine supervision, preferences, metrics | No WinUI reference, so every view model is a plain object a test constructs off the UI thread. |
-| `ClinicAVT.App.Platform` | The Win32, registry, WMI and file adapters of Core's ports, such as the engine launcher and job object, crash dumps, machine and power readers, process memory, the file logger, the preference and metrics files and the example library | What Core must not know. References Core, never WinUI. |
+| `ClinicAVT.App.Platform` | The Win32, registry, WMI and file adapters of Core's ports, such as the engine launcher and job object, machine and power readers, process memory, the file logger, the preference and metrics files and the example library | What Core must not know. References Core, never WinUI. |
 | `ClinicAVT.Client` | `IEngineApi`, the role interfaces it combines, its typed replies and wire enums, `IEngineTransport`, message framing, the pipe transport | The engine's SDK. Knows nothing about the app. |
 
 ## Folders
