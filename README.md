@@ -161,7 +161,8 @@ clang-tidy reads the dev preset's `compile_commands.json`.
 
 </details>
 
-## Repository layout
+<details>
+<summary><strong>Repository layout</strong></summary>
 
 ```
 ClinicAVT/
@@ -219,6 +220,8 @@ ClinicAVT/
 ```
 
 `engine/README.md` and `app/README.md` describe each half in more detail.
+
+</details>
 
 ## Licence
 
