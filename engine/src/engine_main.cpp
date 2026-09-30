@@ -32,6 +32,7 @@
 #include "adapters/note/worker_note_writer.hpp"
 #include "adapters/storage/reflection_json.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
+#include "adapters/storage/store_migrations.hpp"
 #include "adapters/system/exe_paths.hpp"
 #include "adapters/system/gpu_lease.hpp"
 #include "adapters/system/power_throttling.hpp"
@@ -52,9 +53,13 @@
 
 namespace {
 
-// Another engine already owns the pipe; the shell reconnects to it instead of
-// counting a crash
+// Another engine already owns the pipe. The shell reconnects to it and counts no crash
 constexpr int kExitAlreadyServing = 3;
+
+// The store's schema is newer than this build, or too old to upgrade. The shell shows the reason
+// and does not restart
+constexpr int kExitStoreNewer = 4;
+constexpr int kExitStoreTooOld = 5;
 
 // Exit after this long with no shell connected
 constexpr auto kIdleExit = std::chrono::seconds(30);
@@ -125,7 +130,7 @@ void Serve(clinicavt::ipc::PipeServer& server, clinicavt::session::SessionContro
 int wmain(int argc, wchar_t* argv[]) {
     clinicavt::system::LogToStderr();
 #ifdef _DEBUG
-    // Send asserts and CRT errors to stderr instead of a modal dialog (headless process)
+    // Asserts and CRT errors go to stderr, since a headless process cannot show a dialog
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
@@ -151,7 +156,8 @@ int wmain(int argc, wchar_t* argv[]) {
         clinicavt::models::ModelStore model_store(config.models_root);
         clinicavt::models::OvRuntime ov_runtime;
         clinicavt::metrics::Registry metrics;
-        clinicavt::diar::AnchorStore anchors(config.store_root);
+        clinicavt::diar::AnchorStore anchors(config.store_root,
+                                             composition::VoiceprintModel(model_store));
 
         const bool stray_note_host = composition::FindStrayNoteHost(gpu_lease);
         composition::RoleReport roles;
@@ -168,11 +174,11 @@ int wmain(int argc, wchar_t* argv[]) {
                 server.PushNotification("note/model", clinicavt::ipc::NoteModelJson(state));
             },
             roles);
-        // Report a stuck host at startup instead of on the first note request
+        // Reports a stuck host at startup, before the first note request
         if (stray_note_host && note_writer != nullptr) note_writer->Prepare();
         const ProbeScope probe_scope(gpu_lease, note_writer.get());
         auto translator = composition::BuildTranslator(model_store, ov_runtime, roles);
-        // Guidance runs on the CPU in its own lane; the embedder loads in the
+        // Guidance runs on the CPU in its own lane. The embedder loads in the
         // background so the first note search is warm
         clinicavt::guidance::Retriever guidance_retriever(
             [&model_store]() -> std::unique_ptr<clinicavt::guidance::IEmbedder> {
@@ -264,6 +270,9 @@ int wmain(int argc, wchar_t* argv[]) {
     } catch (const clinicavt::ipc::PipeTaken& e) {
         clinicavt::log::Printf("clinicavt-engine: %s\n", e.what());
         return kExitAlreadyServing;
+    } catch (const clinicavt::store::StoreVersionError& e) {
+        clinicavt::log::Printf("clinicavt-engine: %s\n", e.what());
+        return e.Newer() ? kExitStoreNewer : kExitStoreTooOld;
     } catch (const std::exception& e) {
         clinicavt::log::Printf("clinicavt-engine: %s\n", e.what());
         return 1;

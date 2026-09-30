@@ -277,4 +277,20 @@ public class EngineSupervisorTest
         Assert.Equal(EngineStatus.Running, early.Host.Status);
         Assert.Equal(2, early.Launcher.Launched.Count);
     }
+
+    // A store this build cannot open gets its own status and no relaunch
+    [Theory]
+    [InlineData(EngineSupervisor.StoreNewer, EngineStatus.StoreNewer)]
+    [InlineData(EngineSupervisor.StoreTooOld, EngineStatus.StoreTooOld)]
+    public void AStoreFromAnotherVersionStopsWithItsReason(int exitCode, EngineStatus expected)
+    {
+        var h = new Harness();
+        h.Host.Start();
+        h.Current.Crash(exitCode);
+        h.Clock.Advance(RestartPolicy.MaxBackoff);
+
+        Assert.Equal(expected, h.Host.Status);
+        Assert.Single(h.Launcher.Launched);
+        Assert.Equal(exitCode, Assert.Single(h.Log.Reports).ExitCode);
+    }
 }

@@ -14,6 +14,12 @@ public sealed class EngineSupervisor(
     /// <summary>The engine's exit code when another engine already serves the pipe.</summary>
     public const int AlreadyServing = 3;
 
+    /// <summary>The engine's exit code when the store was written by a newer version.</summary>
+    public const int StoreNewer = 4;
+
+    /// <summary>The engine's exit code when the store is too old to upgrade.</summary>
+    public const int StoreTooOld = 5;
+
     /// <summary>The retry interval while another engine holds the pipe.</summary>
     public static readonly TimeSpan ServerWait = TimeSpan.FromSeconds(2);
 
@@ -176,6 +182,16 @@ public sealed class EngineSupervisor(
         }
 
         var now = clock.GetUtcNow();
+        // Every launch would fail the same way
+        if (exitCode is StoreNewer or StoreTooOld)
+        {
+            crashLog.Record(new CrashReport(
+                now, exitCode, now - _launchedAt, _crashes.Count, RecoveryAction.GiveUp,
+                methodInFlight?.Invoke(), session.SessionPhase));
+            SetStatusLocked(exitCode == StoreNewer ? EngineStatus.StoreNewer : EngineStatus.StoreTooOld, changes);
+            return;
+        }
+
         // The engine holding the pipe could not be adopted yet. It is finishing work it cannot
         // cancel, such as a first NPU compile, and accepts again once done. Waiting is not a crash
         if (exitCode == AlreadyServing)

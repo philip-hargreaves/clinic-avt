@@ -126,4 +126,24 @@ public class EngineStatusInShellTest
         Assert.Null(session.ReviewedSessionId);
         Assert.False(session.ConsultationInProgress);
     }
+
+    [Fact]
+    public void AStoreFromAnotherVersionIsExplainedAndLogged()
+    {
+        var log = new ListLogger();
+        using var shell = TestSession.Offline(log);
+        var state = shell.Get<EngineState>();
+
+        shell.Host.RaiseStatus(EngineStatus.StoreNewer);
+        Assert.Equal(
+            "Your consultations were saved by a newer version of ClinicAVT. Update ClinicAVT to open them.",
+            shell.Line.LatestActivity);
+        Assert.False(state.EngineStarting);
+
+        shell.Host.RaiseStatus(EngineStatus.StoreTooOld);
+        Assert.Equal(
+            "Your consultations were saved by a version of ClinicAVT too old for this one to open.",
+            state.EngineStateLabel);
+        Assert.Equal(2, log.Lines.Count);
+    }
 }
