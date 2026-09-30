@@ -12,7 +12,7 @@
 namespace clinicavt::guidance {
 
 inline constexpr std::uint32_t kIndexApplicationId = 0x414D4249;  // "AMBI"
-inline constexpr int kIndexFormat = 3;
+inline constexpr int kIndexFormat = 4;
 inline constexpr const char* kIndexFile = "index.db";
 
 struct IndexedFile {

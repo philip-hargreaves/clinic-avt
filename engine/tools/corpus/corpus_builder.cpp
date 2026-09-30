@@ -60,10 +60,9 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
         {
             store::Db::Transaction txn(db);
             auto meta = db.Prepare(
-                "INSERT INTO corpus_meta(id, corpus_id, name, licence, attribution, source,"
-                " embedder_id, embedder_rev, max_tokens, dim, vector_format, normalised,"
-                " chunk_count, shard_count, built_at, builder)"
-                " VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'f32le', 1, ?, ?, ?, ?)");
+                "INSERT INTO corpus_metadata(id, corpus_id, name, licence, attribution, source,"
+                " embedder_id, embedder_rev, max_tokens, dim, built_at, builder)"
+                " VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             meta.BindText(1, spec.id);
             meta.BindText(2, spec.name);
             meta.BindText(3, spec.licence);
@@ -73,16 +72,14 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
             meta.BindText(7, spec.embedder.rev);
             meta.BindInt64(8, spec.embedder.max_tokens);
             meta.BindInt64(9, spec.embedder.dim);
-            meta.BindInt64(10, static_cast<std::int64_t>(chunks.size()));
-            meta.BindInt64(11, shard_count);
-            meta.BindText(12, spec.built_at);
-            meta.BindText(13, spec.builder);
+            meta.BindText(10, spec.built_at);
+            meta.BindText(11, spec.builder);
             meta.Step();
 
             auto insert = db.Prepare(
-                "INSERT INTO chunks(ord, chunk_id, code, title, chapter, number, section,"
+                "INSERT INTO passages(position, passage_id, code, title, number, section,"
                 " update_tag, last_updated, url, text)"
-                " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             for (std::size_t i = 0; i < chunks.size(); ++i) {
                 const Chunk& c = chunks[i];
                 insert.Reset();
@@ -90,19 +87,18 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
                 insert.BindText(2, c.id);
                 insert.BindText(3, c.code);
                 insert.BindText(4, c.title);
-                insert.BindText(5, c.chapter);
-                insert.BindText(6, c.number);
-                insert.BindText(7, c.section);
-                insert.BindText(8, c.update_tag);
-                insert.BindText(9, c.last_updated);
-                insert.BindText(10, c.url);
-                insert.BindText(11, c.text);
+                insert.BindText(5, c.number);
+                insert.BindText(6, c.section);
+                insert.BindText(7, c.update_tag);
+                insert.BindText(8, c.last_updated);
+                insert.BindText(9, c.url);
+                insert.BindText(10, c.text);
                 insert.Step();
             }
 
             auto shard = db.Prepare(
-                "INSERT INTO guidance_vectors(shard, first_ord, count, dim, data) VALUES(?, ?, ?, "
-                "?, ?)");
+                "INSERT INTO vector_shards(shard, first_position, passage_count, vectors)"
+                " VALUES(?, ?, ?, ?)");
             for (int s = 0; s < shard_count; ++s) {
                 const std::size_t first = static_cast<std::size_t>(s) * kShardVectors;
                 const std::size_t count =
@@ -113,8 +109,7 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
                 shard.BindInt64(1, s);
                 shard.BindInt64(2, static_cast<std::int64_t>(first));
                 shard.BindInt64(3, static_cast<std::int64_t>(count));
-                shard.BindInt64(4, spec.embedder.dim);
-                shard.BindBlob(5,
+                shard.BindBlob(4,
                                std::span<const std::uint8_t>(bytes, count * dim * sizeof(float)));
                 shard.Step();
             }
@@ -144,8 +139,6 @@ void BuildCorpus(const std::filesystem::path& dir, const CorpusSpec& spec,
                             {"embedder_rev", spec.embedder.rev},
                             {"max_tokens", spec.embedder.max_tokens},
                             {"dim", spec.embedder.dim},
-                            {"chunks", chunks.size()},
-                            {"shards", shard_count},
                             {"file", kCorpusFile},
                             {"bytes", std::filesystem::file_size(final_path)},
                             {"sha256", system::Sha256File(final_path)},

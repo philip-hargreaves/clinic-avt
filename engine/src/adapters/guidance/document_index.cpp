@@ -47,10 +47,12 @@ Db OpenIndex(const std::filesystem::path& file) {
 
 constexpr const char* kSelectRow =
     "SELECT d.id, d.sha256, d.mime, d.state, d.error, d.added_at, d.indexed_at, d.pages,"
-    " d.pages_without_text, (SELECT count(*) FROM chunks c WHERE c.document_id = d.id),"
-    " (SELECT f.path FROM files f WHERE f.document_id = d.id ORDER BY length(f.path), f.path"
+    " d.pages_without_text, (SELECT count(*) FROM passages p WHERE p.document_id = d.id),"
+    " (SELECT f.path FROM guideline_files f WHERE f.document_id = d.id"
+    " ORDER BY length(f.path), f.path"
     " LIMIT 1),"
-    " (SELECT f.size FROM files f WHERE f.document_id = d.id LIMIT 1) FROM documents d";
+    " (SELECT f.size FROM guideline_files f WHERE f.document_id = d.id LIMIT 1)"
+    " FROM guideline_documents d";
 
 DocumentInfo Row(Db::Stmt& select) {
     DocumentInfo info;
@@ -72,7 +74,8 @@ DocumentInfo Row(Db::Stmt& select) {
 }
 
 constexpr const char* kSelectChunks =
-    "SELECT ord, page, number, section, text, vector, boxes FROM chunks WHERE document_id = ?";
+    "SELECT position, page, number, section, text, vector, line_boxes FROM passages"
+    " WHERE document_id = ?";
 
 IndexChunk ChunkRow(Db::Stmt& select, std::size_t dim) {
     IndexChunk chunk;
@@ -99,7 +102,7 @@ std::int64_t DocumentIndex::IdOf(const std::string& sha256) {
 
 DocumentIndex::DocumentIndex(const std::filesystem::path& file) : db_(OpenIndex(file)) {
     auto meta = db_.Prepare(
-        "SELECT embedder_id, embedder_rev, dim, max_tokens FROM index_meta WHERE id = 1");
+        "SELECT embedder_id, embedder_rev, dim, max_tokens FROM index_metadata WHERE id = 1");
     if (meta.Step()) {
         embedder_ = {meta.ColumnText(0), meta.ColumnText(1), static_cast<int>(meta.ColumnInt64(2)),
                      static_cast<int>(meta.ColumnInt64(3))};
@@ -110,15 +113,14 @@ void DocumentIndex::Adopt(const EmbedderIdentity& embedder) {
     if (embedder_ != embedder) {
         Clear();
         Db::Transaction txn(db_);
-        db_.Exec("DELETE FROM index_meta");
+        db_.Exec("DELETE FROM index_metadata");
         auto insert = db_.Prepare(
-            "INSERT INTO index_meta(id, embedder_id, embedder_rev, dim, max_tokens, created_at)"
-            " VALUES(1, ?, ?, ?, ?, ?)");
+            "INSERT INTO index_metadata(id, embedder_id, embedder_rev, dim, max_tokens)"
+            " VALUES(1, ?, ?, ?, ?)");
         insert.BindText(1, embedder.id);
         insert.BindText(2, embedder.rev);
         insert.BindInt64(3, embedder.dim);
         insert.BindInt64(4, embedder.max_tokens);
-        insert.BindText(5, Iso8601Now());
         insert.Step();
         txn.Commit();
         embedder_ = embedder;
@@ -142,7 +144,7 @@ DocumentInfo DocumentIndex::Get(std::int64_t id) {
 
 std::vector<IndexedFile> DocumentIndex::Files() {
     std::vector<IndexedFile> out;
-    auto select = db_.Prepare("SELECT path, document_id, size, modified FROM files");
+    auto select = db_.Prepare("SELECT path, document_id, size, modified FROM guideline_files");
     while (select.Step()) {
         out.push_back({select.ColumnText(0), select.ColumnInt64(1), select.ColumnInt64(2),
                        select.ColumnInt64(3)});
@@ -152,7 +154,8 @@ std::vector<IndexedFile> DocumentIndex::Files() {
 
 std::vector<std::string> DocumentIndex::PathsOf(std::int64_t id) {
     std::vector<std::string> out;
-    auto select = db_.Prepare("SELECT path FROM files WHERE document_id = ? ORDER BY path");
+    auto select =
+        db_.Prepare("SELECT path FROM guideline_files WHERE document_id = ? ORDER BY path");
     select.BindInt64(1, id);
     while (select.Step()) out.push_back(select.ColumnText(0));
     return out;
@@ -163,16 +166,16 @@ DocumentIndex::Held DocumentIndex::Hold(const IndexedFile& file, const std::stri
     Held held;
     held.document = IdOf(sha256);
     Db::Transaction txn(db_);
-    auto before = db_.Prepare("SELECT document_id FROM files WHERE path = ?");
+    auto before = db_.Prepare("SELECT document_id FROM guideline_files WHERE path = ?");
     before.BindText(1, file.path);
     const std::int64_t previous = before.Step() ? before.ColumnInt64(0) : 0;
     before.Reset();
 
-    auto exists = db_.Prepare("SELECT 1 FROM documents WHERE id = ?");
+    auto exists = db_.Prepare("SELECT 1 FROM guideline_documents WHERE id = ?");
     exists.BindInt64(1, held.document);
     if (!exists.Step()) {
         auto insert = db_.Prepare(
-            "INSERT INTO documents(id, sha256, mime, state, added_at)"
+            "INSERT INTO guideline_documents(id, sha256, mime, state, added_at)"
             " VALUES(?, ?, ?, 'indexing', ?)");
         insert.BindInt64(1, held.document);
         insert.BindText(2, sha256);
@@ -184,7 +187,7 @@ DocumentIndex::Held DocumentIndex::Hold(const IndexedFile& file, const std::stri
     exists.Reset();
 
     auto upsert = db_.Prepare(
-        "INSERT INTO files(path, document_id, size, modified) VALUES(?, ?, ?, ?)"
+        "INSERT INTO guideline_files(path, document_id, size, modified) VALUES(?, ?, ?, ?)"
         " ON CONFLICT(path) DO UPDATE SET document_id = excluded.document_id,"
         " size = excluded.size, modified = excluded.modified");
     upsert.BindText(1, file.path);
@@ -201,12 +204,12 @@ DocumentIndex::Held DocumentIndex::Hold(const IndexedFile& file, const std::stri
 
 std::int64_t DocumentIndex::Release(const std::string& path) {
     Db::Transaction txn(db_);
-    auto held = db_.Prepare("SELECT document_id FROM files WHERE path = ?");
+    auto held = db_.Prepare("SELECT document_id FROM guideline_files WHERE path = ?");
     held.BindText(1, path);
     if (!held.Step()) return 0;
     const auto document = held.ColumnInt64(0);
     held.Reset();
-    auto erase_file = db_.Prepare("DELETE FROM files WHERE path = ?");
+    auto erase_file = db_.Prepare("DELETE FROM guideline_files WHERE path = ?");
     erase_file.BindText(1, path);
     erase_file.Step();
     const auto released = DropUnheld(document);
@@ -221,7 +224,8 @@ void DocumentIndex::Finish(std::int64_t id, const std::vector<IndexChunk>& chunk
     Db::Transaction txn(db_);
     ClearChunks(id);
     auto insert = db_.Prepare(
-        "INSERT INTO chunks(document_id, ord, page, number, section, text, vector, boxes)"
+        "INSERT INTO passages(document_id, position, page, number, section, text, vector,"
+        " line_boxes)"
         " VALUES(?, ?, ?, ?, ?, ?, ?, ?)");
     for (std::size_t ord = 0; ord < chunks.size(); ++ord) {
         const auto& chunk = chunks[ord];
@@ -240,7 +244,7 @@ void DocumentIndex::Finish(std::int64_t id, const std::vector<IndexChunk>& chunk
         insert.Step();
     }
     auto ready = db_.Prepare(
-        "UPDATE documents SET state = 'ready', error = NULL, indexed_at = ?, pages = ?,"
+        "UPDATE guideline_documents SET state = 'ready', error = NULL, indexed_at = ?, pages = ?,"
         " pages_without_text = ? WHERE id = ?");
     ready.BindText(1, Iso8601Now());
     ready.BindInt64(2, pages);
@@ -258,7 +262,8 @@ void DocumentIndex::Fail(std::int64_t id, const std::string& error, int pages,
     Db::Transaction txn(db_);
     ClearChunks(id);
     auto failed = db_.Prepare(
-        "UPDATE documents SET state = 'failed', error = ?, pages = ?, pages_without_text = ?"
+        "UPDATE guideline_documents SET state = 'failed', error = ?, pages = ?,"
+        " pages_without_text = ?"
         " WHERE id = ?");
     failed.BindText(1, error);
     failed.BindInt64(2, pages);
@@ -273,14 +278,14 @@ void DocumentIndex::Fail(std::int64_t id, const std::string& error, int pages,
 
 std::vector<IndexChunk> DocumentIndex::ReadChunks(std::int64_t id) {
     std::vector<IndexChunk> out;
-    auto select = db_.Prepare((std::string(kSelectChunks) + " ORDER BY ord").c_str());
+    auto select = db_.Prepare((std::string(kSelectChunks) + " ORDER BY position").c_str());
     select.BindInt64(1, id);
     while (select.Step()) out.push_back(ChunkRow(select, static_cast<std::size_t>(embedder_.dim)));
     return out;
 }
 
 IndexChunk DocumentIndex::ReadChunk(std::int64_t id, std::int64_t ord) {
-    auto select = db_.Prepare((std::string(kSelectChunks) + " AND ord = ?").c_str());
+    auto select = db_.Prepare((std::string(kSelectChunks) + " AND position = ?").c_str());
     select.BindInt64(1, id);
     select.BindInt64(2, ord);
     if (!select.Step()) {
@@ -290,21 +295,21 @@ IndexChunk DocumentIndex::ReadChunk(std::int64_t id, std::int64_t ord) {
 }
 
 void DocumentIndex::Clear() {
-    db_.Exec("DELETE FROM documents");
+    db_.Exec("DELETE FROM guideline_documents");
     db_.CheckpointTruncate();
 }
 
 void DocumentIndex::ClearChunks(std::int64_t id) {
-    auto clear = db_.Prepare("DELETE FROM chunks WHERE document_id = ?");
+    auto clear = db_.Prepare("DELETE FROM passages WHERE document_id = ?");
     clear.BindInt64(1, id);
     clear.Step();
 }
 
 std::int64_t DocumentIndex::DropUnheld(std::int64_t document) {
-    auto still = db_.Prepare("SELECT 1 FROM files WHERE document_id = ?");
+    auto still = db_.Prepare("SELECT 1 FROM guideline_files WHERE document_id = ?");
     still.BindInt64(1, document);
     if (still.Step()) return 0;
-    auto erase = db_.Prepare("DELETE FROM documents WHERE id = ?");
+    auto erase = db_.Prepare("DELETE FROM guideline_documents WHERE id = ?");
     erase.BindInt64(1, document);
     erase.Step();
     return document;
