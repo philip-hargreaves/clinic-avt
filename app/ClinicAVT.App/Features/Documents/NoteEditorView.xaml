@@ -50,7 +50,7 @@
                 <!-- Style and detail apply on the next Regenerate. Items are built in code -->
                 <DropDownButton
                     AutomationProperties.Name="Note style"
-                    Content="Note style"
+                    Content="{x:Bind ViewModel.StyleLabel, Mode=OneWay}"
                     IsEnabled="{x:Bind ViewModel.NoteDocumentReady, Mode=OneWay}">
                     <DropDownButton.Flyout>
                         <MenuFlyout x:Name="OptionsMenu" Placement="BottomEdgeAlignedRight" />

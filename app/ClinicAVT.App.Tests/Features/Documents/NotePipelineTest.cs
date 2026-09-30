@@ -15,6 +15,20 @@ public class NotePipelineTest
         JsonSerializer.SerializeToElement(new { detail });
 
     [Fact]
+    public void TheLengthChoiceAppliesToProseOnly()
+    {
+        var note = new TestShell().Note;
+
+        note.Style = "prose";
+        note.Detail = "detailed";
+        Assert.True(note.DetailApplies);
+        Assert.Equal("Prose · Detailed", note.StyleLabel);
+        note.Style = "soap";
+        Assert.False(note.DetailApplies);
+        Assert.Equal("SOAP", note.StyleLabel);
+    }
+
+    [Fact]
     public void ThePipelineRefusesOutOfOrderEventsAndPreparingShowsUntilTheFirstWordsStream()
     {
         var shell = new TestShell();

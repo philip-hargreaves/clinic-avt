@@ -59,13 +59,15 @@ public sealed partial class NoteEditorView : UserControl
         _fit.FitWithin(area, chrome);
     }
 
+    private readonly MenuFlyoutSeparator _detailSeparator = new();
+
     private void BuildOptionsMenu()
     {
         foreach (var option in ViewModel.StyleOptions)
         {
             OptionsMenu.Items.Add(OptionItem("style", option, value => ViewModel.Style = value));
         }
-        OptionsMenu.Items.Add(new MenuFlyoutSeparator());
+        OptionsMenu.Items.Add(_detailSeparator);
         foreach (var option in ViewModel.DetailOptions)
         {
             OptionsMenu.Items.Add(OptionItem("detail", option, value => ViewModel.Detail = value));
@@ -77,17 +79,24 @@ public sealed partial class NoteEditorView : UserControl
     private static RadioMenuFlyoutItem OptionItem(string group, NoteOption option, Action<string> choose) =>
         MenuItems.Radio(option.Name, group, isChecked: false, () => choose(option.Value), tag: option.Value);
 
-    // Checking an item unchecks the rest of its group. Runs again on open because an item
-    // checked before it first shows may not draw its mark
+    // Sets every item's mark, since an item checked before it first shows may not draw it.
+    // Runs again on open. SOAP has one length, so the length items are hidden for it
     private void CheckOptions()
     {
+        var lengths = ViewModel.DetailApplies ? Visibility.Visible : Visibility.Collapsed;
+        _detailSeparator.Visibility = lengths;
         foreach (var entry in OptionsMenu.Items)
         {
-            if (entry is RadioMenuFlyoutItem item
-                && item.Tag as string == (item.GroupName == "style" ? ViewModel.Style : ViewModel.Detail))
+            if (entry is not RadioMenuFlyoutItem item)
             {
-                item.IsChecked = true;
+                continue;
             }
+            var detail = item.GroupName == "detail";
+            if (detail)
+            {
+                item.Visibility = lengths;
+            }
+            item.IsChecked = item.Tag as string == (detail ? ViewModel.Detail : ViewModel.Style);
         }
     }
 

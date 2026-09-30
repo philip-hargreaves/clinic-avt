@@ -25,10 +25,21 @@ public sealed partial class NoteViewModel : ObservableObject
 
     /// <summary>The note style as the engine names it, "prose" or "soap".</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetailApplies))]
+    [NotifyPropertyChangedFor(nameof(StyleLabel))]
     public partial string Style { get; set; } = NoteOptions.DefaultStyle.Value;
+
+    /// <summary>SOAP has one length, so the detail choice applies to prose only.</summary>
+    public bool DetailApplies => Style != "soap";
+
+    /// <summary>The note style menu's label: "Prose · Concise", or "SOAP", which has one length.</summary>
+    public string StyleLabel => DetailApplies
+        ? $"{NoteOptions.Style(Style).Name} · {NoteOptions.Detail(Detail).Name}"
+        : NoteOptions.Style(Style).Name;
 
     /// <summary>"concise" or "detailed".</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StyleLabel))]
     public partial string Detail { get; set; } = NoteOptions.DefaultDetail.Value;
 
     /// <summary>Why the model refused, in its words, empty unless refused.</summary>
