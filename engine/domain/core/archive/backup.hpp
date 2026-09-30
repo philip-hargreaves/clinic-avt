@@ -10,14 +10,14 @@
 
 namespace clinicavt::archive {
 
-// Half-open [from, to) over started_at, ISO 8601 UTC; an empty end is open
+// Half-open [from, to) over started_at, ISO 8601 UTC. An empty end is open
 struct Period {
     std::string from;
     std::string to;
 };
 
 // Counts for a backup of a period. Unfinished sessions (crashed, awaiting recovery) are counted but
-// never included. Demos are excluded
+// never included. Samples are excluded
 struct Counts {
     std::size_t consultations = 0;
     std::size_t reflections = 0;  // with an appraisal entry
@@ -39,9 +39,10 @@ struct BackupResult {
     Manifest manifest;
 };
 
-// Writes finalised non-demo consultations in the period (cleared ones too, for their appraisal
-// entry), then commits the sink, which checks the file. With reflections_only it writes only those
-// with an appraisal entry, stripped as on clear
+// Writes the finalised consultations in the period other than samples (cleared ones too, for their
+// appraisal entry), then commits the sink, which checks the file. With reflections_only it writes
+// only those with an appraisal entry, stripped as on clear. A record Restore would refuse fails
+// the backup with kDamaged
 BackupResult BackUp(store::ISessionStore& store, const Period& period, IArchiveSink& sink,
                     const Progress& progress, bool reflections_only);
 

@@ -22,8 +22,8 @@ inline constexpr std::uint32_t kBackupIterations = 600000;
 // Each record authenticates the header and its own index against reordering and splicing
 class ArchiveFileSink final : public IArchiveSink {
    public:
-    // Refuses a password under 12 code points before anything is written. Only tests lower the
-    // iteration count
+    // Refuses a password under kMinPasswordLength code points before anything is written. Only
+    // tests lower the iteration count
     ArchiveFileSink(std::filesystem::path target, std::string password,
                     std::uint32_t iterations = kBackupIterations);
     ~ArchiveFileSink() override;

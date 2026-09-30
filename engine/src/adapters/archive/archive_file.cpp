@@ -215,7 +215,7 @@ struct ArchiveFileSink::Impl {
         finished = true;
     }
 
-    // Any failure deletes the partial; non-archive errors become kWriteFailed
+    // Any failure deletes the partial file. Errors other than ArchiveError become kWriteFailed
     template <typename Step>
     void Guarded(Step step) {
         if (finished) Fail(ArchiveCode::kWriteFailed);
@@ -296,7 +296,7 @@ ArchiveFileSink::ArchiveFileSink(std::filesystem::path target, std::string passw
     s.target = std::move(target);
     s.partial = PartialOf(s.target);
     // Next to the target so the final move is a same-volume rename. Holds
-    // ciphertext only; CREATE_ALWAYS replaces a stale one from a killed backup
+    // ciphertext only. CREATE_ALWAYS replaces a stale one from a killed backup
     s.file = CreateFileW(s.partial.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                          FILE_ATTRIBUTE_NORMAL, nullptr);
     if (s.file == INVALID_HANDLE_VALUE) Fail(ArchiveCode::kWriteFailed);

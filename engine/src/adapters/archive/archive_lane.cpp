@@ -13,7 +13,7 @@ namespace {
 
 using nlohmann::json;
 
-// Throttles progress events; a large backup has many consultations
+// Limits progress events, since a large backup has many consultations
 constexpr auto kProgressEvery = std::chrono::milliseconds(100);
 
 const char* PhaseName(Phase phase) {
@@ -42,7 +42,7 @@ json DoneJson(const char* job, bool dry_run, std::size_t consultations, std::siz
                 {"ids", std::move(ids)}};
 }
 
-// ArchiveError keeps its code; any other exception maps to kWriteFailed
+// ArchiveError keeps its code. Any other exception maps to kWriteFailed
 std::string CodeOf(const std::exception_ptr& failure) {
     try {
         std::rethrow_exception(failure);

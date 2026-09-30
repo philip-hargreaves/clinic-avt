@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <sstream>
 #include <vector>
@@ -25,6 +26,16 @@ bool IsSessionId(const std::string& id) {
 
 bool IsOptionalIso8601(const std::string& text) {
     return text.empty() || IsIso8601(text);
+}
+
+bool ValidOptions(store::DocumentKind kind, const store::Document& document) {
+    if (kind != store::DocumentKind::kNote)
+        return document.style.empty() && document.detail.empty();
+    const auto one_of = [](const std::string& value, std::initializer_list<const char*> allowed) {
+        return value.empty() || std::ranges::find(allowed, value) != allowed.end();
+    };
+    return one_of(document.style, {"prose", "soap"}) &&
+           one_of(document.detail, {"concise", "detailed"});
 }
 
 }  // namespace
@@ -50,7 +61,8 @@ bool ValidRecord(const store::SessionRecord& record) {
         seen.push_back(entry.kind);
         const store::Document& document = entry.document;
         if (document.revision < 1 || document.revision > kMaxRevision ||
-            !IsOptionalIso8601(document.generated_at) || !IsOptionalIso8601(document.edited_at)) {
+            !IsOptionalIso8601(document.generated_at) || !IsOptionalIso8601(document.edited_at) ||
+            !ValidOptions(entry.kind, document)) {
             return false;
         }
     }
