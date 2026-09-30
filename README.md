@@ -4,8 +4,7 @@
 
 **On-device ambient voice technology for clinical consultations**
 
-Drafts the clinical note and patient information from a consultation, and retrieves the
-relevant clinical guidance.
+Transcribes and diarises consultations, drafts clinical notes with translation, and retrieves relevant guidelines by semantic search.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/philip-hargreaves/clinic-avt/ci.yml?branch=main&label=CI)](https://github.com/philip-hargreaves/clinic-avt/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2011-0078D4)
@@ -35,7 +34,7 @@ before use.
 <tr><td><strong>Recording import</strong></td><td>Existing audio files can be imported, and five example consultations are bundled for demonstration.</td></tr>
 </table>
 
-## How it works
+## Pipeline
 
 ```mermaid
 flowchart LR
