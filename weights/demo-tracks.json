@@ -4,10 +4,11 @@
   "target": "demo",
   "files": {
     "day2_consultation02_mixed.wav": "bbb5edaaf2494f3f54670a1821edfd2085d1caf4c31780b203b58642b5ca7076",
+    "day1_consultation01_mixed.wav": "40caebae31e53da130d3c61b2a03c86802ad93f0e08730e922cf504fcea03c2b",
+    "day1_consultation06_mixed.wav": "0140c122a40309bdf6948c1337fb9898b7b1f4ddcdd5fd657dd361b1fe8c17e1",
     "day5_consultation11_mixed.wav": "32619a9f37d3adad6805602599088244776a16920be9a66ad784f35aa0910cb9",
-    "day5_consultation08_mixed.wav": "a3b2f53467316ab2937d9e57b11864638654ef2837f7bd5af599462693df63e6",
-    "day5_consultation12_mixed.wav": "6152dd0e9e51e83c604e1d34ad70b0695b0c91b5f6ea97627d7f12086c7a0853",
-    "tracks.json": "bde5f087f564817a79b73a6e1ee2baebb0ff2c8786bc3f886d651df18924ed12"
+    "day3_consultation08_mixed.wav": "62c587eb047466c8975113d5fca45fb738d77f82eba0df95287ab1f0de5986ac",
+    "tracks.json": "1f3314b914f18718b49924ac0895b37477d862ef3454001b67bba6dd418abeb9"
   },
   "shards": {
     "day2_consultation02_mixed.wav": [
@@ -17,6 +18,20 @@
         "sha256": "bbb5edaaf2494f3f54670a1821edfd2085d1caf4c31780b203b58642b5ca7076"
       }
     ],
+    "day1_consultation01_mixed.wav": [
+      {
+        "name": "demo-tracks--day1_consultation01_mixed.wav",
+        "size": 14651564,
+        "sha256": "40caebae31e53da130d3c61b2a03c86802ad93f0e08730e922cf504fcea03c2b"
+      }
+    ],
+    "day1_consultation06_mixed.wav": [
+      {
+        "name": "demo-tracks--day1_consultation06_mixed.wav",
+        "size": 21200684,
+        "sha256": "0140c122a40309bdf6948c1337fb9898b7b1f4ddcdd5fd657dd361b1fe8c17e1"
+      }
+    ],
     "day5_consultation11_mixed.wav": [
       {
         "name": "demo-tracks--day5_consultation11_mixed.wav",
@@ -24,27 +39,20 @@
         "sha256": "32619a9f37d3adad6805602599088244776a16920be9a66ad784f35aa0910cb9"
       }
     ],
-    "day5_consultation08_mixed.wav": [
+    "day3_consultation08_mixed.wav": [
       {
-        "name": "demo-tracks--day5_consultation08_mixed.wav",
-        "size": 18025004,
-        "sha256": "a3b2f53467316ab2937d9e57b11864638654ef2837f7bd5af599462693df63e6"
-      }
-    ],
-    "day5_consultation12_mixed.wav": [
-      {
-        "name": "demo-tracks--day5_consultation12_mixed.wav",
-        "size": 10416044,
-        "sha256": "6152dd0e9e51e83c604e1d34ad70b0695b0c91b5f6ea97627d7f12086c7a0853"
+        "name": "demo-tracks--day3_consultation08_mixed.wav",
+        "size": 11022764,
+        "sha256": "62c587eb047466c8975113d5fca45fb738d77f82eba0df95287ab1f0de5986ac"
       }
     ],
     "tracks.json": [
       {
-        "name": "demo-tracks--tracks-v2.json",
-        "size": 395,
-        "sha256": "bde5f087f564817a79b73a6e1ee2baebb0ff2c8786bc3f886d651df18924ed12"
+        "name": "demo-tracks--tracks-v3.json",
+        "size": 471,
+        "sha256": "1f3314b914f18718b49924ac0895b37477d862ef3454001b67bba6dd418abeb9"
       }
     ]
   },
-  "totalBytes": 67071931
+  "totalBytes": 85505971
 }
