@@ -18,8 +18,8 @@ struct HostLimits {
     std::size_t memory_cap = 1u << 30;
 };
 
-// Why a run gave nothing back: cannotOpen, password, outputBound, badPage,
-// timeout, crashed or badOutput
+// Why a run gave nothing back, one of cannotOpen, password, outputBound, badPage, timeout,
+// crashed or badOutput
 class HostError : public std::runtime_error {
    public:
     HostError(std::string reason, const std::string& what)
@@ -40,9 +40,9 @@ struct Bitmap {
     std::vector<std::uint8_t> bmp;
 };
 
-// Runs clinicavt_ingest_host once per call in a job of its own: one process, a
-// memory cap, killed with the engine. The document goes in on stdin and the
-// pages or the pixels come back on stdout, checked before anything reads them
+// Runs clinicavt_ingest_host once per call in its own job (one process, a memory cap, killed
+// with the engine). The document goes in on stdin and the pages or pixels come back on stdout,
+// validated before use
 class IngestHost {
    public:
     explicit IngestHost(std::filesystem::path exe, HostLimits limits = {});

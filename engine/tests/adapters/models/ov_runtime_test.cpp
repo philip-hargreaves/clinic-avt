@@ -54,8 +54,6 @@ void SynthesiseModel(const std::filesystem::path& dir, const std::string& device
              << "\"model.bin\": " << std::filesystem::file_size(dir / "model.bin") << "}}";
 }
 
-// The one GPU proof: a verified model compiles and infers on the Intel GPU,
-// and a tampered one never reaches compilation
 TEST(OvRuntime, LoadsVerifiedModelsOnTheIntelGpuAndRefusesATamperedOne) {
     TempRoot root;
     SynthesiseModel(root.path / "selftest", "GPU");

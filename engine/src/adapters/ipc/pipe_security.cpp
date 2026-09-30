@@ -51,8 +51,8 @@ PipeSecurity::PipeSecurity() : impl_(std::make_unique<Impl>()) {
     impl_->groups = QueryTokenGroups(token);
     CloseHandle(token);
 
-    // The logon SID scopes access to this login session. Another user on the
-    // same machine, or the same user in another session, gets nothing
+    // The logon SID limits access to this login session, so other users and the same user's other
+    // sessions are denied
     const auto* groups = reinterpret_cast<TOKEN_GROUPS*>(impl_->groups.data());
     PSID logon_sid = nullptr;
     for (DWORD i = 0; i < groups->GroupCount; ++i) {

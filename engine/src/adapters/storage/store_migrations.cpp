@@ -24,8 +24,8 @@ Db OpenDatabase(const std::filesystem::path& root) {
         if (db.QueryInt64("SELECT count(*) FROM sqlite_master") != 0) {
             throw StoreError(StoreCode::kSchema, "not a ClinicAVT store");
         }
-        // Incremental vacuum is creation-time. The WAL switch already wrote the
-        // header, so the empty file is rebuilt to take it
+        // auto_vacuum is set at creation. Switching to WAL already wrote the header, so
+        // rebuild the empty file to apply it
         db.Exec("PRAGMA auto_vacuum=INCREMENTAL");
         db.Exec("VACUUM");
         Db::Transaction txn(db);

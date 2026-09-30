@@ -1,10 +1,12 @@
+#include "adapters/note/llm_note_writer.hpp"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
-#include "adapters/note/llm_note_writer.hpp"
+#include "adapters/system/gpu_lease.hpp"
 
 namespace clinicavt::note {
 namespace {
@@ -30,7 +32,8 @@ TEST(LlmNoteWriter, CancelInterruptsAGeneration) {
     }
     models::ModelStore store(kModels);
     models::OvRuntime runtime;
-    LlmNoteWriter writer(store, runtime, kModels.parent_path() / "prompts");
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    LlmNoteWriter writer(store, runtime, gpu, kModels.parent_path() / "prompts");
 
     int seen = 0;
     writer.Write(ElbowTranscript(), {}, [&writer, &seen](const std::string&) {

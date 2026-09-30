@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "dev_wav.hpp"
+#include "support/primock.hpp"
 
 namespace clinicavt::diar {
 namespace {
@@ -34,11 +35,11 @@ TEST(SpeakerEmbedder, ReproducesTheResearchEmbeddingsFromRawAudio) {
     std::ifstream in(std::filesystem::path(kFixtureDir) / "fixtures.json");
     ASSERT_TRUE(in.is_open()) << "missing diarisation fixtures";
     const auto meta = nlohmann::json::parse(in);
-    // The fixture names a wav that is not in the repo
-    if (!std::filesystem::exists(meta.at("wav").get<std::string>())) {
-        GTEST_SKIP() << "research corpus not mounted";
+    const std::string wav = test::PrimockPath(test::kPrimockMixed);
+    if (wav.empty()) {
+        GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockMixed);
     }
-    const auto audio = LoadDevWav(meta.at("wav"));
+    const auto audio = LoadDevWav(wav);
     SpeakerEmbedder embedder(store, runtime);
 
     std::vector<std::string> roles;

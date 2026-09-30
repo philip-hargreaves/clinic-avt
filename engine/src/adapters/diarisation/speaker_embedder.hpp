@@ -11,8 +11,7 @@ namespace clinicavt::diar {
 
 inline constexpr std::size_t kEmbeddingDims = 192;
 
-// ERes2NetV2 through the model store, on CPU, the researched placement for
-// this conv model (INT8 is lossless and 1.9x faster there. GPU buys nothing)
+// ERes2NetV2 on CPU, where INT8 is lossless and 1.9x faster. The GPU gives no gain
 class SpeakerEmbedder {
    public:
     SpeakerEmbedder(const models::ModelStore& store, models::OvRuntime& runtime);

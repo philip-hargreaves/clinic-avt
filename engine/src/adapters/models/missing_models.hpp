@@ -39,6 +39,14 @@ class MissingDiariser : public diar::IDiariser {
                                            const std::vector<diar::LabelledSlice>&, int) override {
         throw std::logic_error("the speaker models are not installed");
     }
+
+    diar::ICaptureDiarisation* Capture() override {
+        return nullptr;
+    }
+
+    diar::IVoiceprints* Voiceprints() override {
+        return nullptr;
+    }
 };
 
 }  // namespace clinicavt::models

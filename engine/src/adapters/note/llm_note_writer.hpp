@@ -13,6 +13,10 @@ class ModelStore;
 class OvRuntime;
 }  // namespace clinicavt::models
 
+namespace clinicavt::system {
+class GpuLease;
+}  // namespace clinicavt::system
+
 namespace clinicavt::note {
 
 // Qwen note writer. It loads once in the background, keeps the pipeline resident and re-reads the
@@ -31,7 +35,8 @@ class LlmNoteWriter : public INoteWriter {
     using LoadListener = std::function<void(const LoadReport&)>;
 
     LlmNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                  std::filesystem::path prompt_dir, std::string tier = "default",
+                  system::GpuLease& gpu, std::filesystem::path prompt_dir,
+                  std::string tier = "default",
                   // Called on the loader thread when a load succeeds or fails
                   LoadListener on_load = {},
                   // Called every few seconds while waiting for the GPU, with seconds waited, as a

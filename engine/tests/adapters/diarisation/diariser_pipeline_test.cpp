@@ -11,16 +11,12 @@
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 #include "dev_wav.hpp"
+#include "support/primock.hpp"
 
 namespace clinicavt::diar {
 namespace {
 
-// Shape checks on the assembled chain over a real consultation. Quality is
-// deliberately not asserted here: the acceptance is the blinded judge
-// protocol, recorded in the provenance addendum. The wav is not in the repo,
-// so these skip without it
-constexpr const char* kWav =
-    "C:/dev/intelliscribe/bench/transcription/mixed/day1_consultation01_mixed.wav";
+// Shape checks only. Output quality is not asserted here
 
 void ExpectSameDiarisation(const DiariseResult& got, const DiariseResult& want) {
     ASSERT_EQ(got.slices.size(), want.slices.size());
@@ -32,14 +28,14 @@ void ExpectSameDiarisation(const DiariseResult& got, const DiariseResult& want) 
     EXPECT_EQ(got.cluster_count, want.cluster_count);
 }
 
-// The voiceprints are computed off the Diarise path, overlapping the GPU turn
-// decode, and DoctorVoiceprint reuses them: the numbers must be the ones the
-// reference method produces, and the reuse must actually skip the embed
+// Voiceprints are computed off the Diarise path, overlapping the GPU turn decode, and reused
+// by DoctorVoiceprint. Values must match the reference method and the reuse must skip the embed
 TEST(DiariserPipeline, AConsultDiarisesToTwoSpeakersAndTheTaughtAnchorRanksItsCluster) {
-    if (!std::filesystem::exists(kWav)) {
-        GTEST_SKIP() << "research corpus not mounted";
+    const std::string wav = test::PrimockPath(test::kPrimockMixed);
+    if (wav.empty()) {
+        GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockMixed);
     }
-    const auto audio = LoadDevWav(kWav);
+    const auto audio = LoadDevWav(wav);
     const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
     models::OvRuntime runtime;
     const auto anchor_root = std::filesystem::temp_directory_path() / "clinicavt-diar-anchor-test";
@@ -98,13 +94,12 @@ TEST(DiariserPipeline, AConsultDiarisesToTwoSpeakersAndTheTaughtAnchorRanksItsCl
     std::filesystem::remove_all(anchor_root, ec);
 }
 
-// The bit-identity acceptance for capture-fed finalise: feeding the same
-// audio incrementally must change nothing about the diarised output
 TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
-    if (!std::filesystem::exists(kWav)) {
-        GTEST_SKIP() << "research corpus not mounted";
+    const std::string wav = test::PrimockPath(test::kPrimockMixed);
+    if (wav.empty()) {
+        GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockMixed);
     }
-    const auto audio = LoadDevWav(kWav);
+    const auto audio = LoadDevWav(wav);
     const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
     models::OvRuntime runtime;
     const auto root = std::filesystem::temp_directory_path() / "clinicavt-diar-capture-test";
@@ -137,13 +132,14 @@ TEST(DiariserPipeline, CaptureFedDiariseMatchesBatchExactly) {
     std::filesystem::remove_all(root, ec);
 }
 
-// An import finds the speech in a pass of its own so it can report it. The settle after
-// it must decode and diarise exactly as a settle alone does
+// Imports find speech in a separate pass to report it. The settle afterwards must match a plain
+// settle
 TEST(DiariserPipeline, FindingSpeechFirstChangesNothingTheSettleDoes) {
-    if (!std::filesystem::exists(kWav)) {
-        GTEST_SKIP() << "research corpus not mounted";
+    const std::string wav = test::PrimockPath(test::kPrimockMixed);
+    if (wav.empty()) {
+        GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockMixed);
     }
-    const auto audio = LoadDevWav(kWav);
+    const auto audio = LoadDevWav(wav);
     const models::ModelStore store{std::filesystem::path(CLINICAVT_MODELS_DIR)};
     models::OvRuntime runtime;
     const auto root = std::filesystem::temp_directory_path() / "clinicavt-diar-speech-test";

@@ -18,7 +18,7 @@ struct EnergyVad : IStreamingVad {
     void Reset() override {}
 };
 
-// Cancellation and device loss are named through the controller's enrolment scenarios
+// Cancellation and device loss are covered by the controller's enrolment tests
 TEST(EnrolmentSink, KeepsOnlyTheSpeechStopsAtTheWindowAndNeedsEnoughOfIt) {
     EnergyVad vad;
     int stops = 0;

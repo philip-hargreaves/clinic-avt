@@ -64,9 +64,9 @@ std::unique_ptr<Embedder> Embedder::Load(const models::ModelStore& store) {
     config.max_length = static_cast<size_t>(kEmbedMaxTokens);
     auto impl = std::make_unique<Impl>(std::move(identity), info.dir, config);
 
-    // Guards: the tokenizer honours max_length (an IR without the truncation
-    // state drops it silently), and an over-length text still embeds to a unit
-    // vector, so the model never sees more positions than it has
+    // Startup checks that the tokenizer honours max_length (an IR without truncation state silently
+    // ignores it) and that an over-length text still embeds to a unit vector, so the model never
+    // exceeds its positions
     std::string long_text;
     for (int i = 0; i < 2000; ++i) long_text += "word ";
     if (TokenCount(impl->tokenizer, long_text, true) != static_cast<std::size_t>(kEmbedMaxTokens)) {

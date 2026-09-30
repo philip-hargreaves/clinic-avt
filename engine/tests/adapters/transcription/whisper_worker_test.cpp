@@ -75,9 +75,8 @@ TEST(WhisperWorker, AClipWaitsForTheOneLoadAndItsDecodeIsMetered) {
     EXPECT_GE(s.decode_busy_seconds, 0.0);
 }
 
-// The same model moves to another device in place: the old one is released
-// first, so two are never resident, and a failed load says why without
-// leaving later clips hanging
+// The old model is released before the new one loads, so two are never resident. A failed load
+// must not leave later clips waiting
 TEST(WhisperWorker, SwitchingDeviceLoadsThereAtOnceAndAFailedSwitchSaysWhy) {
     struct Load {
         std::string device;

@@ -45,6 +45,68 @@ struct DiariseResult {
     DiariseTiming timing;
 };
 
+// Capture-phase work. Without it Diarise processes the whole recording
+class ICaptureDiarisation {
+   public:
+    virtual ~ICaptureDiarisation() = default;
+
+    virtual void Advance(std::span<const float> audio, const DecodeClipFn& decode) = 0;
+
+    // The finalise catch-up. It runs Advance with no budget, so every settled span is decoded and
+    // cut before Diarise. A stop can leave it partial
+    virtual void Settle(std::span<const float> audio, const DecodeClipFn& decode,
+                        const StopFn& stop) = 0;
+
+    // Runs only Settle's speech-finding step, with progress, for imports. Settle then only decodes
+    virtual void FindSpeech(std::span<const float> audio,
+                            const std::function<void(double)>& progress, const StopFn& stop) = 0;
+
+    // Turn texts speculated by Advance, keyed on exact decode spans. Valid
+    // after Diarise
+    virtual TurnTexts TakeTurnTexts() = 0;
+
+    // The chunks behind TakeTurnTexts, same keys, valid after Diarise
+    virtual TurnChunks TakeTurnChunks() = 0;
+
+    // The provisional opening of the sealed transcript, made of settled turns with cached text and
+    // provisional roles. Valid after Advance, on its thread. Empty if nothing settled
+    virtual std::vector<asr::Turn> SpeculativeTranscript() = 0;
+
+    // Adds cut points from Whisper chunk edges, in absolute frames, for the next Advance and
+    // Diarise
+    virtual void AddCutPoints(std::span<const std::uint64_t> cuts) = 0;
+
+    // Drop capture state a finalise will never consume (cancel, abandon)
+    virtual void DiscardCapture() = 0;
+};
+
+// Speaker embeddings for the re-split and the clinician's voice anchor
+class IVoiceprints {
+   public:
+    virtual ~IVoiceprints() = default;
+
+    // Cluster centroids (unit norm), valid after Diarise. The re-split compares
+    // edge chunks with them
+    virtual std::vector<std::vector<float>> ClusterCentroids() = 0;
+
+    // Embedding of [first, end) of the session audio, unit norm, empty when
+    // too short. Served from the capture-phase cache where it has the span
+    virtual std::vector<float> EmbedSpan(std::span<const float> audio, std::uint64_t first,
+                                         std::uint64_t end) = 0;
+
+    // Voiceprint of the speech (unit norm). Empty if the speech is too short or there is no
+    // embedder. ReplaceAnchor turns an enrolment into the anchor
+    virtual std::vector<float> EmbedVoice(std::span<const float> speech) = 0;
+    virtual void ReplaceAnchor(std::span<const float> voiceprint, std::uint64_t enrolled_at) = 0;
+
+    // The doctor cluster's voiceprint and the anchor update from it are separate calls, so the
+    // update can wait until the note lane confirms it was a consultation
+    virtual std::vector<float> DoctorVoiceprint(std::span<const float> audio,
+                                                const std::vector<LabelledSlice>& slices,
+                                                int doctor_cluster) = 0;
+    virtual void AccrueVoiceprint(std::span<const float> voiceprint) = 0;
+};
+
 // Returns slices with anonymous labels plus anchor similarities. The caller assigns roles
 class IDiariser {
    public:
@@ -58,67 +120,9 @@ class IDiariser {
                                                    const std::vector<LabelledSlice>& slices,
                                                    int cluster_count) = 0;
 
-    // Optional capture-phase work. Without it Diarise processes the whole recording
-    virtual void Advance(std::span<const float>, const DecodeClipFn&) {}
-
-    // The finalise catch-up. It runs Advance with no budget, so every settled span is decoded and
-    // cut before Diarise. A stop can leave it partial
-    virtual void Settle(std::span<const float>, const DecodeClipFn&, const StopFn&) {}
-
-    // Runs only Settle's speech-finding step, with progress, for imports. Settle then only decodes
-    virtual void FindSpeech(std::span<const float>, const std::function<void(double)>&,
-                            const StopFn&) {}
-
-    // Turn texts speculated by Advance, keyed on exact decode spans. Valid
-    // after Diarise
-    virtual TurnTexts TakeTurnTexts() {
-        return {};
-    }
-
-    // The chunks behind TakeTurnTexts, same keys, valid after Diarise
-    virtual TurnChunks TakeTurnChunks() {
-        return {};
-    }
-
-    // Cluster centroids (unit norm), valid after Diarise. The re-split judges
-    // edge chunks against them
-    virtual std::vector<std::vector<float>> ClusterCentroids() {
-        return {};
-    }
-
-    // Embedding of [first, end) of the session audio, unit norm, empty when
-    // too short. Served from the capture-phase cache where it has the span
-    virtual std::vector<float> EmbedSpan(std::span<const float>, std::uint64_t, std::uint64_t) {
-        return {};
-    }
-
-    // The provisional opening of the sealed transcript, made of settled turns with cached text and
-    // provisional roles. Valid after Advance, on its thread. Empty if nothing settled
-    virtual std::vector<asr::Turn> SpeculativeTranscript() {
-        return {};
-    }
-
-    // Adds cut points from Whisper chunk edges, in absolute frames, for the next Advance and
-    // Diarise
-    virtual void AddCutPoints(std::span<const std::uint64_t>) {}
-
-    // Voiceprint of the speech (unit norm). Empty if the speech is too short or there is no
-    // embedder. ReplaceAnchor turns an enrolment into the anchor
-    virtual std::vector<float> EmbedVoice(std::span<const float>) {
-        return {};
-    }
-    virtual void ReplaceAnchor(std::span<const float>, std::uint64_t) {}
-
-    // The doctor cluster's voiceprint and the anchor update from it are separate calls, so the
-    // update can wait until the note lane confirms it was a consultation
-    virtual std::vector<float> DoctorVoiceprint(std::span<const float>,
-                                                const std::vector<LabelledSlice>&, int) {
-        return {};
-    }
-    virtual void AccrueVoiceprint(std::span<const float>) {}
-
-    // Drop capture state a finalise will never consume (cancel, abandon)
-    virtual void DiscardCapture() {}
+    // Null when the diariser does not support it
+    virtual ICaptureDiarisation* Capture() = 0;
+    virtual IVoiceprints* Voiceprints() = 0;
 };
 
 }  // namespace clinicavt::diar

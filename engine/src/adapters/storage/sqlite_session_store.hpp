@@ -6,17 +6,17 @@
 #include <filesystem>
 #include <mutex>
 #include <optional>
-#include <thread>
 #include <vector>
 
 #include "adapters/storage/chunk_cipher.hpp"
 #include "adapters/storage/db.hpp"
+#include "core/common/worker_thread.hpp"
 #include "ports/session_store.hpp"
 
 namespace clinicavt::store {
 
-// One clinicavt.db, content sealed per blob under per-session keys. A writer
-// thread commits per interval. Layout in schema/clinicavt.sql
+// One clinicavt.db, each blob encrypted under a per-session key. A writer thread commits per
+// interval. The layout is in schema/clinicavt.sql
 class SqliteSessionStore : public ISessionStore {
    public:
     explicit SqliteSessionStore(
@@ -64,7 +64,7 @@ class SqliteSessionStore : public ISessionStore {
         std::uint64_t held_lost = 0;
         bool faulted = false;  // a commit failed and the listener was told
     };
-    // The capture thread's buffer, under pending_mutex_ alone: Append never waits on the database
+    // Capture buffer, guarded only by pending_mutex_ so Append never waits on the DB
     struct Pending {
         SessionId id;
         std::vector<float> frames;
@@ -79,15 +79,15 @@ class SqliteSessionStore : public ISessionStore {
     void InsertTurn(const SessionId& id, std::int64_t seq, const ChunkCipher& cipher,
                     const asr::Turn& turn);
     void WriteDocument(const SessionId& id, DocumentKind kind, const Document& document);
-    // One document row at the given sequence, inside the caller's transaction
+    // Writes one document row inside the caller's transaction
     void WriteDocumentRow(const SessionId& id, DocumentKind kind, const ChunkCipher& cipher,
                           std::int64_t seq, const Document& document);
     Document ReadDocumentLocked(const SessionId& id, DocumentKind kind);
-    // The row as stored, nullopt when the session has no such document
+    // nullopt if the session has no such document
     std::optional<Document> ReadDocumentRow(const SessionId& id, DocumentKind kind,
                                             const ChunkCipher& cipher);
     std::vector<asr::Turn> ReadTurnsLocked(const SessionId& id, const ChunkCipher& cipher);
-    // AddRecord onto an id already stored, inside its transaction
+    // AddRecord for an id already stored, inside its transaction
     AddOutcome CompleteLocked(const SessionRecord& record);
     void ClearLocked(const SessionId& id);    // Clear inside the caller's transaction
     void Erase(const SessionId& id);          // key row and everything under the session
@@ -104,8 +104,7 @@ class SqliteSessionStore : public ISessionStore {
     std::condition_variable cv_;
     std::optional<Open> open_;
     std::function<void(const StoreError&)> on_fault_;
-    bool stopping_ = false;
-    std::thread writer_;
+    WorkerThread writer_;
     std::mutex pending_mutex_;  // lock order: mutex_ first
     Pending pending_;
 };

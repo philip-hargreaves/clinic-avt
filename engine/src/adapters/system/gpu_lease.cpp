@@ -13,6 +13,12 @@
 
 namespace clinicavt::system {
 
+std::string InheritedGpuLeaseName() {
+#pragma warning(suppress : 4996)
+    const char* name = std::getenv(kGpuLeaseVariable);
+    return name != nullptr ? name : "";
+}
+
 GpuLease::Guard::Guard(Guard&& other) noexcept
     : mutex_(std::exchange(other.mutex_, nullptr)), waited_(other.waited_) {}
 
@@ -51,15 +57,6 @@ GpuLease::GpuLease(const std::string& name, std::chrono::milliseconds slice) : s
 GpuLease::~GpuLease() {
     if (mutex_ != nullptr) CloseHandle(mutex_);
     if (wedged_event_ != nullptr) CloseHandle(wedged_event_);
-}
-
-GpuLease& GpuLease::Global() {
-    static GpuLease lease([] {
-#pragma warning(suppress : 4996)
-        const char* name = std::getenv("CLINICAVT_GPU_LEASE");
-        return std::string(name != nullptr ? name : "");
-    }());
-    return lease;
 }
 
 GpuLease::Guard GpuLease::Acquire(const OnWait& on_wait) {

@@ -23,13 +23,14 @@ std::string Trimmed(const std::string& text) {
 }
 
 DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& runtime,
-                           const std::string& device_override, metrics::Registry* metrics) {
+                           system::GpuLease& gpu, const std::string& device_override,
+                           metrics::Registry* metrics) {
     const models::ModelInfo& info = store.Resolve("asr", "default");
     const std::string requested = device_override.empty() ? info.device : device_override;
     // Only GPU work takes the lease; NPU Whisper runs alongside the note model
     const bool on_gpu = requested.rfind("GPU", 0) == 0;
-    const auto take_gpu = [on_gpu](const char* who) {
-        return on_gpu ? system::GpuLease::Global().Acquire(system::WatchForStuckHosts(who))
+    const auto take_gpu = [on_gpu, &gpu](const char* who) {
+        return on_gpu ? gpu.Acquire(system::WatchForStuckHosts(who, gpu))
                       : system::GpuLease::Guard{};
     };
     // Taken before device discovery (seconds) so Whisper is ready before the note
@@ -92,9 +93,10 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
 }  // namespace
 
 WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
-                                       std::string device_override, metrics::Registry* metrics)
-    : WhisperTranscriber(DeviceLoader([&store, &runtime, metrics](const std::string& device) {
-                             return MakeWhisperDecode(store, runtime, device, metrics);
+                                       system::GpuLease& gpu, std::string device_override,
+                                       metrics::Registry* metrics)
+    : WhisperTranscriber(DeviceLoader([&store, &runtime, &gpu, metrics](const std::string& device) {
+                             return MakeWhisperDecode(store, runtime, gpu, device, metrics);
                          }),
                          std::move(device_override), metrics) {}
 
@@ -103,14 +105,14 @@ WhisperTranscriber::WhisperTranscriber(DeviceLoader loader, std::string device,
     : loader_([loader, device = std::move(device)] { return loader(device); }),
       by_device_(std::move(loader)),
       metrics_(metrics) {
-    worker_ = std::thread([this] { WorkerLoop(); });
+    worker_.Start([this] { WorkerLoop(); });
 }
 
 bool WhisperTranscriber::SwitchDevice(std::string device,
                                       std::function<void(const std::string&)> done) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!by_device_ || stopping_) return false;
+        if (!by_device_ || worker_.Stopping()) return false;
         loader_ = [loader = by_device_, device = std::move(device)] { return loader(device); };
         switched_ = std::move(done);
         switching_ = true;
@@ -122,16 +124,11 @@ bool WhisperTranscriber::SwitchDevice(std::string device,
 
 WhisperTranscriber::WhisperTranscriber(DecodeLoader loader, metrics::Registry* metrics)
     : loader_(std::move(loader)), metrics_(metrics) {
-    worker_ = std::thread([this] { WorkerLoop(); });
+    worker_.Start([this] { WorkerLoop(); });
 }
 
 WhisperTranscriber::~WhisperTranscriber() {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        stopping_ = true;
-    }
-    cv_.notify_all();
-    worker_.join();
+    worker_.Stop();
 }
 
 std::vector<std::uint64_t> WhisperTranscriber::TakeClipCuts() {
@@ -144,7 +141,7 @@ std::vector<Turn> WhisperTranscriber::DecodeClipChunks(std::span<const float> fr
     std::future<std::vector<Turn>> chunks;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (stopping_) return {};  // the worker no longer serves clips
+        if (worker_.Stopping()) return {};  // the worker no longer serves clips
         clips_.push_back({{frames.begin(), frames.end()}, first_frame, {}});
         chunks = clips_.back().chunks.get_future();
     }
@@ -194,9 +191,9 @@ void WhisperTranscriber::WorkerLoop() {
         Load(std::move(first));
         lock.lock();
     }
-    while (!stopping_) {
-        cv_.wait(lock, [this] { return !clips_.empty() || stopping_ || switching_; });
-        if (stopping_) break;
+    while (!worker_.Stopping()) {
+        cv_.wait(lock, [this] { return !clips_.empty() || worker_.Stopping() || switching_; });
+        if (worker_.Stopping()) break;
         // Take a switch's load and reply together so a later switch cannot split them
         if (switching_) {
             auto loader = std::exchange(loader_, {});

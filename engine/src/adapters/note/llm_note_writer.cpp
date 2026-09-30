@@ -59,6 +59,7 @@ ov::genai::GenerationConfig Greedy(std::size_t max_new_tokens) {
 struct LlmNoteWriter::Impl {
     const models::ModelStore& store;
     models::OvRuntime& runtime;
+    system::GpuLease& gpu;
     std::filesystem::path prompt_dir;
     std::string tier;
     std::mutex swap_mutex;      // guards pipeline
@@ -77,8 +78,7 @@ struct LlmNoteWriter::Impl {
     // Waits for the GPU lease, reporting liveness meanwhile. Throws if a stuck host
     // holds it, since the wait would never end
     system::GpuLease::Guard TakeGpu(const char* who) {
-        auto& gpu = system::GpuLease::Global();
-        auto watch = system::WatchForStuckHosts(who);
+        auto watch = system::WatchForStuckHosts(who, gpu);
         auto guard = gpu.Acquire([this, &watch](double waited) {
             std::function<void(double)> listener;
             {
@@ -161,9 +161,10 @@ struct LlmNoteWriter::Impl {
 };
 
 LlmNoteWriter::LlmNoteWriter(const models::ModelStore& store, models::OvRuntime& runtime,
-                             std::filesystem::path prompt_dir, std::string tier,
-                             LoadListener on_load, std::function<void(double)> on_gpu_wait)
-    : impl_(new Impl{store, runtime, std::move(prompt_dir), std::move(tier)}) {
+                             system::GpuLease& gpu, std::filesystem::path prompt_dir,
+                             std::string tier, LoadListener on_load,
+                             std::function<void(double)> on_gpu_wait)
+    : impl_(new Impl{store, runtime, gpu, std::move(prompt_dir), std::move(tier)}) {
     impl_->on_load = std::move(on_load);
     impl_->on_gpu_wait = std::move(on_gpu_wait);
 }
@@ -252,7 +253,7 @@ void LlmNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Note
     if (prompt == impl_->last_prefill) return;
     try {
         // No retry. If the GPU is busy, skip this prefill
-        auto& gpu = system::GpuLease::Global();
+        auto& gpu = impl_->gpu;
         const auto lease = gpu.TryAcquire();
         if (gpu.Active() && !lease.Held()) return;
         const auto t0 = std::chrono::steady_clock::now();

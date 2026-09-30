@@ -5,19 +5,22 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <tuple>
+#include <utility>
 #include <vector>
 
-#include "adapters/transcription/scripted_transcriber.hpp"
-#include "adapters/vad/passthrough_vad.hpp"
 #include "core/session/session_controller.hpp"
+#include "ports/streaming_vad.hpp"
+#include "ports/transcriber.hpp"
 
 namespace clinicavt::session::test_harness {
 
@@ -27,7 +30,6 @@ using audio::IAudioSource;
 using audio::kSampleRate;
 using audio::LevelMeter;
 using audio::LevelReading;
-using audio::PassthroughVad;
 using audio::SourceEndReason;
 
 constexpr auto kTestSettle = std::chrono::milliseconds(200);
@@ -548,7 +550,7 @@ struct FakeNoteWriter : note::INoteWriter {
 
 // Returns one cluster, or two split at half the audio. Counters the tests poll are atomic. The rest
 // is read after the controller joins the thread writing it
-struct FakeDiariser : diar::IDiariser {
+struct FakeDiariser : diar::IDiariser, diar::ICaptureDiarisation, diar::IVoiceprints {
     int clusters = 1;
     std::vector<double> similarities;
     diar::DiariseTiming timing;
@@ -595,6 +597,26 @@ struct FakeDiariser : diar::IDiariser {
                                            const std::vector<diar::LabelledSlice>&, int) override {
         ++similarity_calls;
         return similarities;
+    }
+
+    diar::ICaptureDiarisation* Capture() override {
+        return this;
+    }
+
+    diar::IVoiceprints* Voiceprints() override {
+        return this;
+    }
+
+    diar::TurnChunks TakeTurnChunks() override {
+        return {};
+    }
+
+    std::vector<std::vector<float>> ClusterCentroids() override {
+        return {};
+    }
+
+    std::vector<float> EmbedSpan(std::span<const float>, std::uint64_t, std::uint64_t) override {
+        return {};
     }
 
     std::vector<float> DoctorVoiceprint(std::span<const float>,
@@ -678,6 +700,36 @@ struct FakeDiariser : diar::IDiariser {
     }
 };
 
+// One chunk per clip, numbered in decode order, so a test can tell which decode made a turn
+struct FakeTranscriber : asr::ITranscriber {
+    std::vector<asr::Turn> DecodeClipChunks(std::span<const float> frames,
+                                            std::uint64_t first_frame) override {
+        asr::Turn turn;
+        turn.first_frame = first_frame;
+        turn.frame_count = frames.size();
+        turn.text = "scripted turn " + std::to_string(decodes++) + ", " +
+                    std::to_string(frames.size()) + " frames";
+        return {turn};
+    }
+
+    // Returned once by TakeClipCuts
+    std::vector<std::uint64_t> clip_cuts;
+
+    std::vector<std::uint64_t> TakeClipCuts() override {
+        return std::exchange(clip_cuts, {});
+    }
+
+    int decodes = 0;
+};
+
+struct FakeVad : audio::IStreamingVad {
+    float SpeechProbability(std::span<const float>) override {
+        return 1.0f;
+    }
+
+    void Reset() override {}
+};
+
 inline SourceFactory FactoryFor(Script script) {
     return [script](const std::optional<ReplaySpec>&, const std::string&) {
         return std::make_unique<ScriptedSource>(script);
@@ -696,8 +748,8 @@ struct RigOptions {
 struct Rig {
     RecordingEvents events;
     FakeSessionStore store;
-    asr::ScriptedTranscriber transcriber;
-    PassthroughVad vad;
+    FakeTranscriber transcriber;
+    FakeVad vad;
     FakeDiariser diariser;
     FakeNoteWriter writer;
     metrics::Registry registry;

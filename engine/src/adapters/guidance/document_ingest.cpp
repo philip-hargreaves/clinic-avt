@@ -6,6 +6,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <system_error>
+#include <thread>
 
 #include "adapters/guidance/folder_scan.hpp"
 #include "adapters/system/sha256.hpp"
@@ -111,16 +112,11 @@ DocumentIngest::DocumentIngest(Retriever& retriever, std::filesystem::path folde
     std::error_code ignored;
     std::filesystem::remove_all(scratch_, ignored);
     std::filesystem::create_directories(scratch_, ignored);
-    worker_ = std::thread([this] { Work(); });
+    worker_.Start([this] { Work(); });
 }
 
 DocumentIngest::~DocumentIngest() {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        stop_ = true;
-        wake_.notify_all();
-    }
-    if (worker_.joinable()) worker_.join();
+    worker_.Stop();
     std::error_code ignored;
     std::filesystem::remove_all(scratch_, ignored);
 }
@@ -391,7 +387,7 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
 
 bool DocumentIngest::Cancelled() {
     std::lock_guard<std::mutex> lock(mutex_);
-    return cancel_ || stop_;
+    return cancel_ || worker_.Stopping();
 }
 
 // Scans when idle. Queued documents wait for the embedder. When the embedder is
@@ -401,8 +397,9 @@ void DocumentIngest::Work() {
         Queued item;
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            wake_.wait_for(lock, scan_every_, [this] { return stop_ || !queue_.empty(); });
-            if (stop_) return;
+            wake_.wait_for(lock, scan_every_,
+                           [this] { return worker_.Stopping() || !queue_.empty(); });
+            if (worker_.Stopping()) return;
             const bool ready = retriever_.Status().phase == Readiness::Phase::kReady;
             if (ready) {
                 lock.unlock();

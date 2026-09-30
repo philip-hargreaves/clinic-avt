@@ -21,7 +21,7 @@
 #include "adapters/ipc/messages.hpp"
 #include "adapters/ipc/pipe_client.hpp"
 #include "adapters/models/model_store.hpp"
-#include "adapters/system/child_process.hpp"
+#include "adapters/note/note_host_process.hpp"
 #include "adapters/system/gpu_lease.hpp"
 #include "core/common/log.hpp"
 #include "core/note/model_failure.hpp"
@@ -31,21 +31,14 @@ namespace clinicavt::note {
 using nlohmann::json;
 
 struct WorkerNoteWriter::Impl {
-    std::filesystem::path host_exe;
-    std::filesystem::path models_root;
-    std::filesystem::path prompt_path;
+    NoteHostProcess host;
+    system::GpuLease& gpu;
     const models::ModelStore* store;
 
-    std::mutex state_mutex;     // guards spawn and the handles
-    std::mutex write_mutex;     // frames are written whole
-    std::mutex read_mutex;      // one pipe reader at a time, the attempt or the watcher
-    system::ChildProcess host;  // in a kill-on-close job, so it dies with the engine
-    std::vector<system::ChildProcess> stuck;  // hosts that would not exit, held so none is killed
-    ipc::PipeClient pipe;
+    std::mutex state_mutex;  // guards spawn and the handles
+    std::mutex write_mutex;  // frames are written whole
+    std::mutex read_mutex;   // one pipe reader at a time, the attempt or the watcher
     std::int64_t next_id = 1;
-    // Process-wide counter: an exiting host keeps its pipe name briefly, so names
-    // are never reused
-    static inline std::atomic<int> spawn_count{0};
     bool closing = false;
     bool respawning = false;                  // under state_mutex: Run is between attempts
     std::atomic<bool> attempt_active{false};  // set while the note thread reads the pipe
@@ -69,24 +62,16 @@ struct WorkerNoteWriter::Impl {
     // (hash + compile of a 19 GB model: minutes) has its own longer bound
     static constexpr DWORD kInactivityTimeoutMs = 120'000;
     static constexpr DWORD kLoadTimeoutMs = 20 * 60'000;
-    // A host that loses its pipe cancels and exits; slowest measured exit 3.4 s
-    // after an unfinished prefill
-    static constexpr DWORD kExitGraceMs = 15'000;
 
     bool WorkerAlive() const {
-        return host.Alive() && pipe.IsOpen();
+        return host.Connected();
     }
 
-    // False if the host would not exit (stuck in a driver call). It is then held in stuck
+    // False if the host would not exit (stuck in a driver call)
     bool CloseWorker() {
-        pipe.Close();
+        host.ClosePipe();
         prefill_pending = 0;
-        if (host.End(kExitGraceMs)) return true;
-        log::Printf("clinicavt-engine: note host %lu did not exit; leaving it\n", host.Pid());
-        stuck.push_back(std::move(host));
-        host = {};
-        system::GpuLease::Global().MarkWedged();
-        return false;
+        return host.End();
     }
 
     // Loads cannot be cancelled, so wait for the load to settle before closing.
@@ -113,31 +98,11 @@ struct WorkerNoteWriter::Impl {
             return;
         }
         CloseWorker();
-
-        const std::wstring pipe_path = L"\\\\.\\pipe\\LOCAL\\clinicavt-note-" +
-                                       std::to_wstring(GetCurrentProcessId()) + L"-" +
-                                       std::to_wstring(++spawn_count);
-        const std::string tier = Tier();
-        const std::wstring args = L"\"" + pipe_path + L"\" \"" + models_root.wstring() + L"\" \"" +
-                                  prompt_path.wstring() + L"\" \"" +
-                                  std::wstring(tier.begin(), tier.end()) + L"\"";
-        try {
-            host = system::ChildProcess::Spawn(host_exe, args, {.exempt_from_throttling = true});
-        } catch (const std::exception&) {
-            throw std::runtime_error("note worker failed to start");
-        }
-        // The host creates the pipe before loading models, so connecting is fast
-        for (int attempt = 0; attempt < 150; ++attempt) {
-            if (pipe.Open(pipe_path)) break;
-            if (host.WaitFor(100)) break;  // died before serving
-        }
-        if (!pipe.IsOpen()) {
+        host.Spawn(Tier());
+        const std::string failure = host.Connect();
+        if (!failure.empty()) {
             CloseWorker();
-            throw std::runtime_error("note worker pipe did not open");
-        }
-        if (pipe.ServerPid() != host.Pid()) {
-            CloseWorker();
-            throw std::runtime_error("note worker pipe is not the spawned process");
+            throw std::runtime_error(failure);
         }
     }
 
@@ -149,7 +114,7 @@ struct WorkerNoteWriter::Impl {
         const std::string frame =
             ipc::EncodeFrame(ipc::Serialize(ipc::MakeRequest(id, method, std::move(params))));
         std::lock_guard<std::mutex> lock(write_mutex);
-        if (!pipe.Write(frame)) {
+        if (!host.Pipe().Write(frame)) {
             throw std::runtime_error("note worker went away");
         }
         return id;
@@ -288,7 +253,7 @@ struct WorkerNoteWriter::Impl {
     bool PumpFrames() {
         for (;;) {
             while (!attempt_active.load()) {
-                const auto payload = pipe.NextFrame();
+                const auto payload = host.Pipe().NextFrame();
                 if (!payload) break;
                 const json message = json::parse(*payload, nullptr, false);
                 if (message.is_object() && message.contains("method")) {
@@ -299,7 +264,7 @@ struct WorkerNoteWriter::Impl {
                 }
             }
             if (attempt_active.load()) return true;
-            switch (pipe.Read(4096)) {
+            switch (host.Pipe().Read(4096)) {
                 case ipc::PipeClient::Poll::kGone:
                     return false;
                 case ipc::PipeClient::Poll::kNothing:
@@ -365,10 +330,10 @@ struct WorkerNoteWriter::Impl {
         for (;;) {
             {
                 std::lock_guard<std::mutex> reading(read_mutex);
-                if (auto payload = pipe.NextFrame()) {
+                if (auto payload = host.Pipe().NextFrame()) {
                     return json::parse(*payload, nullptr, false);
                 }
-                switch (pipe.Read()) {
+                switch (host.Pipe().Read()) {
                     case ipc::PipeClient::Poll::kGone:
                         throw std::runtime_error("note worker died");
                     case ipc::PipeClient::Poll::kRead:
@@ -476,7 +441,7 @@ struct WorkerNoteWriter::Impl {
 
     // True once a stuck host was found; marks the lane failed
     bool Wedged() {
-        if (!system::GpuLease::Global().Wedged()) return false;
+        if (!gpu.Wedged()) return false;
         Transition([](NoteModelState& s) {
             if (s.phase == NoteModelState::Phase::kFailed && s.detail == kStuckInDriver) return;
             s.phase = NoteModelState::Phase::kFailed;
@@ -532,10 +497,12 @@ struct WorkerNoteWriter::Impl {
 
 WorkerNoteWriter::WorkerNoteWriter(std::filesystem::path host_exe,
                                    std::filesystem::path models_root,
-                                   std::filesystem::path prompt_path,
+                                   std::filesystem::path prompt_path, system::GpuLease& gpu,
                                    const models::ModelStore* store, std::string tier,
                                    Listener listener)
-    : impl_(new Impl{std::move(host_exe), std::move(models_root), std::move(prompt_path), store}) {
+    : impl_(new Impl{
+          NoteHostProcess(std::move(host_exe), std::move(models_root), std::move(prompt_path), gpu),
+          gpu, store}) {
     impl_->listener = std::move(listener);
     impl_->state.tier = std::move(tier);
     try {

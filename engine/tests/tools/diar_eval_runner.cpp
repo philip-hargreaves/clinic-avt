@@ -19,6 +19,7 @@
 #include "adapters/diarisation/anchor_store.hpp"
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
+#include "adapters/system/gpu_lease.hpp"
 #include "adapters/system/stderr_log.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
 #include "core/diarisation/role_naming.hpp"
@@ -184,9 +185,10 @@ int main(int argc, char** argv) {
         clinicavt::diar::SpeakerDiariser diariser(store, runtime, diariser_anchors);
         const auto audio = LoadWav(argv[2]);
 
+        clinicavt::system::GpuLease gpu(clinicavt::system::InheritedGpuLeaseName());
         std::unique_ptr<clinicavt::asr::WhisperTranscriber> whisper;
         if (roles) {
-            whisper = std::make_unique<clinicavt::asr::WhisperTranscriber>(store, runtime);
+            whisper = std::make_unique<clinicavt::asr::WhisperTranscriber>(store, runtime, gpu);
         }
         const auto result = diariser.Diarise(audio);
 

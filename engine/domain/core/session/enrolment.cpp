@@ -5,6 +5,7 @@
 #include <exception>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "core/audio/voice_enrolment.hpp"
 
@@ -85,14 +86,16 @@ void Enrolment::Run(double seconds, const MicSelection& mic, double min_speech_s
         }
         why = audio::EnrolRejection(capture, cancelled, min_speech_s);
         if (why.empty()) {
-            const auto voiceprint = diariser_.EmbedVoice(capture.speech);
+            auto* const voiceprints = diariser_.Voiceprints();
+            const auto voiceprint = voiceprints != nullptr ? voiceprints->EmbedVoice(capture.speech)
+                                                           : std::vector<float>{};
             if (voiceprint.empty()) {
                 why = "could not build a voiceprint from the recording";
             } else {
                 const auto now = std::chrono::duration_cast<std::chrono::seconds>(
                                      std::chrono::system_clock::now().time_since_epoch())
                                      .count();
-                diariser_.ReplaceAnchor(voiceprint, static_cast<std::uint64_t>(now));
+                voiceprints->ReplaceAnchor(voiceprint, static_cast<std::uint64_t>(now));
             }
         }
     } catch (const std::exception& e) {

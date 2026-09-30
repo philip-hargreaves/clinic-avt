@@ -255,7 +255,7 @@ TEST(Retriever, ATypedQueryIsSearchedWholeAndANoteSentenceBySentence) {
     for (const auto& r : two_sentences.shown) EXPECT_TRUE(r.trigger.empty()) << "split as a note";
     EXPECT_TRUE(retriever->Search("  ", 3, SearchMode::kQuery).abstained);
 
-    // Blank text abstains without embedding anything
+    // Blank text returns nothing without embedding
     const auto blank = retriever->Search("  ", 3, SearchMode::kNote);
     EXPECT_TRUE(blank.abstained);
     EXPECT_EQ(blank.considered, 0);

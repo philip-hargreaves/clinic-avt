@@ -21,6 +21,7 @@
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
 #include "adapters/note/llm_note_writer.hpp"
+#include "adapters/system/gpu_lease.hpp"
 #include "adapters/system/power_throttling.hpp"
 #include "adapters/system/stderr_log.hpp"
 #include "core/common/log.hpp"
@@ -163,7 +164,8 @@ int main(int argc, char* argv[]) {
         const auto on_gpu_wait = [&server](double waited) {
             server.PushNotification("gpuWait", {{"seconds", waited}});
         };
-        clinicavt::note::LlmNoteWriter writer(store, runtime, prompt_path, tier, on_load,
+        clinicavt::system::GpuLease gpu_lease(clinicavt::system::InheritedGpuLeaseName());
+        clinicavt::note::LlmNoteWriter writer(store, runtime, gpu_lease, prompt_path, tier, on_load,
                                               on_gpu_wait);
         GenerationLane lane(server);
         server.RegisterMethod("prepare", [&writer](const json&) {

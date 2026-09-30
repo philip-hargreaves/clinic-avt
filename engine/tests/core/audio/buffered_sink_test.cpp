@@ -17,7 +17,7 @@
 namespace clinicavt::audio {
 namespace {
 
-// Records what arrives, in order. Holding it lets the ring fill behind it
+// Records packets in order. Set hold to block OnAudio so the ring fills
 struct RecordingSink : IAudioSink {
     std::vector<float> frames;
     std::vector<std::uint64_t> lost_per_packet;
@@ -63,7 +63,7 @@ TEST(BufferedSink, DeliversEveryFrameInOrderThenTheEnd) {
         BufferedSink sink(inner, 16384);
         const auto audio = Ramp(9600);
         for (std::size_t at = 0; at < audio.size(); at += 160) {
-            // One packet carries the source's own loss, which must pass through unchanged
+            // One packet reports upstream loss, which must pass through unchanged
             sink.OnAudio(std::span<const float>(audio).subspan(at, 160), at == 1600 ? 3 : 0);
         }
         sink.OnEnd({SourceEndReason::kCompleted, "done"});
@@ -104,7 +104,7 @@ TEST(BufferedSink, AStalledSinkNeverBlocksTheSourceAndOnlyOverrunIsLost) {
     }
     inner.hold = false;
     sink.OnEnd({SourceEndReason::kStopped, ""});
-    // What fitted arrived intact and in order. The rest is counted as lost, never dropped silently
+    // Frames that fitted arrive in order, and the rest must be counted as lost
     ASSERT_LE(inner.frames.size(), 1024u);
     EXPECT_EQ(inner.frames, Ramp(inner.frames.size()));
     EXPECT_EQ(inner.frames.size() + inner.TotalLost(), 3000u);

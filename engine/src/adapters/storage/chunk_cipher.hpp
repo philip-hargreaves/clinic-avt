@@ -8,7 +8,7 @@
 
 namespace clinicavt::store {
 
-// Keeps each stream's IVs disjoint. Every domain counts seq from zero
+// Keeps IVs disjoint per stream. Each domain counts seq from zero
 enum class Domain : std::uint8_t {
     kAudio = 0,
     kTurns = 1,
@@ -23,13 +23,13 @@ enum class Domain : std::uint8_t {
 };
 
 // AES-256-GCM, one key per session or backup. IV = domain + sequence, both authenticated with
-// the context bytes (a session id, or a backup's header). Destroying the key is the erase
+// the context (session id or backup header). Deleting the key makes the data unreadable
 class ChunkCipher {
    public:
     static ChunkCipher Generate();
     static ChunkCipher FromWrapped(std::span<const std::uint8_t> wrapped);
 
-    // PBKDF2-HMAC-SHA256 of the password bytes, which the caller normalises
+    // PBKDF2-HMAC-SHA256. The caller normalises the password
     static ChunkCipher FromPassword(std::string_view password, std::span<const std::uint8_t> salt,
                                     std::uint32_t iterations);
 
@@ -40,7 +40,7 @@ class ChunkCipher {
     std::vector<std::uint8_t> Seal(Domain domain, std::string_view context, std::uint64_t seq,
                                    std::span<const std::uint8_t> plain) const;
 
-    // Throws if the payload fails authentication for any reason
+    // Throws on authentication failure
     std::vector<std::uint8_t> Open(Domain domain, std::string_view context, std::uint64_t seq,
                                    std::span<const std::uint8_t> sealed) const;
 

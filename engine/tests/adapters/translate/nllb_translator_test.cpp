@@ -1,3 +1,5 @@
+#include "adapters/translate/nllb_translator.hpp"
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -7,7 +9,6 @@
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
-#include "adapters/translate/nllb_translator.hpp"
 
 namespace clinicavt::translate {
 namespace {

@@ -5,10 +5,10 @@
 #include <functional>
 #include <mutex>
 #include <optional>
-#include <thread>
 
 #include "adapters/interfaces/guidance_lane.hpp"
 #include "adapters/interfaces/guidance_retriever.hpp"
+#include "core/common/worker_thread.hpp"
 
 namespace clinicavt::guidance {
 
@@ -34,9 +34,8 @@ class GuidanceLane : public IGuidanceLane {
     ReadinessListener on_readiness_;
     std::mutex mutex_;
     std::condition_variable wake_;
-    std::thread worker_;
+    WorkerThread worker_{mutex_, wake_};
     bool prepare_ = false;
-    bool stop_ = false;
     std::deque<SearchRequest> pending_notes_;  // one per session, in arrival order
     std::optional<SearchRequest> pending_text_;
 };

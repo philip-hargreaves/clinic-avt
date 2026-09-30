@@ -42,14 +42,14 @@ ModelInfo ParseManifest(const std::filesystem::path& dir) {
         info.licence = manifest.at("licence").get<std::string>();
         const auto& runtime = manifest.at("runtime");
         info.device = runtime.at("device").get<std::string>();
-        // Optional: absent means the LLM pipeline with no properties
+        // Optional, defaulting to "llm" with no properties
         info.pipeline = runtime.value("pipeline", "llm");
         info.properties = runtime.value("properties", nlohmann::json::object());
         for (const auto& [name, hash] : manifest.at("files").items()) {
             info.file_hashes[name] = strings::Lower(hash.get<std::string>());
         }
-        // Optional: without sizes the load check is presence only. Named local:
-        // iterating the items of a temporary json dangles
+        // Optional. Without sizes the load check is presence only. items() needs a named json,
+        // since on a temporary it dangles
         const nlohmann::json sizes = manifest.value("bytes", nlohmann::json::object());
         for (const auto& [name, bytes] : sizes.items()) {
             info.file_bytes[name] = bytes.get<std::uintmax_t>();
@@ -58,7 +58,7 @@ ModelInfo ParseManifest(const std::filesystem::path& dir) {
         Broken(dir, e.what());
     }
     if (info.file_hashes.empty()) Broken(dir, "no files listed");
-    // A pipeline this build cannot construct is a corrupt manifest for this build
+    // Unknown pipeline type counts as a corrupt manifest
     if (info.pipeline != "llm" && info.pipeline != "vlm" && info.pipeline != "embedding") {
         Broken(dir, "unknown pipeline: " + info.pipeline);
     }
@@ -111,7 +111,7 @@ const ModelInfo& ModelStore::Resolve(std::string_view task, std::string_view tie
 }
 
 void ModelStore::Verify(const ModelInfo& model) const {
-    // A drive that dropped out takes the whole folder, so say that before naming any file
+    // A dropped drive loses the whole folder, so a missing folder is reported before any file
     std::error_code error;
     if (!std::filesystem::is_directory(model.dir, error)) {
         throw std::runtime_error(model.id + ": the models folder cannot be read (" +

@@ -5,8 +5,7 @@
 namespace clinicavt::metrics {
 namespace {
 
-// The live rate follows the recent stream; the average is the whole generation's truth. A zero
-// span must read as no rate, never inf or NaN on the wire
+// A zero span must read as 0, never inf or NaN on the wire
 TEST(Throughput, TheRateFollowsTheStreamAndTheAverageTheWholeGeneration) {
     ThroughputMeter meter;
     EXPECT_EQ(meter.Rate(1.0), 0);

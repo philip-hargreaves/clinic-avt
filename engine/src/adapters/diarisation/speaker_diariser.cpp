@@ -32,8 +32,8 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio) {
         return seconds;
     };
 
-    // With capture-phase state, finalise only completes it. Without it, the
-    // whole recording is processed here. Either way the maths is identical
+    // With capture-phase state, finalise finishes from it. Without it the whole recording is
+    // processed here, with the same maths
     CaptureDiarisation capture;
     std::vector<float> probabilities;
     SegResult seg;
@@ -54,7 +54,7 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio) {
     result.timing.finish_s = lap();
     const auto slices =
         CutSlices(probabilities, audio.size(), std::move(seg.change_points), capture.clip_cuts);
-    // Capture's embedding where it has the slice, an empty one meaning too short
+    // Reuses capture embeddings where present. Empty means the slice is too short
     const auto embedded = EmbedSlices(slices, [&](const Region& slice) -> std::vector<float> {
         const auto it = capture.embeddings.find({slice.first_frame, slice.end_frame});
         if (it != capture.embeddings.end()) {
@@ -85,8 +85,8 @@ DiariseResult SpeakerDiariser::Diarise(std::span<const float> audio) {
 std::vector<double> SpeakerDiariser::AnchorSimilarities(std::span<const float> audio,
                                                         const std::vector<LabelledSlice>& slices,
                                                         int cluster_count) {
-    // Each cluster's similarity to the accrued anchor. A cluster too short
-    // for a voiceprint ranks below any real match
+    // Similarity of each cluster to the anchor. A cluster too short for a
+    // voiceprint ranks below any real match
     const auto anchor = anchors_.Anchor();
     if (!anchor) return {};
     std::vector<double> similarity(static_cast<std::size_t>(cluster_count), -2.0);
@@ -122,7 +122,7 @@ std::vector<float> SpeakerDiariser::DoctorVoiceprint(std::span<const float> audi
 
 std::vector<float> SpeakerDiariser::EmbedVoice(std::span<const float> audio) {
     if (audio.size() < kVoiceprintMinFrames) return {};
-    // One long exposure, capped as a consultation's voiceprint is
+    // One embed, capped like a consultation voiceprint
     return embedder_.Embed(
         audio.subspan(0, std::min<std::size_t>(audio.size(), kVoiceprintCapFrames)));
 }

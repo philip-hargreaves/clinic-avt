@@ -12,6 +12,10 @@ namespace clinicavt::models {
 class ModelStore;
 }  // namespace clinicavt::models
 
+namespace clinicavt::system {
+class GpuLease;
+}  // namespace clinicavt::system
+
 namespace clinicavt::note {
 
 // Runs the note model in a supervised child process so a GPU driver fault cannot corrupt or hang
@@ -21,8 +25,9 @@ class WorkerNoteWriter : public INoteWriter, public INoteTiers {
     // store resolves tiers for Configure and names the model. Null, as in tests, keeps the tier
     // with no names. listener is called on every state transition, off the caller's thread
     WorkerNoteWriter(std::filesystem::path host_exe, std::filesystem::path models_root,
-                     std::filesystem::path prompt_path, const models::ModelStore* store = nullptr,
-                     std::string tier = "default", Listener listener = {});
+                     std::filesystem::path prompt_path, system::GpuLease& gpu,
+                     const models::ModelStore* store = nullptr, std::string tier = "default",
+                     Listener listener = {});
     ~WorkerNoteWriter() override;
 
     void Prepare() override;

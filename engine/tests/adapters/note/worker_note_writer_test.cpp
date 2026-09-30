@@ -16,6 +16,7 @@
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/note/worker_note_writer.hpp"
+#include "adapters/system/gpu_lease.hpp"
 #include "adapters/system/process_scan.hpp"
 
 namespace clinicavt::note {
@@ -53,9 +54,9 @@ std::vector<asr::Turn> ElbowTranscript() {
              "twice a day after food, and we will arrange blood tests."}};
 }
 
-// Every staged note tier through the real host, each on the pipeline its
-// manifest names. CLINICAVT_SWEEP_TIER narrows it to one tier for the sweep;
-// the host's own log carries verify, load and decode figures
+// Runs every staged note tier through the real host, each on the pipeline its manifest names.
+// CLINICAVT_SWEEP_TIER narrows it to one tier for the sweep. The host's own log has the verify,
+// load and decode figures
 TEST(WorkerNoteWriter, EveryStagedTierWritesANoteAndSheet) {
     if (!std::filesystem::exists(HostExe())) GTEST_SKIP() << "host not staged";
     if (kDebugBuild) GTEST_SKIP() << "OpenVINO 2026.3 debug GPU plugin asserts";
@@ -74,7 +75,8 @@ TEST(WorkerNoteWriter, EveryStagedTierWritesANoteAndSheet) {
 
     for (const auto& tier : tiers) {
         SCOPED_TRACE(tier);
-        WorkerNoteWriter writer(HostExe(), kModels, PromptPath(), &store);
+        system::GpuLease gpu(system::InheritedGpuLeaseName());
+        WorkerNoteWriter writer(HostExe(), kModels, PromptPath(), gpu, &store);
         const auto t0 = std::chrono::steady_clock::now();
         ASSERT_EQ(writer.Configure(tier).tier, tier);
 
@@ -101,7 +103,7 @@ TEST(WorkerNoteWriter, EveryStagedTierWritesANoteAndSheet) {
     }
 }
 
-// The pid of a note host that is not in `before`: the one this test started
+// The pid of the note host this test started, the one not in `before`
 DWORD NewNoteHost(const std::vector<DWORD>& before) {
     const auto now = system::ListProcesses();
     for (const auto& entry : now) {
@@ -127,7 +129,8 @@ TEST(WorkerNoteWriter, AKilledWorkerRespawnsAndTheNoteStillArrives) {
     }
     if (kDebugBuild) GTEST_SKIP() << "OpenVINO 2026.3 debug GPU plugin asserts";
     const auto before = NoteHosts();
-    WorkerNoteWriter writer(HostExe(), kModels, PromptPath());
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    WorkerNoteWriter writer(HostExe(), kModels, PromptPath(), gpu);
     writer.Prepare();
     const DWORD mine = NewNoteHost(before);
     ASSERT_NE(mine, 0u);
@@ -135,8 +138,7 @@ TEST(WorkerNoteWriter, AKilledWorkerRespawnsAndTheNoteStillArrives) {
     std::atomic<bool> killed{false};
     const std::string note =
         writer.Write(ElbowTranscript(), {}, [&killed, mine](const std::string& partial) {
-            // The first streamed words prove generation is mid-flight, then this
-            // test's own worker dies under it. Any other host on the machine is left alone
+            // Kills this test's host once streaming has started
             if (partial.size() > 20 && !killed.exchange(true)) {
                 HANDLE host = OpenProcess(PROCESS_TERMINATE, FALSE, mine);
                 if (host != nullptr) {

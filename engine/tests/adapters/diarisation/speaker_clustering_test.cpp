@@ -67,7 +67,7 @@ TEST(SpeakerClustering, OnlyLongSlicesVoteOnTheCount) {
     embeddings.clear();
     durations.clear();
     AddVoices(2, kLong, 0, embeddings, durations);
-    AddVoices(1, kShort, 2, embeddings, durations);  // a chorus of short slices from a third voice
+    AddVoices(1, kShort, 2, embeddings, durations);  // many short slices from a third voice
     EXPECT_EQ(ClusterSpeakers(embeddings, durations).count, 2)
         << "short slices cannot change the count";
 }

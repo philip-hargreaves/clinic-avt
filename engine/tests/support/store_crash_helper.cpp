@@ -1,5 +1,5 @@
-// Kill victim for the recovery test: records through the real store until
-// terminated. "cancel" mode cancels first, then idles to be killed.
+// Recovery-test helper that records through the real store until killed. "cancel" mode cancels
+// first, then waits to be killed
 
 #include <chrono>
 #include <cstdio>
@@ -45,8 +45,7 @@ int main(int argc, char* argv[]) {
         for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    // A second connection watches the committed count. The acked number is
-    // what the test holds recovery to
+    // Second connection reports the committed count, which the test checks recovery against
     clinicavt::store::Db reader(root / "clinicavt.db");
     const std::string count_sql = "SELECT COUNT(*) FROM chunks WHERE session_id = '" + id + "'";
     store.ReplaceTurns(id, std::vector<clinicavt::asr::Turn>{{0, audio.size(), "", "turn 0"}});

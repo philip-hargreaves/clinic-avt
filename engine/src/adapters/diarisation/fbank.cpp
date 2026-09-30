@@ -6,8 +6,8 @@
 
 namespace clinicavt::diar {
 
-// The blessed research contract (torchaudio kaldi defaults + ERes2NetV2
-// front-end). A mismatch fails embedder parity
+// Must match the research setup (torchaudio kaldi defaults + ERes2NetV2
+// front-end) or embedder parity fails
 FbankFeatures EmbedderFbank(std::span<const float> audio) {
     knf::FbankOptions opts;
     opts.frame_opts.samp_freq = 16000.0f;

@@ -26,6 +26,9 @@ class OvRuntime;
 namespace clinicavt::note {
 class WorkerNoteWriter;
 }  // namespace clinicavt::note
+namespace clinicavt::system {
+class GpuLease;
+}  // namespace clinicavt::system
 namespace clinicavt::translate {
 class NllbTranslator;
 }  // namespace clinicavt::translate
@@ -48,8 +51,8 @@ struct Transcriber {
 };
 
 Transcriber BuildTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
-                             const std::string& device, metrics::Registry& metrics, bool scripted,
-                             RoleReport& report);
+                             system::GpuLease& gpu, const std::string& device,
+                             metrics::Registry& metrics, bool scripted, RoleReport& report);
 
 // Compiles in the background. session/start waits for it and hello does not
 std::unique_ptr<audio::IStreamingVad> BuildVad(const models::ModelStore& store,
@@ -70,12 +73,10 @@ std::string MachineNoteTier(const models::ModelStore& store);
 
 // Runs note generation in a supervised child, so a GPU driver fault only costs a respawn. Null if
 // nothing can write
-std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(models::ModelStore& store,
-                                                        const std::filesystem::path& models_root,
-                                                        const std::string& requested_tier,
-                                                        const std::string& auto_tier,
-                                                        note::INoteTiers::Listener listener,
-                                                        RoleReport& report);
+std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(
+    models::ModelStore& store, const std::filesystem::path& models_root, system::GpuLease& gpu,
+    const std::string& requested_tier, const std::string& auto_tier,
+    note::INoteTiers::Listener listener, RoleReport& report);
 
 // Runs on the CPU only, so it does not contend for the GPU. Null if the model is not staged
 std::unique_ptr<translate::NllbTranslator> BuildTranslator(const models::ModelStore& store,
@@ -84,6 +85,6 @@ std::unique_ptr<translate::NllbTranslator> BuildTranslator(const models::ModelSt
 
 // An orphaned note host exits within seconds. One still present after that is stuck in the driver
 // until reboot. Checked before any model uses the GPU, and marks the GPU lease wedged when found
-bool FindStrayNoteHost();
+bool FindStrayNoteHost(system::GpuLease& gpu);
 
 }  // namespace clinicavt::composition

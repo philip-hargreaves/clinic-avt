@@ -10,7 +10,7 @@ namespace clinicavt::archive {
 
 namespace {
 
-// Only unconvertible text gets here, which the pipe's JSON never carries
+// Only reached for invalid UTF-8, which pipe JSON never contains
 [[noreturn]] void Unusable() {
     throw ArchiveError(ArchiveCode::kWeakPassword);
 }

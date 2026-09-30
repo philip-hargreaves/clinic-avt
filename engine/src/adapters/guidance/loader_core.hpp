@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <string>
 
-// A refusal with its reason, for the corpus and the index when they load
+// Load failure with a reason, used by the corpus and the index
 namespace clinicavt::guidance {
 
 struct Refused : std::runtime_error {

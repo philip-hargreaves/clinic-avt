@@ -61,7 +61,7 @@ TEST(ApplyFloor, TheFloorDropsWeakHitsAndAbstainsWhenNothingRemains) {
     EXPECT_TRUE(none.kept.empty());
     EXPECT_EQ(none.considered, 3);
 
-    // Only the whole-note list decides whether a note clears the floor
+    // Only the whole-note list is checked against the floor
     std::vector<SubQueryHits> lists{{"sentence", false, {{"a", 0.95}}},
                                     {"note", true, {{"b", 0.84}}}};
     EXPECT_FALSE(NoteClears(lists, 0.85));
@@ -96,7 +96,7 @@ TEST(PopulationConflict, AnotherPopulationConflictsOnlyWhenTheNoteOrTitleIsExpli
          "silence on pregnancy is not a contradiction"},
         {"A 9-year-old child with fever.", children, "", false, "a child"},
         {"Patient aged 72 with new back pain.", children, "", true, "aged 72"},
-        // The title counts, and sex stated alone says adult
+        // The title counts, and sex alone implies adult
         {adult, gastro, "Diarrhoea and vomiting caused by gastroenteritis in under 5s", true,
          "the title names under 5s"},
         {adult, gastro, "Gastroenteritis in adults", false, "the title names adults"},

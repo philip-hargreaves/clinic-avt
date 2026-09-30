@@ -17,7 +17,7 @@ json LoadFixture(const std::string& name) {
     return json::parse(in);
 }
 
-// The same rows the shell's identifier check must pass clean
+// Same fixture as the shell's identifier check
 TEST(SummaryScrub, MatchesTheSharedFixture) {
     for (const auto& row : LoadFixture("summary-scrub.json")) {
         EXPECT_EQ(ScrubSummary(row["in"].get<std::string>()), row["out"].get<std::string>())

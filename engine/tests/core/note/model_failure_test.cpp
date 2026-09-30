@@ -22,7 +22,6 @@ TEST(ModelFailure, ALoadFailureBecomesAPlainMessageNamingTheModel) {
     EXPECT_EQ(PlainLoadMessage(LoadFailure::kOther, ""), "the note model could not be loaded");
 }
 
-// Decides whether the host process must restart
 TEST(ModelFailure, OnlyADriverFaultPoisonsTheProcess) {
     EXPECT_TRUE(PoisonsGpuContext("clEnqueueNDRangeKernel, error code: -5 CL_OUT_OF_RESOURCES"));
     EXPECT_TRUE(PoisonsGpuContext("could not execute a primitive"));

@@ -4,7 +4,7 @@
 -- Immutable once built: rollback journal, opened read-only. page_size 65536.
 -- application_id 0x414D4247 ("AMBG"). user_version 1 is the format.
 
--- One row. The manifest repeats the load-bearing fields and adds the file hash
+-- One row. manifest.json duplicates the key fields and adds the file hash
 CREATE TABLE corpus_meta (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
     corpus_id     TEXT    NOT NULL,                 -- "nice-2026-08-25", carries the fetch date
@@ -42,8 +42,8 @@ CREATE TABLE chunks (
     text          TEXT    NOT NULL                  -- verbatim, displayed, never generated from
 );
 
--- Vectors in shards of consecutive ordinals, about 1 MB each. dim repeats so
--- the length check is local to the row
+-- Vectors in shards of consecutive ordinals, ~1 MB each. dim is repeated so the
+-- length check needs only the row
 CREATE TABLE guidance_vectors (
     shard         INTEGER PRIMARY KEY,
     first_ord     INTEGER NOT NULL CHECK (first_ord >= 0),

@@ -9,9 +9,8 @@
 
 namespace clinicavt::models {
 
-// CACHE_DIR plus the manifest's properties. Values reach OpenVINO as the
-// strings its own property parsing accepts ("32" for a float hint), bools
-// as bools
+// CACHE_DIR plus the manifest properties. Values are passed as the strings OpenVINO parses
+// ("32" for a float hint), and bools stay bools
 ov::AnyMap CompileProperties(const ModelInfo& info);
 
 struct LoadedModel {
@@ -19,13 +18,13 @@ struct LoadedModel {
     std::string device;  // the concrete device compiled for, e.g. GPU.1
 };
 
-// Compiles cleared models for their manifest device. An unavailable device
-// is a loud error naming what exists, with no fallback
+// Compiles models for their manifest device. A missing device throws, listing the available
+// devices, with no fallback
 class OvRuntime {
    public:
     LoadedModel Load(const ModelStore& store, std::string_view task, std::string_view tier,
                      const std::string& xml_name);
-    // One IR of a model the caller has already resolved and verified
+    // The caller has already resolved and verified the model
     LoadedModel Load(const ModelInfo& info, const std::string& xml_name);
 
     std::string ResolveDevice(const std::string& requested);

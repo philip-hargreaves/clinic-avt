@@ -12,9 +12,8 @@ struct ModelInfo;
 
 namespace clinicavt::note {
 
-// One resident model behind whichever GenAI pipeline its manifest names. The
-// writer never learns which. A single history: a prompt that extends the
-// last one costs the delta, one that diverges re-prefills
+// One resident model behind the GenAI pipeline its manifest names. It keeps one history, so a
+// prompt extending the last costs only the delta and a diverging one re-prefills
 class TextPipeline {
    public:
     using Streamer = std::function<ov::genai::StreamingStatus(std::string)>;
@@ -30,8 +29,8 @@ class TextPipeline {
                             const Streamer& streamer) = 0;
 };
 
-// Builds the pipeline the manifest names, on the resolved device, with the
-// compile cache beside the model and the manifest's properties verbatim
+// Builds the pipeline the manifest names on the resolved device, with the compile cache next to
+// the model and the manifest properties unchanged
 std::unique_ptr<TextPipeline> MakeTextPipeline(const models::ModelInfo& info,
                                                const std::string& device);
 

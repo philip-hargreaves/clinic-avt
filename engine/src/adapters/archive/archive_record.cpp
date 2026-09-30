@@ -13,7 +13,7 @@ struct KindName {
     const char* name;
 };
 
-// The store's names, so a backup reads the same as the rows it came from
+// Same kind names as the session store
 constexpr KindName kKinds[] = {
     {store::DocumentKind::kNote, "note"},
     {store::DocumentKind::kPatient, "patient"},
@@ -31,7 +31,7 @@ const char* NameOf(store::DocumentKind kind) {
     throw std::invalid_argument("unknown document kind");
 }
 
-// No text from the record goes into the error: only the fixed code
+// The error carries only the fixed code
 [[noreturn]] void Damaged() {
     throw ArchiveError(ArchiveCode::kDamaged);
 }

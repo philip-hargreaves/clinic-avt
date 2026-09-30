@@ -19,8 +19,12 @@ add_library(clinicavt_core STATIC
     domain/core/guidance/reference_tail.cpp
     domain/core/records/reflections.cpp
     domain/core/records/session_records.cpp
+    domain/core/session/capture_lane.cpp
     domain/core/session/enrolment.cpp
+    domain/core/session/finaliser.cpp
+    domain/core/session/import_job.cpp
     domain/core/session/note_lane.cpp
+    domain/core/session/review.cpp
     domain/core/session/session_controller.cpp
     domain/core/session/transcribe_recording.cpp)
 target_include_directories(clinicavt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain)
@@ -155,6 +159,10 @@ add_library(clinicavt_storage STATIC
     src/adapters/storage/db.cpp
     src/adapters/storage/reflection_json.cpp
     src/adapters/storage/sqlite_session_store.cpp
+    src/adapters/storage/sqlite_store_documents.cpp
+    src/adapters/storage/sqlite_store_records.cpp
+    src/adapters/storage/sqlite_store_seeding.cpp
+    src/adapters/storage/sqlite_store_writer.cpp
     src/adapters/storage/store_migrations.cpp)
 target_include_directories(clinicavt_storage PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(clinicavt_storage
@@ -194,6 +202,7 @@ target_link_libraries(clinicavt_transcription
 add_library(clinicavt_note STATIC
     src/adapters/note/llm_note_writer.cpp
     src/adapters/note/text_pipeline.cpp
+    src/adapters/note/note_host_process.cpp
     src/adapters/note/worker_note_writer.cpp)
 target_link_libraries(clinicavt_note
     PUBLIC clinicavt_adapters_root

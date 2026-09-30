@@ -50,8 +50,7 @@ TEST(DecodeTurnTexts, EachTurnDecodesOnlyItsOwnUnheardAudio) {
     EXPECT_EQ(calls, (std::vector<Call>{{0, 40000}, {40000, 20000}}))
         << "an overlapping head is clamped, not decoded twice";
 
-    // The audio belongs to whoever talked through it. Decoding it would put
-    // the louder speaker's words under the quieter speaker's name
+    // A nested overlap turn isn't decoded, or the louder speaker's words land under the quieter one
     calls.clear();
     const auto nested =
         DecodeTurnTexts({{0, 60000, 0}, {20000, 40000, 1}}, kAudio, Decoder(&calls));
@@ -65,8 +64,8 @@ TEST(DecodeTurnTexts, ClipsAreBoundedToRealAudioAboveTheFloor) {
     EXPECT_TRUE(sliver[0].empty());
     EXPECT_TRUE(calls.empty()) << "a sub-floor span is skipped, not decoded";
 
-    // A 0.35 s "No." sits between the 0.30 s floor and the old 0.40 s one, where a
-    // dropped denial let the note fabricate the opposite answer
+    // 0.35 s "No." is above the 0.30 s floor. Dropping short denials lets the note invert the
+    // answer
     calls.clear();
     const auto no = DecodeTurnTexts({{100000, 105600, 1}}, kAudio, Decoder(&calls, "No."));
     EXPECT_EQ(no[0], "No. at 100000") << "a short answer above the floor must be decoded";

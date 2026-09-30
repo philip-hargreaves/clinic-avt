@@ -18,7 +18,7 @@ RoleTurn Turn(int cluster, std::string text, std::uint64_t frames = 32000) {
     return {cluster, frames, std::move(text)};
 }
 
-// The turns laid end to end, as the diariser hands them over
+// Turns laid end to end, as diariser output
 std::vector<LabelledSlice> Slices(const std::vector<RoleTurn>& turns) {
     std::vector<LabelledSlice> slices;
     std::uint64_t at = 0;
@@ -41,8 +41,7 @@ RoleResult NameRoles(const std::vector<RoleTurn>& turns, int cluster_count,
 }
 
 TEST(LexicalDoctorScore, SelfIdentificationAndPlanSpeechScoreClinicianOnWholeTokensOnly) {
-    // The named failure the suppression exists for: the old rule scored
-    // this utterance -0.31, below the patient's greeting
+    // Scored -0.31 by an earlier rule, below the patient's greeting
     const double doctor =
         LexicalDoctorScore("I'm Doctor Deen Mirza from GP at Hand. Nice to see you.");
     const double patient = LexicalDoctorScore("Nice to see you.");
@@ -101,8 +100,7 @@ TEST(NameRoles, AbstainsToNumberedSpeakersOnAThinMarginOrOneCluster) {
 }
 
 TEST(NameRoles, ClusterMeansDecideAndEmptyTurnsDoNotDilute) {
-    // Two strong clinician turns against six mild patient turns. A sum
-    // would let the count vote, the mean must not
+    // Scores are averaged, so six mild patient turns can't outvote two strong clinician turns
     std::vector<RoleTurn> turns{
         Turn(0, "I'll arrange the scan and I want you to rest your knee"),
         Turn(0, "you should take the tablets with your evening meal"),
@@ -125,17 +123,16 @@ TEST(NameRoles, AThirdClusterIsNeverACandidate) {
 }
 
 TEST(NameRoles, AResemblingPrintDecidesAndAForeignPrintYieldsToContent) {
-    // Someone resembles the print: it names the lexically patient-looking
-    // cluster as the doctor, content-blind, rank not margin
+    // A cluster matches the voiceprint, so it is named doctor by rank alone, even with patient-like
+    // text
     const auto resembling = NameRoles(Consultation(), 2, std::vector<double>{0.41, 0.84});
     EXPECT_TRUE(resembling.from_anchor);
     EXPECT_EQ(resembling.doctor_cluster, 1);
     EXPECT_EQ(resembling.role_of_cluster[1], "doctor");
     EXPECT_EQ(resembling.role_of_cluster[0], "patient");
 
-    // Nobody in the room resembles the print (another clinician's): the
-    // content decides as if there were no print, so a stale print cannot
-    // invert the record
+    // No cluster matches the voiceprint (another clinician's), so the roles come from the content
+    // and a stale print cannot invert them
     const auto foreign = NameRoles(Consultation(), 2, std::vector<double>{0.41, 0.44});
     EXPECT_FALSE(foreign.from_anchor);
     EXPECT_EQ(foreign.doctor_cluster, NameRoles(Consultation(), 2).doctor_cluster);

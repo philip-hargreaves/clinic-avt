@@ -52,11 +52,12 @@ std::vector<std::string> Unstaged(const models::ModelStore& store,
 }  // namespace
 
 Transcriber BuildTranscriber(const models::ModelStore& store, models::OvRuntime& runtime,
-                             const std::string& device, metrics::Registry& metrics, bool scripted,
-                             RoleReport& report) {
+                             system::GpuLease& gpu, const std::string& device,
+                             metrics::Registry& metrics, bool scripted, RoleReport& report) {
     try {
         report.first_use |= Uncompiled(store, "asr");
-        auto whisper = std::make_unique<asr::WhisperTranscriber>(store, runtime, device, &metrics);
+        auto whisper =
+            std::make_unique<asr::WhisperTranscriber>(store, runtime, gpu, device, &metrics);
         auto* const concrete = whisper.get();
         return {std::move(whisper), concrete};
     } catch (const std::exception& e) {
@@ -122,12 +123,10 @@ std::string MachineNoteTier(const models::ModelStore& store) {
     return auto_tier;
 }
 
-std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(models::ModelStore& store,
-                                                        const std::filesystem::path& models_root,
-                                                        const std::string& requested_tier,
-                                                        const std::string& auto_tier,
-                                                        note::INoteTiers::Listener listener,
-                                                        RoleReport& report) {
+std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(
+    models::ModelStore& store, const std::filesystem::path& models_root, system::GpuLease& gpu,
+    const std::string& requested_tier, const std::string& auto_tier,
+    note::INoteTiers::Listener listener, RoleReport& report) {
     try {
         if (auto_tier.empty()) {
             log::Printf("clinicavt-engine: no note model staged\n");
@@ -153,7 +152,7 @@ std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(models::ModelStore& stor
             return nullptr;
         }
         auto worker = std::make_unique<note::WorkerNoteWriter>(
-            host, models_root, models_root.parent_path() / "prompts", &store, tier,
+            host, models_root, models_root.parent_path() / "prompts", gpu, &store, tier,
             std::move(listener));
         // On first use, compile on an idle GPU before any recording
         if (Uncompiled(store, "note", tier)) {
@@ -187,11 +186,11 @@ std::unique_ptr<translate::NllbTranslator> BuildTranslator(const models::ModelSt
     }
 }
 
-bool FindStrayNoteHost() {
+bool FindStrayNoteHost(system::GpuLease& gpu) {
     const bool stray =
         !system::LingeringOrphans(system::kNoteHostExe, std::chrono::seconds(8)).empty();
     if (stray) {
-        system::GpuLease::Global().MarkWedged();
+        gpu.MarkWedged();
         log::Printf(
             "clinicavt-engine: a note host from an earlier engine is stuck; "
             "the GPU is not ours until the computer restarts\n");

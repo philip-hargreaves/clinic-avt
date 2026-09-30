@@ -10,8 +10,7 @@
 
 namespace clinicavt::audio {
 
-// VAD behind a background load. A failed load throws on the first
-// probability, loud rather than silent
+// VAD loaded in the background. A failed load throws on the first probability
 class DeferredVad : public IStreamingVad {
    public:
     explicit DeferredVad(std::function<std::unique_ptr<IStreamingVad>()> build,
@@ -22,7 +21,7 @@ class DeferredVad : public IStreamingVad {
         return inner_.Get().SpeechProbability(hop);
     }
 
-    // A fresh model starts reset, so only an already-loaded one needs it
+    // A newly loaded model is already reset
     void Reset() override {
         if (inner_.Loaded()) {
             inner_.Get().Reset();

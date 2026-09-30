@@ -69,7 +69,7 @@ struct FakeRetriever : IGuidanceRetriever {
     }
 };
 
-// What the callbacks delivered, waitable
+// Callback results, with wait helpers
 struct Outcome {
     std::mutex mutex;
     std::condition_variable changed;

@@ -7,8 +7,7 @@
 
 namespace clinicavt::diar {
 
-// CI stand-in when no speaker models are staged: the whole recording is one
-// speaker, so the finalise decode yields one turn
+// CI stand-in when no speaker models are staged. The whole recording is one speaker
 class ScriptedDiariser : public IDiariser {
    public:
     DiariseResult Diarise(std::span<const float> audio) override {
@@ -21,6 +20,14 @@ class ScriptedDiariser : public IDiariser {
     std::vector<double> AnchorSimilarities(std::span<const float>,
                                            const std::vector<LabelledSlice>&, int) override {
         return {};
+    }
+
+    ICaptureDiarisation* Capture() override {
+        return nullptr;
+    }
+
+    IVoiceprints* Voiceprints() override {
+        return nullptr;
     }
 };
 

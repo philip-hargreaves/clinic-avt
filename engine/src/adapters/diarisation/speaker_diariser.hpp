@@ -19,10 +19,9 @@
 
 namespace clinicavt::diar {
 
-// The batch chain: VAD -> segmentation -> slices -> embeddings -> clusters,
-// with long overlap spans emitted as second turns. Owns its own VAD
-// (Silero is stateful) and the clinician anchor
-class SpeakerDiariser : public IDiariser {
+// Runs VAD, segmentation, slicing, embedding and clustering in a batch, with long overlaps as
+// second turns. Owns its VAD (Silero is stateful) and the clinician anchor
+class SpeakerDiariser : public IDiariser, public ICaptureDiarisation, public IVoiceprints {
    public:
     SpeakerDiariser(const models::ModelStore& store, models::OvRuntime& runtime,
                     AnchorStore& anchors);
@@ -33,7 +32,15 @@ class SpeakerDiariser : public IDiariser {
                                            const std::vector<LabelledSlice>& slices,
                                            int cluster_count) override;
 
-    // Diarise then finalises from the accumulated state
+    ICaptureDiarisation* Capture() override {
+        return this;
+    }
+
+    IVoiceprints* Voiceprints() override {
+        return this;
+    }
+
+    // Diarise finishes from the state this accumulates
     void Advance(std::span<const float> audio, const DecodeClipFn& decode) override {
         worker_.Advance(audio, decode);
     }
@@ -43,8 +50,8 @@ class SpeakerDiariser : public IDiariser {
         worker_.Advance(audio, decode, std::numeric_limits<int>::max(), stop);
     }
 
-    // Capture's pass over growing tenths of the recording, decoding nothing. Its results are
-    // keyed on spans, so the Settle after it matches one run alone
+    // Runs the capture stage over growing tenths of the audio without decoding. Results are keyed
+    // by span, so a Settle after it matches a Settle alone
     void FindSpeech(std::span<const float> audio, const std::function<void(double)>& progress,
                     const StopFn& stop) override {
         const DecodeClipFn none = [](std::span<const float>, std::uint64_t) {
@@ -72,8 +79,8 @@ class SpeakerDiariser : public IDiariser {
 
     std::vector<float> EmbedVoice(std::span<const float> audio) override;
 
-    // Reuses the voiceprint AnchorSimilarities computed for the cluster.
-    // Embeds only when there is none
+    // Reuses the voiceprint AnchorSimilarities computed for the cluster. Embeds only when there is
+    // none
     std::vector<float> DoctorVoiceprint(std::span<const float> audio,
                                         const std::vector<LabelledSlice>& slices,
                                         int doctor_cluster) override;
@@ -94,8 +101,7 @@ class SpeakerDiariser : public IDiariser {
         return embedder_.Embed(audio.subspan(first, end - first));
     }
 
-    // Roles named as finalise names them, with cluster centroids standing in
-    // for the voiceprints against the anchor
+    // Roles assigned as finalise does, using cluster centroids in place of voiceprints
     std::vector<asr::Turn> SpeculativeTranscript() override;
 
     void AddCutPoints(std::span<const std::uint64_t> cuts) override {

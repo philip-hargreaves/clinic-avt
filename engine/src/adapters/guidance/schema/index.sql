@@ -1,7 +1,5 @@
--- The added-documents index: what the app derived from the files in the
--- guidelines folder. A cache, rebuilt whole when its format or embedder does
--- not match. Plaintext, since every text here is a file of the clinician's
--- own in her folder
+-- Added-documents index, a cache of the guidelines folder, rebuilt on a format or embedder
+-- mismatch. Plaintext, since every text here is already a file in the user's folder
 
 CREATE TABLE index_meta (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
@@ -13,8 +11,8 @@ CREATE TABLE index_meta (
     created_at    TEXT    NOT NULL                  -- ISO 8601 UTC
 );
 
--- One document is one content: id is the first 63 bits of its sha256, so the
--- same bytes at any path are one document and a changed file is a new one
+-- One row per content. id is the first 63 bits of the sha256, so identical
+-- bytes at any path share a row and a changed file gets a new one
 CREATE TABLE documents (
     id            INTEGER PRIMARY KEY,
     sha256        TEXT    NOT NULL UNIQUE CHECK (length(sha256) = 64),
@@ -27,8 +25,8 @@ CREATE TABLE documents (
     pages_without_text INTEGER
 );
 
--- A file in the folder holding a document. Several may hold the same one, and
--- a document no file holds goes
+-- Folder paths holding a document. Several may share one, and a document with no path is
+-- deleted
 CREATE TABLE files (
     path          TEXT    NOT NULL PRIMARY KEY,     -- relative to the folder, UTF-8
     document_id   INTEGER NOT NULL REFERENCES documents (id) ON DELETE CASCADE,

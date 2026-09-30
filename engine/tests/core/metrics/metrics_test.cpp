@@ -5,7 +5,7 @@
 namespace clinicavt::metrics {
 namespace {
 
-// The perf report reads one session: loads and devices outlive it, the rest does not
+// The perf report covers one session, so only loads and devices carry over
 TEST(Metrics, ANewSessionKeepsOnlyDevicesAndLoads) {
     Registry registry;
     registry.RecordDevice("asr", "GPU.0");
