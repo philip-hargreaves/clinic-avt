@@ -1,10 +1,10 @@
 -- ClinicAVT session store. One database, one writer thread.
 --
--- Content (audio, transcript text, documents) is AES-256-GCM ciphertext under
--- a per-session key; the cipher authenticates the sealing domain, the session
--- id and the sequence, so a blob cannot be moved between rows or sessions
--- undetected. Shape (timing, state, options) is plaintext so it can be
--- queried without a key. Deleting a session's key row is the crypto-erase.
+-- Content (audio, transcript, documents) is AES-256-GCM under a per-session key.
+-- The cipher authenticates domain, session id and sequence, so a blob moved
+-- between rows or sessions is detected. Metadata (timing, state, options) is
+-- plaintext so it can be queried without a key. Deleting the key row makes the
+-- session's content unreadable.
 
 CREATE TABLE sessions (
     id           TEXT    PRIMARY KEY,             -- random 128-bit hex
@@ -25,8 +25,8 @@ CREATE TABLE session_keys (
     wrapped      BLOB    NOT NULL                 -- AES key, DPAPI-wrapped for the user
 );
 
--- Audio write-ahead log: committed once a second while recording, the basis
--- for resuming a crashed session, erased when the transcript is sealed
+-- Audio write-ahead log, committed every second while recording, used to resume after a
+-- crash and erased when the transcript is sealed
 CREATE TABLE chunks (
     session_id   TEXT    NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
     seq          INTEGER NOT NULL,                -- also the nonce sequence
@@ -62,7 +62,7 @@ CREATE TABLE documents (
     PRIMARY KEY (session_id, kind)
 );
 
--- The options the note was written with: a subtype of documents
+-- Options the note was written with, one row per note document
 CREATE TABLE note_options (
     session_id   TEXT    PRIMARY KEY,
     kind         TEXT    NOT NULL DEFAULT 'note' CHECK (kind = 'note'),

@@ -51,7 +51,6 @@ struct ChunkCipher::Impl {
         Load();
     }
 
-    // Makes the AES key from key_bytes
     void Load() {
         Check(BCryptOpenAlgorithmProvider(&alg, BCRYPT_AES_ALGORITHM, nullptr, 0),
               "BCryptOpenAlgorithmProvider");
@@ -109,7 +108,7 @@ ChunkCipher ChunkCipher::FromWrapped(std::span<const std::uint8_t> wrapped) {
 
 ChunkCipher ChunkCipher::FromPassword(std::string_view password, std::span<const std::uint8_t> salt,
                                       std::uint32_t iterations) {
-    // Derived straight into the heap Impl, whose destructor zeroes it on any throw
+    // Derived directly into the heap Impl, whose destructor zeroes the key on a throw
     auto impl = std::make_unique<Impl>();
     BCRYPT_ALG_HANDLE hmac = nullptr;
     Check(BCryptOpenAlgorithmProvider(&hmac, BCRYPT_SHA256_ALGORITHM, nullptr,

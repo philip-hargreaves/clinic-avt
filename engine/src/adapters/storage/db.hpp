@@ -25,7 +25,7 @@ class Db {
         void BindText(int index, std::string_view value);
         void BindBlob(int index, std::span<const std::uint8_t> value);
         void BindNull(int index);
-        // Empty binds NULL: the store's optional texts are empty strings in C++
+        // An empty string binds NULL, since optional texts are empty strings in C++
         void BindTextOrNull(int index, std::string_view value);
 
         bool Step();  // true when a row is ready, false when done
@@ -60,10 +60,10 @@ class Db {
         bool done_ = false;
     };
 
-    // kSession: the clinical store's pragmas (WAL, synchronous FULL, foreign keys).
-    // kIndex: a rebuildable cache: WAL, synchronous NORMAL, foreign keys, secure delete.
-    // kBuild: read-write, create, no pragmas. The caller sets the file's shape.
-    // kImmutableReadOnly: a finished file nothing writes, no locking, no journal
+    // kSession is the clinical store (WAL, synchronous FULL, foreign keys).
+    // kIndex is a rebuildable cache (WAL, synchronous NORMAL, foreign keys, secure delete).
+    // kBuild is read-write with create and no pragmas.
+    // kImmutableReadOnly is a finished file with no locking and no journal
     enum class Mode { kSession, kIndex, kBuild, kImmutableReadOnly };
 
     explicit Db(const std::filesystem::path& path, Mode mode = Mode::kSession);
@@ -75,7 +75,7 @@ class Db {
     Stmt Prepare(const char* sql);
     std::int64_t QueryInt64(const char* sql);
 
-    // Header marks, both transactional: the writing application and the schema version
+    // Header fields (transactional): application id and schema version
     std::int64_t ApplicationId();
     void SetApplicationId(std::int64_t id);
     std::int64_t UserVersion();
