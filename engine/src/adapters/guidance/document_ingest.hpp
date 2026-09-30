@@ -9,13 +9,13 @@
 #include <mutex>
 #include <set>
 #include <string>
-#include <thread>
 
 #include "adapters/guidance/document_index.hpp"
 #include "adapters/guidance/ingest_host.hpp"
 #include "adapters/guidance/retriever.hpp"
 #include "adapters/interfaces/document_ingest.hpp"
 #include "adapters/system/recycle_bin.hpp"
+#include "core/common/worker_thread.hpp"
 
 namespace clinicavt::guidance {
 
@@ -96,11 +96,10 @@ class DocumentIngest : public IDocumentIngest {
 
     std::mutex mutex_;
     std::condition_variable wake_;
-    std::thread worker_;
+    WorkerThread worker_{mutex_, wake_};
     std::deque<Queued> queue_;
     std::int64_t current_ = 0;
     bool cancel_ = false;
-    bool stop_ = false;
 
     std::mutex listener_mutex_;
     std::function<void(const IngestProgress&)> on_progress_;

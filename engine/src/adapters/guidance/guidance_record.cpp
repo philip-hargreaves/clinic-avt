@@ -5,7 +5,7 @@
 namespace clinicavt::guidance {
 namespace {
 
-// Null where absence is a state of its own, distinct from built and refused
+// Sends an empty string as null
 json OrNull(const std::string& s) {
     if (s.empty()) return nullptr;
     return s;
@@ -29,7 +29,7 @@ double Num(const json& j, const char* key) {
     return it->get<double>();
 }
 
-// A document id is 63 bits, past what a double keeps exactly
+// Document ids are 63-bit and do not fit a double exactly
 std::int64_t Int64(const json& j, const char* key) {
     const auto it = j.find(key);
     if (it == j.end() || !it->is_number_integer()) return 0;

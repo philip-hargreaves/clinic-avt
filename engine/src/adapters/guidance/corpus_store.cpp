@@ -25,7 +25,7 @@ std::uint64_t AvailablePhysicalMemory() {
     return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys : 0;
 }
 
-// Before allocating: the matrix plus a citation's worth per row
+// Size limit for the matrix and one citation per row, checked before allocating
 void GuardMemory(std::size_t rows, std::size_t dim, const std::string& what) {
     const auto needed = static_cast<std::uint64_t>(rows) * dim * sizeof(float) + rows * 256;
     Guard(AvailablePhysicalMemory() > needed, what + " too large for the available memory");
@@ -101,8 +101,8 @@ std::unique_ptr<CorpusStore> CorpusStore::Open(const std::filesystem::path& dir,
               "not a corpus file");
         Guard(db.UserVersion() == kCorpusFormat, "corpus format is newer or older than this build");
         {
-            // header bytes 18 and 19 are the file format versions: 1 rollback journal, 2 WAL.
-            // An immutable connection does not report the header's mode, so read the bytes
+            // Header bytes 18-19 are the format versions (1 rollback journal, 2 WAL). An
+            // immutable connection does not report the journal mode, so read the bytes
             std::ifstream header(path, std::ios::binary);
             char format[20] = {};
             header.read(format, sizeof format);

@@ -22,7 +22,7 @@ bool HiddenOrSystem(const std::filesystem::path& path) {
            (attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) != 0;
 }
 
-// Copies in progress, Office locks and downloads in the making
+// In-progress copies, Office lock files and partial downloads
 bool Transient(const std::filesystem::path& path) {
     const auto name = path.filename().string();
     const auto ext = LowerExtension(path);

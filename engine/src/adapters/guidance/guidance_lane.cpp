@@ -12,12 +12,7 @@ GuidanceLane::GuidanceLane(IGuidanceRetriever& retriever, ReadinessListener on_r
     : retriever_(retriever), on_readiness_(std::move(on_readiness)) {}
 
 GuidanceLane::~GuidanceLane() {
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        stop_ = true;
-    }
-    wake_.notify_all();
-    if (worker_.joinable()) worker_.join();
+    worker_.Stop();
 }
 
 void GuidanceLane::Prepare() {
@@ -51,7 +46,7 @@ void GuidanceLane::Run(SearchRequest request) {
 }
 
 void GuidanceLane::Start() {
-    if (!worker_.joinable()) worker_ = std::thread([this] { Work(); });
+    if (!worker_.Started()) worker_.Start([this] { Work(); });
 }
 
 // Catches callback exceptions so they cannot kill the worker or RPC thread
@@ -67,9 +62,10 @@ void GuidanceLane::Fail(const SearchRequest& request, const char* detail) {
 void GuidanceLane::Work() {
     std::unique_lock<std::mutex> lock(mutex_);
     for (;;) {
-        wake_.wait(
-            lock, [this] { return stop_ || prepare_ || !pending_notes_.empty() || pending_text_; });
-        if (stop_) return;
+        wake_.wait(lock, [this] {
+            return worker_.Stopping() || prepare_ || !pending_notes_.empty() || pending_text_;
+        });
+        if (worker_.Stopping()) return;
         if (prepare_) {
             prepare_ = false;
             lock.unlock();

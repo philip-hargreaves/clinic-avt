@@ -33,7 +33,7 @@ struct CorpusInfo {
     std::int64_t chunk_count = 0;
 };
 
-// What every result needs without a read
+// Result fields that need no DB read
 struct Cite {
     std::string chunk_id;
     std::string code;
@@ -49,10 +49,9 @@ struct ChunkText {
     std::string update_tag;
 };
 
-// A corpus directory opened read-only, vectors resident as one matrix, text
-// read on demand. Every manifest claim is checked against the file and the
-// staged embedder. A failed guard leaves the corpus unavailable with a reason.
-// One thread owns an instance
+// A read-only corpus with its vectors resident as one matrix and text read on demand. Every
+// manifest field is checked against the file and the embedder, and a failed check marks the
+// corpus unavailable with a reason. Single-threaded
 class CorpusStore {
    public:
     static std::unique_ptr<CorpusStore> Open(const std::filesystem::path& dir,

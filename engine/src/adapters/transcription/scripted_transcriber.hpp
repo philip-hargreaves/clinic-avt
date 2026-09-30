@@ -10,8 +10,7 @@
 
 namespace clinicavt::asr {
 
-// CI stand-in when no ASR model is staged: one chunk per clip, numbered in
-// decode order
+// CI stand-in when no ASR model is staged. One chunk per clip, numbered in decode order
 class ScriptedTranscriber : public ITranscriber {
    public:
     std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
@@ -24,7 +23,7 @@ class ScriptedTranscriber : public ITranscriber {
         return {turn};
     }
 
-    // Clip cuts a test scripts, handed over once like the worker's
+    // Set by a test and returned once by TakeClipCuts
     std::vector<std::uint64_t> clip_cuts;
 
     std::vector<std::uint64_t> TakeClipCuts() override {

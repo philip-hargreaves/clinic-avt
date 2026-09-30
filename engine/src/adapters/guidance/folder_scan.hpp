@@ -13,13 +13,12 @@ inline constexpr const char* kPdf = "application/pdf";
 // text/plain, text/markdown or kPdf by extension, else empty
 std::string Mime(const std::filesystem::path& path);
 
-// The open does not share writing, so a file another program is still writing
-// refuses it
+// Opens without write sharing, so fails while another program is writing the file
 bool Unlocked(const std::filesystem::path& path);
 
 std::int64_t Ticks(std::filesystem::file_time_type time);
 
-// A file the guidelines folder holds, keyed as the index keys it
+// A file in the guidelines folder, keyed like the index
 struct FolderFile {
     std::string path;  // relative to the folder, UTF-8
     std::int64_t size = 0;
