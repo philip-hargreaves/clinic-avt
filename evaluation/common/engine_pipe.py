@@ -1,4 +1,4 @@
-"""Client for the engine's named pipe: length-prefixed JSON-RPC, as the shell speaks it.
+"""Engine named-pipe client: length-prefixed JSON-RPC, same framing as the shell.
 
     engine = Engine([exe, pipe, ...], pipe, log_path)
     engine.wait_up()
@@ -24,9 +24,8 @@ class EngineDied(RuntimeError):
 
 
 class Engine:
-    # One synchronous pipe handle serialises reads and writes, so a blocking read on another
-    # thread would stall every write. PeekNamedPipe says how much is waiting and only that much
-    # is read.
+    # One synchronous handle serialises reads and writes, so a blocking read on another thread
+    # would stall writes. Read only what PeekNamedPipe reports.
     def __init__(self, command, pipe_name, log_path, cwd=None):
         self.log_path = log_path
         self.log_offset = 0
@@ -134,7 +133,7 @@ class Engine:
         return None
 
     def wait_up(self, seconds=60):
-        # Echo answers as soon as the pipe serves, before any model has loaded
+        # Echo works before any model has loaded
         deadline = time.perf_counter() + seconds
         while True:
             try:
@@ -159,7 +158,7 @@ class Engine:
         return data.decode("utf-8", "replace").splitlines()
 
     def close(self):
-        # The engine leaves once asked; a note model still loading finishes first
+        # Engine exits on request, after any note model still loading
         try:
             if not self.dead:
                 self.request("engine/exit", timeout=10)

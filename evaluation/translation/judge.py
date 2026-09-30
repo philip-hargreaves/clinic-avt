@@ -236,8 +236,8 @@ FITS = {"omission": {"omission"}, "addition": {"addition", "mistranslation"},
 
 
 def validity():
-    """A human reference is not flawless, so an untouched one may fairly draw major or minor marks.
-    What it must not draw is a critical one."""
+    """Human references are not flawless, so an untouched one may draw major or minor marks.
+    It may never draw a critical one."""
     caught = defaultdict(lambda: [0, 0])
     controls = defaultdict(lambda: [0, 0, 0])  # critical, major, shown
     for _, key, verdict in verdicts("plant"):

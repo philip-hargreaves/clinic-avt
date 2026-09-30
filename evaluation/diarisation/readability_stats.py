@@ -32,7 +32,7 @@ def broken_bigrams(ref_words, hyp_words):
 
 
 def duplicated_spans(turns):
-    # A 4-gram that recurs within 10 s of audio: the fingerprint of overlap stitching
+    # 4-grams repeated within 10 s of audio, a sign of overlap stitching
     seen = {}
     dup = 0
     for t in turns:

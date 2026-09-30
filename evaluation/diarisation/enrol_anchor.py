@@ -15,7 +15,7 @@ wav, out = sys.argv[1], sys.argv[2]
 seconds = float(sys.argv[3]) if len(sys.argv) > 3 else 50.0
 
 os.makedirs(perf_loop.LOGS, exist_ok=True)
-# The replay wav rides in as the engine's fourth positional argument
+# Replay wav is the engine's fourth positional argument
 engine = perf_loop.Engine(9000, extra_args=[wav])
 try:
     engine.wait_up()  # up, without waiting on the note model's compile cache
