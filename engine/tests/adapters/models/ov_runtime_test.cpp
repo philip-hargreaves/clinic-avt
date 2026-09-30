@@ -31,6 +31,16 @@ struct TempRoot {
     }
 };
 
+// The compile cache is under LocalAppData, outside the temp root
+struct RemovedAtExit {
+    std::filesystem::path path;
+
+    ~RemovedAtExit() {
+        std::error_code ignored;
+        std::filesystem::remove_all(path, ignored);
+    }
+};
+
 // A model with known behaviour (doubles 8 floats), synthesised so the test
 // depends on no external weights
 void SynthesiseModel(const std::filesystem::path& dir, const std::string& device) {
@@ -59,6 +69,7 @@ TEST(OvRuntime, LoadsVerifiedModelsOnTheIntelGpuAndRefusesATamperedOne) {
     SynthesiseModel(root.path / "selftest", "GPU");
 
     const ModelStore store(root.path);
+    const RemovedAtExit cache{store.List().at(0).cache_dir};
     OvRuntime runtime;
     {
         LoadedModel loaded = runtime.Load(store, "selftest", "default", "model.xml");

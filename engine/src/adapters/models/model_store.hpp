@@ -20,14 +20,15 @@ struct ModelInfo {
     std::string pipeline;       // llm | vlm | embedding GenAI pipeline, llm when absent
     nlohmann::json properties;  // OpenVINO properties passed verbatim at compile, {} when absent
     std::filesystem::path dir;
+    std::filesystem::path cache_dir;                   // OpenVINO compile cache, empty for none
     std::map<std::string, std::string> file_hashes;    // filename -> sha256 hex: provenance
     std::map<std::string, std::uintmax_t> file_bytes;  // filename -> size, when the manifest says
 };
 
 // Per-model manifest.json dirs under one root. Parsing fails closed. A load checks presence and
 // size only, as integrity is checked at delivery (fetch, staging, package signature). Hashes are
-// kept for provenance, and the embedder's weight hash is also its revision. Has no OpenVINO
-// dependency
+// kept for provenance, and the embedder's weight hash is also its revision. Each model compiles
+// into LocalDataRoot()/cache/<id>. Has no OpenVINO dependency
 class ModelStore {
    public:
     explicit ModelStore(const std::filesystem::path& root);
@@ -46,14 +47,14 @@ class ModelStore {
     std::vector<ModelInfo> models_;
 };
 
-// OpenVINO compile cache, next to the weights
+// The model folder is read-only once installed, so the cache is per user
 inline std::filesystem::path CacheDir(const ModelInfo& info) {
-    return info.dir / ".cache";
+    return info.cache_dir;
 }
 
 // True once compiled on this machine (cache exists)
 inline bool Compiled(const ModelInfo& info) {
-    return std::filesystem::exists(CacheDir(info));
+    return !info.cache_dir.empty() && std::filesystem::exists(info.cache_dir);
 }
 
 }  // namespace clinicavt::models

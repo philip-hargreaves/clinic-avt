@@ -217,7 +217,9 @@ public class RealEngineSessionTest
 
         // A cold compile cache is the hard case. The 9B compiles on the GPU
         // while 16x whisper floods it
-        var noteCache = Path.Combine(EnginePath.FindModels()!, "qwen3.5-9b-int4", ".cache");
+        var noteCache = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ClinicAVT", "cache", "qwen3.5-9b-int4");
         var crashes = 0;
         for (var round = 0; round < 6; round++)
         {

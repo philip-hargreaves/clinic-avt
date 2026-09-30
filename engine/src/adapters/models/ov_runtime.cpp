@@ -2,10 +2,13 @@
 
 #include <stdexcept>
 
+#include "core/common/utf8.hpp"
+
 namespace clinicavt::models {
 
 ov::AnyMap CompileProperties(const ModelInfo& info) {
-    ov::AnyMap map{{"CACHE_DIR", CacheDir(info).string()}};
+    ov::AnyMap map;
+    if (!info.cache_dir.empty()) map["CACHE_DIR"] = utf8::FromPath(info.cache_dir);
     for (const auto& [key, value] : info.properties.items()) {
         if (value.is_boolean()) {
             map[key] = value.get<bool>();

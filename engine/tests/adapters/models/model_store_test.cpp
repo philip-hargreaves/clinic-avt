@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "adapters/system/exe_paths.hpp"
 #include "adapters/system/sha256.hpp"
 
 namespace clinicavt::models {
@@ -99,6 +100,14 @@ TEST(ModelStore, AScanListsOnlyManifestedModelsById) {
     EXPECT_EQ(store.List()[1].task, "asr");
     EXPECT_EQ(store.List()[1].device, "GPU");
     EXPECT_EQ(store.List()[1].licence, "MIT");
+}
+
+// Installed model folders are read-only
+TEST(ModelStore, EachModelCompilesIntoItsOwnFolderUnderLocalAppData) {
+    TempRoot root;
+    Stage(root.path, {.id = "silero-vad", .task = "vad"});
+    const ModelStore store(root.path);
+    EXPECT_EQ(store.List().at(0).cache_dir, system::LocalDataRoot() / "cache" / "silero-vad");
 }
 
 // A second spelling of the root would mean a second compile cache, and a
