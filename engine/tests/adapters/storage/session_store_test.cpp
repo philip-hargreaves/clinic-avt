@@ -15,7 +15,10 @@
 
 #include "adapters/storage/chunk_cipher.hpp"
 #include "adapters/storage/db.hpp"
+#include "adapters/storage/reflection_json.hpp"
 #include "adapters/storage/sqlite_session_store.hpp"
+#include "adapters/storage/store_migrations.hpp"
+#include "core/records/reflections.hpp"
 
 namespace clinicavt::store {
 namespace {
@@ -63,7 +66,7 @@ bool WaitUntil(Condition condition) {
 
 std::int64_t ChunkCount(const TempRoot& root, const SessionId& id) {
     Db db(root.DbPath());
-    Db::Stmt count = db.Prepare("SELECT COUNT(*) FROM chunks WHERE session_id = ?");
+    Db::Stmt count = db.Prepare("SELECT COUNT(*) FROM audio_chunks WHERE consultation_id = ?");
     count.BindText(1, id);
     count.Step();
     return count.ColumnInt64(0);
@@ -71,7 +74,8 @@ std::int64_t ChunkCount(const TempRoot& root, const SessionId& id) {
 
 ChunkCipher CipherOf(const TempRoot& root, const SessionId& id) {
     Db db(root.DbPath());
-    Db::Stmt key = db.Prepare("SELECT wrapped FROM session_keys WHERE session_id = ?");
+    Db::Stmt key =
+        db.Prepare("SELECT wrapped_key FROM consultation_keys WHERE consultation_id = ?");
     key.BindText(1, id);
     if (!key.Step()) throw std::runtime_error("no key row for " + id);
     return ChunkCipher::FromWrapped(key.ColumnBlob(0));
@@ -113,8 +117,9 @@ std::vector<StoredChunk> DecryptSession(const TempRoot& root, const SessionId& i
     const ChunkCipher cipher = CipherOf(root, id);
     Db db(root.DbPath());
     Db::Stmt select = db.Prepare(
-        "SELECT seq, first_frame, lost_before, payload FROM chunks WHERE session_id = ?"
-        " ORDER BY seq");
+        "SELECT sequence, first_frame, dropped_before, encrypted_audio FROM audio_chunks"
+        " WHERE consultation_id = ?"
+        " ORDER BY sequence");
     select.BindText(1, id);
     std::vector<StoredChunk> chunks;
     std::int64_t expected_seq = 0;
@@ -185,16 +190,19 @@ TEST(SessionStore, ARecordedConsultationSealsItsTranscriptAndErasesItsAudio) {
     }
 
     Db db(root.DbPath());
-    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM chunks"), 0) << "committed and pending alike";
+    EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM audio_chunks"), 0)
+        << "committed and pending alike";
     // Numbering continues past the replaced turns, so no sequence (IV) is sealed twice
-    Db::Stmt seqs = db.Prepare("SELECT seq FROM turns WHERE session_id = ? ORDER BY seq");
+    Db::Stmt seqs =
+        db.Prepare("SELECT sequence FROM turns WHERE consultation_id = ? ORDER BY sequence");
     seqs.BindText(1, id);
     std::vector<std::int64_t> sequences;
     while (seqs.Step()) sequences.push_back(seqs.ColumnInt64(0));
     EXPECT_EQ(sequences, (std::vector<std::int64_t>{2, 3}));
 
     Db::Stmt row = db.Prepare(
-        "SELECT state, ended_at IS NOT NULL, sample_rate, device_name, lost_frames FROM sessions"
+        "SELECT state, ended_at IS NOT NULL, sample_rate, device_name, dropped_frames"
+        " FROM consultations"
         " WHERE id = ?");
     row.BindText(1, id);
     ASSERT_TRUE(row.Step());
@@ -265,7 +273,7 @@ TEST(SessionStore, CancelErasesAtOnceAndTheStoreRecordsAgain) {
     EXPECT_THROW((void)store.ReadAudio(cancelled), std::runtime_error) << "the key is gone";
     {
         Db db(root.DbPath());
-        for (const char* table : {"sessions", "session_keys", "chunks", "turns"}) {
+        for (const char* table : {"consultations", "consultation_keys", "audio_chunks", "turns"}) {
             EXPECT_EQ(db.QueryInt64((std::string("SELECT COUNT(*) FROM ") + table).c_str()), 0)
                 << table;
         }
@@ -413,13 +421,14 @@ TEST(SessionStore, RewritingOrRecreatingADocumentNeverReusesAnIv) {
     SqliteSessionStore store(root.path, kNever);
     const SessionId id = store.Begin({16000, "", ""});
     store.Finalise(id);
-    const Document note{.text = "the note", .style = "prose", .detail = "standard"};
+    const Document note{.text = "the note", .style = "prose", .detail = "concise"};
 
     std::vector<std::vector<std::uint8_t>> payloads;
     std::vector<std::int64_t> sequences;
     auto record = [&] {
         Db db(root.DbPath());
-        Db::Stmt row = db.Prepare("SELECT seq, payload FROM documents WHERE kind = 'note'");
+        Db::Stmt row =
+            db.Prepare("SELECT revision, encrypted_text FROM documents WHERE kind = 'note'");
         ASSERT_TRUE(row.Step());
         sequences.push_back(row.ColumnInt64(0));
         payloads.push_back(row.ColumnBlob(1));
@@ -444,7 +453,7 @@ TEST(SessionStore, RewritingOrRecreatingADocumentNeverReusesAnIv) {
     // A deleted slot keeps no count, so the next write starts somewhere fresh
     auto reflection_seq = [&] {
         Db db(root.DbPath());
-        Db::Stmt row = db.Prepare("SELECT seq FROM documents WHERE kind = 'reflection'");
+        Db::Stmt row = db.Prepare("SELECT revision FROM documents WHERE kind = 'reflection'");
         return row.Step() ? row.ColumnInt64(0) : 0;
     };
     store.SaveDocument(id, DocumentKind::kReflection, {.text = "first"});
@@ -495,7 +504,7 @@ TEST(SessionStore, NoContentIsPlaintextAtRest) {
         std::vector<std::uint8_t> sealed_turn;
         {
             Db db(root.DbPath());
-            Db::Stmt row = db.Prepare("SELECT payload FROM turns");
+            Db::Stmt row = db.Prepare("SELECT encrypted_turn FROM turns");
             ASSERT_TRUE(row.Step());
             sealed_turn = row.ColumnBlob(0);
         }
@@ -528,7 +537,7 @@ TEST(SessionStore, DeleteErasesTheSessionItsKeyAndEveryRow) {
     EXPECT_THROW((void)store.ReadTurns(finished), std::runtime_error);
     Db db(root.DbPath());
     for (const char* table :
-         {"sessions", "session_keys", "turns", "chunks", "documents", "note_options"}) {
+         {"consultations", "consultation_keys", "turns", "audio_chunks", "documents"}) {
         EXPECT_EQ(db.QueryInt64((std::string("SELECT COUNT(*) FROM ") + table).c_str()), 0)
             << table;
     }
@@ -549,7 +558,8 @@ TEST(SessionStore, ErasedKeysLeaveNoRemnantInTheFileOrWal) {
     std::vector<std::vector<std::uint8_t>> needles;
     for (const SessionId& id : {deleted, cleared}) {
         Db db(root.DbPath());
-        Db::Stmt key = db.Prepare("SELECT wrapped FROM session_keys WHERE session_id = ?");
+        Db::Stmt key =
+            db.Prepare("SELECT wrapped_key FROM consultation_keys WHERE consultation_id = ?");
         key.BindText(1, id);
         ASSERT_TRUE(key.Step());
         const std::vector<std::uint8_t> wrapped = key.ColumnBlob(0);
@@ -637,14 +647,14 @@ TEST(SessionStore, ARecordMovesWholeIntoAnotherStoreUnderAFreshKeyAndOnlyOnce) {
     const auto listed = target.ListSessions();
     ASSERT_EQ(listed.size(), 1u);
     EXPECT_EQ(listed[0].state, SessionState::kFinalised);
-    EXPECT_FALSE(listed[0].demo);
+    EXPECT_FALSE(listed[0].sample);
     EXPECT_FALSE(listed[0].cleared);
     EXPECT_TRUE(listed[0].has_reflection);
     EXPECT_EQ(listed[0].written_at, written_at);
     {
         Db db(other_root.DbPath());
-        EXPECT_EQ(db.QueryInt64("SELECT retain FROM sessions"), 1);
-        Db::Stmt turn = db.Prepare("SELECT payload FROM turns WHERE seq = 0");
+        EXPECT_EQ(db.QueryInt64("SELECT saved FROM consultations"), 1);
+        Db::Stmt turn = db.Prepare("SELECT encrypted_turn FROM turns WHERE sequence = 0");
         ASSERT_TRUE(turn.Step());
         EXPECT_THROW((void)CipherOf(root, id).Open(Domain::kTurns, id, 0, turn.ColumnBlob(0)),
                      StoreError)
@@ -682,7 +692,7 @@ TEST(SessionStore, ClearingKeepsOnlyTheAppraisalEntryAndDeleteAllCanClearToo) {
         store.ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "doctor", "the history"}});
         store.Finalise(id);
         store.SaveDocument(id, DocumentKind::kNote,
-                           {.text = "a note", .style = "soap", .detail = "standard"});
+                           {.text = "a note", .style = "soap", .detail = "concise"});
         store.SaveDocument(id, DocumentKind::kPatient, {.text = "a sheet"});
         store.SaveDocument(id, DocumentKind::kGuidance, {.text = "{}"});
         store.SaveDocument(id, DocumentKind::kLabel, {.text = "Elbow swelling"});
@@ -718,7 +728,7 @@ TEST(SessionStore, ClearingKeepsOnlyTheAppraisalEntryAndDeleteAllCanClearToo) {
     {
         Db db(root.DbPath());
         EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM documents"), 3);
-        EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM note_options"), 0);
+        EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM documents WHERE style IS NOT NULL"), 0);
     }
 
     // Delete all keeping reflections clears the same way and never touches the live session
@@ -771,7 +781,7 @@ TEST(SessionStore, RetainOffSessionsAreHiddenThenSweptButACrashedOneWaitsForReco
     EXPECT_THROW((void)store.ReadTurns(dropped), std::runtime_error);
     {
         Db db(root.DbPath());
-        EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM session_keys"), 2) << "its key is gone";
+        EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM consultation_keys"), 2) << "its key is gone";
         EXPECT_EQ(db.QueryInt64("SELECT COUNT(*) FROM turns"), 1);
     }
     EXPECT_EQ(Recording(store.ListSessions()), (std::vector<SessionId>{crashed}))
@@ -787,23 +797,31 @@ TEST(SessionStore, AFreshStoreIsStampedAndForeignOlderOrNewerFilesAreRefused) {
     }
     {
         Db db(root.DbPath());
-        EXPECT_EQ(db.UserVersion(), 6);
+        EXPECT_EQ(db.UserVersion(), 7);
         EXPECT_EQ(db.ApplicationId(), 0x414D4243) << "AMBC";
         EXPECT_EQ(db.QueryInt64("PRAGMA auto_vacuum"), 2) << "incremental";
         EXPECT_EQ(db.QueryInt64("PRAGMA foreign_keys"), 1);
         db.SetUserVersion(999);
     }
-    EXPECT_THROW(SqliteSessionStore(root.path, kNever), std::runtime_error)
-        << "a store from a newer build";
-    {
-        Db db(root.DbPath());
-        db.SetUserVersion(5);
+    try {
+        SqliteSessionStore newer(root.path, kNever);
+        ADD_FAILURE() << "a store from a newer build opened";
+    } catch (const StoreVersionError& e) {
+        EXPECT_TRUE(e.Newer());
     }
-    EXPECT_THROW(SqliteSessionStore(root.path, kNever), std::runtime_error)
-        << "a store from an older build: there are no migrations";
     {
         Db db(root.DbPath());
-        db.SetUserVersion(6);
+        db.SetUserVersion(kOldestSchemaVersion - 1);
+    }
+    try {
+        SqliteSessionStore older(root.path, kNever);
+        ADD_FAILURE() << "a store too old to upgrade opened";
+    } catch (const StoreVersionError& e) {
+        EXPECT_FALSE(e.Newer());
+    }
+    {
+        Db db(root.DbPath());
+        db.SetUserVersion(kSchemaVersion);
         db.SetApplicationId(0);
     }
     EXPECT_THROW(SqliteSessionStore(root.path, kNever), std::runtime_error)
@@ -818,7 +836,8 @@ TEST(SessionStore, AFreshStoreIsStampedAndForeignOlderOrNewerFilesAreRefused) {
     EXPECT_THROW(SqliteSessionStore(foreign, kNever), std::runtime_error);
     {
         Db db(foreign / "clinicavt.db");
-        EXPECT_EQ(db.QueryInt64("SELECT count(*) FROM sqlite_master WHERE name = 'sessions'"), 0)
+        EXPECT_EQ(db.QueryInt64("SELECT count(*) FROM sqlite_master WHERE name = 'consultations'"),
+                  0)
             << "no schema was created into it";
         // Foreign application_id, whatever the user_version
         db.Exec("DROP TABLE notes");
@@ -899,6 +918,66 @@ TEST(SessionStore, AppendNeverWaitsOnTheDatabase) {
     EXPECT_LT(worst, 10ms) << "an append waited on the store";
     store.Abandon(id);
     EXPECT_EQ(Joined(DecryptSession(root, id)).size(), 200u * 160u);
+}
+
+// Patient information with the appraisal entry is more than a cleared consultation holds, so the
+// list, Delete all, a restore and removing the reflection all treat it as not cleared
+TEST(SessionStore, ClearedIsOneRuleForTheListDeleteAllRestoreAndReflections) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    JsonReflectionCodec codec;
+    records::Reflections reflections(store, codec);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.Finalise(id);
+    store.SaveDocument(id, DocumentKind::kPatient, {.text = "a sheet"});
+    store.SaveDocument(id, DocumentKind::kReflection, {.text = R"({"happened":"x"})"});
+    EXPECT_FALSE(store.Cleared(id));
+    EXPECT_FALSE(store.ListSessions()[0].cleared);
+    const SessionRecord whole = store.ReadRecord(id);
+
+    EXPECT_EQ(store.DeleteAll(true), 1u);
+    EXPECT_TRUE(store.Cleared(id));
+    EXPECT_TRUE(store.ListSessions()[0].cleared);
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).revision, 0);
+    EXPECT_EQ(store.DeleteAll(true), 0u);
+
+    EXPECT_EQ(store.AddRecord(whole), AddOutcome::kCompleted);
+    EXPECT_FALSE(store.Cleared(id));
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).text, "a sheet");
+
+    reflections.Delete(id);
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kPatient).text, "a sheet") << "still stored";
+    store.SaveDocument(id, DocumentKind::kReflection, {.text = R"({"happened":"y"})"});
+    store.Clear(id);
+    reflections.Delete(id);
+    EXPECT_TRUE(store.ListSessions().empty()) << "a cleared one goes with its entry";
+}
+
+// Neither the WAL nor the file keeps the ciphertext a rewrite or delete replaced
+TEST(SessionStore, ARewrittenOrDeletedDocumentLeavesNoOldCiphertext) {
+    TempRoot root;
+    SqliteSessionStore store(root.path, kNever);
+    const SessionId id = store.Begin({16000, "", ""});
+    store.Finalise(id);
+    auto sealed = [&](const char* kind) {
+        Db db(root.DbPath());
+        Db::Stmt row = db.Prepare("SELECT encrypted_text FROM documents WHERE kind = ?");
+        row.BindText(1, kind);
+        return row.Step() ? row.ColumnBlob(0) : std::vector<std::uint8_t>{};
+    };
+    store.SaveDocument(id, DocumentKind::kNote, {.text = std::string(600, 'n')});
+    store.SaveDocument(id, DocumentKind::kReflection, {.text = std::string(600, 'r')});
+    const auto note = sealed("note");
+    const auto reflection = sealed("reflection");
+    ASSERT_TRUE(FileHolds(root.DbPath(), note) || FileHolds(root.WalPath(), note));
+
+    store.EditDocument(id, DocumentKind::kNote, std::string(600, 'e'));
+    store.DeleteDocument(id, DocumentKind::kReflection);
+    for (const auto& old : {note, reflection}) {
+        EXPECT_FALSE(FileHolds(root.DbPath(), old));
+        EXPECT_FALSE(FileHolds(root.WalPath(), old));
+    }
+    EXPECT_EQ(store.ReadDocument(id, DocumentKind::kNote).text, std::string(600, 'e'));
 }
 
 }  // namespace

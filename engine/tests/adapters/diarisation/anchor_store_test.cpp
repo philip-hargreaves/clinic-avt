@@ -8,6 +8,13 @@
 #include <fstream>
 #include <vector>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+// clang-format off
+#include <windows.h>
+#include <dpapi.h>
+// clang-format on
+
 #include "adapters/diarisation/cluster_voiceprint.hpp"
 
 namespace clinicavt::diar {
@@ -109,6 +116,80 @@ TEST(AnchorRecord, AnotherVersionOrAShortRecordStartsFresh) {
     std::memcpy(plain.data(), &version, 4);
     EXPECT_FALSE(detail::ParseAnchor(plain).has_value()) << "another version";
     EXPECT_FALSE(detail::ParseAnchor(std::vector<std::uint8_t>(10)).has_value()) << "too short";
+}
+
+void WriteProtected(const std::filesystem::path& path, std::vector<std::uint8_t> plain) {
+    DATA_BLOB in{static_cast<DWORD>(plain.size()), plain.data()};
+    DATA_BLOB out{};
+    ASSERT_TRUE(CryptProtectData(&in, nullptr, nullptr, nullptr, nullptr, 0, &out));
+    std::ofstream(path, std::ios::binary)
+        .write(reinterpret_cast<const char*>(out.pbData), static_cast<std::streamsize>(out.cbData));
+    LocalFree(out.pbData);
+}
+
+// The version 2 layout: version, dims, sessions, enrolled_at, then the sum
+std::vector<std::uint8_t> Version2(const std::vector<float>& sum, std::uint64_t sessions) {
+    std::vector<std::uint8_t> plain(24 + sum.size() * 4);
+    const std::uint32_t version = 2;
+    const auto dims = static_cast<std::uint32_t>(sum.size());
+    const std::uint64_t enrolled_at = 0;
+    std::memcpy(plain.data(), &version, 4);
+    std::memcpy(plain.data() + 4, &dims, 4);
+    std::memcpy(plain.data() + 8, &sessions, 8);
+    std::memcpy(plain.data() + 16, &enrolled_at, 8);
+    std::memcpy(plain.data() + 24, sum.data(), sum.size() * 4);
+    return plain;
+}
+
+TEST(AnchorStore, AVersion2PrintStillLoadsAndIsRewrittenWithTheModel) {
+    TempDir dir;
+    WriteProtected(dir.path / "anchor.bin", Version2(Unit(3, 4), 4));
+    {
+        AnchorStore store(dir.path, "embedder a");
+        EXPECT_EQ(store.Status().origin, AnchorOrigin::kAccrued);
+        EXPECT_EQ(store.Status().sessions, 4u);
+        EXPECT_NEAR((*store.Anchor())[0], 0.6f, 1e-5);
+    }
+    AnchorStore other(dir.path, "embedder b");
+    EXPECT_FALSE(other.Anchor().has_value()) << "the rewritten file names embedder a";
+}
+
+TEST(AnchorStore, APrintFromAnotherModelIsErased) {
+    TempDir dir;
+    {
+        AnchorStore store(dir.path, "embedder a");
+        store.Replace(Unit(1, 0), 42);
+    }
+    {
+        AnchorStore unstaged(dir.path);
+        EXPECT_EQ(unstaged.Status().origin, AnchorOrigin::kEnrolled) << "no model to compare";
+    }
+    {
+        AnchorStore same(dir.path, "embedder a");
+        EXPECT_EQ(same.Status().enrolled_at, 42u);
+    }
+    AnchorStore other(dir.path, "embedder b");
+    EXPECT_EQ(other.Status().origin, AnchorOrigin::kNone);
+    EXPECT_FALSE(std::filesystem::exists(dir.path / "anchor.bin"));
+    other.Accrue(Unit(0, 1));
+    AnchorStore reloaded(dir.path, "embedder b");
+    EXPECT_EQ(reloaded.Status().sessions, 1u);
+}
+
+// A save writes a temporary file and renames it over the print, so a crash mid-save leaves the
+// previous print. The temporary file it would leave is deleted unread
+TEST(AnchorStore, ASaveCutShortKeepsThePreviousPrint) {
+    TempDir dir;
+    {
+        AnchorStore store(dir.path, "embedder a");
+        store.Accrue(Unit(1, 0));
+        store.Accrue(Unit(1, 0));
+    }
+    EXPECT_FALSE(std::filesystem::exists(dir.path / "anchor.bin.tmp"));
+    std::ofstream(dir.path / "anchor.bin.tmp", std::ios::binary) << "half a save";
+    AnchorStore store(dir.path, "embedder a");
+    EXPECT_EQ(store.Status().sessions, 2u);
+    EXPECT_FALSE(std::filesystem::exists(dir.path / "anchor.bin.tmp"));
 }
 
 TEST(VoiceprintRanges, StopAtTheCapAndRefuseUnderASecond) {

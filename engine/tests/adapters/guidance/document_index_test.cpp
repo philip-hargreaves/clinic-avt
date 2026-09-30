@@ -116,5 +116,29 @@ TEST(DocumentIndex, AnotherEmbedderEmptiesItAndAForeignFileIsMadeAgain) {
     EXPECT_TRUE(once_more.Files().empty());
 }
 
+TEST(DocumentIndex, AnIndexInAnOlderFormatIsDeletedAndMadeAgain) {
+    fixture::TempDir dir{"index-format"};
+    const auto file = dir.path / kIndexFile;
+    {
+        store::Db old(file, store::Db::Mode::kIndex);
+        old.Exec(
+            "CREATE TABLE documents (id INTEGER PRIMARY KEY, sha256 TEXT);"
+            "INSERT INTO documents VALUES (1, 'x')");
+        old.SetApplicationId(kIndexApplicationId);
+        old.SetUserVersion(kIndexFormat - 1);
+    }
+    DocumentIndex index(file);
+    EXPECT_TRUE(index.List().empty());
+    EXPECT_FALSE(index.Adopted());
+    index.Adopt(kEmbedder);
+    const auto held = index.Hold({"gout.md", 0, 10, 1}, std::string(64, 'd'), "text/markdown");
+    index.Finish(held.document, {Chunk(0, 0, "Offer allopurinol.")}, 0, 0);
+    EXPECT_EQ(index.ReadChunk(held.document, 0).text, "Offer allopurinol.");
+
+    store::Db db(file, store::Db::Mode::kIndex);
+    EXPECT_EQ(db.UserVersion(), kIndexFormat);
+    EXPECT_EQ(db.QueryInt64("SELECT count(*) FROM sqlite_schema WHERE name = 'documents'"), 0);
+}
+
 }  // namespace
 }  // namespace clinicavt::guidance

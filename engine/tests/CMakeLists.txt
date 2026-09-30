@@ -105,6 +105,7 @@ add_executable(engine_tests
     adapters/ipc/pipe_server_test.cpp
     adapters/system/power_throttling_test.cpp
     adapters/storage/session_store_test.cpp
+    adapters/storage/store_schema_test.cpp
     adapters/diarisation/speaker_clustering_test.cpp
     adapters/storage/store_recovery_test.cpp
     adapters/audio/wav_source_test.cpp
@@ -118,6 +119,7 @@ target_compile_definitions(engine_tests PRIVATE
     CLINICAVT_GUIDANCE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/guidance"
     CLINICAVT_DEMO_DIR="${clinicavt_SOURCE_DIR}/demo/reflections"
     CLINICAVT_ARCHIVE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/archive"
+    CLINICAVT_STORAGE_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/storage"
     CLINICAVT_CRASH_HELPER="$<TARGET_FILE:store_crash_helper>")
 
 add_executable(store_crash_helper

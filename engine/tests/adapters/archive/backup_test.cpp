@@ -94,7 +94,7 @@ RestoreResult RestoreFrom(const std::filesystem::path& path, SqliteSessionStore&
     return Restore(store, source, dry_run, {});
 }
 
-// Backs up the period's finished and cleared consultations and skips demos, a crashed recording
+// Backs up the period's finished and cleared consultations and skips samples, a crashed recording
 // and other periods. Restored into another store they come back whole, and a second restore adds
 // nothing
 TEST(Backup, APeriodBacksUpWholeAndRestoresOnceIntoAnotherStore) {
@@ -211,6 +211,26 @@ TEST(Backup, ARecordTheStoreWouldRefuseStopsRestoreBeforeAnyWrite) {
         EXPECT_EQ(e.Code(), ArchiveCode::kDamaged);
     }
     EXPECT_TRUE(store.ListSessions().empty());
+}
+
+// A record Restore would refuse fails the backup and leaves no file. The store holds a start time
+// in a form no build writes
+TEST(Backup, ARecordRestoreWouldRefuseFailsTheBackup) {
+    TempDir dir;
+    SqliteSessionStore here(dir.path / "here", kNever);
+    Consultation(here, true);
+    store::SessionMeta meta{16000, "", ""};
+    meta.started_at = "2026-03-09 14:20:00";
+    here.Finalise(here.Begin(meta));
+
+    const auto path = dir.path / "backup.clinicavt";
+    try {
+        BackUpTo(path, here, {});
+        ADD_FAILURE() << "backed up a record Restore would refuse";
+    } catch (const ArchiveError& e) {
+        EXPECT_EQ(e.Code(), ArchiveCode::kDamaged);
+    }
+    EXPECT_FALSE(std::filesystem::exists(path));
 }
 
 // Backs up only consultations with an appraisal entry, each as a cleared one with no transcript,

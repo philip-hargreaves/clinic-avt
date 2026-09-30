@@ -47,7 +47,8 @@ int main(int argc, char* argv[]) {
 
     // Second connection reports the committed count, which the test checks recovery against
     clinicavt::store::Db reader(root / "clinicavt.db");
-    const std::string count_sql = "SELECT COUNT(*) FROM chunks WHERE session_id = '" + id + "'";
+    const std::string count_sql =
+        "SELECT COUNT(*) FROM audio_chunks WHERE consultation_id = '" + id + "'";
     store.ReplaceTurns(id, std::vector<clinicavt::asr::Turn>{{0, audio.size(), "", "turn 0"}});
     for (;;) {
         for (auto& sample : audio) sample = PatternAt(frame++);

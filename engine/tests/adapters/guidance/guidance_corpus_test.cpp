@@ -155,7 +155,7 @@ TEST(CorpusStore, ABuiltCorpusOpensReadOnlyWithItsMatrixInOrdinalOrder) {
     EXPECT_EQ(store->TextAt(3).text, chunks[3].text);
     EXPECT_EQ(store->TextAt(3).url, chunks[3].url);
     EXPECT_EQ(store->Info().id, "fixture-2026-09-10");
-    EXPECT_EQ(store->Info().chunk_count, static_cast<std::int64_t>(chunks.size()));
+    EXPECT_EQ(store->Info().passage_count, static_cast<std::int64_t>(chunks.size()));
     EXPECT_EQ(store->Info().sha256, system::Sha256File(dir / kCorpusFile));
     EXPECT_FALSE(fs::exists(dir / "corpus.db-wal")) << "read-only open writes nothing";
 }
@@ -182,25 +182,28 @@ TEST(CorpusStore, RefusesADamagedOrMismatchedCorpusWithAReason) {
         {"meta id", manifest("id", "other"), {}, "differs"},
         {"meta dim", manifest("dim", kDim + 1), {}, "differs"},
         {"meta embedder", manifest("embedder_id", "other"), {}, "differs"},
-        {"meta chunks", manifest("chunks", 3), {}, "differs"},
+        {"meta name", manifest("name", "Another corpus"), {}, "name differs"},
+        {"meta built at", manifest("built_at", "2026-09-11T00:00:00Z"), {}, "build time differs"},
+        {"meta max tokens", manifest("max_tokens", 256), {}, "max tokens differs"},
+        {"older manifest", manifest("format", 1), {}, "manifest format 1 is older"},
         {"embedder rev", {}, rev, "staged embedder"},
         {"embedder max tokens", {}, tokens, "max tokens"},
         {"shard length",
-         sql("PRAGMA ignore_check_constraints=ON; UPDATE guidance_vectors SET data = "
-             "substr(data, 5) WHERE shard = 0"),
+         sql("UPDATE vector_shards SET vectors = substr(vectors, 5) WHERE shard = 0"),
          {},
          "length"},
         {"shard gap",
-         sql("UPDATE guidance_vectors SET first_ord = first_ord + 1 WHERE shard = 0"),
+         sql("UPDATE vector_shards SET first_position = first_position + 1 WHERE shard = 0"),
          {},
          "contiguous"},
         // The first float becomes 2.0, so the first vector is no longer unit length
         {"shard norm",
-         sql("UPDATE guidance_vectors SET data = unhex('00000040' || substr(hex(data), 9)) "
+         sql("UPDATE vector_shards SET vectors = unhex('00000040' || substr(hex(vectors), 9)) "
              "WHERE shard = 0"),
          {},
          "unit length"},
-        {"newer format", sql("PRAGMA user_version=2"), {}, "format"},
+        {"newer format", sql("PRAGMA user_version=3"), {}, "corpus format 3 is newer"},
+        {"older format", sql("PRAGMA user_version=1"), {}, "corpus format 1 is older"},
         {"foreign file", sql("PRAGMA application_id=0"), {}, "not a corpus"},
         {"WAL mode", sql("PRAGMA journal_mode=WAL"), {}, "WAL"},
         {"missing manifest",
