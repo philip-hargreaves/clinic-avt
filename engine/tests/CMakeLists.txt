@@ -16,6 +16,7 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 # Core logic only. Links no adapters, so a core test that needs one fails to build
 add_executable(core_tests
+    core/archive/record_rules_test.cpp
     core/audio/audio_ring_test.cpp
     core/audio/buffered_sink_test.cpp
     core/audio/level_meter_test.cpp
@@ -47,6 +48,12 @@ add_executable(core_tests
     core/note/model_failure_test.cpp
     core/note/note_gate_test.cpp
     core/note/note_label_test.cpp
+    core/session/enrolment_test.cpp
+    core/session/session_controller_enrolment_test.cpp
+    core/session/session_controller_import_test.cpp
+    core/session/session_controller_lifecycle_test.cpp
+    core/session/session_controller_note_test.cpp
+    core/session/transcribe_recording_test.cpp
     core/translate/plain_punctuation_test.cpp)
 target_compile_definitions(core_tests PRIVATE CLINICAVT_CMAKE_VERSION="${clinicavt_VERSION}")
 target_link_libraries(core_tests PRIVATE clinicavt_core clinicavt_warnings GTest::gtest_main)
@@ -54,12 +61,9 @@ target_link_libraries(core_tests PRIVATE clinicavt_core clinicavt_warnings GTest
 # Adapters, and the core tests that need one or read a JSON fixture
 add_executable(engine_tests
     adapters/diarisation/seg_decode_test.cpp
-    core/session/session_controller_enrolment_test.cpp
-    core/session/session_controller_import_test.cpp
-    core/session/session_controller_lifecycle_test.cpp
-    core/session/session_controller_note_test.cpp
     core/note/summary_scrub_test.cpp
     adapters/diarisation/anchor_store_test.cpp
+    adapters/diarisation/deferred_diariser_test.cpp
     adapters/demo/json_sample_source_test.cpp
     adapters/audio/capture_errors_test.cpp
     adapters/audio/capture_timeline_test.cpp
@@ -68,6 +72,7 @@ add_executable(engine_tests
     adapters/models/deferred_load_test.cpp
     adapters/models/note_tier_test.cpp
     adapters/models/residency_test.cpp
+    adapters/vad/deferred_vad_test.cpp
     adapters/storage/db_test.cpp
     adapters/diarisation/fbank_test.cpp
     adapters/ipc/framing_test.cpp
@@ -93,7 +98,7 @@ add_executable(engine_tests
     adapters/ipc/wire_events_test.cpp
     adapters/ipc/messages_test.cpp
     adapters/models/model_store_test.cpp
-    adapters/models/note_lane_test.cpp
+    adapters/note/note_tiers_test.cpp
     adapters/note/note_prompt_test.cpp
     adapters/models/ov_smoke_test.cpp
     adapters/ipc/pipe_security_test.cpp
@@ -106,7 +111,7 @@ add_executable(engine_tests
     adapters/transcription/whisper_worker_test.cpp
     adapters/archive/archive_file_test.cpp
     adapters/ipc/archive_handlers_test.cpp
-    core/archive/backup_test.cpp)
+    adapters/archive/backup_test.cpp)
 target_compile_definitions(engine_tests PRIVATE
     CLINICAVT_CMAKE_VERSION="${clinicavt_VERSION}"
     CLINICAVT_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/schema/fixtures"
@@ -163,16 +168,18 @@ target_link_libraries(gpu_tests PRIVATE
 
 # And for tests needing staged model weights
 add_executable(models_tests
-    adapters/models/asr_wer_test.cpp
+    adapters/transcription/asr_wer_test.cpp
     adapters/diarisation/diariser_pipeline_test.cpp
     adapters/diarisation/fbank_parity_test.cpp
     adapters/guidance/guidance_embedder_test.cpp
-    adapters/models/note_writer_test.cpp
+    adapters/note/llm_note_writer_test.cpp
     adapters/diarisation/seg_model_test.cpp
     adapters/vad/silero_vad_test.cpp
     adapters/diarisation/speaker_embedder_test.cpp
-    adapters/models/translate_test.cpp
-    adapters/models/worker_note_writer_test.cpp)
+    adapters/translate/nllb_translator_test.cpp
+    adapters/note/worker_note_writer_test.cpp)
+# For support/primock.hpp
+target_include_directories(models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(models_tests PRIVATE
     CLINICAVT_MODELS_DIR="${clinicavt_SOURCE_DIR}/models"
     CLINICAVT_DIAR_FIXTURE_DIR="${clinicavt_SOURCE_DIR}/engine/tests/fixtures/diarisation"

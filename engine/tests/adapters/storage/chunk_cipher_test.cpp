@@ -17,7 +17,7 @@ std::vector<std::uint8_t> SampleChunk() {
     return plain;
 }
 
-// Empty is real: a loss-only commit seals zero frames
+// A loss-only commit seals an empty payload
 TEST(ChunkCipher, SealedPayloadsRoundTripAlsoEmptyAndThroughTheWrappedKey) {
     const ChunkCipher cipher = ChunkCipher::Generate();
     const ChunkCipher stored = ChunkCipher::FromWrapped(cipher.Wrapped());

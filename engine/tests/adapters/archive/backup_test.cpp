@@ -23,7 +23,7 @@ using store::SessionId;
 using store::SessionRecord;
 using store::SqliteSessionStore;
 
-// The lowest count a reader accepts, so tests derive in microseconds
+// The minimum count a reader accepts, which keeps key derivation fast in tests
 constexpr std::uint32_t kLowIterations = 1000;
 constexpr const char* kPassword = "maple-orbit-fender-quill-harbor";
 constexpr auto kNever = std::chrono::hours(1);
@@ -46,7 +46,7 @@ struct TempDir {
     }
 };
 
-// A consultation recorded now, with its note, sheet and label, and a reflection when asked
+// Consultation recorded now, with note, sheet and label, plus an optional reflection
 SessionId Consultation(SqliteSessionStore& store, bool reflected) {
     const SessionId id = store.Begin({16000, "usb-1", "Desk microphone"});
     store.ReplaceTurns(id, std::vector<asr::Turn>{{0, 16000, "Doctor", "how is the elbow"},
@@ -94,8 +94,9 @@ RestoreResult RestoreFrom(const std::filesystem::path& path, SqliteSessionStore&
     return Restore(store, source, dry_run, {});
 }
 
-// A period's finished consultations go, cleared ones with them; demos, a crashed recording and
-// another period's consultation stay behind. After removal they come back whole elsewhere, once
+// Backs up the period's finished and cleared consultations and skips demos, a crashed recording
+// and other periods. Restored into another store they come back whole, and a second restore adds
+// nothing
 TEST(Backup, APeriodBacksUpWholeAndRestoresOnceIntoAnotherStore) {
     TempDir dir;
     SqliteSessionStore here(dir.path / "here", kNever);
@@ -160,8 +161,7 @@ TEST(Backup, APeriodBacksUpWholeAndRestoresOnceIntoAnotherStore) {
     EXPECT_EQ(again.skipped, 3u);
 }
 
-// Removed keeping its reflection, then restored: the content returns and the reflection written
-// since stays
+// The reflection written after clearing survives the restore
 TEST(Backup, AClearedConsultationIsCompletedByARestore) {
     TempDir dir;
     SqliteSessionStore store(dir.path / "store", kNever);
@@ -192,8 +192,7 @@ TEST(Backup, AClearedConsultationIsCompletedByARestore) {
     EXPECT_EQ(RestoreFrom(path, store).skipped, 1u) << "whole again, so left alone";
 }
 
-// The file authenticates, but its second record could not have come from a store: nothing is
-// written, not even the first
+// An authenticated file with an invalid second record writes nothing, not even the first record
 TEST(Backup, ARecordTheStoreWouldRefuseStopsRestoreBeforeAnyWrite) {
     TempDir dir;
     const auto path = dir.path / "backup.clinicavt";
@@ -214,9 +213,8 @@ TEST(Backup, ARecordTheStoreWouldRefuseStopsRestoreBeforeAnyWrite) {
     EXPECT_TRUE(store.ListSessions().empty());
 }
 
-// Only consultations with an appraisal entry go, each as a cleared one keeps it: no transcript,
-// note, sheet or device. Restored elsewhere they arrive cleared, and a full backup later
-// completes them
+// Backs up only consultations with an appraisal entry, each as a cleared one with no transcript,
+// note, sheet or device. Restoring a later full backup completes them
 TEST(Backup, ReflectionsOnlyHoldsNothingOfTheConsultationAndAFullRestoreCompletesIt) {
     TempDir dir;
     SqliteSessionStore here(dir.path / "here", kNever);
@@ -261,7 +259,6 @@ TEST(Backup, ReflectionsOnlyHoldsNothingOfTheConsultationAndAFullRestoreComplete
     EXPECT_EQ(there.ReadDocument(reflected, DocumentKind::kNote).text, "Swollen left elbow.");
 }
 
-// A file that says it holds reflections only but carries a transcript is not one we wrote
 TEST(Backup, AReflectionsOnlyFileWithAConsultationInItIsDamaged) {
     TempDir dir;
     const auto path = dir.path / "backup.clinicavt";

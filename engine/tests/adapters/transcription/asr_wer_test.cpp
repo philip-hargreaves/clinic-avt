@@ -16,22 +16,17 @@
 #include "adapters/diarisation/speaker_diariser.hpp"
 #include "adapters/models/model_store.hpp"
 #include "adapters/models/ov_runtime.hpp"
+#include "adapters/system/gpu_lease.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
 #include "core/diarisation/turn_decode.hpp"
 #include "ports/audio_source.hpp"
+#include "support/primock.hpp"
 
 namespace clinicavt::asr {
 namespace {
 
-// Not in the repo. The test skips without it
-constexpr const char* kWav =
-    "C:/dev/intelliscribe/bench/transcription/mixed/day1_consultation01_mixed.wav";
-constexpr const char* kRef =
-    "C:/dev/intelliscribe/bench/transcription/references/day1_consultation01.json";
-
-// Long-form parity on this consult is 21.28%. The shipped per-turn decode
-// (each diarised turn from its own audio) measured under it on the
-// 57-consult sweep, so the gate holds the baseline
+// Long-form WER on this consult is 21.28%. Per-turn decode measured below that on the
+// 57-consult sweep, so the gate is the baseline
 constexpr double kMaxWer = 0.22;
 
 std::vector<float> LoadWav(const char* path) {
@@ -95,25 +90,27 @@ double Wer(const std::vector<std::string>& ref, const std::vector<std::string>& 
 }
 
 TEST(AsrWer, ProductionPathHoldsTheBaseline) {
-    if (!std::filesystem::exists(kWav) || !std::filesystem::exists(kRef)) {
-        GTEST_SKIP() << "research corpus not mounted";
-    }
-    const auto frames = LoadWav(kWav);
-    const auto gold = NormalisedWords(LoadGold(kRef));
+    const std::string wav = test::PrimockPath(test::kPrimockMixed);
+    const std::string reference = test::PrimockPath(test::kPrimockReference);
+    if (wav.empty()) GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockMixed);
+    if (reference.empty()) GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockReference);
+    const auto frames = LoadWav(wav.c_str());
+    const auto gold = NormalisedWords(LoadGold(reference.c_str()));
 
     const models::ModelStore store(std::filesystem::path(CLINICAVT_MODELS_DIR));
     models::OvRuntime runtime;
     const auto load_start = std::chrono::steady_clock::now();
-    WhisperTranscriber transcriber(store, runtime);
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    WhisperTranscriber transcriber(store, runtime, gpu);
     const auto load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - load_start);
-    // A throwaway anchor root: evaluation must never touch a real anchor
+    // A throwaway anchor root, so evaluation never touches a real anchor
     const auto anchor_root = std::filesystem::temp_directory_path() / "clinicavt-asr-wer-anchor";
     std::filesystem::create_directories(anchor_root);
     diar::AnchorStore anchors(anchor_root);
     diar::SpeakerDiariser diariser(store, runtime, anchors);
 
-    // The production finalise: each diarised turn decodes its own audio
+    // As in the production finalise, each diarised turn decodes its own audio
     const auto decode_start = std::chrono::steady_clock::now();
     const auto result = diariser.Diarise(frames);
     const auto turns = diar::MergeByCluster(result.slices);

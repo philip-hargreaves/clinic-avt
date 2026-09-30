@@ -21,7 +21,6 @@ std::filesystem::path Fixture(const char* name) {
     return std::filesystem::path(CLINICAVT_RECORDING_FIXTURE_DIR) / name;
 }
 
-// A file of the test's own, removed afterwards
 struct TempFile {
     std::filesystem::path path;
 

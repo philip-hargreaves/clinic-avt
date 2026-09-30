@@ -10,17 +10,14 @@
 #include <vector>
 
 #include "ports/audio_source.hpp"
+#include "support/primock.hpp"
 
 namespace clinicavt::audio {
 namespace {
 
-// Not in the repo. The speech checks skip without it
-constexpr const char* kWav =
-    "C:/dev/intelliscribe/bench/transcription/mixed/day1_consultation01_mixed.wav";
-
-std::vector<float> FirstSeconds(int seconds) {
-    std::ifstream in(kWav, std::ios::binary);
-    if (!in.is_open()) throw std::runtime_error(std::string("missing dev wav: ") + kWav);
+std::vector<float> FirstSeconds(const std::string& wav, int seconds) {
+    std::ifstream in(wav, std::ios::binary);
+    if (!in.is_open()) throw std::runtime_error("missing dev wav: " + wav);
     in.seekg(44);
     std::vector<std::int16_t> pcm(static_cast<std::size_t>(seconds) * kSampleRate);
     in.read(reinterpret_cast<char*>(pcm.data()), static_cast<std::streamsize>(pcm.size() * 2));
@@ -36,11 +33,12 @@ TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
     SileroVad vad(store, runtime);
     const std::vector<float> wrong(100, 0.0f);
     EXPECT_THROW(vad.SpeechProbability(wrong), std::runtime_error) << "a wrong hop size";
-    if (!std::filesystem::exists(kWav)) {
-        GTEST_SKIP() << "research corpus not mounted";
+    const std::string wav = test::PrimockPath(test::kPrimockMixed);
+    if (wav.empty()) {
+        GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockMixed);
     }
 
-    const auto speech = FirstSeconds(10);
+    const auto speech = FirstSeconds(wav, 10);
     float max_speech = 0;
     std::size_t hops = 0;
     const auto start = std::chrono::steady_clock::now();

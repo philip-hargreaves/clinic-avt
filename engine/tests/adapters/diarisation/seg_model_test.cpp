@@ -11,15 +11,14 @@
 
 #include "adapters/diarisation/segmenter.hpp"
 #include "dev_wav.hpp"
+#include "support/primock.hpp"
 
 namespace clinicavt::diar {
 namespace {
 
-// Research check D: per-frame powerset argmax agreement is the faithfulness
-// criterion, since the decoded class is the only downstream consumer. Raw
-// log-probs carry harmless bi-LSTM float noise. The decode gate then holds
-// the engine's change points and overlap spans against the reference decode
-// of the same windows, tolerant to one ~17 ms frame of drift
+// The model check is per-frame powerset argmax agreement, since only the decoded class is used
+// downstream and raw log-probs differ by bi-LSTM float noise. The decode must match the reference
+// change points and overlap spans within one ~17 ms frame
 constexpr const char* kFixtureDir = CLINICAVT_DIAR_FIXTURE_DIR;
 constexpr std::uint64_t kFrameTolerance = 300;  // one seg frame is ~272 samples
 
@@ -31,11 +30,11 @@ nlohmann::json LoadMeta() {
 
 TEST(SegModel, MatchesTheResearchArgmaxAndReferenceDecode) {
     const auto meta = LoadMeta();
-    // The fixture names a wav that is not in the repo
-    if (!std::filesystem::exists(meta.at("wav").get<std::string>())) {
-        GTEST_SKIP() << "research corpus not mounted";
+    const std::string wav = test::PrimockPath(test::kPrimockMixed);
+    if (wav.empty()) {
+        GTEST_SKIP() << test::PrimockSkipReason(test::kPrimockMixed);
     }
-    const auto audio = LoadDevWav(meta.at("wav"));
+    const auto audio = LoadDevWav(wav);
     const std::size_t windows = meta.at("windows");
     const std::size_t frames = meta.at("frames_per_window");
 
@@ -79,7 +78,7 @@ TEST(SegModel, MatchesTheResearchArgmaxAndReferenceDecode) {
         EXPECT_GE(agreement, 0.9999);
     }
 
-    // The decode over the same audio holds the reference change points and overlap spans
+    // Decode must match the reference change points and overlap spans
     Segmenter segmenter(store, runtime);
     const auto result = segmenter.Run(audio);
 

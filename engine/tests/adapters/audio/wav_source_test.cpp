@@ -15,8 +15,7 @@
 namespace clinicavt::audio {
 namespace {
 
-// Every file is built byte by byte in the test, so each malformation is
-// deliberate rather than an accident of a fixture on disk.
+// Files are built byte by byte so each malformation is deliberate
 struct WavSpec {
     std::uint16_t format = 1;  // 1 = PCM, 3 = float
     std::uint16_t channels = 1;

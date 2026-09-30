@@ -40,7 +40,7 @@ TEST(LevelMeter, ReadsTheCurveAndFlagsClippingPerWindow) {
         {"silence reads zero", Silence(), 0.0F, false},
         {"a full-scale sine reads full scale", Sine(0.995F), 1.0F, false},
         {"a -20 dB sine reads two thirds", Sine(0.1F), 2.0F / 3.0F, false},
-        // The flag follows the samples rather than the level: a single spike clips
+        // Clipping is checked per sample, so a single spike clips
         {"a single spike clips", spike, std::nullopt, true},
     };
     for (const auto& c : cases) {

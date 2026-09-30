@@ -1,8 +1,7 @@
-// An ingest host that reads no PDF: the bytes on stdin choose what it does.
-// "FAKE exit 3" exits 3, "FAKE crash" dies, "FAKE sleep" stalls, "FAKE garbage"
-// writes text that is no JSON, "FAKE partial" a page without its lines,
-// "FAKE huge" writes past any cap, "FAKE echo"
-// reports how many bytes arrived, anything else gets two canned pages
+// A fake ingest host driven by stdin. "FAKE exit 3" exits 3, "FAKE crash" crashes,
+// "FAKE sleep" stalls, "FAKE garbage" writes non-JSON, "FAKE partial" writes a page with no
+// lines, "FAKE huge" exceeds any cap and "FAKE echo" reports the bytes received. Anything else
+// gets two canned pages
 #include <fcntl.h>
 #include <io.h>
 

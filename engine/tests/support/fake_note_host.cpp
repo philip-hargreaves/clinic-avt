@@ -1,8 +1,6 @@
-// A note host that loads nothing: speaks the host protocol so the lane's
-// state machine can be exercised with no weights and no GPU. A tier whose
-// model id contains "broken" fails to load, one containing "slow" takes 2 s.
-// Everything else loads in 100 ms. A prefill takes 2 s, holding the serve loop
-// as the real one does
+// A fake note host that implements the host protocol with no weights or GPU. Model ids
+// containing "broken" fail to load and those containing "slow" take 2 s, others 100 ms. A
+// prefill takes 2 s and blocks the serve loop like the real host
 #include <chrono>
 #include <cstdio>
 #include <filesystem>

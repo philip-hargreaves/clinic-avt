@@ -31,7 +31,7 @@ namespace {
 using store::DocumentKind;
 using store::SessionRecord;
 
-// The lowest count a reader accepts, so tests derive in microseconds
+// The minimum count a reader accepts, which keeps key derivation fast in tests
 constexpr std::uint32_t kLowIterations = 1000;
 constexpr const char* kPassword = "correct horse battery staple";
 
@@ -82,9 +82,8 @@ store::RecordDocument Doc(DocumentKind kind, std::string text, std::string langu
     return d;
 }
 
-// Every field and every document kind, non-ASCII text, a revision past 2^53 and a cleared
-// consultation holding only its appraisal entry. The golden v1 file was written from these, so
-// changing them fails that test
+// Every field and document kind, non-ASCII text, a revision past 2^53 and a cleared
+// consultation. The golden v1 file was written from these, so they must not change
 std::vector<SessionRecord> SampleRecords() {
     SessionRecord full;
     full.id = "0123456789abcdef0123456789abcdef";
@@ -253,8 +252,8 @@ void PutLe32(std::vector<std::uint8_t>& bytes, std::size_t at, std::uint32_t val
     for (int i = 0; i < 4; ++i) bytes[at + i] = static_cast<std::uint8_t>(value >> (8 * i));
 }
 
-// Every way a file can be wrong fails with its reason, at open or before the last record, so a
-// restore that reads the whole file first never writes from one
+// Damage is reported at open or before the last record, so a restore that reads the whole file
+// first never writes from a bad one
 TEST(ArchiveFile, DamagedBackupsAreRefusedWithTheirReason) {
     TempDir dir;
     const auto good = dir.path / "good.clinicavt";
@@ -399,8 +398,8 @@ TEST(ArchiveFile, AFailedBackUpLeavesNoPartialAndKeepsTheExistingFile) {
     }
 }
 
-// A cipher holding exactly these key bytes, through the store's own unwrap, as a cipher never
-// exposes its key
+// Builds a cipher with these key bytes through the store's unwrap, because ChunkCipher does not
+// expose its key
 store::ChunkCipher WithKey(const std::array<std::uint8_t, 32>& key) {
     DATA_BLOB in{static_cast<DWORD>(key.size()), const_cast<BYTE*>(key.data())};
     DATA_BLOB out{};
@@ -466,8 +465,8 @@ TEST(ArchiveFile, WriteGoldenV1) {
     WriteBackup(GoldenPath(), kGoldenPassword, SampleRecords());
 }
 
-// Every later build must open every v1 file. This one was written on another computer under
-// another Windows user, so it also proves a backup moves between machines
+// Later builds must open every v1 file. Written on another machine under another Windows
+// user, so it also covers moving a backup between machines
 TEST(ArchiveFile, TheV1GoldenBackupStillOpensWithEveryField) {
     ArchiveFileSource source(GoldenPath(), kGoldenPassword);
     const auto records = SampleRecords();

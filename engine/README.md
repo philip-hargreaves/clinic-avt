@@ -16,7 +16,8 @@ evaluation only.
 domain/
   core/            a static library, one folder per stage; namespace = folder
     audio/         capture ring, level meter, resume source, the enrolment sink
-    session/       the session controller, transcription, note lane, enrolment
+    session/       the session controller and its capture, import, finalise and review parts,
+                   transcription, note lane, enrolment
     records/       which sessions the history lists, delete and clear, appraisal reflections
     demo/          seeding the sample year
     diarisation/   speaker regions, per-turn decode, re-split, role naming, transcript tidy
@@ -25,7 +26,7 @@ domain/
     archive/       backup contents and the record rules restore checks
     translate/     punctuation the translator cannot write
     metrics/       counters and throughput
-    common/        utf8, strings, ISO 8601 time, version, argv, the log
+    common/        utf8, strings, ISO 8601 time, version, argv, the log, the worker thread
   ports/           the interfaces core drives, flat, and the store error type
 src/
   adapters/        one folder per seam, matching core/ where a stage has one
@@ -50,4 +51,6 @@ Test binaries are split by what they need, not by folder: `core_tests` links onl
 core test that needs an adapter does not build; `engine_tests` runs anywhere, `models_tests` needs
 staged weights, `gpu_tests` the Intel GPU, `capture_tests` a microphone;
 `ctest -LE 'gpu|models|microphone'` is the CPU-only set. The wire messages both sides test against
-are in `schema/`.
+are in `schema/`. The tests that measure against the PriMock consultation `day1_consultation01`
+skip when it is missing. `tests/support/primock.hpp` holds its default paths, and
+`CLINICAVT_PRIMOCK_MIXED` and `CLINICAVT_PRIMOCK_REFERENCE` override them.

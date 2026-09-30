@@ -95,8 +95,7 @@ void Sql(const fs::path& dir, const char* sql) {
     EditManifest(dir, "sha256", system::Sha256File(file));
 }
 
-// The invented corpus and notes every guidance test builds on, checked on CI
-// since the notes are otherwise read only by the opt-in model test
+// Runs on CI because otherwise only the opt-in model test reads the notes
 TEST(GuidanceFixture, TheCorpusAndNotesAreConsistent) {
     const auto chunks = fixture::Chunks(kFixtureDir);
     ASSERT_GE(chunks.size(), 40u);

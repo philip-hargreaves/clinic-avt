@@ -311,27 +311,22 @@ TEST(SessionController,
     EXPECT_EQ(rig.diariser.accrued_cluster, 1);
 }
 
-TEST(SessionController, ThePrintLearnsNothingFromUnnamedSpeakersOrWhenFrozen) {
+TEST(SessionController, ThePrintLearnsNothingFromUnnamedSpeakers) {
     struct Row {
         const char* name;
         int clusters;
-        std::vector<double> similarities;
-        bool freeze;
         std::vector<std::string> speakers;
     };
     const std::vector<Row> rows = {
-        {"one cluster cannot be named", 1, {}, false, {"speaker 1"}},
+        {"one cluster cannot be named", 1, {"speaker 1"}},
         // The scripted text carries no lexical role signal either
-        {"two clusters and no anchor", 2, {}, false, {"speaker 1", "speaker 2"}},
-        {"a frozen print still names the roles", 2, {0.2, 0.8}, true, {"doctor", "patient"}},
+        {"two clusters and no anchor", 2, {"speaker 1", "speaker 2"}},
     };
     for (const auto& row : rows) {
         SCOPED_TRACE(row.name);
         Rig rig;
         rig.diariser.clusters = row.clusters;
-        rig.diariser.similarities = row.similarities;
         auto controller = rig.Make(Script::kStreamUntilStopped);
-        if (row.freeze) controller.FreezeAnchor();
 
         ASSERT_TRUE(controller.Start());
         ASSERT_TRUE(rig.WaitForFrames(kTwoTurnFrames));
@@ -392,11 +387,11 @@ TEST(SessionController, FinaliseStagesAndDiariseTimingReachTheMetrics) {
 }
 
 // Every decode leaves a chunk edge behind, as whisper's worker does
-struct CuttingTranscriber : asr::ScriptedTranscriber {
+struct CuttingTranscriber : FakeTranscriber {
     std::vector<asr::Turn> DecodeClipChunks(std::span<const float> frames,
                                             std::uint64_t first_frame) override {
         clip_cuts.push_back(first_frame + frames.size() / 2);
-        return ScriptedTranscriber::DecodeClipChunks(frames, first_frame);
+        return FakeTranscriber::DecodeClipChunks(frames, first_frame);
     }
 };
 

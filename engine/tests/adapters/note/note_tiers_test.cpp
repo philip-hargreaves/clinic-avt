@@ -10,6 +10,7 @@
 
 #include "adapters/models/model_store.hpp"
 #include "adapters/note/worker_note_writer.hpp"
+#include "adapters/system/gpu_lease.hpp"
 
 namespace clinicavt::note {
 namespace {
@@ -75,12 +76,13 @@ struct Transitions {
     }
 };
 
-TEST(NoteLane, ConfiguringATierLoadsItAtOnceAndTheHostServesIt) {
+TEST(NoteTiers, ConfiguringATierLoadsItAtOnceAndTheHostServesIt) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
     Transitions seen;
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
-                          seen.Listener());
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, gpu, &store,
+                          "default", seen.Listener());
     const auto start = lane.State();
     EXPECT_EQ(start.phase, Phase::kIdle);
     EXPECT_EQ(start.tier, "default");
@@ -105,17 +107,18 @@ TEST(NoteLane, ConfiguringATierLoadsItAtOnceAndTheHostServesIt) {
     EXPECT_EQ(lane.Write({{0, 16000, "doctor", "hello"}}, {}, nullptr),
               "A note from qwen3.6-35b-a3b-int4");
     EXPECT_EQ(lane.State().phase, Phase::kReady);
-    // The case summary goes through the host like the label: one call, one text
+    // The case summary goes through the host in one call, like the label
     EXPECT_EQ(lane.WriteSummary("the note"), "A summary from qwen3.6-35b-a3b-int4");
     EXPECT_THROW(lane.WriteSummary(""), std::runtime_error);
 }
 
-TEST(NoteLane, WhatTheLaneCannotServeFailsLoudlyAndChangesNothing) {
+TEST(NoteTiers, WhatTheLaneCannotServeFailsLoudlyAndChangesNothing) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
     Transitions seen;
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
-                          seen.Listener());
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, gpu, &store,
+                          "default", seen.Listener());
 
     EXPECT_THROW(lane.Write({}, {}, nullptr), std::runtime_error) << "an empty transcript";
 
@@ -138,21 +141,22 @@ TEST(NoteLane, WhatTheLaneCannotServeFailsLoudlyAndChangesNothing) {
     ASSERT_TRUE(seen.WaitFor(Phase::kReady, from)) << "the previous tier loads again";
     EXPECT_EQ(seen.Snapshot().back().id, "qwen3.5-9b-int4");
 
-    WorkerNoteWriter missing("C:/nowhere/clinicavt_note_host.exe", staged.root, staged.root);
+    WorkerNoteWriter missing("C:/nowhere/clinicavt_note_host.exe", staged.root, staged.root, gpu);
     EXPECT_THROW(missing.Write({{0, 16000, "doctor", "hello"}}, {}, nullptr), std::runtime_error)
         << "a missing host";
 }
 
-// A load cannot be cancelled, so a switch waits for it rather than killing the
-// host, and the stuck-host probe leaves it alone
-TEST(NoteLane, ASwitchDuringALoadIsRefusedUntilTheLoadSettles) {
+// A load cannot be cancelled, so a switch waits for it to end. The stuck-host probe leaves the
+// loading host alone
+TEST(NoteTiers, ASwitchDuringALoadIsRefusedUntilTheLoadSettles) {
     TieredStore staged;
     std::filesystem::remove_all(staged.root / "qwen3.6-35b-a3b-int4");
     staged.Stage("qwen-slow-int4", "Slow", "accuracy");
     const models::ModelStore store(staged.root);
     Transitions seen;
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
-                          seen.Listener());
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, gpu, &store,
+                          "default", seen.Listener());
     lane.Configure("accuracy");
 
     EXPECT_THROW(lane.Configure("default"), std::logic_error);
@@ -169,12 +173,13 @@ TEST(NoteLane, ASwitchDuringALoadIsRefusedUntilTheLoadSettles) {
 
 // The host reads nothing while prefilling, so a second large prefill would block the capture
 // thread. The lane skips it
-TEST(NoteLane, APrefillWaitsForTheLastOneRatherThanBlockingTheCaller) {
+TEST(NoteTiers, APrefillWaitsForTheLastOneRatherThanBlockingTheCaller) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
     Transitions seen;
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
-                          seen.Listener());
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, gpu, &store,
+                          "default", seen.Listener());
     lane.Configure("accuracy");
     ASSERT_TRUE(seen.WaitFor(Phase::kReady));
     std::vector<asr::Turn> transcript;
@@ -188,12 +193,13 @@ TEST(NoteLane, APrefillWaitsForTheLastOneRatherThanBlockingTheCaller) {
     EXPECT_LT(std::chrono::steady_clock::now() - t0, std::chrono::milliseconds(1000));
 }
 
-TEST(NoteLane, AHealthyHostAskedIfStuckExitsAndServesTheNextNote) {
+TEST(NoteTiers, AHealthyHostAskedIfStuckExitsAndServesTheNextNote) {
     TieredStore staged;
     const models::ModelStore store(staged.root);
     Transitions seen;
-    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, &store, "default",
-                          seen.Listener());
+    system::GpuLease gpu(system::InheritedGpuLeaseName());
+    WorkerNoteWriter lane(CLINICAVT_FAKE_NOTE_HOST, staged.root, staged.root, gpu, &store,
+                          "default", seen.Listener());
     lane.Configure("accuracy");
     ASSERT_TRUE(seen.WaitFor(Phase::kReady));
 

@@ -4,7 +4,8 @@
 #   .\tools\run-gates.ps1 [-Build] [-WithMicrophone] [-List]
 #
 # -List checks the plumbing without running anything. Needs staged weights and
-# the Intel GPU; tests that read the research corpus skip without it.
+# the Intel GPU. The model tests that read the PriMock consultation skip without it.
+# CLINICAVT_PRIMOCK_MIXED and CLINICAVT_PRIMOCK_REFERENCE override its default paths.
 [CmdletBinding()]
 param(
     [switch]$Build,
@@ -27,6 +28,20 @@ if ($running) {
     $names = ($running | ForEach-Object { "$($_.ProcessName) $($_.Id)" }) -join ', '
     throw "close the app and let its engine exit before the gates ($names still running)"
 }
+
+# ctest counts a skipped test as passed, so missing PriMock files are reported here.
+# The defaults match engine\tests\support\primock.hpp
+$primock = [ordered]@{
+    CLINICAVT_PRIMOCK_MIXED     = 'C:\dev\intelliscribe\bench\transcription\mixed\day1_consultation01_mixed.wav'
+    CLINICAVT_PRIMOCK_REFERENCE = 'C:\dev\intelliscribe\bench\transcription\references\day1_consultation01.json'
+}
+$missingPrimock = @($primock.GetEnumerator() | ForEach-Object {
+    $path = [Environment]::GetEnvironmentVariable($_.Key)
+    if (-not $path) { $path = $_.Value }
+    if (-not (Test-Path $path)) { $path }
+})
+$primockWarning = "PriMock file(s) missing, so the model tests that read them will skip: $($missingPrimock -join ', ')"
+if ($missingPrimock) { Write-Warning $primockWarning }
 
 $results = [ordered]@{}
 $started = Get-Date
@@ -95,4 +110,5 @@ $results.GetEnumerator() | ForEach-Object {
     '{0,-10} exit {1,-4} {2,6} min  {3}' -f $_.Key, $_.Value.Exit, $_.Value.Minutes, $_.Value.Summary
 }
 '{0:N0} minutes in total; logs in build\gates-*.log' -f ((Get-Date) - $started).TotalMinutes
+if ($missingPrimock) { Write-Warning $primockWarning }
 if (@($results.Values | Where-Object { $_.Exit -ne 0 })) { exit 1 }
