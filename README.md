@@ -136,7 +136,7 @@ Or open `clinicavt.slnx` in Visual Studio, set `ClinicAVT.App` as the startup pr
 platform, and run. The shell always uses the release engine, since a debug engine distorts timings.
 To produce a release, run `tools\stage-release.ps1` for the zip folder or `tools\pack-msix.ps1` for
 an unsigned MSIX. Both include the 4B and 9B note models. Pass `-Tiers` to choose others.
-`tools\release\SIGNING.txt` describes how the MSIX is signed.
+Pass `-Publisher` with the subject of the certificate that will sign the MSIX.
 
 </details>
 

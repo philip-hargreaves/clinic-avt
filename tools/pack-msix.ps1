@@ -3,7 +3,7 @@
 #   pack-msix.ps1 [-Out <folder>] [-Tiers constrained,default] [-Publisher <subject>]
 #
 # -Tiers picks note models by manifest tier: constrained (4B), default (9B), accuracy (35B).
-# -Publisher defaults to the one in Package.appxmanifest.
+# -Publisher is the subject of the signing certificate. The manifest holds a placeholder.
 param(
     [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\msix"),
     [ValidateSet("constrained", "default", "accuracy")]
@@ -69,6 +69,7 @@ $manifest.PreserveWhitespace = $true
 $manifest.Load($manifestPath)
 $manifest.Package.Identity.Version = $version
 $manifest.Package.Identity.Publisher = $Publisher
+if ($Publisher -match 'CN=([^,]+)') { $manifest.Package.Properties.PublisherDisplayName = $Matches[1].Trim() }
 # The build overwrites the Windows versions
 $family = $manifest.Package.Dependencies.TargetDeviceFamily
 $family.MinVersion = $source.Dependencies.TargetDeviceFamily.MinVersion
@@ -82,7 +83,6 @@ if ($LASTEXITCODE -ne 0) { throw "makeappx pack failed" }
 $packClock.Stop()
 
 Copy-Item (Join-Path $repo "tools\release\README-msix.txt") (Join-Path $Out "README.txt")
-Copy-Item (Join-Path $repo "tools\release\SIGNING.txt") $Out
 # A scanner can still hold a file in the work folder, and the package is already written
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 if (Test-Path $work) { Write-Warning "could not remove $work" }
