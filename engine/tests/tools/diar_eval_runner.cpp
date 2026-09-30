@@ -52,7 +52,7 @@ std::vector<clinicavt::asr::Turn> AsChunk(std::string text, std::span<const floa
 
 std::string Decode(clinicavt::asr::WhisperTranscriber& transcriber, std::span<const float> clip,
                    std::uint64_t first_frame) {
-    return clinicavt::asr::JoinedText(transcriber.DecodeClipChunks(clip, first_frame));
+    return clinicavt::asr::JoinedText(transcriber.DecodeClipChunks(clip, first_frame, {}));
 }
 
 // --amortise-probe: feeds a SpeakerDiariser the audio so far in five-second

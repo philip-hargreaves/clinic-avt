@@ -30,8 +30,10 @@ class GpuLease;
 
 namespace clinicavt::asr {
 
-// Whisper chunks with absolute frames, which are also the source of cut points
-using DecodeFn = std::function<std::vector<Turn>(std::span<const float>, std::uint64_t)>;
+// Whisper chunks with absolute frames, which are also the source of cut points. Returns no chunks
+// when `stop` is true before the decode starts
+using DecodeFn =
+    std::function<std::vector<Turn>(std::span<const float>, std::uint64_t, const StopFn& stop)>;
 
 using DecodeLoader = std::function<DecodeFn()>;
 
@@ -60,9 +62,9 @@ class WhisperTranscriber : public ITranscriber {
         return moving_.load();
     }
 
-    // Blocks until the worker has decoded the clip
-    std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
-                                       std::uint64_t first_frame) override;
+    // Blocks until the worker has decoded or dropped the clip
+    std::vector<Turn> DecodeClipChunks(std::span<const float> frames, std::uint64_t first_frame,
+                                       const StopFn& stop) override;
 
     std::vector<std::uint64_t> TakeClipCuts() override;
 
@@ -70,6 +72,7 @@ class WhisperTranscriber : public ITranscriber {
     struct Clip {
         std::vector<float> frames;
         std::uint64_t first_frame;
+        StopFn stop;
         std::promise<std::vector<Turn>> chunks;
     };
 

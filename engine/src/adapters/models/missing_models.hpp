@@ -15,7 +15,8 @@ namespace clinicavt::models {
 // Consultations are refused before reaching them, so any call is a bug and throws
 class MissingTranscriber : public asr::ITranscriber {
    public:
-    std::vector<asr::Turn> DecodeClipChunks(std::span<const float>, std::uint64_t) override {
+    std::vector<asr::Turn> DecodeClipChunks(std::span<const float>, std::uint64_t,
+                                            const asr::StopFn&) override {
         throw std::logic_error("the speech recognition model is not installed");
     }
 };

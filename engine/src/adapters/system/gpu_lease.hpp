@@ -61,9 +61,12 @@ class GpuLease {
         return mutex_ != nullptr;
     }
 
-    // Blocks until acquired, `on_wait` gives up, or the lease is wedged. An
+    // Checked every kPoll while waiting. True gives up at once
+    using GiveUp = std::function<bool()>;
+
+    // Blocks until acquired, `on_wait` or `give_up` gives up, or the lease is wedged. An
     // abandoned mutex counts as acquired
-    Guard Acquire(const OnWait& on_wait = {});
+    Guard Acquire(const OnWait& on_wait = {}, const GiveUp& give_up = {});
 
     // Non-blocking acquire, for work only worth doing immediately
     Guard TryAcquire();
@@ -81,6 +84,7 @@ class GpuLease {
 
    private:
     static constexpr std::chrono::milliseconds kSlice{5000};
+    static constexpr std::chrono::milliseconds kPoll{100};
     void* mutex_ = nullptr;         // HANDLE
     void* wedged_event_ = nullptr;  // HANDLE
     std::chrono::milliseconds slice_;

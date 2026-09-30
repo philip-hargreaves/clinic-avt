@@ -59,13 +59,16 @@ GpuLease::~GpuLease() {
     if (wedged_event_ != nullptr) CloseHandle(wedged_event_);
 }
 
-GpuLease::Guard GpuLease::Acquire(const OnWait& on_wait) {
+GpuLease::Guard GpuLease::Acquire(const OnWait& on_wait, const GiveUp& give_up) {
     if (mutex_ == nullptr || Wedged()) return {};
     const auto t0 = std::chrono::steady_clock::now();
+    const auto step = give_up ? std::min(slice_, std::chrono::milliseconds(kPoll)) : slice_;
+    auto next_slice = t0 + slice_;
     for (;;) {
-        const DWORD result = WaitForSingleObject(mutex_, static_cast<DWORD>(slice_.count()));
-        const double waited =
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        if (give_up && give_up()) return {};
+        const DWORD result = WaitForSingleObject(mutex_, static_cast<DWORD>(step.count()));
+        const auto now = std::chrono::steady_clock::now();
+        const double waited = std::chrono::duration<double>(now - t0).count();
         if (result == WAIT_OBJECT_0) return {mutex_, waited};
         if (result == WAIT_ABANDONED) {
             log::Printf("clinicavt: the last GPU holder exited mid-work\n");
@@ -75,6 +78,9 @@ GpuLease::Guard GpuLease::Acquire(const OnWait& on_wait) {
             log::Printf("clinicavt: GPU lease wait failed (error %lu)\n", GetLastError());
             return {};
         }
+        // The stuck-host watch and the wedge check keep their slice cadence
+        if (now < next_slice) continue;
+        next_slice = now + slice_;
         if (Wedged() || (on_wait && !on_wait(waited))) return {};
     }
 }

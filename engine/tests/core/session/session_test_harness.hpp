@@ -707,7 +707,8 @@ struct FakeDiariser : diar::IDiariser, diar::ICaptureDiarisation, diar::IVoicepr
 // One chunk per clip, numbered in decode order, so a test can tell which decode made a turn
 struct FakeTranscriber : asr::ITranscriber {
     std::vector<asr::Turn> DecodeClipChunks(std::span<const float> frames,
-                                            std::uint64_t first_frame) override {
+                                            std::uint64_t first_frame,
+                                            const asr::StopFn& /*stop*/) override {
         asr::Turn turn;
         turn.first_frame = first_frame;
         turn.frame_count = frames.size();

@@ -24,7 +24,7 @@
 namespace clinicavt::session {
 
 Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& diariser,
-                               asr::ITranscriber& transcriber, ISessionEvents& events,
+                               asr::ITranscriber& transcriber, ICaptureEvents& events,
                                metrics::Registry* metrics, const StageFn& stage) {
     Transcript transcript;
     events.OnProgress("speakers");
@@ -57,7 +57,7 @@ Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& di
         return similarity;
     });
     const auto decode = [&transcriber](std::span<const float> clip, std::uint64_t first) {
-        return transcriber.DecodeClipChunks(clip, first);
+        return transcriber.DecodeClipChunks(clip, first, {});
     };
     auto turns = diar::MergeByCluster(result.slices);
     auto* const capture = diariser.Capture();
