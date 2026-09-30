@@ -12,7 +12,7 @@
 
 namespace clinicavt::note {
 
-// Read fresh every note, so a prompt edit applies to the next generation
+// Re-read per note so prompt edits apply without a restart
 inline std::string LoadPrompt(const std::filesystem::path& path) {
     std::ifstream in(path);
     if (!in) {
@@ -23,7 +23,7 @@ inline std::string LoadPrompt(const std::filesystem::path& path) {
     return buffer.str();
 }
 
-// SPEAKER: text lines, the shape the prompt was tuned on
+// "SPEAKER: text" lines, the format the prompt was tuned on
 inline std::string TranscriptBlock(const std::vector<asr::Turn>& turns) {
     std::string block;
     for (const auto& turn : turns) {
