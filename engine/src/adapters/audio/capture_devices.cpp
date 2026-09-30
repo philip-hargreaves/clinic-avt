@@ -66,7 +66,7 @@ std::vector<CaptureDevice> ListCaptureDevices() {
         return devices;
     }
 
-    // The same default WasapiCapture resolves when no id is pinned
+    // The default WasapiCapture uses when no id is pinned
     std::wstring default_id;
     ComPtr<IMMDevice> default_device;
     if (SUCCEEDED(

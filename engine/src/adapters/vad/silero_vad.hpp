@@ -8,8 +8,8 @@
 
 namespace clinicavt::audio {
 
-// Silero through the model store, on CPU: ~0.1 ms per hop,
-// so it runs inline on the audio pipeline, behind the capture ring
+// Silero on CPU, ~0.1 ms per hop, so it runs inline on the audio pipeline behind
+// the capture ring
 class SileroVad : public IStreamingVad {
    public:
     SileroVad(const models::ModelStore& store, models::OvRuntime& runtime);

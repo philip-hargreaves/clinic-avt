@@ -6,9 +6,8 @@
 
 namespace clinicavt::audio {
 
-// Turns WASAPI packet positions into the port's "frames lost". Positions
-// alone decide: the discontinuity flag only ever corroborates them.
-// One instance per stream: positions restart from a new origin on any client rebuild.
+// Computes lost frames from WASAPI packet positions only. Positions restart when the client is
+// rebuilt, so each stream needs its own instance
 class CaptureTimeline {
    public:
     explicit CaptureTimeline(std::uint32_t native_rate) : native_rate_(native_rate) {}

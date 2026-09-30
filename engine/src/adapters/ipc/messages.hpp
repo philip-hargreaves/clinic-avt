@@ -26,7 +26,7 @@ inline constexpr int kSessionError = -32001;
 
 inline constexpr int kProtocolVersion = 1;
 
-// A string id echoes into every reply, so bounding it keeps replies encodable
+// Ids are echoed in every reply, so they are bounded to keep replies encodable
 inline constexpr std::size_t kMaxIdBytes = 128;
 
 using Id = std::variant<std::int64_t, std::string>;
@@ -59,9 +59,8 @@ inline json IdToJson(const Id& id) {
     return std::get<std::string>(id);
 }
 
-// One request per frame, no batches: an integer or string id and object
-// params. By value so params move out: nlohmann's copy recurses one frame
-// per nesting level
+// One request per frame with an integer or string id and object params, and no batches. Taken
+// by value so params can move, since nlohmann copies recurse once per nesting level
 inline std::variant<Request, Error> ParseRequest(json j) {
     const auto invalid = [](std::string why) {
         return Error{kInvalidRequest, "Invalid Request", json(std::move(why))};
@@ -128,8 +127,7 @@ inline std::optional<PeerInfo> PeerInfoFromJson(const json& j) {
     if (!j.is_object() || j.size() != 3) return std::nullopt;
     if (!j.contains("name") || !j["name"].is_string()) return std::nullopt;
     if (!j.contains("version") || !j["version"].is_string()) return std::nullopt;
-    // Compare on the json value: get<int>() would truncate an out-of-range number
-    // into a match. There is only one supported version, so equality is the check.
+    // Compared as json because get<int>() would truncate an out-of-range number into a match
     if (!j.contains("protocolVersion") || j["protocolVersion"] != kProtocolVersion) {
         return std::nullopt;
     }
@@ -137,7 +135,6 @@ inline std::optional<PeerInfo> PeerInfoFromJson(const json& j) {
                     kProtocolVersion};
 }
 
-// The two error shapes every handler returns
 inline Error InvalidParams(std::string detail) {
     return Error{kInvalidParams, "Invalid params", json(std::move(detail))};
 }
@@ -153,8 +150,8 @@ inline std::variant<std::string, Error> IdFrom(const json& params) {
     return params["id"].get<std::string>();
 }
 
-// A handler on one stored session: body(id) runs once the id is valid, and a
-// store failure inside it becomes a session error
+// Runs body(id) once the session id is valid and maps store failures inside it to a session
+// error
 template <class Body>
 std::variant<json, Error> WithSession(const json& params, Body body) {
     const auto id = IdFrom(params);
@@ -171,7 +168,6 @@ inline json NullWhenEmpty(const std::string& value) {
     return value.empty() ? json(nullptr) : json(value);
 }
 
-// A transcript turn as every message carries it
 inline json TurnJson(const asr::Turn& turn) {
     return {{"firstFrame", turn.first_frame},
             {"frameCount", turn.frame_count},

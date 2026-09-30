@@ -1,16 +1,19 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <span>
 #include <utility>
+#include <vector>
 
 #include "adapters/models/deferred_load.hpp"
 #include "ports/diariser.hpp"
 
 namespace clinicavt::diar {
 
-// Diarisation behind a background load. Callers already run off the audio threads
-class DeferredDiariser : public IDiariser {
+// Diariser loaded on a background thread. Callers are off the audio threads
+class DeferredDiariser : public IDiariser, public ICaptureDiarisation, public IVoiceprints {
    public:
     explicit DeferredDiariser(std::function<std::unique_ptr<IDiariser>()> build,
                               metrics::Registry* metrics = nullptr)
@@ -26,67 +29,89 @@ class DeferredDiariser : public IDiariser {
         return inner_.Get().AnchorSimilarities(audio, slices, cluster_count);
     }
 
+    // Returned without waiting for the load. Each call then waits for it, and does nothing when the
+    // loaded diariser lacks the capability
+    ICaptureDiarisation* Capture() override {
+        return this;
+    }
+
+    IVoiceprints* Voiceprints() override {
+        return this;
+    }
+
     void Advance(std::span<const float> audio, const DecodeClipFn& decode) override {
-        inner_.Get().Advance(audio, decode);
+        if (auto* capture = inner_.Get().Capture()) capture->Advance(audio, decode);
     }
 
     void Settle(std::span<const float> audio, const DecodeClipFn& decode,
                 const StopFn& stop) override {
-        inner_.Get().Settle(audio, decode, stop);
+        if (auto* capture = inner_.Get().Capture()) capture->Settle(audio, decode, stop);
     }
 
     void FindSpeech(std::span<const float> audio, const std::function<void(double)>& progress,
                     const StopFn& stop) override {
-        inner_.Get().FindSpeech(audio, progress, stop);
+        if (auto* capture = inner_.Get().Capture()) capture->FindSpeech(audio, progress, stop);
     }
 
     TurnTexts TakeTurnTexts() override {
-        return inner_.Get().TakeTurnTexts();
+        auto* capture = inner_.Get().Capture();
+        return capture != nullptr ? capture->TakeTurnTexts() : TurnTexts{};
     }
 
     TurnChunks TakeTurnChunks() override {
-        return inner_.Get().TakeTurnChunks();
+        auto* capture = inner_.Get().Capture();
+        return capture != nullptr ? capture->TakeTurnChunks() : TurnChunks{};
+    }
+
+    std::vector<asr::Turn> SpeculativeTranscript() override {
+        auto* capture = inner_.Get().Capture();
+        return capture != nullptr ? capture->SpeculativeTranscript() : std::vector<asr::Turn>{};
+    }
+
+    void AddCutPoints(std::span<const std::uint64_t> cuts) override {
+        if (auto* capture = inner_.Get().Capture()) capture->AddCutPoints(cuts);
+    }
+
+    void DiscardCapture() override {
+        if (!inner_.Loaded()) return;
+        if (auto* capture = inner_.Get().Capture()) capture->DiscardCapture();
     }
 
     std::vector<std::vector<float>> ClusterCentroids() override {
-        return inner_.Get().ClusterCentroids();
+        auto* voiceprints = inner_.Get().Voiceprints();
+        return voiceprints != nullptr ? voiceprints->ClusterCentroids()
+                                      : std::vector<std::vector<float>>{};
     }
 
     std::vector<float> EmbedSpan(std::span<const float> audio, std::uint64_t first,
                                  std::uint64_t end) override {
-        return inner_.Get().EmbedSpan(audio, first, end);
+        auto* voiceprints = inner_.Get().Voiceprints();
+        return voiceprints != nullptr ? voiceprints->EmbedSpan(audio, first, end)
+                                      : std::vector<float>{};
     }
 
-    std::vector<asr::Turn> SpeculativeTranscript() override {
-        return inner_.Get().SpeculativeTranscript();
+    std::vector<float> EmbedVoice(std::span<const float> speech) override {
+        auto* voiceprints = inner_.Get().Voiceprints();
+        return voiceprints != nullptr ? voiceprints->EmbedVoice(speech) : std::vector<float>{};
     }
 
-    void AddCutPoints(std::span<const std::uint64_t> cuts) override {
-        inner_.Get().AddCutPoints(cuts);
+    void ReplaceAnchor(std::span<const float> voiceprint, std::uint64_t enrolled_at) override {
+        if (auto* voiceprints = inner_.Get().Voiceprints()) {
+            voiceprints->ReplaceAnchor(voiceprint, enrolled_at);
+        }
     }
 
     std::vector<float> DoctorVoiceprint(std::span<const float> audio,
                                         const std::vector<LabelledSlice>& slices,
                                         int doctor_cluster) override {
-        return inner_.Get().DoctorVoiceprint(audio, slices, doctor_cluster);
+        auto* voiceprints = inner_.Get().Voiceprints();
+        return voiceprints != nullptr ? voiceprints->DoctorVoiceprint(audio, slices, doctor_cluster)
+                                      : std::vector<float>{};
     }
 
     void AccrueVoiceprint(std::span<const float> voiceprint) override {
-        inner_.Get().AccrueVoiceprint(voiceprint);
-    }
-
-    std::vector<float> EmbedVoice(std::span<const float> audio) override {
-        return inner_.Get().EmbedVoice(audio);
-    }
-
-    void ReplaceAnchor(std::span<const float> voiceprint, std::uint64_t enrolled_at) override {
-        inner_.Get().ReplaceAnchor(voiceprint, enrolled_at);
-    }
-
-    void DiscardCapture() override {
-        if (inner_.Loaded()) {
-            inner_.Get().DiscardCapture();
-        }
+        if (auto* voiceprints = inner_.Get().Voiceprints())
+            voiceprints->AccrueVoiceprint(voiceprint);
     }
 
    private:

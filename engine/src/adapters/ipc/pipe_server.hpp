@@ -19,8 +19,8 @@ class PipeTaken : public std::runtime_error {
     PipeTaken() : std::runtime_error("pipe name already claimed by another process") {}
 };
 
-// One duplex pipe, one client at a time. Construction claims the pipe
-// name, so a name already taken is treated as an attack and throws PipeTaken.
+// One duplex pipe, one client at a time. The constructor claims the name and
+// throws PipeTaken if it is already taken (treated as an attack)
 class PipeServer {
    public:
     using MethodHandler = std::function<std::variant<json, Error>(const json& params)>;
@@ -32,22 +32,20 @@ class PipeServer {
 
     void RegisterMethod(const std::string& method, MethodHandler handler);
 
-    // Handlers may queue these. Each is written to the client right after the reply
+    // Handlers queue these, and each goes to the client right after the reply
     void QueueNotification(const std::string& method, json params);
 
-    // Callable from any thread. Bounded so a client that stops draining never
-    // stalls the capture thread
+    // Thread-safe. Bounded so a client that stops reading cannot stall capture
     void PushNotification(const std::string& method, json params);
 
     enum class Accept { kClient, kIdle };
 
-    // Waits for the next client. Gives up once nobody has come for `idle`
-    // while `busy` was false. A client that leaves before speaking is
-    // dropped and the wait goes on
+    // Waits for a client. Returns once no client has come for `idle` while `busy`
+    // is false. Clients that leave before sending are dropped and waiting continues
     Accept AwaitClient(std::chrono::milliseconds idle, const std::function<bool()>& busy = {});
 
-    // Serves the connected client until it disconnects or the stream corrupts.
-    // False when it left without sending a whole frame
+    // Serves until disconnect or stream corruption. False if the client left
+    // without sending a whole frame
     bool Serve();
 
     // Blocks: accept one client, serve until it disconnects or the stream corrupts
@@ -64,7 +62,7 @@ class PipeServer {
     std::map<std::string, MethodHandler> handlers_;
     std::vector<json> notifications_;
     std::mutex write_mutex_;
-    bool write_failed_ = false;  // under write_mutex_. A torn frame ends the stream
+    bool write_failed_ = false;  // under write_mutex_, set when a torn frame ends the stream
 };
 
 }  // namespace clinicavt::ipc

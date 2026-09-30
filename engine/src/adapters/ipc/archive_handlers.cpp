@@ -11,7 +11,7 @@ namespace clinicavt::ipc {
 
 namespace {
 
-// An instant bounding a period. The shell sends "" for an open end, or leaves it out
+// A period bound. Missing, null or "" means open-ended
 bool TimeParam(const json& params, const char* key, std::string& out) {
     if (!params.contains(key) || params[key].is_null()) {
         out.clear();
@@ -32,7 +32,7 @@ std::variant<clinicavt::archive::Period, Error> PeriodFrom(const json& params) {
     return period;
 }
 
-// What refuses a backup or restore before it starts
+// Reason to refuse a backup or restore up front
 std::optional<Error> Refusal(bool session_active, const clinicavt::archive::ArchiveLane& lane) {
     if (session_active) return SessionError("finish the consultation first");
     if (lane.Busy()) return SessionError("a backup or restore is already running");
@@ -49,7 +49,7 @@ std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionStore& 
                                                const json& params) {
     const auto period = PeriodFrom(params);
     if (std::holds_alternative<Error>(period)) return std::get<Error>(period);
-    // The last backup, when there is one: what it held and when it was made
+    // The last backup's period and when it was made, if there is one
     std::optional<clinicavt::archive::Period> covered;
     std::string at;
     if (params.contains("covered") && !params["covered"].is_null()) {

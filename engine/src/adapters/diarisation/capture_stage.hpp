@@ -18,8 +18,8 @@
 
 namespace clinicavt::diar {
 
-// Decodes per speculation pass, small so a long pass cannot stall the
-// causal stages that keep the settled frontier fresh
+// Max decodes per speculation pass, so a long pass cannot starve the causal
+// stages that advance the settled frontier
 inline constexpr int kSpeculateBudget = 4;
 inline constexpr int kEdgeEmbedBudget = 2;  // edge chunks embedded per capture tick
 
@@ -50,7 +50,6 @@ std::vector<LabelledSlice> LabelSlices(const std::vector<Region>& kept,
                                        const std::vector<Region>& overlap_spans,
                                        const EmbedRangeFn& embed_span);
 
-// What capture accumulates for finalise to consume
 struct CaptureDiarisation {
     std::vector<float> vad_probabilities;  // one per hop
     SegResult seg;                         // absolute frames
@@ -64,7 +63,7 @@ struct CaptureDiarisation {
     std::vector<std::uint64_t> clip_cuts;  // segment edges from clip decodes
 };
 
-// What the last Advance could say about the sealed transcript's opening
+// Provisional opening of the sealed transcript from the last Advance
 struct Speculation {
     std::vector<LabelledSlice> turns;  // settled, merged, text known
     std::vector<std::string> texts;
@@ -72,8 +71,8 @@ struct Speculation {
     int cluster_count = 0;
 };
 
-// The capture-phase diarisation behind the settled frontier. Finalise stays
-// bit-identical and pays only the tail
+// Capture-phase diarisation up to the settled frontier, so finalise only processes the tail. The
+// results are bit-identical to a batch run
 class CaptureStage {
    public:
     CaptureStage(audio::SileroVad& vad, Segmenter& segmenter, SpeakerEmbedder& embedder);
@@ -83,14 +82,14 @@ class CaptureStage {
     void Advance(std::span<const float> audio, const DecodeClipFn& decode,
                  int budget = kSpeculateBudget, const StopFn& stop = {});
 
-    // The audio has ended: pad the final hop and segment the tail
+    // Called at the end of the audio. Pads the final hop and segments the tail
     void Finish(std::span<const float> audio);
 
     bool Engaged() const {
         return !state_.vad_probabilities.empty();
     }
 
-    // The next session's VAD starts fresh, as the first one does
+    // Also resets VAD and caches for the next session
     CaptureDiarisation Take() {
         vad_.Reset();
         overlap_cache_.clear();
@@ -109,7 +108,7 @@ class CaptureStage {
    private:
     const std::vector<float>& EmbedSlice(std::span<const float> audio, const Region& slice);
 
-    // Provisional overlap-turn embeddings, recomputed across ticks otherwise
+    // Cached so ticks do not re-embed the same overlap turns
     std::map<std::pair<std::uint64_t, std::uint64_t>, std::vector<float>> overlap_cache_;
 
     audio::SileroVad& vad_;

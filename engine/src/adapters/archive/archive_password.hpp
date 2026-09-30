@@ -15,11 +15,10 @@ std::string KdfInput(std::string_view password);
 
 std::size_t CodePoints(std::string_view utf8);
 
-// Overwrites a secret in place and empties it
 void Wipe(std::string& secret);
 void Wipe(std::wstring& secret);
 
-// Wipes a secret when the scope ends, however it ends
+// Wipes the secret on scope exit, including on throw
 template <typename Secret>
 struct WipeOnExit {
     Secret& secret;

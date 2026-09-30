@@ -32,9 +32,8 @@ std::optional<AnchorRecord> ParseAnchor(std::span<const std::uint8_t> plain);
 
 }  // namespace detail
 
-// The clinician's voiceprint, DPAPI-protected. It starts from an enrolment or
-// from the first consultation and every consultation refines it. A corrupt
-// file resets to empty and rebuilds
+// Clinician voiceprint, DPAPI-protected. Seeded by enrolment or the first
+// consultation, refined by each one after. A corrupt file resets to empty
 class AnchorStore {
    public:
     // An enrolment counts as this many consultations, so the first few
@@ -43,12 +42,12 @@ class AnchorStore {
 
     explicit AnchorStore(const std::filesystem::path& root);
 
-    // Unit-norm voiceprint, empty before any enrolment or consultation
+    // Unit norm. Nullopt before any enrolment or consultation
     std::optional<std::vector<float>> Anchor() const;
     AnchorStatus Status() const;
 
     void Accrue(std::span<const float> voiceprint);
-    // Seed the print from an enrolment, discarding whatever accrued before
+    // Seeds from an enrolment, discarding anything accrued
     void Replace(std::span<const float> voiceprint, std::uint64_t enrolled_at);
     void Clear();
 
