@@ -1,15 +1,11 @@
-# Writes the MSIX logo images in app\ClinicAVT.App\Assets from AppIcon.ico. Run it again when
-# the icon changes, and commit the PNGs. Sizes the icon already has are copied from it. The
-# other sizes are scaled from its largest image.
+# Writes the MSIX logos in app\ClinicAVT.App\Assets from AppIcon.ico. Commit the PNGs.
 #
 #   make-logo-assets.ps1
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 $assets = Join-Path (Split-Path $PSScriptRoot -Parent) "app\ClinicAVT.App\Assets"
 
-# Read the images inside the icon, keyed by width. The entries start 6 bytes in and are 16
-# bytes each, with the image's length and offset at bytes 8 and 12 of the entry. Every image
-# must be a PNG
+# The icon's PNG images, by width
 $bytes = [IO.File]::ReadAllBytes((Join-Path $assets "AppIcon.ico"))
 $frames = @{}
 for ($i = 0; $i -lt [BitConverter]::ToUInt16($bytes, 4); $i++) {
@@ -23,7 +19,6 @@ for ($i = 0; $i -lt [BitConverter]::ToUInt16($bytes, 4); $i++) {
 }
 $largest = $frames[[int]($frames.Keys | Measure-Object -Maximum).Maximum]
 
-# Draws the icon, iconSize pixels square, in the centre of a transparent image
 function Write-Logo([string]$name, [int]$width, [int]$height, [int]$iconSize) {
     $source = if ($frames.ContainsKey($iconSize)) { $frames[$iconSize] } else { $largest }
     $canvas = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -44,15 +39,14 @@ Get-ChildItem $assets -Filter *.png |
 
 foreach ($scale in 100, 200, 400) {
     $k = $scale / 100
-    # App list, taskbar and Start, then the logo the installer shows
     Write-Logo "Square44x44Logo.scale-$scale" (44 * $k) (44 * $k) (44 * $k)
     Write-Logo "StoreLogo.scale-$scale" (50 * $k) (50 * $k) (50 * $k)
-    # Tiles and splash keep a margin round the icon
+    # Tiles and splash have a margin
     Write-Logo "Square150x150Logo.scale-$scale" (150 * $k) (150 * $k) (90 * $k)
     Write-Logo "Wide310x150Logo.scale-$scale" (310 * $k) (150 * $k) (90 * $k)
     Write-Logo "SplashScreen.scale-$scale" (620 * $k) (300 * $k) (150 * $k)
 }
-# Taskbar and title bar sizes, with the unplated versions Windows uses on light and dark taskbars
+# Taskbar sizes
 foreach ($size in 16, 24, 32, 48, 256) {
     foreach ($form in "", "_altform-unplated", "_altform-lightunplated") {
         Write-Logo "Square44x44Logo.targetsize-$size$form" $size $size $size
