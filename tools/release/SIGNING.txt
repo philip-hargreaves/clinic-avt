@@ -1,0 +1,36 @@
+Signing the ClinicAVT package
+-----------------------------
+tools\pack-msix.ps1 writes an unsigned ClinicAVT_<version>_x64.msix and SHA256SUMS.txt.
+Windows installs the package only after it is signed with a certificate whose subject matches
+its Publisher. The person who holds the certificate downloads both files and follows these
+steps.
+
+1. Check the certificate. This lists the subject and thumbprint of each installed certificate:
+
+     Get-ChildItem Cert:\CurrentUser\My | Format-List Subject, Thumbprint
+
+   The subject must match the package's Publisher exactly, including case and spaces, or
+   signtool fails with error 0x8007000B. If it is different, ask for the package to be rebuilt
+   with the Publisher in app\ClinicAVT.App\Package.appxmanifest changed to match. The
+   Publisher must not change after a release, because Windows then treats the next version as
+   a different app.
+
+2. Check that the downloaded package is intact. The hash must match the one in
+   SHA256SUMS.txt. Upper or lower case does not matter:
+
+     Get-FileHash ClinicAVT_<version>_x64.msix -Algorithm SHA256
+
+3. Sign with a timestamp, so the package still installs after the certificate expires. Use
+   the timestamp server of the certificate authority, and the thumbprint from step 1. Run
+   signtool from a Developer PowerShell for Visual Studio, or by its full path in the Windows
+   SDK:
+
+     signtool sign /fd SHA256 /tr <timestamp server> /td SHA256 /sha1 <thumbprint> ClinicAVT_<version>_x64.msix
+
+4. Verify the signature:
+
+     signtool verify /pa /v ClinicAVT_<version>_x64.msix
+
+Host the signed file with README.txt beside it. Recipients download it and double-click it.
+
+Each release needs a higher number in the VERSION file and a new signature.

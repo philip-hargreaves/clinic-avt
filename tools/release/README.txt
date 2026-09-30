@@ -9,7 +9,7 @@ Getting started
 5. If Windows SmartScreen appears, select "More info", then "Run anyway".
 
 The first launch takes a few minutes while the models are prepared for this computer. This
-happens only once.
+happens once. A note model chosen later in Settings is prepared the first time it is used.
 
 To try it without recording, select "Import the file" on the Consultation page and choose
 an example consultation. The Help page in the app covers everything else.
