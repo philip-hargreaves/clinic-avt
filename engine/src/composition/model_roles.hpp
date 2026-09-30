@@ -60,6 +60,10 @@ std::unique_ptr<audio::IStreamingVad> BuildVad(const models::ModelStore& store,
                                                metrics::Registry& metrics, bool scripted,
                                                RoleReport& report);
 
+// The speaker embedding model's id and weight hash, which a voiceprint is only valid for. Empty
+// when that model is not staged
+std::string VoiceprintModel(const models::ModelStore& store);
+
 // Needs both the diarisation and segmentation models
 std::unique_ptr<diar::IDiariser> BuildDiariser(const models::ModelStore& store,
                                                models::OvRuntime& runtime,
