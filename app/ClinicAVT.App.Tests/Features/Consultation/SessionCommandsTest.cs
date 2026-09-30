@@ -77,7 +77,8 @@ public class SessionCommandsTest
     [Fact]
     public async Task DiscardIsHiddenWhenConsultationsAreNotSaved()
     {
-        var shell = TestSession.Create(new AppPreferences(new MemoryPreferencesStore()));
+        var shell = TestSession.Create(
+            new AppPreferences(new MemoryPreferencesStore()) { KeepConsultations = false });
         var controls = shell.Get<SessionControlsViewModel>();
         await ReviewAsync(shell);
 

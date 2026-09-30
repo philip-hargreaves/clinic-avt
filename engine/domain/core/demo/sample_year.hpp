@@ -10,7 +10,8 @@
 
 namespace clinicavt::demo {
 
-// Returns the time months_back months before now, with the day clamped to the length of that month
+// Returns the time months_back months before now, with the day clamped to the length of that
+// month. A time after now moves back one month
 std::chrono::sys_seconds SampleStart(const Sample& sample, std::chrono::sys_seconds now);
 
 std::size_t SeedSampleYear(store::IDocumentStore& documents, store::ISampleStore& sample_store,

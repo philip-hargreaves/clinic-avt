@@ -1,12 +1,12 @@
 {
   "source": "day2_consultation02",
-  "attribution": "Recording from PriMock57 (Babylon Health), CC BY 4.0, transcribed by the app; notes and case study by the app's accuracy tier at standard settings",
-  "monthsBack": 1,
-  "day": 15,
+  "attribution": "Recording from PriMock57 (Babylon Health), CC BY 4.0, transcribed by the app; clinical note, patient information and case study written by the app",
+  "monthsBack": 0,
+  "day": 22,
   "time": "13:15",
   "label": "Painless elbow swelling",
-  "note": "The patient, a 53-year-old male, presented with a one-week history of painless, warm, fluid-filled swelling on the left elbow, noting no trauma. He has a GP-diagnosed history of osteoarthritis and a peanut allergy, with no regular medications. Examination revealed a visible swelling with warmth and fluid fluctuation, though the skin was dry.\n\nThe working diagnosis is olecranon bursitis. The plan is to prescribe over-the-counter ibuprofen 400mg twice daily with food. Blood test forms for inflammatory markers, infection, and rheumatological antibodies will be sent to the patient’s home. A follow-up appointment is arranged to review results and the joint status.",
-  "patient": "Your appointment today\nYou came to see us because of painless swelling on your left elbow. You said it felt warm and had fluid inside. You noted no injury caused this. We examined the area and saw visible swelling. The skin was dry but the fluid moved.\n\nYour diagnosis\nYour assessment is olecranon bursitis. This is swelling of the fluid sac near the elbow joint. It happens when the sac fills with extra fluid. We did not find any other specific cause.\n\nYour treatment and next steps\nWe will send blood test forms to your home. These tests check for inflammation and infection. They also check for rheumatological antibodies. You must take ibuprofen 400mg twice daily. Take this medicine with food. We have arranged a follow-up appointment. This is to review your test results. We will also check the joint status then.\n\nWhen to contact us\nWe did not discuss any specific warning signs to watch for. No symptoms were listed for you to monitor. Please contact us if you have new concerns.",
+  "note": "The patient presented with left elbow swelling noticed a week ago. The area was warm and felt fluid-filled but not painful. A history of osteoarthritis was confirmed by a GP previously. The patient has a peanut allergy. Examination revealed dry skin on the elbow tip. The patient was diagnosed with bursitis. Ibuprofen 400mg twice daily was prescribed. Blood tests for inflammatory markers and gout were arranged. A follow-up appointment was scheduled to review results. The patient was advised to return immediately if the elbow became red or very painful.",
+  "patient": "Your appointment today\nYou came because your left elbow swelled. It felt warm and held fluid but did not hurt. We checked your skin and found it was dry.\n\nYour diagnosis\nWe suspect you have bursitis. This means the fluid bag at your elbow joint is inflamed.\n\nYour treatment and next steps\nTake Ibuprofen 400mg twice daily. Rest your elbow to help it heal. We will send blood tests to check for inflammation and gout. You must come back to see us soon to review the results.\n\nWhen to contact us\nCall us immediately if your elbow turns red. Call us immediately if your elbow becomes very painful.",
   "summary": "A patient in their fifties presented with a one-week history of painless, warm, fluid-filled swelling on the left elbow without trauma. Examination confirmed visible swelling with fluid fluctuation and dry skin. The working diagnosis was olecranon bursitis, managed with ibuprofen and blood tests sent to the patient’s home.",
   "audioSeconds": 539.73,
   "answers": {
@@ -21,7 +21,6 @@
   },
   "turns": [
     {"speaker": "doctor", "firstFrame": 7392, "frameCount": 32832, "text": "Good morning."},
-    {"speaker": "patient", "firstFrame": 56032, "frameCount": 6208, "text": "Thanks, Tony."},
     {"speaker": "doctor", "firstFrame": 69344, "frameCount": 49216, "text": "I'm Dr Dean Mirza from GP at hand, nice to see you."},
     {"speaker": "patient", "firstFrame": 126688, "frameCount": 11328, "text": "Nice to see you."},
     {"speaker": "doctor", "firstFrame": 145632, "frameCount": 64064, "text": "Okay, before we start your appointment, could you please tell me your first name and your date of birth?"},

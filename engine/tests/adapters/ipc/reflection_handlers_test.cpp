@@ -26,7 +26,7 @@ TEST(Handlers, TheSampleYearSeedsOnceAndClearsCleanly) {
     EXPECT_EQ(ResultOf(again)["added"], 0) << "already seeded is a no-op, not an error";
 
     const json sessions = HandleSessionList(fixture.records)["sessions"];
-    EXPECT_EQ(sessions.size(), 9u);
+    EXPECT_EQ(sessions.size(), 7u);
     std::size_t samples = 0;
     for (const auto& s : sessions) {
         if (s["sample"].get<bool>()) {
@@ -37,9 +37,9 @@ TEST(Handlers, TheSampleYearSeedsOnceAndClearsCleanly) {
             EXPECT_EQ(s["id"], real);
         }
     }
-    EXPECT_EQ(samples, 8u);
+    EXPECT_EQ(samples, 6u);
     const json entries = HandleReflectionList(fixture.reflections)["reflections"];
-    ASSERT_EQ(entries.size(), 8u);
+    ASSERT_EQ(entries.size(), 6u);
     for (const auto& e : entries) EXPECT_TRUE(e["sample"].get<bool>());
     const auto sample = entries[0]["id"].get<std::string>();
     EXPECT_FALSE(fixture.store->ReadDocument(sample, DocumentKind::kNote).text.empty());
@@ -57,7 +57,7 @@ TEST(Handlers, TheSampleYearSeedsOnceAndClearsCleanly) {
     const auto erased =
         HandleSessionDeleteAll(fixture.records, json{{"deleteReflections", true}}, false, false);
     ASSERT_TRUE(std::holds_alternative<json>(erased));
-    EXPECT_EQ(ResultOf(erased)["removed"], 9);
+    EXPECT_EQ(ResultOf(erased)["removed"], 7);
     EXPECT_EQ(HandleSessionList(fixture.records)["sessions"].size(), 0u);
 }
 

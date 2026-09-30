@@ -8,15 +8,26 @@
 
 namespace clinicavt::demo {
 
-std::chrono::sys_seconds SampleStart(const Sample& sample, std::chrono::sys_seconds now) {
+namespace {
+
+std::chrono::sys_seconds StartIn(std::chrono::year_month ym, const Sample& sample) {
     using namespace std::chrono;
-    const year_month_day today{floor<days>(now)};
-    year_month ym = year_month{today.year(), today.month()} - months{sample.months_back};
     const auto month_end =
         static_cast<unsigned>(year_month_day_last{ym.year(), month_day_last{ym.month()}}.day());
     const auto day_number = std::clamp(static_cast<unsigned>(sample.day), 1u, month_end);
     const year_month_day ymd{ym.year(), ym.month(), day{day_number}};
     return sys_days{ymd} + hours{sample.hour} + minutes{sample.minute};
+}
+
+}  // namespace
+
+std::chrono::sys_seconds SampleStart(const Sample& sample, std::chrono::sys_seconds now) {
+    using namespace std::chrono;
+    const year_month_day today{floor<days>(now)};
+    const year_month ym = year_month{today.year(), today.month()} - months{sample.months_back};
+    const auto start = StartIn(ym, sample);
+    // A sample in the current month can fall after now, so it moves back a month
+    return start <= now ? start : StartIn(ym - months{1}, sample);
 }
 
 std::size_t SeedSampleYear(store::IDocumentStore& documents, store::ISampleStore& sample_store,

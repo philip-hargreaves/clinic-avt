@@ -100,13 +100,17 @@ public class PrivacySettingsTest
     }
 
     [Fact]
-    public async Task KeepConsultationsDefaultsOffAndTurningOnIsConfirmedNeverJustToggled()
+    public async Task KeepConsultationsDefaultsOnAndTurningItBackOnIsConfirmedNeverJustToggled()
     {
         var preferences = Preferences();
         var asked = 0;
         var dialogs = new FakeDialogService { Answer = false, OnConfirm = () => asked++ };
         var privacy = TestSession.Settings(preferences: preferences, dialogs: dialogs).Get<PrivacySettings>();
-        Assert.False(privacy.KeepConsultations, "save nothing unless the clinician opts in");
+        Assert.True(privacy.KeepConsultations, "a demonstration build keeps consultations from the start");
+
+        privacy.KeepConsultations = false;  // turning off needs no confirmation
+        Assert.Equal(0, asked);
+        Assert.False(preferences.KeepConsultations);
 
         privacy.KeepConsultations = true;
         await WaitUntilAsync(() => asked == 1);
