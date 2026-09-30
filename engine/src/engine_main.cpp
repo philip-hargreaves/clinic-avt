@@ -83,16 +83,19 @@ clinicavt::session::SourceFactory MakeSourceFactory(std::string forced) {
 // the lane is destroyed, since Whisper outlives it
 class ProbeScope {
    public:
-    explicit ProbeScope(clinicavt::note::WorkerNoteWriter* lane) {
+    ProbeScope(clinicavt::system::GpuLease& gpu, clinicavt::note::WorkerNoteWriter* lane)
+        : gpu_(gpu) {
         if (lane == nullptr) return;
-        clinicavt::system::GpuLease::Global().SetStuckProbe(
-            [lane] { return lane->CheckForStuckHost(); });
+        gpu_.SetStuckProbe([lane] { return lane->CheckForStuckHost(); });
     }
     ~ProbeScope() {
-        clinicavt::system::GpuLease::Global().SetStuckProbe({});
+        gpu_.SetStuckProbe({});
     }
     ProbeScope(const ProbeScope&) = delete;
     ProbeScope& operator=(const ProbeScope&) = delete;
+
+   private:
+    clinicavt::system::GpuLease& gpu_;
 };
 
 // Closing the shell ends capture and a reopened shell reconnects. Stay while a note model is
@@ -134,7 +137,8 @@ int wmain(int argc, wchar_t* argv[]) {
         for (int i = 1; i < argc; ++i) args.push_back(clinicavt::utf8::FromPath(argv[i]));
         const composition::EngineConfig config = composition::ParseConfig(std::move(args));
         // All engines and note hosts share one GPU lease name, passed to hosts in the environment
-        _putenv_s("CLINICAVT_GPU_LEASE", clinicavt::system::kGpuLeaseName);
+        _putenv_s(clinicavt::system::kGpuLeaseVariable, clinicavt::system::kGpuLeaseName);
+        clinicavt::system::GpuLease gpu_lease(clinicavt::system::kGpuLeaseName);
         clinicavt::log::Printf(
             "clinicavt-engine: power throttling %s\n",
             clinicavt::system::Describe(clinicavt::system::DisableThrottlingOnSelf()).c_str());
@@ -149,24 +153,24 @@ int wmain(int argc, wchar_t* argv[]) {
         clinicavt::metrics::Registry metrics;
         clinicavt::diar::AnchorStore anchors(config.store_root);
 
-        const bool stray_note_host = composition::FindStrayNoteHost();
+        const bool stray_note_host = composition::FindStrayNoteHost(gpu_lease);
         composition::RoleReport roles;
-        auto transcriber = composition::BuildTranscriber(model_store, ov_runtime, config.asr_device,
-                                                         metrics, config.scripted, roles);
+        auto transcriber = composition::BuildTranscriber(
+            model_store, ov_runtime, gpu_lease, config.asr_device, metrics, config.scripted, roles);
         auto vad = composition::BuildVad(model_store, ov_runtime, metrics, config.scripted, roles);
         auto diariser = composition::BuildDiariser(model_store, ov_runtime, anchors, metrics,
                                                    config.scripted, roles);
         const std::string auto_tier = composition::MachineNoteTier(model_store);
         // The shell re-sends its tier on connect, which is a no-op by then
         auto note_writer = composition::BuildNoteWriter(
-            model_store, config.models_root, config.note_tier, auto_tier,
+            model_store, config.models_root, gpu_lease, config.note_tier, auto_tier,
             [&server](const clinicavt::note::NoteModelState& state) {
                 server.PushNotification("note/model", clinicavt::ipc::NoteModelJson(state));
             },
             roles);
         // Report a stuck host at startup instead of on the first note request
         if (stray_note_host && note_writer != nullptr) note_writer->Prepare();
-        const ProbeScope probe_scope(note_writer.get());
+        const ProbeScope probe_scope(gpu_lease, note_writer.get());
         auto translator = composition::BuildTranslator(model_store, ov_runtime, roles);
         // Guidance runs on the CPU in its own lane; the embedder loads in the
         // background so the first note search is warm

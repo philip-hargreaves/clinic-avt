@@ -5,10 +5,10 @@
 #include <exception>
 #include <functional>
 #include <mutex>
-#include <thread>
 #include <utility>
 
 #include "core/common/log.hpp"
+#include "core/common/worker_thread.hpp"
 
 namespace clinicavt::models {
 
@@ -21,16 +21,11 @@ class Residency {
 
     Residency(std::function<void()> load, std::function<void()> unload, Clock::duration idle)
         : load_(std::move(load)), unload_(std::move(unload)), idle_(idle) {
-        worker_ = std::thread([this] { Run(); });
+        worker_.Start([this] { Run(); });
     }
 
     ~Residency() {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            stop_ = true;
-        }
-        changed_.notify_all();
-        worker_.join();
+        worker_.Stop();
     }
 
     Residency(const Residency&) = delete;
@@ -102,7 +97,7 @@ class Residency {
    private:
     void Run() {
         std::unique_lock<std::mutex> lock(mutex_);
-        while (!stop_) {
+        while (!worker_.Stopping()) {
             if (want_ && !loaded_ && !loading_) {
                 want_ = false;
                 loading_ = true;
@@ -156,10 +151,9 @@ class Residency {
     bool loaded_ = false;
     bool loading_ = false;
     bool unloading_ = false;
-    bool stop_ = false;
     int users_ = 0;
     Clock::time_point last_ = Clock::now();
-    std::thread worker_;
+    WorkerThread worker_{mutex_, changed_};
 };
 
 }  // namespace clinicavt::models

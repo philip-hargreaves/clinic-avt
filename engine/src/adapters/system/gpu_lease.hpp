@@ -14,9 +14,14 @@ namespace clinicavt::system {
 // One name per logon session so all engines and note hosts share the lease
 inline constexpr const char* kGpuLeaseName = "Local\\clinicavt-gpu";
 
+// Set by the engine and inherited by the hosts it starts
+inline constexpr const char* kGpuLeaseVariable = "CLINICAVT_GPU_LEASE";
+
+// The lease name inherited from the engine, empty when unset
+std::string InheritedGpuLeaseName();
+
 // Named mutex serialising all GPU work of engines and note hosts, so two models
-// never run at once (the driver-fault configuration). Name comes from
-// CLINICAVT_GPU_LEASE, set by the engine and inherited by hosts. Inert when unset
+// never run at once (the driver-fault configuration). Inert with an empty name
 class GpuLease {
    public:
     class Guard {
@@ -51,8 +56,6 @@ class GpuLease {
     ~GpuLease();
     GpuLease(const GpuLease&) = delete;
     GpuLease& operator=(const GpuLease&) = delete;
-
-    static GpuLease& Global();
 
     bool Active() const {
         return mutex_ != nullptr;
@@ -96,7 +99,7 @@ std::vector<ProcessId> OrphanedNoteHosts();
 // Default wait: logs every 30 s and gives up for good if an orphaned note host
 // is still there one slice later, since only a stuck host lingers. Tests
 // inject the lease and scan
-GpuLease::OnWait WatchForStuckHosts(const char* who, GpuLease& lease = GpuLease::Global(),
+GpuLease::OnWait WatchForStuckHosts(const char* who, GpuLease& lease,
                                     OrphanScan scan = OrphanedNoteHosts);
 
 }  // namespace clinicavt::system

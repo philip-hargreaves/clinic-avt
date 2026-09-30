@@ -24,10 +24,10 @@ struct ModelInfo {
     std::map<std::string, std::uintmax_t> file_bytes;  // filename -> size, when the manifest says
 };
 
-// Per-model manifest.json dirs under one root. Parsing fails closed. A load
-// checks presence and size only. Integrity is established at delivery (fetch,
-// staging, package signature). Hashes are provenance; the embedding model's
-// weight hash is its revision. No OpenVINO here
+// Per-model manifest.json dirs under one root. Parsing fails closed. A load checks presence and
+// size only, as integrity is checked at delivery (fetch, staging, package signature). Hashes are
+// kept for provenance, and the embedder's weight hash is also its revision. Has no OpenVINO
+// dependency
 class ModelStore {
    public:
     explicit ModelStore(const std::filesystem::path& root);
@@ -36,7 +36,7 @@ class ModelStore {
         return models_;
     }
 
-    // The one model serving a role. Ambiguity and absence are loud
+    // The model for a role. Throws if none or several match
     const ModelInfo& Resolve(std::string_view task, std::string_view tier) const;
 
     // Throws naming the first file missing or of the wrong size. Reads no bytes
@@ -46,12 +46,12 @@ class ModelStore {
     std::vector<ModelInfo> models_;
 };
 
-// OpenVINO's compile cache, beside the weights
+// OpenVINO compile cache, next to the weights
 inline std::filesystem::path CacheDir(const ModelInfo& info) {
     return info.dir / ".cache";
 }
 
-// True once the model has been compiled on this machine
+// True once compiled on this machine (cache exists)
 inline bool Compiled(const ModelInfo& info) {
     return std::filesystem::exists(CacheDir(info));
 }

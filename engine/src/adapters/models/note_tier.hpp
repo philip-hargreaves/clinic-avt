@@ -10,11 +10,11 @@
 
 namespace clinicavt::models {
 
-// The shell's value for a note model the user never chose
+// Shell value when the user has not picked a note model
 inline constexpr const char* kAutoNoteTier = "auto";
 
-// The integrated GPU shares RAM: the 9B's host peaks near 7.6 GB beside the engine's
-// 4.5-7.5 GB. The GPU's own limit can be lower, so it is checked too
+// The iGPU shares RAM, and the 9B host peaks near 7.6 GB on top of the engine's 4.5-7.5 GB. The
+// GPU limit can be lower, so it is checked too
 inline constexpr std::uint64_t kNineBInstalledBytes = 23ULL << 30;  // a 24 GB machine
 inline constexpr std::uint64_t kNineBGpuBytes = 11ULL << 30;
 
@@ -31,8 +31,8 @@ inline std::vector<std::string> StagedNoteTiers(const ModelStore& store) {
     return tiers;
 }
 
-// The note model a machine starts on until the user picks one: the 9B when it fits, else the
-// 4B, and the 35B only as a last resort. Empty when none is staged. Unknown memory is too little
+// The default note tier is the 9B if it fits, else the 4B, else the 35B. Empty if none is staged.
+// Unknown memory counts as too little
 inline std::string AutoNoteTier(const std::vector<std::string>& staged,
                                 const MachineMemory& memory) {
     const auto has = [&staged](const char* tier) {
