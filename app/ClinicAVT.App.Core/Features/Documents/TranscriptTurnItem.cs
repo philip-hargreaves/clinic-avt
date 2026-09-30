@@ -4,13 +4,15 @@ namespace ClinicAVT.App.Core.Features.Documents;
 public sealed record TranscriptTurnItem(string Speaker, string TimeLabel, string Text)
 {
     /// <summary>
-    /// "Doctor", "Patient", an ellipsis while unknown, or the role as the engine named it.
+    /// "Doctor", "Patient", "Other speaker" for anyone else, an ellipsis while unknown, or the
+    /// engine's fallback label capitalised ("Speaker 1") when roles could not be decided.
     /// </summary>
     public string SpeakerLabel => Speaker switch
     {
         "doctor" => "Doctor",
         "patient" => "Patient",
-        "" => "\u2026",
-        _ => Speaker,
+        "unknown" => "Other speaker",
+        "" => "…",
+        _ => char.ToUpperInvariant(Speaker[0]) + Speaker[1..],
     };
 }
