@@ -60,8 +60,9 @@ Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& di
         return transcriber.DecodeClipChunks(clip, first);
     };
     auto turns = diar::MergeByCluster(result.slices);
-    const auto cache = diariser.TakeTurnTexts();
-    const auto chunk_cache = diariser.TakeTurnChunks();
+    auto* const capture = diariser.Capture();
+    const auto cache = capture != nullptr ? capture->TakeTurnTexts() : diar::TurnTexts{};
+    const auto chunk_cache = capture != nullptr ? capture->TakeTurnChunks() : diar::TurnChunks{};
     std::vector<std::vector<asr::Turn>> turn_chunks;
     auto turn_texts =
         diar::DecodeTurnTexts(turns, audio, decode, &cache, &chunk_cache, &turn_chunks);
@@ -70,11 +71,14 @@ Transcript TranscribeRecording(std::span<const float> audio, diar::IDiariser& di
     stage("voiceprints joined");
     // Must run after the voiceprint task joins because the embedder is single-threaded
     {
-        const auto centroids = diariser.ClusterCentroids();
+        auto* const voiceprints = diariser.Voiceprints();
+        const auto centroids = voiceprints != nullptr ? voiceprints->ClusterCentroids()
+                                                      : std::vector<std::vector<float>>{};
         const auto pieces = diar::ResplitByEmbedding(
             turns, turn_texts, turn_chunks,
             [&](std::uint64_t first, std::uint64_t end) {
-                return diariser.EmbedSpan(audio, first, end);
+                return voiceprints != nullptr ? voiceprints->EmbedSpan(audio, first, end)
+                                              : std::vector<float>{};
             },
             centroids);
         turns.clear();
