@@ -80,11 +80,12 @@ $packClock = [Diagnostics.Stopwatch]::StartNew()
 & $makeappx.FullName pack /d $layout /p $msix /h SHA256 /o
 if ($LASTEXITCODE -ne 0) { throw "makeappx pack failed" }
 $packClock.Stop()
-Remove-Item $work -Recurse -Force
 
-$hash = (Get-FileHash $msix -Algorithm SHA256).Hash.ToLowerInvariant()
-Set-Content (Join-Path $Out "SHA256SUMS.txt") "$hash  $(Split-Path $msix -Leaf)" -Encoding ascii
 Copy-Item (Join-Path $repo "tools\release\README-msix.txt") (Join-Path $Out "README.txt")
+Copy-Item (Join-Path $repo "tools\release\SIGNING.txt") $Out
+# A scanner can still hold a file in the work folder, and the package is already written
+Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $work) { Write-Warning "could not remove $work" }
 
 $size = (Get-Item $msix).Length / 1GB
 Write-Host ("{0}: {1:N2} GB, tiers {2}. Pack {3:mm\:ss}, total {4:mm\:ss}" -f $msix, $size,

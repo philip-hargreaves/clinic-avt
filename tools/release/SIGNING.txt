@@ -4,6 +4,5 @@ The certificate subject must equal the Publisher in app\ClinicAVT.App\Package.ap
 or signtool fails with 0x8007000B.
 
   Get-ChildItem Cert:\CurrentUser\My | Format-List Subject, Thumbprint
-  Get-FileHash ClinicAVT_<version>_x64.msix        (compare with SHA256SUMS.txt)
   signtool sign /fd SHA256 /tr <timestamp server> /td SHA256 /sha1 <thumbprint> ClinicAVT_<version>_x64.msix
   signtool verify /pa /v ClinicAVT_<version>_x64.msix
