@@ -1,40 +1,33 @@
-# diarisation
+# Diarisation
 
-**Question.** Does the engine attribute each word to the right speaker, name the doctor without a
-wrong guess, and keep the transcript readable, including short answers?
+Is each word given to the right speaker, is the doctor named without a wrong guess, and does
+the transcript stay readable?
 
-**Data.** PriMock57 TextGrids (see `evaluation/transcription/README.md`), the mixed tracks, and sweeps of the
-engine over them (`evaluation/performance/perf_loop.py` with `PERF_SAVE`, transcripts in
-`build/perf-loop/transcripts/<tag>-<cid>_mixed.json`). `reference/research-port-slices.txt` is the
-research C++ port's per-slice output, the 96.94% selection pipeline, frozen.
+## Data
 
-**Backs.** Research docs `docs/evaluation/3-diarisation/voice-enrolment-eval-2026-09.md`,
-`torch-free-port-plan.md` (the port matches research), `docs/production/eval-shipped-vs-single-decode-2026-09.md`,
-ADR-0031. The selection itself (ERes2NetV2 + Silero + self-enrolment, 95.9%; held-out Fareez;
-AMI) was measured by the research bench, which is not migrated: its data went with the returned SSD.
+The PriMock57 references and mixed tracks from the transcription stage. The sweep scripts read
+transcripts saved by `evaluation/performance/perf_loop.py` with `PERF_SAVE=1`.
+`reference/research-port-slices.txt` is the output of the pipeline the engine was ported from.
 
-## Engine offline (diar_eval_runner)
+## Run
 
-```
-python evaluation/diarisation/runner_accuracy.py [--reference-only]   engine vs research port, pass within 0.5 pt
-python evaluation/diarisation/runner_roles.py                          cold-start naming (zero wrong) and anchor leave-one-out
-```
+The engine offline, through `diar_eval_runner`:
 
-## Engine sweeps (perf-loop transcripts)
+| Script | Checks |
+|---|---|
+| `runner_accuracy.py` | The engine against the reference pipeline. Passes within 0.5 points. |
+| `runner_roles.py` | Doctor naming. Passes on zero wrong names. |
 
-```
-python evaluation/diarisation/score_gate.py <tagA> <tagB>            WER, negations lost/added, word attribution
-python evaluation/diarisation/absorbed_answers.py <tagA> <tagB> [12]  short answers heard under the other speaker
-python evaluation/diarisation/short_turn_recall.py <tagA> <tagB> [5]  short reference turns recovered
-python evaluation/diarisation/readability_stats.py <tagA> <tagB>      broken bigrams, turn shape, duplicated spans
-python evaluation/diarisation/negation_audit.py pack|merge <tag>      blinded reading of each negation difference
-python evaluation/diarisation/diff_pairs.py pack|merge <tagA> <tagB>  blinded pairwise judging of differing regions
-python evaluation/diarisation/tidy_offline.py <in> <out>              tidy an existing sweep offline (port of tidy_transcript)
-python evaluation/diarisation/resplit_calibrate.py <engine log> <sweep log> <tag>
-python evaluation/diarisation/enrol_anchor.py <doctor wav> <anchor.bin> [seconds]
-python evaluation/diarisation/anchor_sims.py <tag> [day]  |  anchor_curve.py <cold> <enrolled> <day> <out.png>
-```
+Two sweeps compared, as `<script> <tagA> <tagB>`:
 
-`ABSORBED_SUBSTANTIVE=1` and `NEG_SUBSTANTIVE=1` count only what a transcriber would keep.
-Outputs land beside the sweep in `build/perf-loop`. Word attribution and WER cannot see
-scrambled word order: read the transcripts too.
+| Script | Measures |
+|---|---|
+| `score_gate.py` | WER, negations lost or added, word attribution |
+| `absorbed_answers.py` | Short answers placed under the other speaker |
+| `short_turn_recall.py` | Short reference turns recovered |
+| `readability_stats.py` | Broken bigrams, turn shape, duplicated spans |
+| `negation_audit.py` | Blinded reading of each negation difference |
+| `diff_pairs.py` | Blinded pairwise judging of the regions that differ |
+
+The other scripts are one-off tools, each described in its docstring. Word attribution and
+WER cannot see scrambled word order, so read the transcripts as well.

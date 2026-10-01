@@ -1,14 +1,11 @@
-# negatives
+# Negatives
 
-Inputs that must retrieve nothing. Written for this project; no third-party text.
+Inputs that should retrieve nothing, used for the false-positive rate and the threshold.
+Written for this project.
 
-```
-negatives.jsonl    one item per line: qid, kind, mode, text
-```
+| Kind | Examples |
+|---|---|
+| Non-clinical text | A CV, meeting notes, a recipe, a changelog |
+| Clinical notes with no guideline in the corpus | Tennis elbow, motion sickness, chilblains |
 
-Two kinds
-
-- non-clinical text: a synthetic CV, meeting notes, a recipe, a software changelog, a weather report, a match report. The CV is the v1 failure case.
-- clinical notes for conditions with no guideline in the corpus, each checked against every guideline title and recommendation text before inclusion: tennis elbow, ingrowing toenail, motion sickness, athlete's foot, seborrhoeic dermatitis, nosebleed, plantar fasciitis, chilblains, jet lag, ganglion, hiccups, stye.
-
-Used for the false-positive rate and the threshold calibration. No expected ids.
+`negatives.jsonl` has one item per line, with `qid`, `kind`, `mode` and `text`.

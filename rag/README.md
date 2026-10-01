@@ -1,21 +1,15 @@
-# rag
+# Retrieval data
 
-Guidance retrieval data. Private by default; a folder is committed only when named in `.gitignore`.
+Data for the guideline search evaluation. Only the gold sets are in git.
 
 ```
-sources/nice/          fetched NICE corpus: manifest, html, json, pdfs, scripts, logs
-sources/st-georges/    client guideline folder and referral cases
-gold/                  labelled evaluation sets
-candidates/            embedder and reranker exports under trial
-results/               selection evaluation outputs
-corpora/<id>/          built corpora: manifest.json, corpus.db; junctioned beside the exe as corpora
-venv/                  harness environment, see evaluation/retrieval
+rag/
+├── gold/                        labelled evaluation sets
+│   ├── primock-statements/      sentences from the app's notes of PriMock57 consultations
+│   ├── synthetic-statements/    consultation extracts written for the project
+│   └── negatives/               inputs that should retrieve nothing
+├── sources/                     guideline documents, not in git
+└── corpora/                     built corpora, not in git
 ```
 
-Rules
-
-- the engine reads a corpus only through `corpora/<id>/manifest.json`; nothing under `sources/` is indexed at runtime
-- corpus ids carry the fetch date
-- built corpora are not committed, and none ships through `weights/` yet
-- committed here: this file, and folders named in `.gitignore`; third-party material carries `LICENCE` and `ATTRIBUTION`
-- staged models live in `models/`, the harness in `evaluation/retrieval`, PR bodies in `internal/`
+The harness is in `evaluation/retrieval`.

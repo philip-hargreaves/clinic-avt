@@ -1,25 +1,21 @@
-# knowledge
+# Knowledge
 
-**Question.** How much medicine does each candidate note model know, before it is asked to write a
-note? A screening filter, not the selection criterion.
+How much medicine does each candidate note model know before it writes a note? This is a
+screening step. The note evaluation makes the selection.
 
-**Data.** Nine public multiple-choice tasks, downloaded by lm-evaluation-harness on first use
-(Hugging Face datasets): MedQA (4 options), MedMCQA, PubMedQA and six MMLU medical subjects,
-listed in `[knowledge] tasks` in `evaluation/config.toml`.
+## Data
 
-**Backs.** Research docs `docs/evaluation/1-knowledge/` (knowledge-benchmarks, knowledge-report,
-comparison-models-2026-09, gemma4-struggles).
+MedQA, MedMCQA, PubMedQA and six MMLU medical subjects, downloaded by lm-evaluation-harness on
+first use. The task list is `[knowledge] tasks` in `evaluation/config.toml`.
 
 ## Run
 
 ```
-python evaluation/knowledge/run.py qwen3.5-9b-int4-ov                 # full suite -> build/evaluation/knowledge/results/<model>.json
-python evaluation/knowledge/run.py gemma-4-31b-it-int4-ov --limit 5   # smoke: 5 questions per task -> smoke/
-python evaluation/knowledge/run.py --table [folder]                   # average, MMLU medical, per task
+python evaluation/knowledge/run.py <model>              # full suite
+python evaluation/knowledge/run.py <model> --limit 5    # five questions per task
+python evaluation/knowledge/run.py --table              # averages and per-task scores
 ```
 
-Zero-shot, loglikelihood scoring on the iGPU, the automatic batch sized under the 4 GB allocation
-cap. Two backends with one scoring rule: lm-eval's OpenVINO model for LLM exports (every banked
-result), and a split backend for VLM exports, which runs the text embeddings and the language
-model on ov.Core and never loads the vision parts. Gemma needs BOS prepended (`bos = true`), or
-scores fall below chance. Knowledge needs its own environment (`evaluation[knowledge]`, transformers 4).
+Results go to `build/evaluation/knowledge/results/<model>.json`. Scoring is zero-shot by
+log-likelihood on the GPU. Gemma models need `bos = true` in the config. This stage needs its
+own environment, `evaluation[knowledge]`.
