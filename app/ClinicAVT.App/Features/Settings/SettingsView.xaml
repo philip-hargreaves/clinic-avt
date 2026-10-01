@@ -7,6 +7,27 @@
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:vm="using:ClinicAVT.App.Core.Features.Settings">
 
+    <!-- In light mode the platform control fill matches the white cards, so the controls here
+         get a faint grey. Elsewhere they sit on the grey page and stay white -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#F0F2F5" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#EBEDF0" />
+                    <SolidColorBrush x:Key="ComboBoxBackground" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundUnfocused" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundFocused" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#F0F2F5" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#EBEDF0" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Default" />
+                <ResourceDictionary x:Key="HighContrast" />
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

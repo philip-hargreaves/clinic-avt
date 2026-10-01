@@ -142,12 +142,9 @@
                     <Button
                         Grid.Column="1"
                         VerticalAlignment="Top"
-                        AutomationProperties.Name="Delete this consultation"
                         Command="{x:Bind ViewModel.DeleteCommand}"
-                        CommandParameter="{x:Bind ViewModel.Selected, Mode=OneWay}"
-                        Style="{StaticResource TrayButton}"
-                        ToolTipService.ToolTip="Delete this consultation">
-                        <FontIcon FontSize="16" Glyph="&#xE74D;" />
+                        CommandParameter="{x:Bind ViewModel.Selected, Mode=OneWay}">
+                        <controls:IconLabel Glyph="&#xE74D;" Text="Delete consultation" />
                     </Button>
                 </Grid>
 

@@ -16,6 +16,20 @@
                  the page neutral, and solid white cards stand out on it -->
             <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#F2F4F6F9" />
             <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFF" />
+            <!-- The platform control edge is 6% black and fades on the white cards. 10% with a
+                 darker bottom line keeps buttons and dropdowns outlined. Settings also greys
+                 their fill, since its controls all sit on cards -->
+            <LinearGradientBrush x:Key="ControlEdgeBrush" MappingMode="Absolute" StartPoint="0,0" EndPoint="0,3">
+                <LinearGradientBrush.RelativeTransform>
+                    <ScaleTransform CenterY="0.5" ScaleY="-1" />
+                </LinearGradientBrush.RelativeTransform>
+                <GradientStop Offset="0.33" Color="#33000000" />
+                <GradientStop Offset="1.0" Color="#1A000000" />
+            </LinearGradientBrush>
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlEdgeBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="ControlEdgeBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="ControlEdgeBrush" />
+            <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="ControlEdgeBrush" />
             <!-- The status bar is one step lighter than the page. Dark and high contrast get
                  that from the layer fill, so they reuse it -->
             <SolidColorBrush x:Key="StatusBarBrush" Color="#FFFFFF" />
