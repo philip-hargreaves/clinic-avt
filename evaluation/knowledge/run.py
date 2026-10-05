@@ -1,7 +1,8 @@
 """The medical knowledge suite: zero-shot multiple choice scored by loglikelihood through
 lm-evaluation-harness, on the iGPU. LLM exports run through lm-eval's OpenVINO model; VLM exports
-run their text embeddings and language model on ov.Core, without the vision parts. Models trained
-with a BOS their tokenizer omits ("bos" in evaluation/config.toml) get it prepended, or scores fall to chance.
+run their text embeddings and language model on ov.Core, without the vision parts, one input at a
+time because these exports score padded batches wrongly on the iGPU. Models trained with a BOS their
+tokenizer omits ("bos" in evaluation/config.toml) get it prepended, or scores fall to chance.
 
     python evaluation/knowledge/run.py qwen3.5-9b-int4-ov
     python evaluation/knowledge/run.py gemma-4-31b-it-int4-ov --limit 5          # smoke: 5 per task
@@ -41,6 +42,7 @@ def split_lm(spec, device):
     import openvino as ov
     from lm_eval.api.model import TemplateLM
     from tokenizers import Tokenizer
+    from tqdm import tqdm
 
     path = spec["path"]
     cfg = json.loads((path / "config.json").read_text())
@@ -64,6 +66,7 @@ def split_lm(spec, device):
             self.tokenizer_json = Tokenizer.from_file(str(path / "tokenizer.json"))
             self.bos = token_id("bos_token_id") if spec["bos"] else None
             self.eos = token_id("eos_token_id")
+            self.last_len = 0
 
         @property
         def eot_token_id(self):
@@ -78,6 +81,14 @@ def split_lm(spec, device):
             return [self.bos] + ids if self.bos is not None and add_special_tokens is not False else ids
 
         def logits(self, ids):
+            # On the iGPU a pass with the same length as the one before it returns wrong logits,
+            # even after reset_state or on a new request. A one-token pass in between avoids it
+            if len(ids) == self.last_len:
+                self.infer([self.prefix_token_id])
+            self.last_len = len(ids)
+            return self.infer(ids)
+
+        def infer(self, ids):
             ids = np.array([ids], dtype=np.int64)
             n = ids.shape[1]
             feed = {"inputs_embeds": self.embed(ids)[0], "attention_mask": np.ones((1, n), dtype=np.int64),
@@ -95,14 +106,25 @@ def split_lm(spec, device):
             return self.request.get_tensor("logits").data[0]
 
         def _loglikelihood_tokens(self, requests, disable_tqdm=False, **kwargs):
+            # Choices with single-token answers share one input. Each distinct input runs once and
+            # keeps log-probabilities for its longest continuation
+            def key(context, continuation):
+                return tuple((context + continuation)[-(MAX_SEQ + 1):-1])
+
+            tail = {}
+            for _, context, continuation in requests:
+                k = key(context, continuation)
+                tail[k] = max(tail.get(k, 0), len(continuation))
+            logprobs = {}
+            for k in tqdm(tail, disable=disable_tqdm, mininterval=30):
+                last = self.logits(list(k))[-tail[k]:].astype(np.float64)
+                last -= last.max(axis=-1, keepdims=True)
+                logprobs[k] = last - np.log(np.exp(last).sum(axis=-1, keepdims=True))
             out = []
             for _, context, continuation in requests:
-                whole = (context + continuation)[-(MAX_SEQ + 1):]
-                logits = self.logits(whole[:-1])[-len(continuation):].astype(np.float64)
-                logits -= logits.max(axis=-1, keepdims=True)
-                logprobs = logits - np.log(np.exp(logits).sum(axis=-1, keepdims=True))
-                picked = logprobs[np.arange(len(continuation)), continuation]
-                out.append((float(picked.sum()), bool((logits.argmax(axis=-1) == continuation).all())))
+                lp = logprobs[key(context, continuation)][-len(continuation):]
+                picked = lp[np.arange(len(continuation)), continuation]
+                out.append((float(picked.sum()), bool((lp.argmax(axis=-1) == continuation).all())))
             return out
 
         def loglikelihood_rolling(self, requests, disable_tqdm=False):
