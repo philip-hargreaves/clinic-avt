@@ -186,6 +186,50 @@ TEST(WhisperWorker, AThrowingDecodeLosesOnlyThatClipsText) {
     EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 10, {})), "later");
 }
 
+// A lost NPU stays lost until the device is reset, so later clips decode on the GPU too
+TEST(WhisperWorker, ALostNpuMovesDecodingToTheGpuAndRetriesTheClip) {
+    std::mutex mutex;
+    std::vector<std::string> loads;
+    WhisperTranscriber transcriber(
+        DeviceLoader([&](const std::string& device) {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                loads.push_back(device);
+            }
+            return DecodeFn([device](std::span<const float>, std::uint64_t first, const StopFn&) {
+                if (device == "NPU") {
+                    throw std::runtime_error("ZE_RESULT_ERROR_DEVICE_LOST, device hung");
+                }
+                return std::vector<Turn>{At(first, 1, device)};
+            });
+        }),
+        "NPU");
+
+    const std::vector<float> clip(10);
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 0, {})), "GPU");
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 10, {})), "GPU");
+    std::lock_guard<std::mutex> lock(mutex);
+    EXPECT_EQ(loads, (std::vector<std::string>{"NPU", "GPU"}));
+}
+
+TEST(WhisperWorker, AnNpuErrorOtherThanDeviceLossStaysOnTheNpu) {
+    std::atomic<int> loads{0};
+    WhisperTranscriber transcriber(
+        DeviceLoader([&](const std::string& device) {
+            ++loads;
+            return DecodeFn([device](std::span<const float>, std::uint64_t first, const StopFn&) {
+                if (first == 0) throw std::runtime_error("bad input");
+                return std::vector<Turn>{At(first, 1, device)};
+            });
+        }),
+        "NPU");
+
+    const std::vector<float> clip(10);
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 0, {})), "");
+    EXPECT_EQ(JoinedText(transcriber.DecodeClipChunks(clip, 10, {})), "NPU");
+    EXPECT_EQ(loads.load(), 1);
+}
+
 // Stop drops a clip still waiting for the GPU and every clip queued behind it. Later clips decode
 TEST(WhisperWorker, StoppedClipsAreDroppedWhileTheyWait) {
     std::atomic<int> decodes{0};
