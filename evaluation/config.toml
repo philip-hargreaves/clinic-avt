@@ -194,7 +194,7 @@ reliability = ["qwen3.5-4b-int4-ov", "qwen3.5-9b-int4-ov", "qwen3-30b-a3b-int4-o
 tiers = { constrained = "qwen3.5-4b-int4", default = "qwen3.5-9b-int4", accuracy = "qwen3.6-35b-a3b-int4" }
 comparison = ["qwen3.8-27b-int4-ov", "qwen3.6-27b-int4-ov-intel", "gemma-4-e4b-it-int4-ov",
               "gemma-4-12b-it-qat-int4-ov", "gemma-4-26b-a4b-it-int4-ov", "gemma-4-31b-it-int4-ov"]
-transcript_tag = "ACC16L"          # perf-loop tag of the sealed transcripts the tiers are judged on
+transcript_tag = "IMP"             # sealed transcripts the tiers are judged on (import_transcripts.py)
 
 [transcription]
 # The Whisper exports compared, folders under asr_models (or app_models for the shipped one)
