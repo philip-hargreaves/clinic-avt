@@ -57,6 +57,7 @@ desktop.ini
 !/demo/reflections/
 !/demo/cases.txt
 __pycache__/
+*.egg-info/
 
 # Evaluation data and outputs: runs write to build/evaluation, datasets stay outside the repo
 /evaluation/**/*.wav
