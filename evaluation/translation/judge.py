@@ -25,6 +25,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.io import read_json, read_jsonl  # noqa: E402
 from common.stats import mean_interval  # noqa: E402
+from languages import ORIGINAL  # noqa: E402
 from study import LANGUAGES, LOW_RESOURCE, REFERENCE, ROOT  # noqa: E402
 
 SHEETS_JUDGED = 12
@@ -43,8 +44,11 @@ def folder(kind: str, part: str) -> Path:
     return path
 
 
-def write_task(kind: str, task: str, language: str, items: list):
-    """Items are (source, [(system, text)]). Only the key file maps letters to systems."""
+def write_task(kind: str, task: str, language: str, items: list, systems: list | None = None):
+    """Items are (source, [(system, text)]). Only the key file maps letters to systems. A task already
+    written is kept, so verdicts stay matched to the letters they were given."""
+    if (folder(kind, "keys") / f"{task}.json").exists():
+        return False
     rng = random.Random(task)
     body, key = [f"TARGET LANGUAGE: {language}", ""], {}
     for number, (source, entries) in enumerate(items, 1):
@@ -55,8 +59,9 @@ def write_task(kind: str, task: str, language: str, items: list):
         key[str(number)] = {"words": len(source.split()),
                             "letters": {letter: what for letter, (what, _) in zip(LETTERS, entries)}}
     (folder(kind, "tasks") / f"{task}.md").write_text("\n".join(body), encoding="utf-8", newline="\n")
-    json.dump({"language": language, "items": key},
+    json.dump({"language": language, "items": key, **({"systems": systems} if systems else {})},
               open(folder(kind, "keys") / f"{task}.json", "w", encoding="utf-8"), indent=1)
+    return True
 
 
 SEQ2SEQ = ("nllb-600m-int8", "m2m100-1.2b-int8", "m2m100-418m-int8", "small100-int8")
@@ -64,7 +69,8 @@ LLM_ROW = ("nllb-600m-int8", "qwen3.5-4b-int4")
 
 
 def tasks(kind="sheets", names=SEQ2SEQ, count=SHEETS_JUDGED):
-    """One task per sheet and language. The llm kind pairs NLLB with the note model over the
+    """One task per sheet and language. A language some candidates cannot translate gets a task
+    from the ones that can, named in the key. The llm kind pairs NLLB with the note model over the
     first sheets of the same sample."""
     systems = {}
     for name in names:
@@ -72,20 +78,24 @@ def tasks(kind="sheets", names=SEQ2SEQ, count=SHEETS_JUDGED):
         systems[name] = {(r["id"], r["language"]): r for r in read_jsonl(path)}
     sheets = sorted({k[0] for k in systems[REFERENCE]})
     chosen = sorted(random.Random(7).sample(sheets, SHEETS_JUDGED))[:count]
-    written = 0
+    written = new = 0
     for sheet in chosen:
         for language in LANGUAGES:
             entries = [(name, rows[(sheet, language)]["translation"]) for name, rows in systems.items()
                        if (sheet, language) in rows]
-            if len(entries) < len(systems):
+            covering = [name for name, rows in systems.items()
+                        if any(k[1] == language for k in rows)]
+            if not entries or len(entries) < len(covering):
                 continue
             source = systems[REFERENCE][(sheet, language)]["source"]
-            write_task(kind, f"{sheet}__{language}", language, [(source, entries)])
+            partial = [name for name, _ in entries] if len(entries) < len(systems) else None
+            new += write_task(kind, f"{sheet}__{language}", language, [(source, entries)], partial)
             written += 1
-    print(written, "tasks over", len(chosen), "sheets and", len(systems), "systems")
+    print(written, "tasks over", len(chosen), "sheets and", len(systems), "systems,", new, "new")
 
 
-NATIVE_ZERO = {"Urdu": 0x06F0, "Arabic": 0x0660, "Bengali": 0x09E6, "Gujarati": 0x0AE6, "Punjabi": 0x0A66}
+NATIVE_ZERO = {"Urdu": 0x06F0, "Arabic": 0x0660, "Bengali": 0x09E6, "Gujarati": 0x0AE6, "Punjabi": 0x0A66,
+               "Farsi": 0x06F0, "Kurdish (Sorani)": 0x0660, "Hindi": 0x0966, "Tamil": 0x0BE6}
 
 
 def change_number(text: str, language: str):
@@ -114,7 +124,7 @@ def flip_negation(source: str):
 def references(language: str) -> list[tuple[str, str]]:
     """(english, reference) pairs from FLORES-200, whose references were checked by hand. TICO-19
     has misaligned rows, which would make an untouched reference look wrong."""
-    from translate import FLORES
+    from languages import FLORES
     root = ROOT / "data" / "flores200_dataset" / "devtest"
     english = open(root / "eng_Latn.devtest", encoding="utf-8").read().splitlines()
     target = open(root / f"{FLORES[language]}.devtest", encoding="utf-8").read().splitlines()
@@ -159,9 +169,8 @@ def plant():
                 english, reference = flips[call]
                 items.append((flip_negation(english), [("negation", reference)]))
             rng.shuffle(items)
-            write_task("plant", f"{language}-{call}", language, items)
-            count += 1
-    print(count, "validation tasks")
+            count += write_task("plant", f"{language}-{call}", language, items)
+    print(count, "new validation tasks")
 
 
 def verdicts(kind: str):
@@ -215,7 +224,7 @@ def score(kind="sheets"):
               f"{entry['adequacy']:8.1f}  {entry['fluency']:7.1f}  {len(names):3d} | {interval}")
     print()
     for system in sorted({s for s, _ in rows}):
-        for label, group in (("low-resource", LOW_RESOURCE), ("all", LANGUAGES)):
+        for label, group in (("low-resource", LOW_RESOURCE), ("original 8", ORIGINAL), ("all", LANGUAGES)):
             picked = [table[f"{system}|{language}"] for language in group if f"{system}|{language}" in table]
             if picked:
                 mean_penalty = np.mean([p["penalty"] for p in picked])

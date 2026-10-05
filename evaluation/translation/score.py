@@ -21,10 +21,9 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.io import read_jsonl  # noqa: E402
 from common.stats import mean_interval  # noqa: E402
+from languages import ORIGINAL, SCRIPT  # noqa: E402
 from study import LOW_RESOURCE, REFERENCE, ROOT  # noqa: E402
 
-SCRIPT = {"Urdu": "ARABIC", "Arabic": "ARABIC", "Punjabi": "GURMUKHI", "Bengali": "BENGALI",
-          "Gujarati": "GUJARATI", "Polish": "LATIN", "Romanian": "LATIN", "Somali": "LATIN"}
 
 
 def load(set_name: str) -> dict:
@@ -66,7 +65,7 @@ def refs(set_name: str):
                   f"{len(keys):4d} | {interval}")
     print()
     for system in systems:
-        for label, group in (("low-resource", LOW_RESOURCE), ("all", languages)):
+        for label, group in (("low-resource", LOW_RESOURCE), ("original 8", ORIGINAL), ("all", languages)):
             scores = [table[f"{system}|{language}"]["chrf"] for language in group
                       if f"{system}|{language}" in table]
             if scores:
