@@ -37,6 +37,9 @@ summarisation = [
     "bert-score==0.3.13",
     "psutil==7.2.2",
 ]
+diarisation = [
+    "scipy",            # silhouette sweep in multispeaker.py space
+]
 performance = [
     "openvino-genai==2026.2.1.0",
     "psutil==7.2.2",

@@ -2,7 +2,10 @@
 // "start end cluster" per slice in seconds (the attribution scorer's format).
 // --roles runs the full finalise flow (per-turn ASR, text assignment, cold-start
 // naming) and prints roles, margin and per-cluster voiceprints for the
-// role-acceptance scorer
+// role-acceptance scorer. --space prints every embedded slice with its cluster,
+// for the voice-space figure. --embed prints one voiceprint of the whole wav
+#include <process.h>
+
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -17,12 +20,17 @@
 #include <vector>
 
 #include "adapters/diarisation/anchor_store.hpp"
+#include "adapters/diarisation/capture_stage.hpp"
 #include "adapters/diarisation/cluster_voiceprint.hpp"
+#include "adapters/diarisation/speaker_clustering.hpp"
 #include "adapters/diarisation/speaker_diariser.hpp"
 #include "adapters/system/gpu_lease.hpp"
 #include "adapters/system/stderr_log.hpp"
 #include "adapters/transcription/whisper_transcriber.hpp"
+#include "core/diarisation/diar_regions.hpp"
+#include "core/diarisation/embeddings.hpp"
 #include "core/diarisation/role_naming.hpp"
+#include "core/diarisation/slice_refinement.hpp"
 #include "core/diarisation/turn_decode.hpp"
 
 namespace {
@@ -157,6 +165,44 @@ void AmortiseProbe(const clinicavt::models::ModelStore& store,
     std::filesystem::remove_all(anchor_root, ec);
 }
 
+void PrintVector(const char* tag, const std::vector<float>& values) {
+    std::printf("%s", tag);
+    for (const float x : values) std::printf(" %.6f", x);
+    std::printf("\n");
+}
+
+// Follows the batch path of SpeakerDiariser::Diarise up to clustering. Prints "COUNT k", then
+// "SPACE start end cluster v..." per embedded slice
+void PrintVoiceSpace(const clinicavt::models::ModelStore& store,
+                     clinicavt::models::OvRuntime& runtime, const std::vector<float>& audio) {
+    namespace diar = clinicavt::diar;
+    clinicavt::audio::SileroVad vad(store, runtime);
+    diar::Segmenter segmenter(store, runtime);
+    diar::SpeakerEmbedder embedder(store, runtime);
+
+    std::vector<float> probabilities;
+    vad.Reset();
+    diar::AppendVadHops(vad, audio, probabilities, true);
+    auto seg = segmenter.Run(audio);
+    const auto slices =
+        diar::CutSlices(probabilities, audio.size(), std::move(seg.change_points), {});
+    const auto embedded = diar::EmbedSlices(slices, [&](const diar::Region& slice) {
+        const auto clip = diar::Gather(audio, diar::EmbeddingRanges(slice, seg.overlap_spans));
+        return clip.size() < diar::kEmbedMinFrames ? std::vector<float>{} : embedder.Embed(clip);
+    });
+    const auto clusters = diar::ClusterSpeakers(embedded.embeddings, embedded.durations);
+
+    std::printf("COUNT %d\n", clusters.count);
+    for (std::size_t i = 0; i < embedded.kept.size(); ++i) {
+        char tag[64];
+        std::snprintf(tag, sizeof tag, "SPACE %.3f %.3f %d",
+                      static_cast<double>(embedded.kept[i].first_frame) / 16000.0,
+                      static_cast<double>(embedded.kept[i].end_frame) / 16000.0,
+                      clusters.labels[i]);
+        PrintVector(tag, embedded.embeddings[i]);
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -164,22 +210,43 @@ int main(int argc, char** argv) {
     if (argc < 3) {
         std::fprintf(
             stderr,
-            "usage: diar_eval_runner <models-dir> <audio.wav> [--roles] [--amortise-probe]\n");
+            "usage: diar_eval_runner <models-dir> <audio.wav> [--roles] [--amortise-probe] "
+            "[--space] [--embed] [--enrol <speech.wav>]\n");
         return 2;
     }
-    bool roles = false, amortise = false;
+    bool roles = false, amortise = false, space = false, embed = false;
+    std::string enrol;  // speech to enrol as the clinician's voice before naming roles
     for (int i = 3; i < argc; ++i) {
         if (std::strcmp(argv[i], "--roles") == 0) roles = true;
         if (std::strcmp(argv[i], "--amortise-probe") == 0) {
             roles = true;
             amortise = true;
         }
+        if (std::strcmp(argv[i], "--space") == 0) space = true;
+        if (std::strcmp(argv[i], "--embed") == 0) embed = true;
+        if (std::strcmp(argv[i], "--enrol") == 0 && i + 1 < argc) {
+            roles = true;
+            enrol = argv[++i];
+        }
     }
     try {
         const clinicavt::models::ModelStore store{std::filesystem::path(argv[1])};
         clinicavt::models::OvRuntime runtime;
-        // A throwaway anchor root: evaluation must never touch a real anchor
-        const auto anchor_root = std::filesystem::temp_directory_path() / "clinicavt-diar-eval";
+        if (space || embed) {
+            const auto audio = LoadWav(argv[2]);
+            if (space) {
+                PrintVoiceSpace(store, runtime, audio);
+            } else {
+                clinicavt::diar::SpeakerEmbedder embedder(store, runtime);
+                PrintVector("EMB", embedder.Embed(audio));
+            }
+            return 0;
+        }
+        // Fresh anchor root per run so evaluation never touches a real anchor and no enrolment
+        // carries over to the next clip
+        const auto anchor_root = std::filesystem::temp_directory_path() /
+                                 ("clinicavt-diar-eval-" + std::to_string(_getpid()));
+        std::filesystem::remove_all(anchor_root);
         std::filesystem::create_directories(anchor_root);
         clinicavt::diar::AnchorStore diariser_anchors(anchor_root);
         clinicavt::diar::SpeakerDiariser diariser(store, runtime, diariser_anchors);
@@ -215,10 +282,25 @@ int main(int argc, char** argv) {
         const auto took = std::chrono::duration<double>(std::chrono::steady_clock::now() - before);
         std::fprintf(stderr, "per-turn: %zu turns decoded in %.1f s\n", pturns.size(),
                      took.count());
-        const auto named = clinicavt::diar::NameTurns(pturns, turn_texts, result.cluster_count);
+        // As in the app, the enrolment voiceprint becomes the anchor and each cluster's similarity
+        // to it is used before the text to name the clinician
+        std::vector<double> similarity;
+        if (!enrol.empty()) {
+            auto* const voiceprints = diariser.Voiceprints();
+            const auto print = voiceprints->EmbedVoice(LoadWav(enrol.c_str()));
+            if (print.empty()) throw std::runtime_error("no voiceprint from the enrolment");
+            voiceprints->ReplaceAnchor(print, 1);
+            similarity = diariser.AnchorSimilarities(audio, result.slices, result.cluster_count);
+        }
+        const auto named =
+            clinicavt::diar::NameTurns(pturns, turn_texts, result.cluster_count, similarity);
         const auto& decided = named.roles;
 
-        std::printf("DOCTOR %d\nMARGIN %.4f\n", decided.doctor_cluster, decided.margin);
+        std::printf("DOCTOR %d\nMARGIN %.4f\nANCHORED %d\n", decided.doctor_cluster, decided.margin,
+                    decided.from_anchor ? 1 : 0);
+        for (std::size_t c = 0; c < similarity.size(); ++c) {
+            std::printf("SIMILARITY %zu %.4f\n", c, similarity[c]);
+        }
         for (std::size_t c = 0; c < decided.role_of_cluster.size(); ++c) {
             std::printf("ROLE %zu %s\n", c, decided.role_of_cluster[c].c_str());
         }
