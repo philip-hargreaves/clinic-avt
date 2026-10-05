@@ -21,8 +21,11 @@ from common import config  # noqa: E402
 from common.io import append_jsonl  # noqa: E402
 
 NOTES = str(config.path("summarisation") / "notes")
-TIMINGS = os.path.join(NOTES, "case-summary-timings.jsonl")
+TIMINGS = os.path.join(NOTES, f"{os.environ.get('CASE_OUT', 'case-summary')}-timings.jsonl")
 TIERS = ["constrained", "default", "accuracy"]
+# CASE_SOURCE is the notes folder to summarise, with {tier} filled in. CASE_OUT prefixes the output
+SOURCE = os.environ.get("CASE_SOURCE", "tier-{tier}-concise")
+PREFIX = os.environ.get("CASE_OUT", "case-summary")
 
 # The app's IdentifierCheck, mirrored, plus what a summary must not do
 PATTERNS = {
@@ -55,14 +58,14 @@ Colofac Mebeverine Peppermint Nausea Emergency Department""".split())
 
 
 def out_dir(tier):
-    d = os.path.join(NOTES, f"case-summary-{tier}")
+    d = os.path.join(NOTES, f"{PREFIX}-{tier}")
     os.makedirs(d, exist_ok=True)
     return d
 
 
 def notes_for(tier):
     out = []
-    paths = sorted(glob.glob(os.path.join(NOTES, f"tier-{tier}-concise", "*.md")))
+    paths = sorted(glob.glob(os.path.join(NOTES, SOURCE.format(tier=tier), "*.md")))
     for path in paths or sorted(glob.glob(os.path.join(NOTES, f"tier-{tier}-standard", "*.md"))):
         text = open(path, encoding="utf-8").read().strip()
         if not text or text.startswith("NOT A CONSULTATION"):
@@ -106,7 +109,7 @@ def scan():
     summary_rows = []
     details = []
     for tier in TIERS:
-        d = os.path.join(NOTES, f"case-summary-{tier}")
+        d = os.path.join(NOTES, f"{PREFIX}-{tier}")
         if not os.path.isdir(d):
             continue
         files = sorted(glob.glob(os.path.join(d, "*.md")))
@@ -154,7 +157,7 @@ def scan():
     lines += ["", "## Capitalised mid-sentence words to read (not counted)", ""]
     for r in summary_rows:
         lines.append(f"- {r[0]}: " + (", ".join(r[8][:40]) if r[8] else "none"))
-    out = os.path.join(config.out("summarisation"), "case-summary-scan.md")
+    out = os.path.join(config.out("summarisation"), f"{PREFIX}-scan.md")
     open(out, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     print("\n".join(lines))
 
