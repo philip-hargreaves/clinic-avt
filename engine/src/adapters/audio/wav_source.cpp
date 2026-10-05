@@ -171,7 +171,7 @@ SourceEnd WavSource::RunToEnd(IAudioSink& sink) {
         }
         sink.OnAudio(std::span<const float>(frames.data(), count), 0);
         remaining -= count;
-        // Sleep to deadlines from a fixed origin; per-packet sleeps accumulate drift
+        // Sleeps to deadlines from a fixed origin, as per-packet sleeps accumulate drift
         if (config_.speed > 0) {
             frames_sent += count;
             const auto due = static_cast<std::int64_t>(static_cast<double>(frames_sent) * 1e6 /

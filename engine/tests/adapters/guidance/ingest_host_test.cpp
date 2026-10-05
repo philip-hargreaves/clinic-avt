@@ -98,7 +98,7 @@ TEST(IngestHost, TheRealHostReadsAndDrawsAPdf) {
     EXPECT_EQ(bitmap.height, 842);
     ASSERT_EQ(bitmap.bmp.size(), 54u + 595u * 842u * 4u);
     EXPECT_EQ(bitmap.bmp[0], 'B');
-    // White paper, ink somewhere
+    // The page is white with some dark pixels
     EXPECT_EQ(bitmap.bmp[54], 0xFF);
     bool ink = false;
     for (std::size_t i = 54; i + 4 <= bitmap.bmp.size(); i += 4) ink = ink || bitmap.bmp[i] < 0x80;

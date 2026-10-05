@@ -107,7 +107,7 @@ TEST(LevelMeter, ReadingsArePerWindowWhateverTheChunking) {
     ASSERT_EQ(from_tiny.size(), 5u);
     ASSERT_EQ(from_packets.size(), 5u);
     for (std::size_t i = 0; i < expected.size(); ++i) {
-        // Same samples in the same order: bit-identical
+        // Same samples in the same order give bit-identical results
         EXPECT_EQ(expected[i].level, from_tiny[i].level) << "window " << i;
         EXPECT_EQ(expected[i].level, from_packets[i].level) << "window " << i;
         EXPECT_EQ(expected[i].clipped, from_tiny[i].clipped);

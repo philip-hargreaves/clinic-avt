@@ -16,10 +16,9 @@
 namespace clinicavt::diar {
 namespace {
 
-// The fixture features are torchaudio output (the research reference), so
-// the test checks torch-vs-C++ front-end parity directly on real speech.
-// Pass criteria are the research port's own gate: identical frame count,
-// p99 abs diff < 1e-4, max abs diff < 1e-2
+// The fixture features are torchaudio output, so this checks front-end parity with torch
+// on real speech. A pass needs the same frame count, p99 abs diff < 1e-4 and max abs
+// diff < 1e-2
 constexpr const char* kFixtureDir = CLINICAVT_DIAR_FIXTURE_DIR;
 
 TEST(FbankParity, MatchesTheTorchReferenceOnRealSpeech) {

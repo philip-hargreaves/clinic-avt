@@ -87,11 +87,10 @@ TEST(GuidanceEmbedder, LoadsAndMatchesTheHarnessEmbeddings) {
     EXPECT_EQ(out.vector.size(), 1024u);
 }
 
-// The retriever over the staged model and the fixture corpus: each fixture
-// note surfaces its guideline first and one of its expected recommendations in
-// the top three, and none of the guidelines it must avoid. The non-clinical text is
-// refused at the shipped floor. Ordering is asserted without the floor. What
-// the floor does with each note is printed, since the fixture is invented text
+// Each fixture note ranks its guideline first, an expected recommendation in the top
+// three and none of the guidelines it must avoid. The non-clinical text is refused at the
+// shipped floor. Ordering is asserted without the floor. The floor's effect on each note
+// is printed because the fixture is invented text
 TEST(GuidanceEmbedder, SearchesTheFixtureNotes) {
     const fixture::TempDir temp("real");
     const auto& dir = temp.path;

@@ -137,7 +137,7 @@ std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::IDocumentStore&
 
 namespace {
 
-// Compares only added documents ("upload:" ids); corpora are ignored
+// Compares only added documents ("upload:" ids), ignoring corpora
 bool DocumentsChangedSince(const clinicavt::guidance::Record& record,
                            clinicavt::guidance::IDocumentIngest& ingest) {
     std::set<std::string> searched;

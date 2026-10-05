@@ -89,7 +89,7 @@ TEST(AnchorStore, PersistsAcrossReloadAndClearErasesTheFile) {
         ASSERT_TRUE(reloaded.Anchor().has_value());
         EXPECT_NEAR((*reloaded.Anchor())[0], 0.6f, 1e-5);
 
-        // Forgetting the voiceprint must remove it from disk, not just from memory
+        // Forgetting the voiceprint removes it from disk as well as memory
         reloaded.Clear();
         EXPECT_FALSE(reloaded.Anchor().has_value());
         EXPECT_EQ(reloaded.Status().origin, AnchorOrigin::kNone);
@@ -198,7 +198,7 @@ TEST(VoiceprintRanges, StopAtTheCapAndRefuseUnderASecond) {
         const auto start = static_cast<std::uint64_t>(i) * 700000;
         slices.push_back({start, start + 640000, 0});
     }
-    slices.push_back({4000000, 4008000, 1});  // cluster 1: half a second only
+    slices.push_back({4000000, 4008000, 1});  // cluster 1, half a second only
 
     const auto ranges = VoiceprintRanges(slices, 0);
     ASSERT_EQ(ranges.size(), 3u) << "the slice crossing 90 s is kept whole, then stop";

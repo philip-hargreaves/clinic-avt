@@ -154,7 +154,7 @@ void CaptureLane::DiarLoop() {
             };
             auto* const capture = diariser_.Capture();
             if (capture != nullptr) capture->Advance(audio, decode);
-            // Apply this tick's chunk-edge cuts and decode the pieces now, so Stop doesn't have to
+            // Apply this tick's chunk-edge cuts and decode the pieces now, to leave less for Stop
             const auto cuts = transcriber_.TakeClipCuts();
             if (!cuts.empty() && capture != nullptr) {
                 capture->AddCutPoints(cuts);

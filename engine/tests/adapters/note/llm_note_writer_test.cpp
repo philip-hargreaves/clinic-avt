@@ -25,7 +25,7 @@ std::vector<asr::Turn> ElbowTranscript() {
              "twice a day after food, and we will arrange blood tests."}};
 }
 
-// The only real-model proof that cancel stops a generation. Runs in Debug too
+// The only real-model test that cancel stops a generation. Runs in Debug too
 TEST(LlmNoteWriter, CancelInterruptsAGeneration) {
     if (!std::filesystem::exists(kModels / "qwen3.5-9b-int4")) {
         GTEST_SKIP() << "note model not staged";

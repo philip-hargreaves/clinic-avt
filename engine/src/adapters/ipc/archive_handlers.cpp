@@ -124,7 +124,7 @@ void RegisterArchiveMethods(PipeServer& server, const EngineServices& services) 
     server.RegisterMethod("archive/summary", [&catalog](const json& params) {
         return HandleArchiveSummary(catalog, params);
     });
-    // Both reply at once; the job reports on archive/progress, then archive/done or failed
+    // Both reply at once. The job reports on archive/progress, then archive/done or failed
     server.RegisterMethod("archive/backup", [&controller, lane](const json& params) {
         return HandleArchiveBackup(*lane, controller.Running(), params);
     });

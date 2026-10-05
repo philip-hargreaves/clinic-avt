@@ -21,16 +21,16 @@ namespace clinicavt::guidance {
 
 inline constexpr const char* kReadMe = "Instructions.txt";
 
-// Creates a missing folder and copies in the shipped guidelines; returns the
+// Creates a missing folder and copies in the shipped guidelines, returning the
 // count. Never refills an existing folder, so user deletions stay deleted
 std::size_t SeedGuidelines(const std::filesystem::path& folder,
                            const std::filesystem::path& shipped);
 
 // Watches the guidelines folder. A scan every few seconds picks up new and
-// changed files, drops documents whose files are gone, and queues work for the
-// ingest thread, which reads via the host, embeds one unit at a time between
-// note searches, and publishes ready documents as one snapshot. The index
-// under root is a cache and lists without an embedder
+// changed files, drops documents whose files are gone and queues work. The
+// ingest thread reads via the host, embeds one unit at a time between note
+// searches and publishes ready documents as one snapshot. The index under
+// root is a cache and lists without an embedder
 class DocumentIngest : public IDocumentIngest {
    public:
     using Discard = std::function<void(const std::filesystem::path&)>;

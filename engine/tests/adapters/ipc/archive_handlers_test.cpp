@@ -300,7 +300,7 @@ TEST(ArchiveHandlers, JobsAndDeletesAreRefusedWhileBusyAndBadParamsNeverStartOne
     EXPECT_EQ(store.sessions->ListSessions().size(), 1u);
 }
 
-// Remove and Delete all keep each appraisal entry unless asked: the consultation leaves the
+// Remove and Delete all keep each appraisal entry unless asked. The consultation leaves the
 // history list and its entry stays in the journal
 TEST(ArchiveHandlers, RemoveAndDeleteAllKeepReflectionsUnlessAskedAndMatchTheFixtures) {
     Store store;

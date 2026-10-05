@@ -116,7 +116,7 @@ class IRecordingStore {
 
     virtual SessionId Begin(const SessionMeta& meta) = 0;
 
-    // lost_frames: frames missing just before these
+    // lost_frames counts frames missing immediately before these
     virtual void Append(const SessionId& id, std::span<const float> frames,
                         std::uint64_t lost_frames) = 0;
 

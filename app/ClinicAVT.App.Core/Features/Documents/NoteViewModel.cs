@@ -226,7 +226,7 @@ public sealed partial class NoteViewModel : ObservableObject
 
     partial void OnDetailChanged(string value) => OptionChanged();
 
-    // Clears every document and stamp, an open edit included, since the next text replaces them
+    // Clears every document and stamp, an open edit included, as the next text replaces them
     private void ClearDocuments(NotePipelineState state)
     {
         NoteEditing = false;

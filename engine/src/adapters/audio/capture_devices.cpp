@@ -98,8 +98,8 @@ std::vector<CaptureDevice> ListCaptureDevices() {
         if (entry.name.empty()) entry.name = "Microphone";
         if (entry.short_name.empty()) entry.short_name = entry.name;
         entry.is_default = !default_id.empty() && id == default_id;
-        // BTHENUM is classic Bluetooth, BTHLE is LE Audio (measured: the WF-1000XM6
-        // enumerates as BTHLE). The prefix covers both
+        // BTHENUM is classic Bluetooth and BTHLE is LE Audio, which the WF-1000XM6 uses.
+        // The prefix covers both
         entry.bluetooth = Property(store.Get(), kEnumeratorName).starts_with("BTH");
         devices.push_back(std::move(entry));
     }

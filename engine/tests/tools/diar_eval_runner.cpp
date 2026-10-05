@@ -1,9 +1,8 @@
-// Dev evaluation tool. Default: production diarisation over one wav, printing
-// "start end cluster" per slice in seconds (the attribution scorer's format).
-// --roles runs the full finalise flow (per-turn ASR, text assignment, cold-start
-// naming) and prints roles, margin and per-cluster voiceprints for the
-// role-acceptance scorer. --space prints every embedded slice with its cluster,
-// for the voice-space figure. --embed prints one voiceprint of the whole wav
+// Dev evaluation tool. By default it runs production diarisation over one wav and prints
+// "start end cluster" per slice in seconds. --roles runs the full finalise flow (per-turn
+// ASR, text assignment, cold-start naming) and prints roles, margin and per-cluster
+// voiceprints. --space prints every embedded slice with its cluster. --embed prints one
+// voiceprint of the whole wav
 #include <process.h>
 
 #include <algorithm>
@@ -64,7 +63,7 @@ std::string Decode(clinicavt::asr::WhisperTranscriber& transcriber, std::span<co
 }
 
 // --amortise-probe: feeds a SpeakerDiariser the audio so far in five-second
-// steps, exactly as the session controller does, then times what a stop pays
+// steps, as the session controller does, then times what a stop pays
 // and verifies the output is bit-identical to the batch pass
 void AmortiseProbe(const clinicavt::models::ModelStore& store,
                    clinicavt::models::OvRuntime& runtime,
@@ -87,7 +86,7 @@ void AmortiseProbe(const clinicavt::models::ModelStore& store,
         return AsChunk(Decode(whisper, clip, first), clip, first);
     };
 
-    // Capture: the controller's cadence
+    // Capture at the controller's cadence
     double capture_s = 0.0;
     std::size_t ticks = 0;
     for (std::uint64_t upto = kStepFrames; upto < audio.size(); upto += kStepFrames) {
@@ -272,7 +271,7 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        // The production finalise: each merged turn decodes its own audio
+        // As in the production finalise, each merged turn decodes its own audio
         const auto before = std::chrono::steady_clock::now();
         const auto pturns = clinicavt::diar::MergeByCluster(result.slices);
         const auto turn_texts = clinicavt::diar::DecodeTurnTexts(

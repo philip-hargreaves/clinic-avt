@@ -8,7 +8,9 @@ using ClinicAVT.App.Platform;
 
 namespace ClinicAVT.App.Composition;
 
-/// <summary>The launch steps in order. Data comes first and the engine starts once the window shows.</summary>
+/// <summary>
+/// The launch steps in order. Data comes first and the engine starts once the window shows.
+/// </summary>
 internal static class StartupTasks
 {
     public static IServiceCollection AddStartupTasks(this IServiceCollection services)
@@ -31,7 +33,7 @@ internal static class StartupTasks
         public void Run() => state.Follow(session);
     }
 
-    // Before Activate, so a dark preference never flashes light
+    // Runs before Activate so a dark preference never flashes light
     private sealed class ApplyTheme(AppPreferences preferences, IThemeService theme) : IStartupTask
     {
         public string Name => "apply theme";

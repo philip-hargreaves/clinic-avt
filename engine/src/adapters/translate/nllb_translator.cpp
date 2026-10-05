@@ -59,7 +59,7 @@ struct NllbTranslator::Impl {
     ov::InferRequest encoder;
     ov::InferRequest decoder;
     std::atomic<bool> cancel{false};
-    // Last, so its thread stops first
+    // Declared last so its thread stops first
     std::unique_ptr<models::Residency> residency;
 
     // Called by Residency while no translation runs

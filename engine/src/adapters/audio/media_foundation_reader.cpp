@@ -81,8 +81,8 @@ void Check(HRESULT hr, const char* otherwise) {
     if (FAILED(hr)) Refuse(hr, otherwise);
 }
 
-// Windows N, KN and Server can lack Media Foundation. Probing first turns the
-// delay-load failure, an SEH exception, into a plain refusal
+// Windows N, KN and Server can lack Media Foundation. The probe avoids the SEH
+// exception a failed delay load raises
 void RequireMediaFoundation() {
     for (const wchar_t* dll : {L"mfplat.dll", L"mfreadwrite.dll"}) {
         const HMODULE module = LoadLibraryExW(dll, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
@@ -95,7 +95,7 @@ void RequireMediaFoundation() {
     }
 }
 
-// COM and Media Foundation for one call; both are reference counted
+// COM and Media Foundation for one call. Both are reference counted
 class MediaFoundation {
    public:
     MediaFoundation() {
@@ -161,7 +161,7 @@ ComPtr<IMFSourceReader> OpenAudio(const std::filesystem::path& path) {
     return reader;
 }
 
-// Container duration estimate; a VBR MP3 without a header can be ~20% short
+// Container duration estimate. A VBR MP3 without a header can be ~20% short
 double Seconds(IMFSourceReader& reader) {
     PROPVARIANT value;
     PropVariantInit(&value);
@@ -235,7 +235,7 @@ std::vector<float> MediaFoundationReader::Decode(const std::filesystem::path& pa
         if (FAILED(hr) || (flags & MF_SOURCE_READERF_ERROR) != 0) {
             Refuse(FAILED(hr) ? hr : E_FAIL, "the file is damaged");
         }
-        // A new type at the same rate is harmless; any other plays at the wrong speed
+        // A new type at the same rate is harmless. Any other plays at the wrong speed
         if ((flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) != 0 &&
             !IsPipelineFormat(*reader.Get())) {
             throw RecordingError("the sound in it changes format partway through");
@@ -252,7 +252,7 @@ std::vector<float> MediaFoundationReader::Decode(const std::filesystem::path& pa
         const std::size_t count = length / sizeof(float);
         audio.insert(audio.end(), first, first + count);
         buffer->Unlock();
-        // Samples are a few ms each; report progress in 1% steps
+        // Samples are a few ms each, so progress is reported in 1% steps
         const double done = static_cast<double>(audio.size()) / kSampleRate / seconds;
         if (progress && seconds > 0 && done - reported >= 0.01) {
             reported = done;

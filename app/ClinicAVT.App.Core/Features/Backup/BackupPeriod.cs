@@ -18,7 +18,9 @@ public sealed record BackupPeriod(DateOnly? First, DateOnly? Last)
 
     public const int ChooseDatesIndex = 4;
 
-    /// <summary>The option at that index on the given day. Choose dates uses the two picked days.</summary>
+    /// <summary>
+    /// The option at that index on the given day. Choose dates uses the two picked days.
+    /// </summary>
     public static BackupPeriod For(int index, DateOnly today, DateOnly? from = null, DateOnly? to = null)
     {
         var month = new DateOnly(today.Year, today.Month, 1);
@@ -50,7 +52,9 @@ public sealed record BackupPeriod(DateOnly? First, DateOnly? Last)
 
     public string To(TimeZoneInfo zone) => Last is { } day ? Utc(day.AddDays(1), zone) : "";
 
-    /// <summary>"1 Jul to 30 Sep 2026", the year once when both ends share it. Empty for Everything.</summary>
+    /// <summary>
+    /// "1 Jul to 30 Sep 2026", the year once when both ends share it. Empty for Everything.
+    /// </summary>
     public string Span() => (First, Last) switch
     {
         ({ } first, { } last) when first.Year == last.Year =>
@@ -75,7 +79,9 @@ public sealed record BackupPeriod(DateOnly? First, DateOnly? Last)
     public string FileName(DateOnly today, string kind = "backup") =>
         First is null && Last is null ? $"ClinicAVT {kind} {Day(today)}" : $"ClinicAVT {kind} {Span()}";
 
-    /// <summary>A period the engine gave back, from its half-open UTC ends, in local days.</summary>
+    /// <summary>
+    /// A period the engine gave back, from its half-open UTC ends, in local days.
+    /// </summary>
     public static BackupPeriod FromWire(string? from, string? to, TimeZoneInfo zone) =>
         new(LocalDay(from, zone), LocalDay(to, zone)?.AddDays(-1));
 

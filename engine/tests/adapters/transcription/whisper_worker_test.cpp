@@ -172,7 +172,6 @@ TEST(WhisperWorker, ASwitchQueuedDuringALoadKeepsItMovingUntilBothSettle) {
     EXPECT_FALSE(transcriber.Moving());
 }
 
-// A driver fault in one decode loses that clip's text, not the session
 TEST(WhisperWorker, AThrowingDecodeLosesOnlyThatClipsText) {
     WhisperTranscriber transcriber(
         Ready([](std::span<const float>, std::uint64_t first, const StopFn&) {

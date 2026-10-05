@@ -30,7 +30,6 @@ struct ReflectionEdit {
     std::optional<std::vector<Reference>> references;
 };
 
-// A row of the appraisal journal
 struct ReflectionRow {
     store::SessionId id;
     std::string started_at;

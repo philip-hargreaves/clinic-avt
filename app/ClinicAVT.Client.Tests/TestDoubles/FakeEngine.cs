@@ -47,7 +47,7 @@ internal sealed class FakeEngine : IAsyncDisposable
         }
         catch (Exception)
         {
-            // Disposal tears the pipe out from under the loop by design
+            // Disposal closes the pipe while the loop is still reading
         }
     }
 }

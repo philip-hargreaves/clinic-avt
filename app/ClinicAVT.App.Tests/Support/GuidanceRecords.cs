@@ -45,7 +45,9 @@ internal static class GuidanceRecords
         unavailable = (string?)null,
     };
 
-    /// <summary>One guideline recommendation. The code is the chunk id's first part unless given.</summary>
+    /// <summary>
+    /// One guideline recommendation. The code is the chunk id's first part unless given.
+    /// </summary>
     public static object Result(
         string chunkId, string trigger = "A sentence of the note.",
         string url = "https://example.test/fx100", string source = "nice",
@@ -88,7 +90,9 @@ internal static class GuidanceRecords
     public static GuidanceRecommendation Found(object result, string sourceLabel = "NICE", bool labelled = true) =>
         GuidanceRecommendation.From(Parse(result), sourceLabel, true, labelled);
 
-    /// <summary>A guidance/ready payload. Id is set for the note's search and null for a typed query.</summary>
+    /// <summary>
+    /// A guidance/ready payload. Id is set for the note's search and null for a typed query.
+    /// </summary>
     public static JsonElement Ready(string? id, object[] shown, bool searched = true,
         bool? stale = false, string? storeError = null, object[]? corpora = null) =>
         JsonSerializer.SerializeToElement(new

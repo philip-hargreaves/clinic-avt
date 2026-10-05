@@ -347,9 +347,9 @@ public sealed partial class GuidanceViewModel : ObservableObject
         ShowCards();
     }
 
-    // A typed query stands in for the note's cards until it is cleared. Added
-    // documents lead, whole-note matches sort after the sentences, then each
-    // guideline takes one card, the first after the documents under a divider
+    // A typed query replaces the note's cards until it is cleared. Added documents come
+    // first and whole-note matches sort after sentence matches. Each guideline gets one
+    // card, and the first one after the documents carries a divider
     private void ShowCards()
     {
         Cards.Clear();

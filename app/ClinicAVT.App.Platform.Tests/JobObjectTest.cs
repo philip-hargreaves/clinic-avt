@@ -5,7 +5,7 @@ namespace ClinicAVT.App.Platform.Tests;
 [Trait("Requires", "Processes")]
 public class JobObjectTest
 {
-    // A process that stays alive without needing a console or stdin.
+    // Stays alive without a console or stdin
     private static Process StartWaiter() =>
         Process.Start(new ProcessStartInfo("ping", "-n 60 127.0.0.1")
         {
@@ -25,7 +25,7 @@ public class JobObjectTest
 
             job.Dispose();
 
-            // KILL_ON_JOB_CLOSE fires when the last handle closes.
+            // KILL_ON_JOB_CLOSE fires when the last handle closes
             await waiter.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token);
             Assert.True(waiter.HasExited);
         }

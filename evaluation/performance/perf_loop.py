@@ -16,8 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common import config  # noqa: E402
 from common.engine_pipe import Engine as PipeEngine, EngineDied  # noqa: E402
 
-# EVAL_ENGINE: run a copied binary so rebuilds don't fight a live sweep.
-# PERF_ENGINE_ARGS: extra flags, e.g. "--asr-device NPU".
+# EVAL_ENGINE runs a copied binary so a rebuild can replace the original during a sweep
+# PERF_ENGINE_ARGS adds engine flags, e.g. "--asr-device NPU"
 ENGINE = str(config.path("engine"))
 ENGINE_ARGS = os.environ.get("PERF_ENGINE_ARGS", "").split()
 MODELS = str(config.path("app_models"))
@@ -29,9 +29,9 @@ TAG = os.environ.get("PERF_TAG", "")  # experiments keep their own result files
 RESULTS = os.path.join(HERE, f"runs{TAG}.jsonl")
 EVENTS = os.path.join(HERE, f"events{TAG}.jsonl")
 STOP_FILE = os.path.join(HERE, "STOP")
-PAUSE_FILE = os.path.join(HERE, "PAUSE")  # present: wait between runs; delete to continue
-# PERF_SKIP_DONE=1: a track whose saved transcript already exists under this tag is skipped,
-# so a killed sweep resumes where it stopped (needs PERF_SAVE; never for repeated-run tags)
+PAUSE_FILE = os.path.join(HERE, "PAUSE")  # the loop waits between runs while it exists
+# PERF_SKIP_DONE=1 skips a track whose saved transcript already exists under this tag, so a
+# killed sweep resumes where it stopped. Needs PERF_SAVE. Not for repeated-run tags
 SKIP_DONE = os.environ.get("PERF_SKIP_DONE", "") == "1"
 
 TRACKS = [
@@ -238,13 +238,13 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
         rec["session_id"] = session_id
         rec["start_rtt_s"] = round(rtt, 3)
         rec["replay_speed"] = SPEED
-        # Real time: the source completes on its own at the end of the file
+        # In real time the source completes on its own at the end of the file
         drain(t_start + duration / SPEED + 1.5)
         rec["mem_live_end"] = process_memory_mb(engine.proc.pid)
         if interrupted:
             rec["outcome"] = "interrupted"
             rec["error"] = json.dumps(interrupted)
-        # Stop blocks through finalise: its round trip is the finalise time
+        # Stop blocks through finalise, so its round trip is the finalise time
         t_stop = now()
         stop_probe = on_stop() if on_stop else None  # e.g. a clock sampler
         _, stop_rtt = timed(engine, "session/stop", None, STOP_TIMEOUT)
@@ -305,7 +305,7 @@ def run_session(engine, track, duration, cycle, run_index, tags=None, on_stop=No
                 rec["saved"] = base
             except Exception as e:
                 rec["save_error"] = str(e)
-        # Keep the store small; delete exercises the path too
+        # Deleting keeps the store small and exercises the delete path
         try:
             engine.request("session/delete", {"id": session_id}, 30)
         except Exception as e:
@@ -369,7 +369,7 @@ def _start_engine(index):
         result = engine.request("note/tier", {"tier": tier}, 30)
         event("note_tier", index=index, tier=tier, state=result.get("state"), model=result.get("id"))
         log(f"engine {index}: note tier {tier} -> {result.get('id')} ({result.get('state')})")
-    # Readiness: the compile caches; loads still proceed in the background
+    # Ready means the compile caches are built. Model loads continue in the background
     ready_at = None
     for _ in range(1200):
         result = engine.request("engine/readiness", None, 10)
@@ -407,7 +407,7 @@ def main():
                 engine.close()
             engine_index += 1
             engine = start_engine(engine_index)
-            # No separate warm-up: as in the app, the note model loads during the first capture,
+            # No separate warm-up. As in the app, the note model loads during the first capture,
             # so each cycle's first run is cold
             log(f"cycle {cycle}")
             for track, duration in tracks:

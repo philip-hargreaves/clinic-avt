@@ -15,9 +15,9 @@
 namespace clinicavt::diar {
 namespace {
 
-// The full stage against the research reference: the engine fbank and runtime on
-// raw audio must reproduce the fixture embeddings (research fbank + research
-// runtime). A failure here with fbank parity green points at the glue or the IR
+// The engine fbank and runtime on raw audio must reproduce the fixture embeddings, which
+// come from the reference fbank and runtime. A failure here with fbank parity green points
+// at the glue or the IR
 constexpr const char* kFixtureDir = CLINICAVT_DIAR_FIXTURE_DIR;
 
 float Dot(const std::vector<float>& a, const std::vector<float>& b) {
@@ -55,8 +55,8 @@ TEST(SpeakerEmbedder, ReproducesTheResearchEmbeddingsFromRawAudio) {
         embeddings.push_back(std::move(embedding));
     }
 
-    // Speaker identity must dominate the embedding space. Compare means, since a
-    // mixed track leaks backchannel into some slices
+    // Same-speaker slices must sit closer than cross-speaker ones. Means are compared
+    // because a mixed track leaks backchannel into some slices
     float same = 0.0f, cross = 0.0f;
     int same_n = 0, cross_n = 0;
     for (std::size_t a = 0; a < embeddings.size(); ++a) {

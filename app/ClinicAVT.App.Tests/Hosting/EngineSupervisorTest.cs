@@ -217,7 +217,7 @@ public class EngineSupervisorTest
     }
 
     // A reopened app finds its old engine busy with a first compile. It holds the pipe but
-    // cannot be adopted until it finishes. The app waits for it instead of counting crashes
+    // cannot be adopted until it finishes. The app waits for it and counts no crash
     [Fact]
     public void AnEngineThatCannotBeAdoptedYetIsWaitedForNotCounted()
     {

@@ -8,7 +8,7 @@ from languages import LANGUAGES as ALL_LANGUAGES
 
 ROOT = config.path("mt_root")
 APP_MODELS = config.path("app_models")
-# The judged patient sheets: the accuracy tier's, from summarisation/generate.py app
+# Judged patient sheets from the accuracy tier (summarisation/generate.py app)
 SHEETS = config.path("summarisation") / "notes" / "tier-accuracy-sheet"
 LANGUAGES = list(ALL_LANGUAGES)
 LOW_RESOURCE = ("Urdu", "Punjabi", "Bengali", "Gujarati", "Somali")

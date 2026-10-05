@@ -181,7 +181,8 @@ public class FixtureTest
         Assert.True(DateOnly.TryParse(structured.GetProperty("lastUpdated").GetString(), out _));
         Assert.InRange(structured.GetProperty("score").GetDouble(), 0, 1);
 
-        // A plain-text result has no section, date or tag, a file name for its link and the whole note as its trigger
+        // A plain-text result has no section, date or tag, a file name for its link and the whole
+        // note as its trigger
         var plain = shown[1];
         Assert.Equal("text", plain.GetProperty("source").GetString());
         foreach (var key in new[] { "section", "lastUpdated", "updateTag", "trigger" })

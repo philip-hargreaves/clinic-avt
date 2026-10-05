@@ -16,7 +16,7 @@ namespace clinicavt::audio {
 namespace {
 
 // Each fixture is one second of 44.1 kHz stereo (the wav 8 kHz) with a 440 Hz
-// tone at 0.125 on the left and silence on the right; README has the commands
+// tone at 0.125 on the left and silence on the right
 std::filesystem::path Fixture(const char* name) {
     return std::filesystem::path(CLINICAVT_RECORDING_FIXTURE_DIR) / name;
 }

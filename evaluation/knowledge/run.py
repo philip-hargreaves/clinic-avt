@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common import config  # noqa: E402
 from common.io import write_json  # noqa: E402
 
-ALLOC_CAP = 4_294_959_104   # the iGPU's single-allocation cap; the automatic batch stays under it
+ALLOC_CAP = 4_294_959_104   # the iGPU's single-allocation cap, which the automatic batch stays under
 MAX_SEQ = 1100              # longest context in the suite, for the batch estimate
 
 os.environ.setdefault("HF_DATASETS_TRUST_REMOTE_CODE", "1")

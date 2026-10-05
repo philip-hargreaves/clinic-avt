@@ -97,7 +97,7 @@ bool NoContent(const std::string& text) {
         }
         return false;
     }
-    // Also true with no words at all: punctuation left by a clipped decode
+    // Also true with no words, as with punctuation left by a clipped decode
     return function_words <= 2;
 }
 

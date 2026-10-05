@@ -49,7 +49,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         "Includes each case study, your answers and the guidance you referred to. Transcripts, notes "
         + "and patient information are not included.";
 
-    /// <summary>Shown again after saving; also the file's first line.</summary>
+    /// <summary>Shown again after saving. It is also the file's first line.</summary>
     public string CheckLine { get; } = Warning;
 
     [ObservableProperty]
@@ -156,7 +156,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
             .ToList();
     }
 
-    /// <summary>The file: the warning, then each reflection as Copy writes it.</summary>
+    /// <summary>The warning, then each reflection as Copy writes it.</summary>
     private static string Compose(IEnumerable<ReflectionEntry> entries)
     {
         var text = new StringBuilder(Warning).Append("\n\n");
@@ -243,7 +243,7 @@ public sealed partial class ExportReflectionsViewModel : ObservableObject
         Step = BackupStep.Done;
     }
 
-    // Text comes from the listing; ticked guidance needs the stored reflection
+    // Text comes from the listing. Ticked guidance needs the stored reflection
     private async Task<ReflectionEntry> EntryAsync(ReflectionListing listing)
     {
         var stored = await _engine.GetReflectionAsync(listing.Id).ConfigureAwait(true);

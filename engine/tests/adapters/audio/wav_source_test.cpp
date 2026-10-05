@@ -176,7 +176,7 @@ TEST(WavSource, RefusesMalformedAndUnsupportedFiles) {
         std::size_t delivered;
     };
     const std::vector<Case> cases = {
-        // A truncated file fails rather than completing, after the whole packets before the cut
+        // A truncated file fails after delivering the whole packets before the cut
         {"a truncated data chunk",
          Build(
              {.data = Pcm16Bytes(std::vector<std::int16_t>(500, 7)), .declared_data_bytes = 2000}),
@@ -198,7 +198,7 @@ TEST(WavSource, RefusesMalformedAndUnsupportedFiles) {
 }
 
 TEST(WavSource, RealTimeReplayIsPacedFlatOutIsNot) {
-    // Half a second of audio: paced delivery takes roughly that long
+    // Half a second of audio, so paced delivery takes about that long
     const TempWav file(Build({.data = Pcm16Bytes(std::vector<std::int16_t>(8000, 0))}));
     RecordingSink sink;
 

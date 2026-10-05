@@ -7,7 +7,9 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Appraisal;
 
-/// <summary>A reflection's case summary, written by the engine and correctable by the clinician.</summary>
+/// <summary>
+/// A reflection's case summary, written by the engine and correctable by the clinician.
+/// </summary>
 public sealed partial class CaseStudyViewModel : ObservableObject, IDisposable
 {
     private readonly IReflectionApi _engine;

@@ -18,7 +18,9 @@ public enum BackupStep
     Removed,
 }
 
-/// <summary>The Back up dialog. A checked backup offers to remove the consultations it holds.</summary>
+/// <summary>
+/// The Back up dialog. A checked backup offers to remove the consultations it holds.
+/// </summary>
 public sealed partial class BackupViewModel : ObservableObject, IDisposable
 {
     private readonly IArchiveApi _engine;
@@ -106,7 +108,9 @@ public sealed partial class BackupViewModel : ObservableObject, IDisposable
 
     public bool PrimaryEnabled => Step == BackupStep.ConfirmRemove || CanStart;
 
-    /// <summary>The job cannot be stopped once the engine has it, so the dialog stays until it ends.</summary>
+    /// <summary>
+    /// The job cannot be stopped once the engine has it, so the dialog stays until it ends.
+    /// </summary>
     public bool BlocksClose => Step == BackupStep.Working;
 
     /// <summary>True once consultations were removed, so the lists reload.</summary>

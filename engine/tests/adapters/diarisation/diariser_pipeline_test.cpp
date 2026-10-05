@@ -84,7 +84,7 @@ TEST(DiariserPipeline, AConsultDiarisesToTwoSpeakersAndTheTaughtAnchorRanksItsCl
     }
     EXPECT_GT(similarity[0], similarity[1]) << "the taught cluster ranks nearer";
 
-    // Accrue reuses the voiceprint Diarise computed: no second embed of the cluster
+    // Accrue reuses the voiceprint Diarise computed, so the cluster is not embedded again
     const auto accrue_start = std::chrono::steady_clock::now();
     diariser.AccrueVoiceprint(diariser.DoctorVoiceprint(audio, second.slices, 0));
     const auto accrue_took =

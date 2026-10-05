@@ -40,7 +40,7 @@ struct WorkerNoteWriter::Impl {
     std::mutex read_mutex;   // one pipe reader at a time, the attempt or the watcher
     std::int64_t next_id = 1;
     bool closing = false;
-    bool respawning = false;                  // under state_mutex: Run is between attempts
+    bool respawning = false;                  // under state_mutex, true between Run's attempts
     std::atomic<bool> attempt_active{false};  // set while the note thread reads the pipe
     // Id of the unanswered prefill, 0 if none. Limited to one so a host that stops
     // reading cannot fill the pipe and block capture
@@ -59,7 +59,7 @@ struct WorkerNoteWriter::Impl {
 
     // Generation streams partials constantly, so this much silence means the worker
     // is stuck in a driver call and needs a respawn. A request queued behind a load
-    // (hash + compile of a 19 GB model: minutes) has its own longer bound
+    // (hash and compile of a 19 GB model take minutes) has its own longer bound
     static constexpr DWORD kInactivityTimeoutMs = 120'000;
     static constexpr DWORD kLoadTimeoutMs = 20 * 60'000;
 
@@ -204,7 +204,7 @@ struct WorkerNoteWriter::Impl {
         return text;
     }
 
-    // Memory failures are not retried automatically; only a tier switch or restart retries
+    // Memory failures are not retried automatically. Only a tier switch or restart retries
     bool Blocked() const {
         std::lock_guard<std::mutex> lock(lane_mutex);
         return state.phase == NoteModelState::Phase::kFailed &&
@@ -291,7 +291,7 @@ struct WorkerNoteWriter::Impl {
                     alive = WorkerAlive();
                 }
                 if (!alive || !PumpFrames()) {
-                    // Only an unexpected host death is a failure; a deliberate close stops this
+                    // Only an unexpected host death is a failure. A deliberate close stops this
                     // thread first
                     std::lock_guard<std::mutex> lock(state_mutex);
                     if (closing || respawning) return;
@@ -349,7 +349,7 @@ struct WorkerNoteWriter::Impl {
         }
     }
 
-    // Prefill acks pile up between attempts; drain them so the host's pipe writes
+    // Prefill acks pile up between attempts and are drained so the host's pipe writes
     // do not block. Only when no attempt is reading
     void DrainAcks() {
         std::lock_guard<std::mutex> reading(read_mutex);
@@ -439,7 +439,7 @@ struct WorkerNoteWriter::Impl {
         return true;
     }
 
-    // True once a stuck host was found; marks the lane failed
+    // True once a stuck host was found, and marks the lane failed
     bool Wedged() {
         if (!gpu.Wedged()) return false;
         Transition([](NoteModelState& s) {
@@ -450,14 +450,14 @@ struct WorkerNoteWriter::Impl {
         return true;
     }
 
-    // Retries once in a fresh process; that is the configuration measured to work
+    // Retries once in a fresh process, the configuration measured to work
     std::string Run(const std::string& method, const json& params, const Progress& progress) {
         if (Wedged()) throw std::runtime_error(kStuckInDriver);
         if (Blocked()) throw std::runtime_error(State().detail);
         try {
             return Attempt(method, params, progress);
         } catch (const std::exception& e) {
-            // The awaited load failed; a fresh process would fail too unless the cache was damaged
+            // The awaited load failed. A fresh process would fail too unless the cache was damaged
             if (LoadFailed()) {
                 if (!TakeCacheRebuild() || !RebuildCache())
                     throw std::runtime_error(State().detail);
@@ -508,7 +508,7 @@ WorkerNoteWriter::WorkerNoteWriter(std::filesystem::path host_exe,
     try {
         impl_->Describe(impl_->state.tier, impl_->state);
     } catch (const std::exception&) {  // NOLINT(bugprone-empty-catch) empty names
-        // Nothing staged for the tier; state keeps empty names
+        // Nothing staged for the tier, so state keeps empty names
     }
 }
 
@@ -520,7 +520,7 @@ WorkerNoteWriter::~WorkerNoteWriter() {
     impl_->CloseWorker();
 }
 
-// Spawn and load during capture; failures surface on Write
+// Spawns and loads during capture. Failures surface on Write
 void WorkerNoteWriter::Prepare() {
     impl_->Prepare();
 }

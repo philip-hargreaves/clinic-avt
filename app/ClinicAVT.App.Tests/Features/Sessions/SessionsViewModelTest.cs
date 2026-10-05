@@ -33,7 +33,8 @@ public class SessionsViewModelTest
                     sampleRate = 16000,
                     label = "Elbow swelling",
                     editedAt = "2026-08-17T10:31:00Z",
-                    audioSeconds = 542.0,  // the audio says 9 min, so the wall clock's 8:41 is not used
+                    // The audio says 9 min, so the wall clock's 8:41 is not used
+                    audioSeconds = 542.0,
                 },
             },
         };

@@ -16,7 +16,9 @@ public sealed partial class SessionImport(SessionRecorder recorder, IRecordingAp
     [ObservableProperty]
     public partial bool Importing { get; private set; }
 
-    /// <summary>How far the import has got, in words and one percentage, null until the engine says.</summary>
+    /// <summary>
+    /// How far the import has got, in words and one percentage, null until the engine says.
+    /// </summary>
     [ObservableProperty]
     public partial string? ImportLine { get; private set; }
 
@@ -46,7 +48,9 @@ public sealed partial class SessionImport(SessionRecorder recorder, IRecordingAp
         }
     }
 
-    /// <summary>The import's stage, with the one percentage across all of them until it finalises.</summary>
+    /// <summary>
+    /// The import's stage, with the one percentage across all of them until it finalises.
+    /// </summary>
     public void OnImportProgress(ImportProgress progress)
     {
         if (!Importing || recorder.Phase >= FinalisePhase.Note)
@@ -69,7 +73,9 @@ public sealed partial class SessionImport(SessionRecorder recorder, IRecordingAp
         status.Show(line, busy: true);
     }
 
-    /// <summary>Stops an import. The engine erases what it began and the page goes back to idle.</summary>
+    /// <summary>
+    /// Stops an import. The engine erases what it began and the page goes back to idle.
+    /// </summary>
     public async Task CancelImportAsync()
     {
         if (Importing)

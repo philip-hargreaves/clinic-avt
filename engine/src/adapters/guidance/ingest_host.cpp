@@ -52,7 +52,6 @@ Outcome RunHost(const std::filesystem::path& exe, const std::wstring& args,
     Pipe(out_read, out_write);
     SetHandleInformation(in_write.Get(), HANDLE_FLAG_INHERIT, 0);
     SetHandleInformation(out_read.Get(), HANDLE_FLAG_INHERIT, 0);
-    // One process with a memory cap. Document on stdin, pages on stdout
     system::ChildProcess child;
     try {
         child = system::ChildProcess::Spawn(exe, args,
@@ -106,7 +105,7 @@ float Fraction(const json& value, float whole) {
     return std::clamp(static_cast<float>(value.get<double>() / whole), 0.0F, 1.0F);
 }
 
-// Host JSON as pages; throws if a count or size is out of range
+// Parses host JSON into pages. Throws if a count or size is out of range
 std::vector<Page> PagesOf(json root) {
     if (!root.is_object() || !root["pages"].is_array() || root["pages"].size() > kMaxPages) {
         throw HostError("badOutput", "pages missing or too many");

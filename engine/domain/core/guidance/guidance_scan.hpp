@@ -11,8 +11,8 @@ struct ScanHit {
     float cosine = 0;
 };
 
-// The k nearest rows of a row-major matrix of unit vectors to a unit query:
-// one dot product per row, then a partial sort. Exact, no index
+// The k nearest rows of a row-major matrix of unit vectors to a unit query.
+// Exact search with one dot product per row and a partial sort
 inline std::vector<ScanHit> Scan(const float* matrix, std::size_t rows, int dim, const float* query,
                                  int k) {
     std::vector<ScanHit> hits(rows);

@@ -136,7 +136,7 @@ public sealed class ExampleLibrary(string baseDirectory, ILogger<ExampleLibrary>
         }
     }
 
-    // Packaged debug runs sit one level deeper under AppX, so probe generously
+    // Packaged debug runs sit one level deeper under AppX, so the search climbs several folders
     private string? Find(string name)
     {
         var dir = baseDirectory;

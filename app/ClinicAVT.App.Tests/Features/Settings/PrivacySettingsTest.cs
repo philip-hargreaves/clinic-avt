@@ -66,7 +66,7 @@ public class PrivacySettingsTest
         Assert.Contains("11 consultations deleted", shell.Line.LatestActivity);
         Assert.False(settings.Privacy.SeedDataEnabled);
         Assert.False(preferences.SeedDataEnabled);
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "demo/clear");  // nothing left to clear
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "demo/clear");  // nothing to clear
         Assert.Equal(0, engine.StoredSessions);
         Assert.Single(settings.Documents.Documents);  // guideline documents are not consultations
     }

@@ -176,7 +176,7 @@ Accepted DocumentIngest::Add(const std::vector<std::filesystem::path>& paths) {
     return out;
 }
 
-// Does not touch the folder; the worker scans when poked
+// Does not touch the folder. The worker scans when poked
 Listing DocumentIngest::List() {
     wake_.notify_all();
     std::lock_guard<std::mutex> lock(store_mutex_);
@@ -370,7 +370,7 @@ void DocumentIngest::Scan(const std::set<std::string>& fresh) {
             }
         }
 
-        // Then removed files; drop documents no path holds
+        // Then removed files, dropping documents no path holds
         for (const auto& [path, file] : known) {
             if (present.contains(path)) continue;
             DocumentInfo info;
@@ -449,7 +449,7 @@ void DocumentIngest::Work() {
     }
 }
 
-// Reads the file in place; a file changed or removed since the scan is left
+// Reads the file in place. A file changed or removed since the scan is left
 // for the next one
 void DocumentIngest::Index(const Queued& item) {
     const auto id = item.id;

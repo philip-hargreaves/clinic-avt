@@ -74,7 +74,7 @@ LoadedModel OvRuntime::Load(const ModelInfo& info, const std::string& xml_name) 
 
     LoadedModel loaded;
     loaded.device = ResolveDevice(info.device);
-    // As with Whisper: first launch compiles and exports, later launches import the cached blob
+    // First launch compiles and exports, later launches import the cached blob
     loaded.model = core_.compile_model(xml.string(), loaded.device, CompileProperties(info));
     return loaded;
 }

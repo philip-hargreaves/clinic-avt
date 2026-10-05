@@ -2,7 +2,9 @@ namespace ClinicAVT.App.Core.Ports;
 
 public interface ISessionState
 {
-    /// <summary>True while a consultation is recorded or finalised, until its note is written.</summary>
+    /// <summary>
+    /// True while a consultation is recorded or finalised, until its note is written.
+    /// </summary>
     bool ConsultationInProgress { get; }
 
     /// <summary>The consultation whose review is on screen, or null.</summary>

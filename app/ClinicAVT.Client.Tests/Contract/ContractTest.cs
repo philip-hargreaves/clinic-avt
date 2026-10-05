@@ -161,7 +161,7 @@ public class ContractTest
         await using var second = EngineProcess.Start();
         var exitCode = await second.WaitForExitAsync(Timeout);
 
-        // Exit code 3 tells the app to adopt the running engine instead of counting a crash
+        // Exit code 3 tells the app to adopt the running engine and count no crash
         Assert.Equal(3, exitCode);
         Assert.Contains("pipe name already claimed", second.StandardError, StringComparison.Ordinal);
     }

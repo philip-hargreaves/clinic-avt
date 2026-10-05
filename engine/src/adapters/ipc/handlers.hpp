@@ -40,7 +40,7 @@ std::variant<json, Error> HandleHello(const json& params);
 
 std::variant<json, Error> HandleEcho(const json& params);
 
-// All staged models; `active` marks the one each role loads (note: by configured tier)
+// All staged models. `active` marks the one each role loads, by configured tier for note
 json HandleModels(const clinicavt::models::ModelStore& models,
                   const std::string& note_tier = "default");
 
@@ -78,7 +78,7 @@ std::variant<json, Error> HandleReflectionDelete(clinicavt::records::Reflections
 json HandleReflectionList(clinicavt::records::Reflections& reflections);
 std::variant<json, Error> HandleSessionDelete(clinicavt::store::ISessionCatalog& sessions,
                                               const json& params);
-// Crypto-erases everything; refused while recording or during a backup. Without
+// Crypto-erases everything. Refused while recording or during a backup. Without
 // deleteReflections, a session with an appraisal entry is cleared down to it
 std::variant<json, Error> HandleSessionDeleteAll(clinicavt::records::SessionRecords& records,
                                                  const json& params, bool session_active,
@@ -90,7 +90,7 @@ std::variant<json, Error> HandleSessionRemove(clinicavt::records::SessionRecords
 
 // archive/summary: contents of a backup of the period, and how many consultations
 // the last backup (covered) misses. archive/backup and archive/restore start a
-// lane job; refused while recording or another job runs
+// lane job. Refused while recording or another job runs
 std::variant<json, Error> HandleArchiveSummary(clinicavt::store::ISessionCatalog& sessions,
                                                const json& params);
 std::variant<json, Error> HandleArchiveBackup(clinicavt::archive::ArchiveLane& lane,
@@ -111,7 +111,7 @@ inline Notify PushTo(PipeServer& server) {
     };
 }
 
-// recording/inspect: length and date for the import dialog; stores nothing
+// recording/inspect: length and date for the import dialog. Stores nothing
 std::variant<json, Error> HandleRecordingInspect(clinicavt::audio::IRecordingReader& reader,
                                                  const json& params);
 // Plain-words message naming the missing roles a consultation needs. session/start,
@@ -149,7 +149,7 @@ json GuidanceModelJson(const clinicavt::guidance::Readiness& readiness);
 // Lane request for a search: results as guidance/ready, failure as
 // guidance/failed, both with the session (null for free text). With a session,
 // the record is stored first and the payload says whether the note changed. If
-// the session was erased meanwhile, nothing is sent; other store errors go in
+// the session was erased meanwhile, nothing is sent. Other store errors go in
 // the payload
 clinicavt::guidance::SearchRequest GuidanceSearchRequest(
     clinicavt::store::IDocumentStore& documents, const std::string& session,
@@ -161,7 +161,7 @@ std::variant<json, Error> HandleSessionGuidance(
     clinicavt::store::IDocumentStore& documents, const json& params,
     clinicavt::guidance::IDocumentIngest* ingest = nullptr);
 // guidance/search: searches a session's stored note or free text via the lane.
-// Replies immediately; results come as a notification
+// Replies immediately and results come as a notification
 std::variant<json, Error> HandleGuidanceSearch(clinicavt::store::IDocumentStore& documents,
                                                clinicavt::guidance::IGuidanceLane& lane,
                                                const json& params, const Notify& notify);
@@ -195,7 +195,7 @@ void RegisterGuidanceMethods(PipeServer& server, clinicavt::store::IDocumentStor
 using AsrSwitch =
     std::function<bool(const std::string& device, std::function<void(const std::string&)> done)>;
 
-// asr/device: refused during a session. Replies "loading"; an asr/device
+// asr/device: refused during a session. Replies "loading", then an asr/device
 // notification reports ready or failed
 std::variant<json, Error> HandleAsrDevice(const AsrSwitch& switcher, bool session_active,
                                           const json& params, std::function<void(json)> notify);

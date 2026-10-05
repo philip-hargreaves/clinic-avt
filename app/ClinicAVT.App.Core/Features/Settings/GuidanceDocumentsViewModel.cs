@@ -8,7 +8,9 @@ using ClinicAVT.Client;
 
 namespace ClinicAVT.App.Core.Features.Settings;
 
-/// <summary>The clinician's own documents in the guidelines folder, which guidance also searches.</summary>
+/// <summary>
+/// The clinician's own documents in the guidelines folder, which guidance also searches.
+/// </summary>
 public sealed partial class GuidanceDocumentsViewModel : ObservableObject
 {
     private readonly IGuidanceApi _engine;

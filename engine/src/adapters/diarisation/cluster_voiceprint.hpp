@@ -31,8 +31,8 @@ inline std::vector<Region> VoiceprintRanges(const std::vector<LabelledSlice>& sl
     return ranges;
 }
 
-// One voiceprint per cluster: its audio concatenated and embedded once,
-// not a mean of per-slice embeddings. Empty when too short
+// One voiceprint per cluster from its audio concatenated and embedded once.
+// Empty when too short
 inline std::vector<float> ClusterVoiceprint(SpeakerEmbedder& embedder, std::span<const float> audio,
                                             const std::vector<LabelledSlice>& slices, int cluster) {
     const auto clip = Gather(audio, VoiceprintRanges(slices, cluster));

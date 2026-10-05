@@ -40,7 +40,9 @@ public sealed partial class DocumentTabs : UserControl
         }
     }
 
-    /// <summary>Shows or hides a heading. Hiding the selected one selects the first visible heading.</summary>
+    /// <summary>
+    /// Shows or hides a heading. Hiding the selected one selects the first visible heading.
+    /// </summary>
     public void SetVisible(int index, bool visible)
     {
         var visibility = visible ? Visibility.Visible : Visibility.Collapsed;

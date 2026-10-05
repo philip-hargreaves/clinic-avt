@@ -19,7 +19,7 @@ public partial class App : Application
 
     public App()
     {
-        // Before anything opens the app's files, so a second launch never races the first
+        // Runs before anything opens the app's files so a second launch never races the first
         if (!SingleInstance.Claim())
         {
             SingleInstance.ShowOther();

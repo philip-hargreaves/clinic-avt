@@ -13,7 +13,9 @@ internal sealed class TabFit(FrameworkElement document, double share)
         }
     }
 
-    /// <summary>Caps the document at the area's height less the chrome the editor stacks around it.</summary>
+    /// <summary>
+    /// Caps the document at the area's height less the chrome the editor stacks around it.
+    /// </summary>
     public void FitWithin(FrameworkElement area, double chrome)
     {
         if (area.ActualHeight > 0)

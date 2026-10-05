@@ -33,7 +33,7 @@ def log(line):
 
 
 def launch():
-    # The shipped layout: the engine finds its models, corpora and store beside itself
+    # Shipped layout, with the models, corpora and store beside the engine
     pipe = f"LOCAL\\clinicavt-folder-eval-{os.getpid()}"
     return Engine([ENGINE, pipe], pipe, os.path.join(ROOT, "build", "folder-eval-engine.log"),
                   cwd=os.path.dirname(ENGINE))

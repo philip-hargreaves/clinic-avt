@@ -29,7 +29,7 @@ inline std::vector<std::uint64_t> SnapClipCuts(std::span<const std::uint64_t> cu
                 best = static_cast<std::uint64_t>(hop) * audio::kVadHopFrames;
             }
         }
-        if (best_p >= kEnter) continue;  // no pause near: mid-sentence, drop
+        if (best_p >= kEnter) continue;  // no pause nearby, so the cut is mid-sentence
         const auto near = [best](std::uint64_t other) {
             return (other > best ? other - best : best - other) < kClipCutMinGapFrames;
         };

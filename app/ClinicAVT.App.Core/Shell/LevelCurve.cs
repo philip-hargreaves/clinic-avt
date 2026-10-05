@@ -8,7 +8,7 @@ public static class LevelCurve
 {
     private const double SpeechFloor = 0.25;  // below this is room noise and the ring rests
     private const double SpeechSpan = 0.55;   // loud speech reaches the top of the swing
-    private const double GlowReach = 0.75;    // glow diameter beyond the disc at full level, as a fraction of it
+    private const double GlowReach = 0.75;    // glow spread at full level, in disc diameters
     private const double RingReach = 0.38;    // ring swell at full level, as a fraction
     private const double GlowFloor = 0.08;    // glow alpha at silence
     private const double GlowCeiling = 0.42;

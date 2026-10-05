@@ -6,7 +6,7 @@
 namespace clinicavt::diar {
 
 inline constexpr int kMaxSpeakers = 4;
-inline constexpr std::uint64_t kFitMinFrames = 32000;  // 2 s: only long slices vote on the count
+inline constexpr std::uint64_t kFitMinFrames = 32000;  // 2 s, only longer slices vote on the count
 
 struct ClusterResult {
     std::vector<int> labels;  // one per slice

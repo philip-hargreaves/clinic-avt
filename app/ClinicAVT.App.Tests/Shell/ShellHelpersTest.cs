@@ -43,7 +43,7 @@ public class ShellHelpersTest
     {
         Assert.Equal(1.0, LevelCurve.RingScale(-1));
         Assert.Equal(1.0, LevelCurve.RingScale(0.2), 10);  // room noise, at rest
-        Assert.InRange(LevelCurve.RingScale(0.55), 1.18, 1.25);  // ordinary speech moves the ring visibly
+        Assert.InRange(LevelCurve.RingScale(0.55), 1.18, 1.25);  // ordinary speech moves the ring
         Assert.Equal(1.0, LevelCurve.GlowScale(0));
         Assert.Equal(LevelCurve.GlowScale(1), LevelCurve.GlowScale(4), 10);  // loud input saturates
         Assert.True(LevelCurve.GlowAlpha(0.5) < LevelCurve.GlowAlpha(0.6));

@@ -80,7 +80,9 @@ public sealed record TranslationFailed(string? Detail = null) : EngineNotificati
 public sealed record GuidanceModelChanged(CorporaState State = CorporaState.Unknown, string? Detail = null)
     : EngineNotification;
 
-/// <summary>A finished search. The record has an id for the note's search and none for a typed query.</summary>
+/// <summary>
+/// A finished search. The record has an id for the note's search and none for a typed query.
+/// </summary>
 public sealed record GuidanceReady(GuidanceRecord Record) : EngineNotification;
 
 public sealed record GuidanceFailed(string? Id = null, string? Detail = null) : EngineNotification;
@@ -98,7 +100,9 @@ public sealed record ReflectionSummaryReady(string Id = "", string Text = "") : 
 public sealed record ReflectionSummaryFailed(string Id = "", string Detail = "")
     : EngineNotification;
 
-/// <summary>The store stopped taking writes, such as on a full disk. Sent once per failure.</summary>
+/// <summary>
+/// The store stopped taking writes, such as on a full disk. Sent once per failure.
+/// </summary>
 public sealed record StorageFault(string Detail = "") : EngineNotification;
 
 /// <summary>A backup or restore under way. Job is "backup" or "restore".</summary>
@@ -121,7 +125,9 @@ public sealed record ArchiveDone(
     public IReadOnlyList<string> Ids { get; init; } = [];
 }
 
-/// <summary>A backup or restore that stopped. Code is one of a fixed set, never file content.</summary>
+/// <summary>
+/// A backup or restore that stopped. Code is one of a fixed set, never file content.
+/// </summary>
 public sealed record ArchiveFailed(
     ArchiveJob Job = ArchiveJob.Unknown, ArchiveError Code = ArchiveError.Unknown)
     : EngineNotification;

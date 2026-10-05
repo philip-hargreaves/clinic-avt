@@ -133,7 +133,9 @@ public sealed partial class ImportRecordingViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Problem))]
     public partial string Error { get; private set; } = "";
 
-    /// <summary>The dialog's warning: a failed read, a short recording or a future time.</summary>
+    /// <summary>
+    /// The dialog's warning for a failed read, a short recording or a future time.
+    /// </summary>
     public string Problem =>
         Error.Length > 0 ? Error
         : TooShort ? TooShortLine

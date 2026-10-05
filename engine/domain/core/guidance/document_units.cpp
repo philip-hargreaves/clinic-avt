@@ -94,7 +94,7 @@ int CountWords(std::string_view lower, std::initializer_list<std::string_view> a
     return found;
 }
 
-// Directive wording; such units are kept even if they look like tables or addresses
+// Directive wording. Such units are kept even if they look like tables or addresses
 bool Guides(std::string_view lower) {
     return CountWords(lower, {"should", "recommend", "recommended", "offer", "consider", "refer"}) >
            0;

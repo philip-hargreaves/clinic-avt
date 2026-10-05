@@ -24,8 +24,8 @@ struct RoleResult {
     bool from_anchor = false;  // true when named from the voice print, false for lexical score
 };
 
-// Cold-start scorer without question features: they invert where the patient
-// asks the questions (measured 6/6 -> 0/6)
+// Cold-start scorer. Question features are left out because they invert when
+// the patient asks the questions (measured 6/6 -> 0/6)
 double LexicalDoctorScore(const std::string& text);
 
 // Picks doctor and patient from the two clusters with most talk time. It uses the voice print if it

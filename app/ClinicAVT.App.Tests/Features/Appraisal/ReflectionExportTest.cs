@@ -69,7 +69,8 @@ public class ReflectionExportTest
         Assert.Empty(IdentifierCheck.Find("reviewed Sept 2025, then again"));
     }
 
-    // The engine tests share this fixture. Outputs must pass the check and scrubbed inputs must fail it
+    // The engine tests share this fixture. Outputs must pass the check and scrubbed inputs must
+    // fail it
     [Fact]
     public void TheEngineScrubFixtureAgreesWithTheCheck()
     {

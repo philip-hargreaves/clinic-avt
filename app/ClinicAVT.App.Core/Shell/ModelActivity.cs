@@ -53,7 +53,9 @@ public sealed partial class ModelActivity : ObservableObject, IModelActivity
     /// <summary>Raised when a note/model notification reports the lane's model ready.</summary>
     public event Action? Resident;
 
-    /// <summary>A note model is loading. Loads can take minutes, so the line counts the time.</summary>
+    /// <summary>
+    /// A note model is loading. Loads can take minutes, so the line counts the time.
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ModelLoadLine))]
     public partial bool ModelLoading { get; private set; }

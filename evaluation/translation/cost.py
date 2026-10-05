@@ -24,7 +24,7 @@ def measure(name: str, threads: int, count: int) -> dict:
     import psutil
     from translate import Translator, load_set
     started = time.time()
-    # Imported only to time them: Python import cost, which the engine does not pay
+    # Imported only to time Python import cost, which the engine does not pay
     import optimum.intel  # noqa: F401
     import transformers  # noqa: F401
     imports = time.time() - started

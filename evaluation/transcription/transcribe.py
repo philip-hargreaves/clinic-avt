@@ -35,7 +35,6 @@ def source(consult, form):
 
 
 def model_dir(name):
-    # An [transcription] model is a folder under asr_models, or an app model folder
     for root in (config.path("asr_models"), config.path("app_models")):
         if (root / name).is_dir():
             return root / name

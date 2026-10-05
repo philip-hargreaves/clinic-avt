@@ -61,7 +61,9 @@ public sealed class ReviewGuidanceSearch(
         }
     }
 
-    /// <summary>The note's search came back. A result for another consultation is dropped.</summary>
+    /// <summary>
+    /// The note's search came back. A result for another consultation is dropped.
+    /// </summary>
     public void ApplyReady(GuidanceRecord record)
     {
         if (record.Id != review.FinalisedSessionId)

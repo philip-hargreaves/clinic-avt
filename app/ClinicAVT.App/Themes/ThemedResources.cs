@@ -9,7 +9,9 @@ namespace ClinicAVT.App.Themes;
 /// </summary>
 internal static class ThemedResources
 {
-    /// <summary>Tries the theme's dictionary, then the plain lookup. Null when neither has the key.</summary>
+    /// <summary>
+    /// Tries the theme's dictionary, then the plain lookup. Null when neither has the key.
+    /// </summary>
     public static object? Find(string key, ElementTheme theme)
     {
         // Dark is keyed "Default" in the dictionaries, as WinUI expects

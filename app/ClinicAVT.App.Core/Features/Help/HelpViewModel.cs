@@ -2,7 +2,7 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Core.Features.Help;
 
-/// <summary>The guide itself lives in markup. This holds the small print about the build.</summary>
+/// <summary>The guide is in markup. This holds the version and build details.</summary>
 public sealed class HelpViewModel(IAppInfo app)
 {
     public string VersionLine { get; } =

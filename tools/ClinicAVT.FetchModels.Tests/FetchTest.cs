@@ -22,8 +22,8 @@ public sealed class AssetServer : IDisposable
 
     public string BaseUrl { get; }
 
-    // Below the dynamic port range, and another port if one is taken. A failed start disposes
-    // the listener, so each try needs a new one
+    // Random ports below the dynamic range, retried if taken. A failed start disposes the
+    // listener, so each try needs a new one
     private static (HttpListener, string) Listen()
     {
         for (var attempt = 1; ; attempt++)

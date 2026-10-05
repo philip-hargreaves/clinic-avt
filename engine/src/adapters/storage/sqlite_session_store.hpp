@@ -49,7 +49,7 @@ class SqliteSessionStore : public ISessionStore {
     AddOutcome AddRecord(const SessionRecord& record) override;
     void SetFaultListener(std::function<void(const StoreError&)> listener) override;
 
-    // Test hook: a small cap makes the next commit fail with a full disk. 0 lifts it
+    // Test hook. A small cap makes the next commit fail with a full disk, and 0 lifts it
     void SetMaxPageCount(std::int64_t pages);
 
    private:

@@ -87,7 +87,7 @@ class WhisperTranscriber : public ITranscriber {
     std::function<void(const std::string&)> switched_;
     bool switching_ = false;     // under mutex_
     std::string switch_device_;  // under mutex_, the device a pending switch loads
-    std::string device_;         // worker thread once started; empty for the manifest's device
+    std::string device_;         // worker thread once started, empty for the manifest's device
     std::atomic<bool> moving_{false};
     DecodeFn decode_;  // worker thread only once loaded
     metrics::Registry* metrics_ = nullptr;

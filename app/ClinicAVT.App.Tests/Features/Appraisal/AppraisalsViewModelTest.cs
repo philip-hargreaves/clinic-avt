@@ -35,7 +35,8 @@ public class AppraisalsViewModelTest
         Assert.Equal(["a", "b", "c"], page.Cards.Select(c => c.Id));
         Assert.Equal([true, false, true], page.Cards.Select(c => c.StartsMonth));
         Assert.Equal("A patient in their forties.", page.Cards[0].Line);
-        Assert.Equal("ask about smoking", page.Cards[1].Line);  // without a case study the line is the clinician's words
+        // Without a case study the line is the clinician's words
+        Assert.Equal("ask about smoking", page.Cards[1].Line);
         Assert.Equal("A patient in their sixties with back pain.", page.Cards[2].Line);
         Assert.Equal([false, false, true], page.Cards.Select(c => c.Sample));
         Assert.Equal("September 2026", page.Cards[0].MonthLabel);

@@ -1,6 +1,8 @@
 namespace ClinicAVT.App.Core.Preferences;
 
-/// <summary>The note options the engine accepts, in the order the note style menu lists them.</summary>
+/// <summary>
+/// The note options the engine accepts, in the order the note style menu lists them.
+/// </summary>
 public static class NoteOptions
 {
     public static readonly IReadOnlyList<NoteOption> Styles =

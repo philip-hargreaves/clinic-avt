@@ -3,7 +3,9 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace ClinicAVT.App.Controls;
 
-/// <summary>A dialog's warning, announced as it appears and collapsed while Text is empty.</summary>
+/// <summary>
+/// A dialog's warning, announced as it appears and collapsed while Text is empty.
+/// </summary>
 public sealed partial class WarningLine : UserControl
 {
     public static readonly DependencyProperty TextProperty = DependencyProperty.Register(

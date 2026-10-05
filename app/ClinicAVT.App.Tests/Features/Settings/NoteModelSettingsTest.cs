@@ -56,7 +56,8 @@ public class NoteModelSettingsTest
         Assert.Equal(["Qwen3.5 4B", "Qwen3.5 9B", "Qwen3.6 35B"], settings.NoteModelOptions);
         Assert.Equal(2, settings.NoteModelIndex);
         Assert.True(settings.NoteModelEnabled);
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");  // restoring a saved tier sends no request
+        // Restoring a saved tier sends no request
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "note/tier");
 
         settings.NoteModelIndex = 0;
 

@@ -4,7 +4,9 @@ namespace ClinicAVT.App.Core.Features.Backup;
 
 public static class BackupFlows
 {
-    /// <summary>The Back up dialog. True when it removed consultations from this computer.</summary>
+    /// <summary>
+    /// The Back up dialog. True when it removed consultations from this computer.
+    /// </summary>
     public static async Task<bool> RunBackupAsync(this IDialogService dialogs, Func<BackupViewModel> create)
     {
         using var backup = create();

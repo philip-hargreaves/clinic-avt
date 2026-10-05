@@ -39,7 +39,7 @@ inline std::vector<std::string_view> Words(std::string_view s) {
     return words;
 }
 
-// Lower-cased runs of the bytes word_char accepts; everything else separates
+// Lower-cased runs of the bytes word_char accepts. Other bytes separate them
 inline std::vector<std::string> LowerTokens(std::string_view s, bool (*word_char)(unsigned char)) {
     std::vector<std::string> tokens;
     std::string token;

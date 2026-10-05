@@ -13,7 +13,7 @@ inline constexpr std::uint32_t kMaxFrameBytes = 4u * 1024 * 1024;
 
 inline constexpr std::size_t kHeaderBytes = 4;
 
-// 4-byte little-endian payload length, then the payload.
+// 4-byte little-endian payload length, then the payload
 inline std::string EncodeFrame(std::string_view payload) {
     if (payload.size() > kMaxFrameBytes) {
         throw std::length_error("frame exceeds kMaxFrameBytes");

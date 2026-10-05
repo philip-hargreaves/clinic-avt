@@ -153,7 +153,7 @@ def build():
     cases = GOLD / "st-georges-cases" / "cases.jsonl"
     if cases.exists():
         for r in read_jsonl(cases):
-            # The PMR case cites no NICE recommendation: against this corpus it must retrieve nothing
+            # The PMR case cites no NICE recommendation, so it should retrieve nothing from this corpus
             queries.append({"qid": r["qid"], "set": "st-georges", "text": r["text"], "mode": "note",
                             "expected_ids": r["expected_ids"], "expected_codes": r.get("expected_codes", []),
                             "negative": not r["expected_ids"]})

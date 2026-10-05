@@ -261,7 +261,6 @@ def rank(variant: dict, lists: list[dict], unit_rows: list[dict], background=Non
     for unit, tallied in ranked:
         if len(shown) >= LIMIT:
             break
-        # Floor applies to the best cosine, not the vote score
         if tallied["cos"] < floor:
             continue
         if any(near_duplicate(unit_rows[s["unit"]]["text"], unit_rows[unit]["text"]) for s in shown):

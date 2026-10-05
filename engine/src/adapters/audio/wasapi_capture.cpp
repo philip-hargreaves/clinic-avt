@@ -138,8 +138,8 @@ SourceEnd WasapiCapture::RunToEnd(IAudioSink& sink) {
         return Fail("Activate", hr);
     }
 
-    // Without the communications category Windows never wakes a Bluetooth mic
-    // link (measured: silence). Side effect: other apps' audio ducks while recording
+    // Without the communications category a Bluetooth mic link never wakes and records
+    // silence. Other apps' audio ducks while recording
     ComPtr<IAudioClient2> client2;
     if (SUCCEEDED(client.As(&client2))) {
         AudioClientProperties properties{};

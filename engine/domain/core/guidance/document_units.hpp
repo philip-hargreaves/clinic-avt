@@ -28,9 +28,9 @@ inline constexpr int kMaxUnitWords = 200;
 
 inline constexpr int kSplitWords = 150;
 
-inline constexpr int kTailWords = 6;  // fewer, unnumbered: a sentence's tail or a running head
+inline constexpr int kTailWords = 6;  // shorter unnumbered text is a sentence tail or running head
 
-inline constexpr int kCountRun = 8;  // consecutive integers in a row: a proof's line numbers
+inline constexpr int kCountRun = 8;  // this many consecutive integers are a proof's line numbers
 
 inline constexpr int kLegendPairs = 4;  // "ADA: adalimumab; CZP: ..." under a table
 

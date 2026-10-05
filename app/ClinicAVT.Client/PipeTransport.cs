@@ -7,11 +7,10 @@ using System.Text.Json;
 namespace ClinicAVT.Client;
 
 /// <summary>
-/// JSON-RPC client over the engine's named pipe. One connection, concurrent
-/// requests correlated by id, notifications surfaced as an event. Any transport
-/// failure is terminal. Pending and future requests observe it and the
-/// connection does not recover. This is the client's only Windows-specific type, because pipe
-/// access rights and the server pid check are Win32.
+/// JSON-RPC client over the engine's named pipe. It uses one connection, matches concurrent
+/// requests by id and raises notifications as an event. Any transport failure is terminal and
+/// fails pending and future requests. This is the client's only Windows-specific type, because
+/// pipe access rights and the server pid check are Win32.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class PipeTransport : IEngineTransport
@@ -238,7 +237,7 @@ public sealed class PipeTransport : IEngineTransport
 
     private void Fault(Exception cause)
     {
-        // First fault wins
+        // Only the first fault is kept
         if (Interlocked.CompareExchange(ref _fault, cause, null) is not null)
         {
             return;

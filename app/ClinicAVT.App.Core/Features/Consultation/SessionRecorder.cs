@@ -230,7 +230,7 @@ public sealed partial class SessionRecorder : ObservableObject
     }
 
     // The shared tail of stop and import. A failure must not wedge the UI, so it goes back to
-    // idle saying why. A cancelled import has nothing to say
+    // idle with the reason. A cancelled import shows no reason
     internal async Task FinaliseAsync(string step, string problem, Func<Task<string>> call)
     {
         State = SessionState.Finalising;

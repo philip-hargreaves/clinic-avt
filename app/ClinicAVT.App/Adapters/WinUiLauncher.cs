@@ -6,7 +6,7 @@ namespace ClinicAVT.App.Adapters;
 
 public sealed class WinUiLauncher : ILauncher
 {
-    // Web links only. Anything else is refused before it reaches the launcher
+    // Only web links reach the launcher
     public async Task<bool> OpenLinkAsync(string link)
     {
         try

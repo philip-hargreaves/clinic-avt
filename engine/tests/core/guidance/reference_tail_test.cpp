@@ -54,7 +54,7 @@ TEST(ReferenceTail, TheTailGoesFromItsHeadingButAnAppendixAfterItStays) {
     ASSERT_EQ(paragraphs.size(), 32u);
     EXPECT_EQ(paragraphs[30].text, "Supplementary Table 1 Doses in pregnancy");
 
-    // A heading that ends a paragraph takes only the tail, not the paragraph
+    // A heading that ends a paragraph takes only the tail
     auto joined = Body(30);
     Paragraph last = Para("Review the plan at every appointment.");
     last.lines.push_back({"References", {}});

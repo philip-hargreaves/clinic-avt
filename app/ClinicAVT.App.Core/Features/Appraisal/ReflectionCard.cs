@@ -25,7 +25,6 @@ public sealed partial class ReflectionCard : ObservableObject
 
     public string Id { get; }
 
-    /// <summary>A seeded sample.</summary>
     public bool Sample { get; }
 
     public DateTimeOffset Started { get; }
