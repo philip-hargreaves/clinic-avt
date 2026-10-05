@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "required": ["preferred", "strength", "a_problems", "b_problems", "reason"],
+  "properties": {
+    "preferred": {"type": "string", "enum": ["A", "B", "tie"]},
+    "strength": {"type": "string", "enum": ["slight", "clear", "strong"]},
+    "a_problems": {"type": "array", "items": {"type": "string"}},
+    "b_problems": {"type": "array", "items": {"type": "string"}},
+    "reason": {"type": "string"}
+  }
+}

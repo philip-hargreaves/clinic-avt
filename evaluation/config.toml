@@ -70,6 +70,15 @@ properties = { ACTIVATIONS_SCALE_FACTOR = "32" }
 label = "Qwen3.8-27B"
 params_b = 27
 
+# The same export run as an app tier would be, with the engine's own chat wrap
+[models."qwen3.8-27b-int4-app"]
+path = "{comparison_models}/Qwen3.8-27B-int4-ov"
+pipeline = "vlm"
+template = "chatml"
+properties = { ACTIVATIONS_SCALE_FACTOR = "32" }
+label = "Qwen3.8-27B (app wrap)"
+params_b = 27
+
 [models."qwen3.6-27b-int4-ov-intel"]
 path = "{comparison_models}/Qwen3.6-27B-int4-ov"
 pipeline = "vlm"
