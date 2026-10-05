@@ -27,19 +27,16 @@ inline std::string JoinedText(std::span<const Turn> chunks) {
 
 using StopFn = std::function<bool()>;
 
-// Transcribes one clip per call. The diariser passes each turn's audio and gets the chunks back
+// Transcribes one speaker turn per call
 class ITranscriber {
    public:
     virtual ~ITranscriber() = default;
 
-    // Whisper chunks for the clip, in absolute frames. Safe mid-session. Empty when unsupported,
-    // and a re-split then keeps the original turn. A clip still queued or waiting for the GPU when
-    // `stop` returns true is dropped with no chunks. One already decoding finishes
+    // Returns the turn's text in timed chunks. A clip still waiting when `stop` is true is dropped
     virtual std::vector<Turn> DecodeClipChunks(std::span<const float> frames,
                                                std::uint64_t first_frame, const StopFn& stop) = 0;
 
-    // Chunk edges (absolute frames, inside the clip) from every decode since the last
-    // call, used as diariser cut points. Empty when unsupported
+    // Chunk boundaries since the last call, used to split turns
     virtual std::vector<std::uint64_t> TakeClipCuts() {
         return {};
     }

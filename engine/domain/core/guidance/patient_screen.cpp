@@ -41,7 +41,7 @@ bool LooksLikePatientData(std::string_view text) {
     static const char* const kPhrases[] = {
         "date of birth", "dob:", "nhs number", "nhs no", "dear dr", "dear doctor",
         "discharge summary", "discharge letter",
-        // The app marks its own note and sheet exports, so a filed one is refused
+        // The app marks its own exports, so one imported back is refused
         "clinicavt export"};
     for (const char* phrase : kPhrases) {
         if (strings::Contains(lower, phrase)) return true;

@@ -10,8 +10,8 @@
 
 namespace clinicavt::audio {
 
-// SPSC Lamport ring with monotonic indices masked on access. Capacity is
-// rounded to a power of two
+// Lock-free ring buffer for one writer and one reader (Lamport). Positions only grow and are masked
+// into the buffer, so capacity is rounded to a power of two
 #pragma warning(push)
 #pragma warning(disable : 4324)  // alignas padding is intended
 class AudioRing {

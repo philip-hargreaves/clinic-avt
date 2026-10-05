@@ -111,7 +111,7 @@ std::vector<std::string> DecodeTurnTexts(const std::vector<LabelledSlice>& turns
             }
             auto chunks = decode(audio.subspan(a, b - a), a);
             std::string text = asr::JoinedText(chunks);
-            // A repetition loop has no safe fallback, so leave the text empty
+            // Drop a turn stuck in a loop, as its correct text cannot be recovered
             if (MaxRepeatedNgram(text) >= kPerTurnMaxRepeat) continue;
             texts[i] = std::move(text);
             if (chunks_out != nullptr) (*chunks_out)[i] = std::move(chunks);

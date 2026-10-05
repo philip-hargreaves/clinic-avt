@@ -63,6 +63,7 @@ ClusterResult ClusterSpeakers(const std::vector<std::vector<float>>& embeddings,
     const auto normalised = Normalised(embeddings);
     const std::size_t dims = normalised[0].size();
 
+    // Only slices of two seconds or more form the groups
     std::vector<std::size_t> fit;
     for (std::size_t i = 0; i < n; ++i) {
         if (duration_frames[i] >= kFitMinFrames) fit.push_back(i);
@@ -93,6 +94,7 @@ ClusterResult ClusterSpeakers(const std::vector<std::vector<float>>& embeddings,
     std::vector<int> fit_labels(m, 0);
     double best = -2.0;
     const int khi = std::min(kMaxSpeakers, static_cast<int>(m) - 1);
+    // Try two to four speakers and keep the count whose groups separate best
     for (int kk = 2; kk <= khi; ++kk) {
         std::vector<int> cut(m);
         cutree_k(static_cast<int>(m), merge.data(), kk, cut.data());
@@ -127,7 +129,7 @@ ClusterResult ClusterSpeakers(const std::vector<std::vector<float>>& embeddings,
         for (float& x : result.centroids[c]) x = static_cast<float>(x / norm);
     }
 
-    // Every slice, short ones included, goes to its nearest centroid
+    // Every slice, short ones included, joins the speaker its voice is most similar to
     for (std::size_t i = 0; i < n; ++i) {
         double best_dot = -1e18;
         int best_c = 0;

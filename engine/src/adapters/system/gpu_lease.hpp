@@ -20,8 +20,7 @@ inline constexpr const char* kGpuLeaseVariable = "CLINICAVT_GPU_LEASE";
 // The lease name inherited from the engine, empty when unset
 std::string InheritedGpuLeaseName();
 
-// Named mutex serialising all GPU work of engines and note hosts, so two models
-// never run at once (the driver-fault configuration). Inert with an empty name
+// Named mutex shared by all engines and note hosts, so two models never use the GPU at once
 class GpuLease {
    public:
     class Guard {
@@ -64,8 +63,7 @@ class GpuLease {
     // Checked every kPoll while waiting. True gives up at once
     using GiveUp = std::function<bool()>;
 
-    // Blocks until acquired, `on_wait` or `give_up` gives up, or the lease is wedged. An
-    // abandoned mutex counts as acquired
+    // Blocks until acquired or a callback gives up
     Guard Acquire(const OnWait& on_wait = {}, const GiveUp& give_up = {});
 
     // Non-blocking acquire, for work only worth doing immediately
