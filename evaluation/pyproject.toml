@@ -11,29 +11,29 @@
 # torch is the CPU build: add --extra-index-url https://download.pytorch.org/whl/cpu
 
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "clinicavt-evaluation"
 version = "1.0"
 requires-python = ">=3.12"
-dependencies = ["numpy>=1.26"]
+dependencies = ["numpy>=2.5.3"]
 
 [project.optional-dependencies]
 transcription = [
-    "openvino-genai==2026.2.1.0",
+    "openvino-genai==2026.4.1.0",
     "psutil==7.2.2",
-    "rapidfuzz==3.14.5",
+    "rapidfuzz==3.14.6",
     "regex",
     "more-itertools",
-    "spacy==3.8.14",
+    "spacy==3.8.16",
     # the clinical lens model: pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_ner_bc5cdr_md-0.5.4.tar.gz
 ]
 summarisation = [
-    "openvino-genai==2026.2.1.0",
+    "openvino-genai==2026.4.1.0",
     "openpyxl==3.1.5",
-    "pandas==3.0.3",
+    "pandas==3.0.6",
     "bert-score==0.3.13",
     "psutil==7.2.2",
 ]
@@ -41,63 +41,63 @@ diarisation = [
     "scipy",            # silhouette sweep in multispeaker.py space
 ]
 performance = [
-    "openvino-genai==2026.2.1.0",
+    "openvino-genai==2026.4.1.0",
     "psutil==7.2.2",
     "matplotlib",
 ]
 knowledge = [
-    "lm-eval==0.4.12",
-    "optimum==2.2.0",
-    "optimum-intel==2.0.0",
-    "transformers==4.57.6",
-    "tokenizers==0.22.2",
-    "openvino==2026.2.1",
-    "nncf==3.2.0",
+    "lm-eval==0.4.13",
+    "optimum==2.3.0",
+    "optimum-intel==2.2.0",
+    "transformers==5.18.0",
+    "tokenizers==0.23.2",
+    "openvino==2026.4.1",
+    "nncf==3.4.0",
 ]
 retrieval = [
-    "torch==2.14.0",
-    "openvino==2026.3.0",
-    "openvino-genai==2026.3.0.0",
-    "openvino-tokenizers==2026.3.0.0",
+    "torch==2.14.1",
+    "openvino==2026.4.1",
+    "openvino-genai==2026.4.1.0",
+    "openvino-tokenizers==2026.4.1.0",
     "optimum==2.3.0",
-    "optimum-intel==2.1.0",
-    "transformers==5.5.4",
-    "sentence-transformers==6.0.1",
-    "nncf==3.3.0",
-    "numpy==2.4.6",
-    "pandas==3.0.5",
+    "optimum-intel==2.2.0",
+    "transformers==5.18.0",
+    "sentence-transformers==6.1.0",
+    "nncf==3.4.0",
+    "numpy==2.5.3",
+    "pandas==3.0.6",
     "pypdfium2==5.13.0",
-    "scikit-learn==1.9.0",
+    "scikit-learn==1.9.1",
     "psutil==7.2.2",
     "rank-bm25==0.2.2",
     "hnswlib==0.8.0",
-    "usearch==2.26.2",
+    "usearch==2.26.3",
     "sqlite-vec==0.1.9",
 ]
 translation = [
-    "torch==2.14.0",
-    "openvino==2026.3.0",
-    "openvino-genai==2026.3.0.0",
-    "openvino-tokenizers==2026.3.0.0",
+    "torch==2.14.1",
+    "openvino==2026.4.1",
+    "openvino-genai==2026.4.1.0",
+    "openvino-tokenizers==2026.4.1.0",
     "optimum==2.3.0",
-    "optimum-intel==2.1.0",
-    "nncf==3.3.0",
-    "transformers==5.5.4",
+    "optimum-intel==2.2.0",
+    "nncf==3.4.0",
+    "transformers==5.18.0",
     "sacrebleu==2.6.0",
     "sentencepiece==0.2.2",
-    "numpy==2.4.6",
+    "numpy==2.5.3",
     "psutil==7.2.2",
 ]
 comet = [
     "unbabel-comet==2.2.7",
     "pytorch-lightning==2.6.6",
     "pandas==3.0.6",
-    "transformers==4.57.6",
-    "torch==2.14.0",
-    "openvino==2026.3.0",
-    "openvino-tokenizers==2026.3.0.0",
+    "transformers==5.18.0",
+    "torch==2.14.1",
+    "openvino==2026.4.1",
+    "openvino-tokenizers==2026.4.1.0",
     "sentencepiece==0.2.2",
-    "numpy==1.26.4",
+    "numpy==2.5.3",
 ]
 
 [tool.setuptools]
