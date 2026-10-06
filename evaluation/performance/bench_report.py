@@ -8,7 +8,6 @@ import csv
 import json
 import statistics
 import sys
-import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -633,8 +632,8 @@ def main():
        f"GPUs: {machine.get('gpus')}; NPU: {machine.get('npu')}")
     md(f"- **Power:** {'mains' if batt.get('PowerOnline') else 'battery'}; plan: {machine.get('power_plan')}; "
        f"battery full {fmt((float(machine.get('battery_full_mwh') or 0)) / 1000, 1)} Wh")
-    md(f"- **Tracks:** " + ", ".join(f"{n} ({d / 60:.1f} min)" for n, d in machine.get("tracks", [])))
-    md(f"- **Adapters found:** " + ", ".join(f"{k}={v}" for k, v in kinds.items()))
+    md("- **Tracks:** " + ", ".join(f"{n} ({d / 60:.1f} min)" for n, d in machine.get("tracks", [])))
+    md("- **Adapters found:** " + ", ".join(f"{k}={v}" for k, v in kinds.items()))
     prov = machine.get("provenance") or {}
     md(f"- **Code:** commit {str(prov.get('commit'))[:10]} on {prov.get('branch')}, "
        f"{prov.get('uncommitted_files')} uncommitted files; engine {str(prov.get('engine_sha256'))[:12]} "

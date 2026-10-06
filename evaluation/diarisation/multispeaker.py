@@ -32,7 +32,6 @@ the enrolment speech, and companions take the same share of the longer clip.
 Its clips, runs and scores go to multispeaker-full beside the 90 s set.
 """
 import functools
-import json
 import os
 import subprocess
 import sys
