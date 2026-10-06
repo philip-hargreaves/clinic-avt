@@ -24,7 +24,9 @@ public static class Protocol
         Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
     };
 
-    /// <summary>An object payload as a record, or null for anything else or a field of the wrong kind.</summary>
+    /// <summary>
+    /// An object payload as a record, or null for anything else or a field of the wrong kind.
+    /// </summary>
     public static T? Parse<T>(JsonElement element)
         where T : class
     {
@@ -47,7 +49,9 @@ public static class Protocol
 /// <summary>Reading a reply without trusting its shape.</summary>
 public static class JsonElements
 {
-    /// <summary>The named property when the element is an object and the property is of that kind.</summary>
+    /// <summary>
+    /// The named property when the element is an object and the property is of that kind.
+    /// </summary>
     public static bool TryProperty(this JsonElement element, string name, JsonValueKind kind, out JsonElement value)
     {
         if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out value)

@@ -42,8 +42,8 @@ public sealed class FakeDialogService : IDialogService
     public List<object> Shown { get; } = [];
 
     /// <summary>
-    /// Runs while a dialog is open, as the clinician would use it. The answer is whether the primary
-    /// button closed it, false when unset.
+    /// Runs while a dialog is open, as the clinician would use it. The answer is whether the
+    /// primary button closed it, false when unset.
     /// </summary>
     public Func<object, Task<bool>>? OnShow { get; set; }
 

@@ -21,7 +21,7 @@ class WasapiCapture : public IAudioSource {
     SourceEnd RunToEnd(IAudioSink& sink);
 
     std::wstring endpoint_id_;
-    void* stop_event_ = nullptr;  // HANDLE, manual-reset: stopping is terminal
+    void* stop_event_ = nullptr;  // HANDLE, manual-reset, so stopping is terminal
 };
 
 }  // namespace clinicavt::audio

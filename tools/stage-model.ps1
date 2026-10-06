@@ -3,18 +3,18 @@
 # the manifest, and installs atomically (temp dir, then rename).
 #
 #   stage-model.ps1 -Id whisper-turbo-int8 -Task asr -Tier default -Licence MIT `
-#       -Source C:\dev\intelliscribe\ml-models\whisper-turbo-int8
+#       -Source <exported model folder>
 #   stage-model.ps1 -Id silero-vad -Task vad -Tier default -Licence MIT -Device CPU `
 #       -Repo onnx-community/silero-vad -Revision <40-hex-commit> -Files model.onnx
 #
 # -InPlace hashes the source where it is, writes the manifest beside it, and
-# junctions it into the store: for an export too large to copy on a
-# development machine. -Pipeline and -Property say how the model loads:
-# absent means the LLM pipeline with no properties.
+# junctions it into the store, for an export too large to copy on a
+# development machine. -Pipeline and -Property say how the model loads.
+# Without them it loads as an LLM pipeline with no properties.
 #
 #   stage-model.ps1 -Id qwen3.6-35b-a3b-int4 -Task note -Tier accuracy -Licence Apache-2.0 `
 #       -Name "Qwen3.6 35B" -Pipeline vlm -Property ACTIVATIONS_SCALE_FACTOR=32 `
-#       -Source C:\dev\intelliscribe\ml-models\summariser\qwen3.6-35b-a3b-int4-ov -InPlace
+#       -Source <exported model folder> -InPlace
 param(
     [Parameter(Mandatory)] [string]$Id,
     [Parameter(Mandatory)] [string]$Task,
@@ -46,7 +46,7 @@ if ($InPlace) {
         Copy-Item (Join-Path $Source "*") $staging -Recurse
         $sourceRecord = @{ path = (Resolve-Path $Source).Path }
     } elseif ($Repo) {
-        # Commit-pinned URLs only; a branch name is not a provenance
+        # A branch can move, so only a commit SHA records provenance
         if ($Revision -notmatch '^[0-9a-f]{40}$') { throw "-Revision must be a 40-hex commit SHA" }
         if (-not $Files) { throw "-Files is required with -Repo" }
         foreach ($file in $Files) {
@@ -62,13 +62,13 @@ if ($InPlace) {
 }
 
 # The compile cache and a previous manifest are never part of the model.
-# Hashes are the provenance record and the delivery tools' check; the engine
+# Hashes are the provenance record and the delivery tools' check. The engine
 # checks presence and size at load
 $hashes = [ordered]@{}
 $bytes = [ordered]@{}
 foreach ($file in (Get-ChildItem $staging -File -Recurse | Where-Object {
         $_.FullName -notlike (Join-Path $staging ".cache*") -and $_.Name -ne "manifest.json" })) {
-    # Not $name: PowerShell variables are case-insensitive and that is the -Name parameter
+    # PowerShell variables are case-insensitive, so $name would be the -Name parameter
     $relative = $file.FullName.Substring($staging.Length + 1) -replace '\\', '/'
     Write-Host "Hashing $relative"
     $hashes[$relative] = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()

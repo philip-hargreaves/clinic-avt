@@ -78,7 +78,6 @@ TEST(SegModel, MatchesTheResearchArgmaxAndReferenceDecode) {
         EXPECT_GE(agreement, 0.9999);
     }
 
-    // Decode must match the reference change points and overlap spans
     Segmenter segmenter(store, runtime);
     const auto result = segmenter.Run(audio);
 

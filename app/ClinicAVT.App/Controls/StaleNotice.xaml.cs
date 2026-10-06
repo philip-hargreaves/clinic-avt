@@ -4,7 +4,9 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace ClinicAVT.App.Controls;
 
-/// <summary>Flags a document written before its source changed, with the reason and a link that redoes it.</summary>
+/// <summary>
+/// Flags a document written before its source changed, with the reason and a link that redoes it.
+/// </summary>
 public sealed partial class StaleNotice : UserControl
 {
     public static readonly DependencyProperty TextProperty = DependencyProperty.Register(

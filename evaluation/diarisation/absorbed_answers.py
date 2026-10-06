@@ -33,8 +33,7 @@ FILLER = {"ok", "okay", "yeah", "yep", "yup", "mm", "mhm", "mmhmm", "mmm", "hmm"
 YES_NO = {"yes", "yeah", "yep", "yup", "no", "nope"}
 
 
-# A content word makes an utterance substantive; a filler-only utterance is
-# substantive only as the direct reply to the other speaker's question
+# Substantive means a content word, or a filler-only direct reply to the other speaker's question
 def substantive(words, prev_other_text):
     if any(w not in FILLER for w in words):
         return True
@@ -67,7 +66,7 @@ def classify(ref_ivs, hyp):
         dur = max(1e-6, end - start)
         key = " ".join(words[:3]) if len(words) >= 2 else words[0]
         near = [(s, e, hs, hw) for s, e, hs, hw in hyp if e >= start - 3 and s <= start + 6]
-        # Kept: the right speaker covers the time and some of the words are in those turns
+        # Kept when the right speaker covers the time and some of the words are in those turns
         covering = [hw for s, e, hs, hw in hyp if hs == spk and min(end, e) > max(start, s)]
         covered = sum(max(0.0, min(end, e) - max(start, s)) for s, e, hs, _ in hyp if hs == spk)
         heard = set(w for hw in covering for w in hw.split())

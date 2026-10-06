@@ -28,7 +28,7 @@ $staging = Join-Path ([IO.Path]::GetTempPath()) "openvino-staging"
 Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive $zip $staging
 
-# The zip wraps everything in one versioned directory; install at a stable path
+# The zip wraps everything in one versioned directory, which is installed at a stable path
 $inner = @(Get-ChildItem $staging)
 if ($inner.Count -ne 1) { throw "unexpected archive layout: $($inner.Name -join ', ')" }
 Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue

@@ -126,7 +126,8 @@ public class ImportRecordingTest
         var header = shell.Get<ConsultationHeaderViewModel>();
         Assert.Equal("", header.Title);
         await session.StartRecordingAsync();
-        Assert.Equal(SessionText.Heading(recordedAt), header.Title);  // a recording is headed with its start
+        // A recording is headed with its start
+        Assert.Equal(SessionText.Heading(recordedAt), header.Title);
         shell.Clock.Now = DateTimeOffset.UtcNow;
         await session.StopRecordingAsync();
         engine.RaiseNotification("note/ready", Params(new { text = "note" }));

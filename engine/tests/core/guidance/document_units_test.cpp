@@ -20,7 +20,7 @@ const char* const kLong =
     "Offer allopurinol after a first attack when urate stays high and the patient agrees.";
 
 TEST(DocumentUnits, HeadingsLabelsAndQuestionsNameTheUnitTheyOpen) {
-    // A heading labels the next unit only; a recommendation stands alone
+    // A heading labels the next unit only. A recommendation stands alone
     const auto headed = UnitsFromParagraphs(
         {Para("Gout guideline"), Para("Urate lowering therapy:"),
          Para("1.1 Offer allopurinol after a first attack when urate stays high."),

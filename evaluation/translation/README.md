@@ -1,7 +1,8 @@
 # Translation
 
-Which on-device model translates the patient sheet most faithfully into the eight languages the
-practice needs, and what does the translator cost to start, run and hold in memory?
+Which on-device model translates the patient sheet most faithfully into the languages the app
+offers, and what does the translator cost to start, run and hold in memory? The study first measured
+eight languages; `languages.py` lists all 24 the app offers, with their test-set codes.
 
 ## Data
 
@@ -25,6 +26,7 @@ to a folder holding the FLORES-200 SentencePiece model.
 | `judge.py` | Blind judging of the sheets, validated on planted errors |
 | `comet_qe.py` | Reference-free COMET |
 | `cost.py` | Cold start, seconds per sheet, memory |
+| `summarise.py` | One table per language from every measure, and the original eight's headline figures |
 | `parity.py` | The app's model against the study's export |
 
 ## Translator lifecycle
@@ -39,3 +41,11 @@ to a folder holding the FLORES-200 SentencePiece model.
 
 Each judge verdict comes from an isolated session that reads only `judge-prompt.md` and one
 task file. Each script's docstring gives its arguments.
+
+A candidate lists in `candidates.json` the languages it cannot translate; they are skipped and named
+in the output. `judge.py tasks` keeps tasks already written, so existing verdicts stay matched to
+their letters, and builds a task from the candidates that cover a language when not all do.
+
+`run-24.ps1` in mt_root translates the languages added after the first study, at the original
+settings (4 threads, FLORES and TICO limited to 300 items), then scores and sets up the judge
+tasks. The judge sessions, `judge.py score`, `judge.py validity` and `summarise.py` follow.

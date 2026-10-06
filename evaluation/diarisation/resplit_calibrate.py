@@ -32,8 +32,8 @@ def candidates_by_consult(engine_log, order):
         m = CAND.search(line)
         if m:
             blocks[-1].append(m)
-    # One engine for the whole sweep: split at each "session audio" line and match the blocks in
-    # order with the sweep log's consults. Block 0 precedes the first finalise
+    # One engine runs the whole sweep, so split at each "session audio" line and match the blocks
+    # in order with the sweep log's consults. Block 0 precedes the first finalise
     return dict(zip(order, blocks[1:]))
 
 

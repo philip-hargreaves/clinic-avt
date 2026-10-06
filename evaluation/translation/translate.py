@@ -16,12 +16,10 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.io import read_json, read_jsonl  # noqa: E402
+from languages import FLORES, TICO  # noqa: E402
 from study import LANGUAGES, ROOT, SHEETS, option  # noqa: E402
 
 CANDIDATES = read_json(Path(__file__).with_name("candidates.json"))
-FLORES = {"Urdu": "urd_Arab", "Punjabi": "pan_Guru", "Bengali": "ben_Beng", "Gujarati": "guj_Gujr",
-          "Polish": "pol_Latn", "Romanian": "ron_Latn", "Arabic": "arb_Arab", "Somali": "som_Latn"}
-TICO = {"Urdu": "ur", "Bengali": "bn", "Arabic": "ar", "Somali": "so"}
 MAX_NEW_TOKENS = 256
 BATCH = 8
 
@@ -124,7 +122,13 @@ def main():
     done = set()
     if out.exists():
         done = {(r["id"], r["language"]) for r in read_jsonl(out)}
-    items = [i for i in load_set(set_name, limit) if (i["id"], i["language"]) not in done]
+    entry = CANDIDATES[name]
+    skipped = [language for language in LANGUAGES if language not in entry["codes"]]
+    for language in skipped:
+        why = "unsupported" if language in entry.get("unsupported", []) else "not configured"
+        print(f"skipping {language}: {why} for {name}", flush=True)
+    items = [i for i in load_set(set_name, limit)
+             if (i["id"], i["language"]) not in done and i["language"] not in skipped]
     print(name, set_name, len(items), "to do,", len(done), "done", flush=True)
     if not items:
         return
@@ -158,6 +162,8 @@ def work(name, set_name, weights, threads, items, out):
         else:
             for language in LANGUAGES:
                 rows = [i for i in items if i["language"] == language]
+                if not rows:
+                    continue
                 for k in range(0, len(rows), BATCH):
                     chunk = rows[k:k + BATCH]
                     started = time.time()

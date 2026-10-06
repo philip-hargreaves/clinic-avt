@@ -33,7 +33,7 @@ public sealed partial class ReviewCommandsViewModel : ObservableObject
     private bool AnyEditing => _note.NoteEditing || _patient.PatientEditing;
 
     /// <summary>
-    /// True while a document is being edited, or a note, sheet or translation is still being written.
+    /// True while a document is being edited or a note, sheet or translation is being written.
     /// </summary>
     public bool Busy => AnyEditing || _patient.TranslationRunning
         || _note.PipelineState is NotePipelineState.Pending or NotePipelineState.NoteWriting
@@ -86,7 +86,9 @@ public sealed partial class ReviewCommandsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanTranslate))]
     private Task Translate() => StartTranslation(_patient.SelectedLanguage!);
 
-    /// <summary>Translates again into the translation's own language, whatever the picker shows.</summary>
+    /// <summary>
+    /// Translates again into the translation's own language, whatever the picker shows.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanTranslateAgain))]
     private Task TranslateAgain() => StartTranslation(_patient.TranslationLanguage);
 

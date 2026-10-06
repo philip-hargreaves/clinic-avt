@@ -70,7 +70,7 @@ $manifest.Load($manifestPath)
 $manifest.Package.Identity.Version = $version
 $manifest.Package.Identity.Publisher = $Publisher
 if ($Publisher -match 'CN=([^,]+)') { $manifest.Package.Properties.PublisherDisplayName = $Matches[1].Trim() }
-# The build overwrites the Windows versions
+# Restore the Windows versions the build overwrites
 $family = $manifest.Package.Dependencies.TargetDeviceFamily
 $family.MinVersion = $source.Dependencies.TargetDeviceFamily.MinVersion
 $family.MaxVersionTested = $source.Dependencies.TargetDeviceFamily.MaxVersionTested

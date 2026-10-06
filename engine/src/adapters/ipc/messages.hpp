@@ -16,7 +16,7 @@ namespace clinicavt::ipc {
 
 using nlohmann::json;
 
-// JSON-RPC 2.0 reserved codes, plus the engine range -32000..-32099.
+// JSON-RPC 2.0 reserved codes, plus the engine range -32000..-32099
 inline constexpr int kInvalidRequest = -32600;
 inline constexpr int kMethodNotFound = -32601;
 inline constexpr int kInvalidParams = -32602;
@@ -49,7 +49,7 @@ struct PeerInfo {
     int protocol_version = 0;
 };
 
-// Whisper output can carry invalid UTF-8, so replace rather than throw
+// Whisper output can carry invalid UTF-8, which is replaced so the dump cannot throw
 inline std::string Serialize(const json& j) {
     return j.dump(-1, ' ', false, json::error_handler_t::replace);
 }

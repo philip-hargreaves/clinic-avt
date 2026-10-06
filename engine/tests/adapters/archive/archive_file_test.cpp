@@ -442,7 +442,7 @@ TEST(ArchiveFile, KeysArePbkdf2HmacSha256OfThePasswordBytes) {
     }
 }
 
-// Composed on purpose: the fixture pins the KDF input as the UTF-8 of the NFC form
+// Written composed so the fixture pins the KDF input as the UTF-8 of the NFC form
 constexpr const char* kGoldenPassword = "na\xC3\xAFve-\xE6\x9D\xB1\xE4\xBA\xAC-backup";
 
 std::filesystem::path GoldenPath() {
@@ -457,7 +457,7 @@ bool WritingGolden() {
     return set;
 }
 
-// Run once, by hand, to make the fixture; never again for v1:
+// Run by hand once to make the v1 fixture
 //   $env:CLINICAVT_WRITE_GOLDEN=1; engine_tests --gtest_filter=ArchiveFile.WriteGoldenV1
 TEST(ArchiveFile, WriteGoldenV1) {
     if (!WritingGolden()) GTEST_SKIP() << "writes the fixture only with CLINICAVT_WRITE_GOLDEN=1";

@@ -92,7 +92,7 @@ TEST(Messages, SerializeReplacesInvalidUtf8AndKeepsValidText) {
 
 TEST(Messages, DeeplyNestedParamsDoesNotOverflow) {
     // nlohmann parse and destruction are iterative. Only a copy recurses, so
-    // ParseRequest must move params out. Depth far past a 1 MB stack's frames.
+    // ParseRequest must move params out. The depth is far past what a 1 MB stack holds
     constexpr int kDepth = 200000;
     std::string nested;
     nested.reserve(kDepth * 6 + 32);

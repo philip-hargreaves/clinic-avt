@@ -46,7 +46,7 @@ def load_turns(tag, consult):
 
 
 def reference(consult):
-    # Raw interval text: normalise() drops the markup
+    # Raw interval text, since normalise() drops the markup
     ivs = sorted((start, end, speaker, text) for speaker in primock.SPEAKERS
                  for start, end, text in primock.intervals(primock.textgrid(consult, speaker))
                  if text.strip())

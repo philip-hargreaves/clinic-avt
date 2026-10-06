@@ -1,8 +1,10 @@
 #include "adapters/transcription/whisper_transcriber.hpp"
 
 #include <chrono>
+#include <exception>
 #include <memory>
 #include <openvino/genai/whisper_pipeline.hpp>
+#include <string>
 #include <utility>
 
 #include "adapters/models/model_store.hpp"
@@ -104,8 +106,9 @@ WhisperTranscriber::WhisperTranscriber(const models::ModelStore& store, models::
 
 WhisperTranscriber::WhisperTranscriber(DeviceLoader loader, std::string device,
                                        metrics::Registry* metrics)
-    : loader_([loader, device = std::move(device)] { return loader(device); }),
+    : loader_([loader, device] { return loader(device); }),
       by_device_(std::move(loader)),
+      device_(std::move(device)),
       metrics_(metrics) {
     worker_.Start([this] { WorkerLoop(); });
 }
@@ -115,7 +118,8 @@ bool WhisperTranscriber::SwitchDevice(std::string device,
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!by_device_ || worker_.Stopping()) return false;
-        loader_ = [loader = by_device_, device = std::move(device)] { return loader(device); };
+        loader_ = [loader = by_device_, device] { return loader(device); };
+        switch_device_ = std::move(device);
         switched_ = std::move(done);
         switching_ = true;
         moving_ = true;
@@ -185,6 +189,18 @@ std::string WhisperTranscriber::Load(DecodeLoader loader) {
     }
 }
 
+// A lost NPU stays lost until the device is reset, so Whisper moves to the GPU for good
+bool WhisperTranscriber::FallBackToGpu(const std::string& error) {
+    if (!by_device_ || device_ != "NPU" || error.find("DEVICE_LOST") == std::string::npos) {
+        return false;
+    }
+    log::Printf("clinicavt-engine: asr device lost on NPU, moving to GPU\n");
+    if (!Load([this] { return by_device_("GPU"); }).empty()) return false;
+    device_ = "GPU";
+    if (metrics_ != nullptr) metrics_->RecordDevice("asr", "GPU");
+    return true;
+}
+
 void WhisperTranscriber::WorkerLoop() {
     std::unique_lock<std::mutex> lock(mutex_);
     // A switch requested before the first load replaces it
@@ -201,9 +217,11 @@ void WhisperTranscriber::WorkerLoop() {
         if (switching_) {
             auto loader = std::exchange(loader_, {});
             auto done = std::exchange(switched_, {});
+            auto device = std::exchange(switch_device_, {});
             switching_ = false;
             lock.unlock();
             const std::string error = Load(std::move(loader));
+            if (error.empty()) device_ = std::move(device);
             lock.lock();
             moving_ = switching_;  // a switch requested during this load is still pending
             lock.unlock();
@@ -217,23 +235,43 @@ void WhisperTranscriber::WorkerLoop() {
         lock.unlock();
         std::vector<Turn> chunks;
         std::vector<std::uint64_t> cuts;
+        const auto drop = [&] {
+            chunks.clear();
+            cuts.clear();
+        };
+        const auto decode_clip = [&] {
+            drop();
+            if (!decode_ || (clip.stop && clip.stop())) return;
+            const auto t0 = std::chrono::steady_clock::now();
+            const std::uint64_t clip_end = clip.first_frame + clip.frames.size();
+            for (const Turn& turn : decode_(clip.frames, clip.first_frame, clip.stop)) {
+                if (turn.text.empty()) continue;
+                chunks.push_back(turn);
+                // Chunk edges mark a short answer's start and end inside a long clip
+                for (const std::uint64_t edge :
+                     {turn.first_frame, turn.first_frame + turn.frame_count}) {
+                    if (edge > clip.first_frame && edge < clip_end) cuts.push_back(edge);
+                }
+            }
+            RecordDecode(clip.frames.size(), t0);
+        };
         // A failed decode loses only this clip's text; the audio is already stored
         try {
-            if (decode_ && !(clip.stop && clip.stop())) {
-                const auto t0 = std::chrono::steady_clock::now();
-                const std::uint64_t clip_end = clip.first_frame + clip.frames.size();
-                for (const Turn& turn : decode_(clip.frames, clip.first_frame, clip.stop)) {
-                    if (turn.text.empty()) continue;
-                    chunks.push_back(turn);
-                    // Chunk edges mark a short answer's start and end inside a long clip
-                    for (const std::uint64_t edge :
-                         {turn.first_frame, turn.first_frame + turn.frame_count}) {
-                        if (edge > clip.first_frame && edge < clip_end) cuts.push_back(edge);
-                    }
+            decode_clip();
+        } catch (const std::exception& e) {
+            log::Printf("clinicavt-engine: asr decode failed on %s (%s)\n",
+                        device_.empty() ? "the manifest device" : device_.c_str(), e.what());
+            drop();
+            if (FallBackToGpu(e.what())) {
+                try {
+                    decode_clip();
+                } catch (const std::exception& retry) {
+                    log::Printf("clinicavt-engine: asr decode failed on GPU (%s)\n", retry.what());
+                    drop();
                 }
-                RecordDecode(clip.frames.size(), t0);
             }
-        } catch (...) {  // NOLINT(bugprone-empty-catch) this clip loses its text
+        } catch (...) {
+            drop();
         }
         // Record cuts before releasing the caller so TakeClipCuts right after sees them
         lock.lock();

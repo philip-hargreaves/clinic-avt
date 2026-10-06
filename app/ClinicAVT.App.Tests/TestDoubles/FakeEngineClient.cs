@@ -393,7 +393,7 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
     /// <summary>Leaves an import running until FinishImport or session/cancel.</summary>
     public bool HoldImport { get; set; }
 
-    /// <summary>Seals the import: its stages, session/imported, then the note.</summary>
+    /// <summary>Seals the import with its stages, session/imported, then the note.</summary>
     public void FinishImport()
     {
         _importRunning = false;

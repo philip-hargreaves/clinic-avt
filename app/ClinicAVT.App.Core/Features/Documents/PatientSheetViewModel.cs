@@ -137,7 +137,7 @@ public sealed partial class PatientSheetViewModel : ObservableObject
         TranslationStale = false;
     }
 
-    // Clears the sheet and its translation, an open edit included, since the next text replaces them
+    // Clears the sheet and its translation, an open edit included, as the next text replaces them
     private void Clear()
     {
         PatientEditing = false;

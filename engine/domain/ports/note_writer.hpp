@@ -34,7 +34,7 @@ inline std::optional<NoteDetail> NoteDetailFrom(std::string_view name) {
     return std::nullopt;
 }
 
-// Note structure and length; each maps to a prompt file so changes need no
+// Note structure and length. Each maps to a prompt file so changes need no
 // rebuild. Validated at the RPC boundary
 struct NoteOptions {
     NoteStyle style = NoteStyle::kProse;

@@ -84,7 +84,7 @@ TEST(SpeakerClustering, SparseInputsFallBackSafely) {
     EXPECT_EQ(two.labels, (std::vector<int>{0, 0}));
     EXPECT_TRUE(two.centroids.empty());
 
-    // No slice reaches the fit threshold: the fit falls back to everything
+    // No slice reaches the fit threshold, so the fit uses every slice
     std::vector<std::vector<float>> embeddings;
     std::vector<std::uint64_t> durations;
     AddVoices(2, kShort, 0, embeddings, durations);

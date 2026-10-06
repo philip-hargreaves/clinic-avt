@@ -113,7 +113,7 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
     const auto settled =
         SegSettledFrontier(s.seg_done, s.vad_probabilities.size() * audio::kVadHopFrames);
     if (settled == 0) return;
-    // No budget means finalise catch-up; only that pass logs phase timings
+    // No budget means finalise catch-up. Only that pass logs phase timings
     const bool catch_up = budget == std::numeric_limits<int>::max();
     using Clock = std::chrono::steady_clock;
     const auto t_start = Clock::now();
@@ -133,11 +133,11 @@ void CaptureStage::Advance(std::span<const float> audio, const DecodeClipFn& dec
     const auto& kept = embedded.kept;
     if (kept.size() < 2 || stopped()) return;
 
-    // Provisional labels; spans that final clustering changes are never read
+    // Provisional labels. Spans that final clustering changes are never read
     const auto t_cluster = Clock::now();
     const auto clusters = ClusterSpeakers(embedded.embeddings, embedded.durations);
-    // Overlap embeddings cached separately from slice embeddings (same span,
-    // raw audio); this runs every tick over all settled overlaps
+    // Overlap embeddings are cached apart from slice embeddings (same span, raw audio)
+    // This runs every tick over all settled overlaps
     const auto labelled = LabelSlices(
         kept, clusters, s.seg.overlap_spans, [&](std::uint64_t first, std::uint64_t end) {
             auto& embedding = overlap_cache_[{first, end}];

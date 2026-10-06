@@ -26,7 +26,7 @@ std::vector<float> FirstSeconds(const std::string& wav, int seconds) {
     return frames;
 }
 
-// Thresholds under test are the validated hysteresis: enter 0.40, exit 0.25
+// Hysteresis thresholds under test are enter 0.40 and exit 0.25
 TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
     const models::ModelStore store(std::filesystem::path(CLINICAVT_MODELS_DIR));
     models::OvRuntime runtime;
@@ -52,7 +52,7 @@ TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
             .count() /
         static_cast<double>(hops);
 
-    // Every silent hop after a reset, the first included, proves no state leaks between sessions
+    // Every silent hop after a reset, including the first, shows no state leaks between sessions
     vad.Reset();
     const std::vector<float> silence(kVadHopFrames, 0.0f);
     float max_silence = 0;
@@ -64,8 +64,8 @@ TEST(SileroVad, SeparatesSpeechFromSilenceAtTheShippedThresholds) {
                 per_hop);
     EXPECT_GT(max_speech, 0.40f) << "real speech must clear the enter threshold";
     EXPECT_LT(max_silence, 0.25f) << "digital silence must stay under the exit threshold";
-    // Release measures 0.097 ms, matching the spec's ~0.1. The slack is Debug
-    // harness overhead, and a 32 ms hop budget keeps inline capture safe
+    // Release measures 0.097 ms. The slack covers Debug harness overhead, and a 32 ms hop
+    // budget keeps inline capture safe
     EXPECT_LT(per_hop, 2.0) << "inline on the audio pipeline requires margin";
 }
 

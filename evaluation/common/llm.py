@@ -46,12 +46,17 @@ class NoteModel:
         return self.tokenizer.apply_chat_template(messages, True, extra_context={"enable_thinking": False})
 
     def generate(self, prompt: str, max_new_tokens: int, system: str | None = None,
-                 ignore_eos: bool = False, temperature: float | None = None) -> tuple[str, dict]:
+                 ignore_eos: bool = False, temperature: float | None = None,
+                 top_p: float | None = None, seed: int | None = None) -> tuple[str, dict]:
         cfg = self.ov.GenerationConfig()
         cfg.max_new_tokens = max_new_tokens
         cfg.do_sample = temperature is not None
         if temperature is not None:
             cfg.temperature = temperature
+            if top_p is not None:
+                cfg.top_p = top_p
+            if seed is not None:
+                cfg.rng_seed = seed
         cfg.apply_chat_template = False
         cfg.ignore_eos = ignore_eos
         text = self.render(prompt, system)

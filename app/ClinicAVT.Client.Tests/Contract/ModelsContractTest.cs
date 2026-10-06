@@ -39,7 +39,8 @@ public class ModelsContractTest
 
             Assert.Equal(3, models.Count);
             var vad = models.Single(m => m.GetProperty("id").GetString() == "silero-vad");
-            Assert.Equal("silero-vad", vad.GetProperty("name").GetString());  // without a display name the name is the id
+            // Without a display name the name is the id
+            Assert.Equal("silero-vad", vad.GetProperty("name").GetString());
             Assert.Equal("vad", vad.GetProperty("task").GetString());
             Assert.Equal("default", vad.GetProperty("tier").GetString());
             Assert.Equal("CPU", vad.GetProperty("device").GetString());

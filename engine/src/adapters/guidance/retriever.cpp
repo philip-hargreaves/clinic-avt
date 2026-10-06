@@ -162,7 +162,7 @@ void Retriever::PublishUploads(std::shared_ptr<const UploadSnapshot> uploads) {
 
 namespace {
 
-// Near-duplicate of a shown card, so not worth a slot
+// True for a near-duplicate of a shown card, which is not worth a slot
 bool Restates(const std::vector<Result>& shown, const std::string& text) {
     for (const auto& result : shown) {
         if (NearDuplicate(result.text, text)) return true;

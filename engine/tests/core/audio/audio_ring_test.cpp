@@ -39,11 +39,11 @@ TEST(AudioRing, PushesWhatFitsAndPopsInOrderAcrossTheWrap) {
     EXPECT_EQ(std::vector<float>(out.begin(), out.begin() + 6), Sequence(6, 50.0F));
 }
 
-constexpr std::size_t kTotalFrames = 1 << 20;  // Exact in a float: < 2^24
+constexpr std::size_t kTotalFrames = 1 << 20;  // Exact as a float, under 2^24
 constexpr std::size_t kChunk = 480;
 
 // gtest assertions are not thread-safe on Windows, so the threads only count
-// and every assertion happens after the join.
+// and every assertion happens after the join
 TEST(AudioRing, TwoThreadsMoveEveryFrameInOrder) {
     AudioRing ring(1024);
 

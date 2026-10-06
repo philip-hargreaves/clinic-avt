@@ -34,7 +34,8 @@ public class AppearanceAndDiagnosticsTest
         Assert.True(settings.Appearance.NpuTranscription);
         Assert.True(settings.Privacy.KeepConsultations);
         Assert.Equal(AppTheme.Light, settings.Appearance.Theme);
-        Assert.DoesNotContain(engine.Requests, r => r.Method == "asr/device");  // a launch moves nothing
+        // A launch moves nothing
+        Assert.DoesNotContain(engine.Requests, r => r.Method == "asr/device");
         Assert.Equal(0, asked);
         Assert.Null(store.Json);  // launch restore must not re-save
 

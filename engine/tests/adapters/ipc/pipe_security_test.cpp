@@ -11,8 +11,8 @@
 namespace clinicavt::ipc {
 namespace {
 
-// The rights the pipe is meant to grant, spelled out independently of the
-// production code so a change there has to be made deliberately here too.
+// The rights the pipe should grant, written out apart from the production code so a
+// change there also has to be made here
 constexpr DWORD kExpectedRights = FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES |
                                   FILE_WRITE_ATTRIBUTES | FILE_READ_EA | FILE_WRITE_EA |
                                   READ_CONTROL | SYNCHRONIZE;
@@ -60,8 +60,8 @@ std::vector<ParsedAce> AcesOf(const PipeSecurity& security) {
     return aces;
 }
 
-// The logon SID of this process, derived here rather than taken from the
-// production code, so the test can disagree with it.
+// The logon SID of this process, derived here apart from the production code so the
+// test can disagree with it
 std::vector<char> ProcessTokenGroups() {
     HANDLE token = nullptr;
     EXPECT_TRUE(OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token));
@@ -109,7 +109,7 @@ TEST(PipeSecurity, AnExplicitUninheritableDaclGivesOnlyThisLogonAndSystemTheInte
     BOOL present = FALSE;
     BOOL defaulted = FALSE;
     PACL dacl = DaclOf(security, present, defaulted);
-    // A missing DACL is not an empty one: it grants everyone everything
+    // A missing DACL grants everyone full access
     EXPECT_TRUE(present);
     EXPECT_NE(dacl, nullptr);
     EXPECT_FALSE(defaulted);
@@ -137,7 +137,7 @@ TEST(PipeSecurity, AnExplicitUninheritableDaclGivesOnlyThisLogonAndSystemTheInte
         if (EqualSid(ace.sid, logon_sid)) has_logon = true;
         if (EqualSid(ace.sid, system.sid)) has_system = true;
     }
-    // The logon SID scopes the pipe to this login rather than the whole user
+    // The logon SID limits the pipe to this login session
     EXPECT_TRUE(has_logon);
     EXPECT_TRUE(has_system);
 }

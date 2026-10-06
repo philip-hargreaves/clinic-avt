@@ -7,8 +7,8 @@ using static ClinicAVT.App.Tests.Support.Waits;
 namespace ClinicAVT.App.Tests.Support;
 
 /// <summary>
-/// The shell's own stack over the real engine: launcher, supervisor and connection, on a private
-/// pipe with a temp store. It answers echo by the time StartAsync returns.
+/// The shell's launcher, supervisor and connection over the real engine, on a private pipe with a
+/// temp store. It answers echo by the time StartAsync returns.
 /// </summary>
 internal sealed class RealEngine : IAsyncDisposable
 {
@@ -85,7 +85,7 @@ internal sealed class RealEngine : IAsyncDisposable
         }
         catch (IOException)
         {
-            // Engine may still hold the store. Left for temp cleanup
+            // The engine may still hold the store, so temp cleanup removes it
         }
     }
 }

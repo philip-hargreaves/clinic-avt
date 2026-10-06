@@ -70,7 +70,7 @@ public sealed class AppPreferences(IPreferencesStore store, ILogger? logger = nu
     /// </summary>
     public bool KeepConsultations { get; set; } = true;
 
-    /// <summary>On by default, so evaluators see the status-bar timings from the first run.</summary>
+    /// <summary>On by default, so evaluators see status-bar timings from the first run.</summary>
     public bool ShowPerformanceMetrics { get; set; } = true;
 
     /// <summary>

@@ -124,8 +124,7 @@ public class PipeTransportTest
         var serverTask = Task.Run(async () =>
         {
             await raw.WaitForConnectionAsync();
-            // Read and discard the client's request, then answer with a header
-            // that declares a body far past the cap
+            // The reply header declares a body far past the cap
             await Framing.ReadFrameAsync(raw);
             await raw.WriteAsync(BitConverter.GetBytes(uint.MaxValue));
             await raw.FlushAsync();

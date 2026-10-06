@@ -8,7 +8,8 @@ using ClinicAVT.App.Core.Features.Appraisal;
 namespace ClinicAVT.App.Features.Appraisal;
 
 /// <summary>
-/// The case study, the guidance ticks and the three questions, used by the sheet and the journal cards.
+/// The case study, the guidance ticks and the three questions. The sheet and the journal cards
+/// both use it.
 /// </summary>
 public sealed partial class ReflectionEditorView : UserControl
 {
@@ -23,7 +24,7 @@ public sealed partial class ReflectionEditorView : UserControl
 
     public ReflectionViewModel ViewModel { get; }
 
-    /// <summary>The title and month. Off inside a journal card, whose header carries them.</summary>
+    /// <summary>Shows the title and month. Off in a journal card, whose header has them.</summary>
     public bool ShowHeading { get; }
 
     /// <summary>Removes the entry. Only a journal card offers it.</summary>

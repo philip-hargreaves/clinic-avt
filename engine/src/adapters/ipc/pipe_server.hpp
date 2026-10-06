@@ -48,14 +48,14 @@ class PipeServer {
     // without sending a whole frame
     bool Serve();
 
-    // Blocks: accept one client, serve until it disconnects or the stream corrupts
+    // Blocks while it accepts one client and serves until it disconnects or the stream corrupts
     void ServeOneClient();
 
    private:
     void HandleFrame(const std::string& payload);
     void Reply(const Id& id, const json& envelope);
     void FlushNotifications();
-    bool WriteFrame(const std::string& payload, unsigned timeout_ms = 0);  // 0: wait forever
+    bool WriteFrame(const std::string& payload, unsigned timeout_ms = 0);  // 0 waits forever
 
     PipeSecurity security_;
     void* pipe_ = nullptr;  // HANDLE

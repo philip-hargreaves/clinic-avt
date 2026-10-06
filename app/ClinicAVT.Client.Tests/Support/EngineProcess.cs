@@ -146,7 +146,7 @@ internal sealed class EngineProcess : IAsyncDisposable
         }
         catch (Exception e)
         {
-            // May have exited already. The wait checks
+            // The engine may have exited already, which the wait checks
             return $"engine/exit not delivered: {e.Message}";
         }
     }

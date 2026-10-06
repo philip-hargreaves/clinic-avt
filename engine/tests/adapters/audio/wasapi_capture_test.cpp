@@ -11,9 +11,8 @@
 namespace clinicavt::audio {
 namespace {
 
-// The engine drops a few milliseconds while the stream settles after Start
-// (measured here: 31 to 191 frames, run to run), so losses are split into a
-// startup window and steady state. Only steady state must be lossless.
+// The engine drops 31 to 191 frames while the stream settles after Start, so losses are
+// split into a startup window and steady state. Only steady state must be lossless
 constexpr std::uint64_t kWarmupPackets = 50;  // ~500 ms of 10 ms packets
 
 // Fields are written on the capture thread and read only after the join
@@ -60,7 +59,7 @@ TEST(WasapiCapture, StopBeforeRunEndsAtOnceAndARunCapturesThenStopsCleanly) {
     EXPECT_GT(sink.total_frames, 16000u);
     EXPECT_LT(sink.total_frames, 48000u);
     EXPECT_GT(sink.packets, 20u);
-    // The startup transient is real and must stay visible, but bounded
+    // Some loss at startup is expected but bounded
     EXPECT_LT(sink.lost_in_warmup, 1600u) << "more than 100 ms lost at startup";
     EXPECT_EQ(sink.lost_in_steady_state, 0u) << "steady state must be lossless";
 }

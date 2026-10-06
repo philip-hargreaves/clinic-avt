@@ -23,7 +23,9 @@ public static class BackupWords
 
     public const string ReflectionsTick = "Delete associated reflections";
 
-    /// <summary>"Saved as b in Documents.", naming the drive for a root such as a USB stick.</summary>
+    /// <summary>
+    /// "Saved as b in Documents.", naming the drive for a root such as a USB stick.
+    /// </summary>
     public static string SavedLine(string path)
     {
         var folder = Path.GetDirectoryName(path) ?? "";
@@ -58,7 +60,9 @@ public static class BackupWords
         };
     }
 
-    /// <summary>A request the engine refused before the job started, such as during a recording.</summary>
+    /// <summary>
+    /// A request the engine refused before the job started, such as during a recording.
+    /// </summary>
     public static string Refused(ArchiveJob job, Exception e, ILogger logger) =>
         job == ArchiveJob.Backup
             ? $"The backup could not start: {EngineWords.Reason(e, logger)}. Nothing on this computer has changed."
@@ -66,7 +70,7 @@ public static class BackupWords
 
     /// <summary>
     /// The standing line for a folder that syncs to OneDrive, empty for any other. A work
-    /// OneDrive may be approved by the practice; a personal one is not.
+    /// OneDrive may be approved by the practice. A personal one is not.
     /// </summary>
     public static string OneDriveLine(string folder, IOneDriveFolders oneDrive)
     {

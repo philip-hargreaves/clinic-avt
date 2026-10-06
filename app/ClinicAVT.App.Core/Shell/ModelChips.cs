@@ -11,8 +11,8 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Shell;
 
 /// <summary>
-/// The testing chips. They show the models doing the clinician's work with their live numbers, and
-/// the memory the product holds.
+/// The testing chips. They show the transcription and note models with their live figures,
+/// and the memory the product holds.
 /// </summary>
 public sealed partial class ModelChips : ObservableObject
 {
@@ -96,7 +96,7 @@ public sealed partial class ModelChips : ObservableObject
     [NotifyPropertyChangedFor(nameof(AsrChipVisible), nameof(NoteChipVisible), nameof(MemoryChipVisible))]
     public partial bool MetricsVisible { get; private set; }
 
-    // The two models doing the clinician's work, each with its live number, such as
+    // The transcription and note models, each with its live figure, such as
     // "Whisper Turbo · GPU · 33× RT" and "Qwen3.5 9B · GPU · 14.2 tok/s"
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AsrChipVisible))]
@@ -126,9 +126,8 @@ public sealed partial class ModelChips : ObservableObject
 
     public bool NoteResting => !NoteActive;
 
-    // Memory covers the shell, engine and note host, the whole on-device footprint. The note
-    // host is found by name because it is the engine's child process. A failure leaves the
-    // last value
+    // Memory covers the shell, engine and note host. The note host is found by name because
+    // it is the engine's child process. A failure leaves the last value
     public async Task PollMetricsOnceAsync()
     {
         var memory = await Task.Run(() => _processes.CommittedGb(
@@ -255,11 +254,11 @@ public sealed partial class ModelChips : ObservableObject
         }).ConfigureAwait(true);
 
         RecomputeChips();
-        await PollMetricsOnceAsync().ConfigureAwait(true);  // reported devices beat manifests
+        await PollMetricsOnceAsync().ConfigureAwait(true);  // reported devices override manifests
     }
 
-    // Live figures are unlabelled and move. A settled one says "Averaged" and is the session's
-    // true average, held through review for reading after a run
+    // Live figures are unlabelled. A settled figure reads "Averaged" and is the session's
+    // average, held through review
     private void RecomputeChips()
     {
         OnPropertyChanged(nameof(AsrActive));
@@ -320,7 +319,7 @@ public sealed partial class ModelChips : ObservableObject
     }
 
     // The engine measures at the source, before its notification throttle,
-    // so its figure beats the local arrival count whenever it is present
+    // so its figure replaces the local arrival count when present
     private static double? SourceRate(EngineNotification notification) =>
         (notification as IMetered)?.TokensPerSecond;
 

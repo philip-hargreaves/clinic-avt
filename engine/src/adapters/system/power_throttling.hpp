@@ -9,7 +9,7 @@ namespace clinicavt::system {
 struct ThrottlingState {
     bool known = false;      // read-back succeeded
     bool throttled = false;  // execution speed throttling is ON
-    bool defaulted = true;   // no explicit policy: Windows decides
+    bool defaulted = true;   // no explicit policy set
 };
 
 // process is a process HANDLE

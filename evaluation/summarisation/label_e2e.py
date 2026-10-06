@@ -44,7 +44,7 @@ def main():
         if not got_patient:
             print("FAILED: no patient/ready in 300 s")
             return 1
-        # The label follows the sheet; give the short generation a moment
+        # The label follows the sheet, so wait a moment for the short generation
         for _ in range(60):
             row = engine.request("session/list")["sessions"][0]
             if row.get("label"):

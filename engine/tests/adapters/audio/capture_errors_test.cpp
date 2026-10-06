@@ -10,7 +10,7 @@
 namespace clinicavt::audio {
 namespace {
 
-// The header's constants must be the SDK's, proven at compile time
+// The header's constants must match the SDK's, checked at compile time
 static_assert(hresults::kDeviceInvalidated ==
               static_cast<std::uint32_t>(AUDCLNT_E_DEVICE_INVALIDATED));
 static_assert(hresults::kServiceNotRunning ==
@@ -34,7 +34,7 @@ TEST(EndForCaptureError, ClassifiesDeviceLossConsentAndOtherFailures) {
         EXPECT_NE(end.detail.find("GetBuffer"), std::string::npos) << end.detail;
     }
 
-    // Consent: the clinician is told where to grant microphone access
+    // A consent refusal tells the clinician where to grant microphone access
     const auto denied = EndForCaptureError("Initialize", hresults::kAccessDenied);
     EXPECT_EQ(denied.reason, SourceEndReason::kFailed);
     EXPECT_NE(denied.detail.find("privacy settings"), std::string::npos) << denied.detail;

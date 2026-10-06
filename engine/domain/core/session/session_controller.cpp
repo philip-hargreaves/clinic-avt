@@ -172,7 +172,7 @@ std::optional<std::vector<float>> SessionController::BeginStored(
 
 void SessionController::Stop() {
     import_.Join();
-    // Re-warm the note model during finalise; a long session may have evicted it
+    // Re-warm the note model during finalise because a long session may have evicted it
     if (note_writer_ != nullptr && Running()) {
         note_writer_->Prepare();
     }

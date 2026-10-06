@@ -17,7 +17,7 @@
 namespace clinicavt::guidance {
 namespace {
 
-// Sixty-four buckets of hashed words, unit length: shared words score higher
+// Sixty-four buckets of hashed words, unit length, so shared words score higher
 struct WordEmbedder : IEmbedder {
     EmbedderIdentity identity{"words", "rev-1", 64, 64};
     const EmbedderIdentity& Identity() const override {

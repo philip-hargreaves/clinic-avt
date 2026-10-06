@@ -7,10 +7,8 @@
 
 namespace clinicavt::guidance {
 
-// Ordering and abstention over first-stage candidates. Each sub-query's
-// ranked hits vote by rank (reciprocal rank fusion), a floor on the best cosine
-// refuses out-of-scope input, and a population guard drops recommendations the
-// note rules out
+// Merges each sub-query's ranked passages by reciprocal rank fusion. Passages below the floor are
+// not shown, nor are recommendations for a group the note rules out, such as children
 inline constexpr double kRrfK = 60.0;
 
 inline constexpr double kDefaultFloor = 0.85;

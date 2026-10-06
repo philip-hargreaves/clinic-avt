@@ -8,7 +8,7 @@
 
 namespace clinicavt::diar {
 
-// Reads the research dev wav (16 kHz mono PCM16, plain 44-byte header) as float32 [-1, 1].
+// Reads the research dev wav (16 kHz mono PCM16, plain 44-byte header) as float32 [-1, 1]
 // It is not in the repo, so the tests that use it skip without it
 inline std::vector<float> LoadDevWav(const std::string& path) {
     std::ifstream in(path, std::ios::binary);

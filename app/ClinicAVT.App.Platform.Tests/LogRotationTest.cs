@@ -8,7 +8,7 @@ public sealed class LogRotationTest : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    // Rotate by size, not per launch, so quick relaunches cannot rotate away a stuck process's log
+    // Rotation is by size so quick relaunches cannot rotate away a stuck process's log
     [Fact]
     public void ALogIsAppendedUntilLargeAndEachRotationShiftsRunsDownToTheKeepLimit()
     {

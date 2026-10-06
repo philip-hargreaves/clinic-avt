@@ -11,10 +11,11 @@
 
 namespace clinicavt::diar {
 
-// 0.30 s: at 0.40 a clinical "No." was dropped and the note fabricated the denial
+// Clips under 0.3 s are skipped. At 0.4 s a clinical "No." was lost and the note invented a denial
 inline constexpr std::uint64_t kPerTurnMinClipFrames = 4800;
 
-inline constexpr std::size_t kPerTurnMaxRepeat = 4;  // 5-gram degeneracy guard
+// A five-word phrase repeated this often means Whisper is stuck in a loop
+inline constexpr std::size_t kPerTurnMaxRepeat = 4;
 
 // Finalise and speculation must merge identically or cache keys stop matching
 std::vector<LabelledSlice> MergeByCluster(const std::vector<LabelledSlice>& slices);

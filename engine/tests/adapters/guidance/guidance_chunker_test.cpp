@@ -84,7 +84,7 @@ TEST(ChunksFromText, RunsCloseAtHeadingsAndTheTargetLengthAndNeverExceedTheMaxim
         EXPECT_LE(words, kMaxWords);
     }
 
-    // Only a numbered opening is a heading, never a dose or a version
+    // Only a numbered opening is a heading. Doses and versions are not
     const std::pair<const char*, bool> openings[] = {
         {"Recommendation 12", true},    {"recommendation 3a Consider a blood test", true},
         {"1.2 Investigations", true},   {"1.2.3 Offer first-line treatment", true},

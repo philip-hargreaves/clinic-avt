@@ -78,13 +78,16 @@ class WhisperTranscriber : public ITranscriber {
 
     void WorkerLoop();
     std::string Load(DecodeLoader loader);
+    bool FallBackToGpu(const std::string& error);
     void RecordDecode(std::size_t frames, std::chrono::steady_clock::time_point t0);
 
     DecodeLoader loader_;
     DeviceLoader by_device_;  // set when the transcriber can move between devices
     // Under mutex_. Runs when the pending switch's load ends
     std::function<void(const std::string&)> switched_;
-    bool switching_ = false;  // under mutex_
+    bool switching_ = false;     // under mutex_
+    std::string switch_device_;  // under mutex_, the device a pending switch loads
+    std::string device_;         // worker thread once started, empty for the manifest's device
     std::atomic<bool> moving_{false};
     DecodeFn decode_;  // worker thread only once loaded
     metrics::Registry* metrics_ = nullptr;

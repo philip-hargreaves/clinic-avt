@@ -253,7 +253,8 @@ public class SessionCommandsTest
             engine.RaiseNotification("session/progress", Params(new { stage = "transcript" }));
             Assert.Equal("Writing transcript", controls.FinalisingLabel);
             engine.RaiseNotification("session/progress", Params(new { stage = "unknown" }));
-            Assert.Equal("Writing transcript", controls.FinalisingLabel);  // an unknown stage changes nothing
+            // An unknown stage changes nothing
+            Assert.Equal("Writing transcript", controls.FinalisingLabel);
             engine.RaiseNotification("session/progress", Params(new { stage = "speakers" }));
             Assert.Equal("Labelling speakers", controls.FinalisingLabel);
             // turns is a transcript re-decode and the longest NPU stage, so label it as transcript

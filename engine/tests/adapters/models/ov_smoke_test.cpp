@@ -7,7 +7,7 @@
 
 namespace {
 
-// Proves the pinned toolchain links and its DLLs load, on any machine
+// Checks the pinned toolchain links and its DLLs load on any machine
 TEST(OvSmoke, RuntimeIsThePinnedRelease) {
     const std::string runtime = ov::get_openvino_version().buildNumber;
     EXPECT_NE(runtime.find("2026.3"), std::string::npos) << runtime;

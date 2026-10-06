@@ -32,8 +32,8 @@ TEST(SegDecode, ChangePointsNeedAHeldSpeakerAndSkipSilenceAndOverlap) {
     };
     const std::vector<Case> cases = {
         {"a flip after the hold", Frames({{1, 100}, {2, 100}}), 1},
-        // Speaker 2 for 4 frames only (under the 6-frame hold), then back: the flip TO the
-        // flicker is a change because speaker 1 held, the flip back is not
+        // Speaker 2 for 4 frames, under the 6-frame hold, then back. The flip to speaker 2 is
+        // a change because speaker 1 held. The flip back is not
         {"a flicker under the hold", Frames({{1, 100}, {2, 4}, {1, 100}}), 1},
         {"a 4-frame holder", Frames({{1, 4}, {2, 100}}), 0},
         {"silence between one speaker", Frames({{1, 100}, {0, 50}, {1, 100}}), 0},

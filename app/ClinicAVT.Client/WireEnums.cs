@@ -4,7 +4,9 @@ using System.Text.Json.Serialization;
 
 namespace ClinicAVT.Client;
 
-/// <summary>A model lane or device move, as note/model, note/tier and asr/device report it.</summary>
+/// <summary>
+/// A model lane or device move, as note/model, note/tier and asr/device report it.
+/// </summary>
 [JsonConverter(typeof(WireEnumConverter<ModelState>))]
 public enum ModelState
 {

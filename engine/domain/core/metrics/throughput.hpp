@@ -21,8 +21,8 @@ class ThroughputMeter {
         Trim(now);
     }
 
-    // (count-1)/span over what the window holds: one token is not a rate,
-    // and a stalled stream decays to zero as the window empties
+    // (count-1)/span over the window, since one token is not a rate. A stalled
+    // stream decays to zero as the window empties
     double Rate(double now) {
         Trim(now);
         if (stamps_.size() < 2) {

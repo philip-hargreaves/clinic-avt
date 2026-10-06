@@ -76,7 +76,7 @@ TEST(TidyTranscript, MergesOneSpeakersNearbyFragmentsIntoSentences) {
 TEST(TidyTranscript, TurnsStartWithACapitalAndEndWithPunctuation) {
     const auto out = TidyTranscript({T(0, 10, "doctor", "okay sure so you said i think"),
                                      T(20, 30, "patient", "Thank you. OK,"),
-                                     T(40, 50, "doctor", "So I..."),  // stranded sliver: dropped
+                                     T(40, 50, "doctor", "So I..."),  // stranded sliver, dropped
                                      T(60, 70, "patient", "i'm 53")});
     ASSERT_EQ(out.size(), 3u);
     EXPECT_EQ(out[0].text, "Okay sure so you said I think.");

@@ -64,7 +64,6 @@ struct Readiness {
 // kQuery searches one query of any length. The floor and population guard apply to both
 enum class SearchMode { kNote, kQuery };
 
-// Retrieves guidelines for a note and returns filtered, ranked and thresholded recommendations.
 // Retrieved text never goes into a generated document
 class IGuidanceRetriever {
    public:

@@ -59,7 +59,7 @@ class ArchiveFileSource final : public IArchiveSource {
    private:
     friend class ArchiveFileSink;
 
-    // Sink read-back, under the key it wrote with
+    // Used by the sink to read its file back with the key it wrote with
     ArchiveFileSource(const std::filesystem::path& path, store::ChunkCipher&& cipher);
 
     struct Impl;

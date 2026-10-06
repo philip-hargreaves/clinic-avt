@@ -1,6 +1,6 @@
 namespace ClinicAVT.TestSupport;
 
-/// <summary>A temp 16 kHz mono PCM16 silence wav that sessions replay in place of a microphone.</summary>
+/// <summary>A temp 16 kHz mono PCM16 silent wav that sessions replay as the microphone.</summary>
 internal static class SilenceWav
 {
     public static string Write(int seconds = 2)

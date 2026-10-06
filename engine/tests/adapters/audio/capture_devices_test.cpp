@@ -4,7 +4,7 @@
 
 namespace {
 
-// Real enumeration. A runner with no microphone legitimately lists nothing
+// Real enumeration. A runner with no microphone lists nothing
 TEST(CaptureDevices, EveryListedDeviceIsWellFormed) {
     const auto devices = clinicavt::audio::ListCaptureDevices();
     int defaults = 0;

@@ -58,7 +58,7 @@ TEST(GpuLease, AWaiterGivesUpOnlyWhenItsCallbackSaysSo) {
 
     int slices = 0;
     GpuLease::Guard guard;
-    // On another thread: a mutex is recursive for the thread that owns it
+    // On another thread because a mutex is recursive for the thread that owns it
     std::thread other([&] { guard = waiter.Acquire([&](double) { return ++slices < 5; }); });
     other.join();
 
@@ -84,8 +84,7 @@ TEST(GpuLease, AStuckMarkReachesEveryHolderAndEndsTheirWaits) {
     EXPECT_LT(std::chrono::steady_clock::now() - t0, milliseconds(100)) << "never waits";
 }
 
-// A holder that died mid-work leaves the mutex abandoned. The next waiter
-// takes it rather than waiting for ever
+// A holder that died mid-work leaves the mutex abandoned, and the next waiter takes it
 TEST(GpuLease, AnAbandonedLeaseIsTaken) {
     const std::string name = Name("abandoned");
     GpuLease next(name, milliseconds(50));
@@ -98,7 +97,7 @@ TEST(GpuLease, AnAbandonedLeaseIsTaken) {
     std::thread([&] { EXPECT_TRUE(next.Acquire().Held()); }).join();
 }
 
-// Prefill runs only if the GPU is free now; an unnamed lease is off
+// Prefill runs only if the GPU is free now. An unnamed lease is off
 TEST(GpuLease, TryAcquireAndAnUnnamedLeaseNeverWait) {
     GpuLease off("");
     EXPECT_FALSE(off.Active());
@@ -114,8 +113,8 @@ TEST(GpuLease, TryAcquireAndAnUnnamedLeaseNeverWait) {
     std::thread([&] { EXPECT_FALSE(prefill.TryAcquire().Held()); }).join();
 }
 
-// A host that is merely tearing down is seen once; a stuck one is still there
-// on the next slice. Only the second sighting in a row gives the wait up
+// A host that is tearing down is seen once. A stuck one is still there on the next
+// slice, and only a second sighting in a row ends the wait
 TEST(GpuLease, TheWatchWedgesTheLeaseOnlyForAnOrphanSeenOnTwoSlicesInARow) {
     GpuLease lease(Name("watch"));
     const std::vector<std::vector<DWORD>> scans = {{7}, {}, {7}, {8}, {8}};
@@ -132,7 +131,7 @@ TEST(GpuLease, TheWatchWedgesTheLeaseOnlyForAnOrphanSeenOnTwoSlicesInARow) {
     EXPECT_TRUE(lease.Wedged());
 }
 
-// Past the probe time the lane asks its own host once; a stuck one ends the wait
+// Past the probe time the lane asks its own host once. A stuck one ends the wait
 TEST(GpuLease, TheWatchAsksItsOwnHostOnceAfterTheProbeTime) {
     GpuLease lease(Name("probe"));
     int probes = 0;
@@ -153,7 +152,6 @@ TEST(GpuLease, TheWatchAsksItsOwnHostOnceAfterTheProbeTime) {
     EXPECT_FALSE(waiting(kProbeAfterSeconds));
 }
 
-// A caller that stops mid-wait is released within a poll, not at the next slice
 TEST(GpuLease, AWaiterToldToGiveUpLeavesWithinAPoll) {
     const std::string name = Name("giveup");
     GpuLease holder(name, milliseconds(5000));

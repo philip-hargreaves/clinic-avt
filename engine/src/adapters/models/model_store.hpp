@@ -21,7 +21,7 @@ struct ModelInfo {
     nlohmann::json properties;  // OpenVINO properties passed verbatim at compile, {} when absent
     std::filesystem::path dir;
     std::filesystem::path cache_dir;                   // OpenVINO compile cache, empty for none
-    std::map<std::string, std::string> file_hashes;    // filename -> sha256 hex: provenance
+    std::map<std::string, std::string> file_hashes;    // filename -> sha256 hex, for provenance
     std::map<std::string, std::uintmax_t> file_bytes;  // filename -> size, when the manifest says
 };
 

@@ -26,7 +26,7 @@ TEST(CaptureTimeline, AGapIsCountedOnceInTargetFrames) {
             << "clean packet " << packet;
     }
 
-    // 4800 native frames vanish: 100 ms, which is 1600 target frames
+    // 4800 native frames go missing, 100 ms or 1600 target frames
     constexpr std::uint64_t kGap = 4800;
     EXPECT_EQ(timeline.OnPacket(kOrigin + packet++ * kNativeStep + kGap, kFrames), 1600u);
 
@@ -43,8 +43,8 @@ TEST(CaptureTimeline, AGapIsCountedOnceInTargetFrames) {
 }
 
 TEST(CaptureTimeline, RoundingAndBackwardPositionsNeverInventLoss) {
-    // 44.1 kHz native against 100-frame packets: every real position is the
-    // rounded value of a non-integral ideal, so sub-frame wobble is constant
+    // 44.1 kHz native with 100-frame packets, so every position is rounded from a
+    // non-integral value and has sub-frame wobble
     CaptureTimeline rounding(44100);
     double ideal = 0.0;
     for (int packet = 0; packet < 2000; ++packet) {
@@ -58,7 +58,7 @@ TEST(CaptureTimeline, RoundingAndBackwardPositionsNeverInventLoss) {
     timeline.OnPacket(kNativeStep, kFrames);
     // A device hiccup reports an earlier position, which is not loss
     EXPECT_EQ(timeline.OnPacket(kNativeStep / 2, kFrames), 0u);
-    // And when positions resume where they should be, still no phantom loss
+    // No loss is reported when positions resume where they should be
     EXPECT_EQ(timeline.OnPacket(3 * kNativeStep, kFrames), 0u);
 }
 

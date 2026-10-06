@@ -19,7 +19,8 @@ public class ExportReflectionsTest
         var engine = new FakeEngineClient();
         engine.Reflections.Add(("a", "2026-09-04T09:12:00Z", "Elbow swelling", "check the temperature", "A patient in their forties."));
         engine.Reflections.Add(("d", "2025-11-03T10:00:00Z", "Back pain", "", "A patient in their sixties."));
-        engine.Reflections.Add(("b", "2026-08-31T23:30:00Z", "Cough", "ask about smoking", ""));  // 1 Sep in London
+        // 1 Sep in London
+        engine.Reflections.Add(("b", "2026-08-31T23:30:00Z", "Cough", "ask about smoking", ""));
         engine.Reflections.Add(("c", "2026-08-10T10:00:00Z", "", "listen longer", ""));
         engine.Reflections.Add(("s", "2026-09-10T10:00:00Z", "Sample", "a seeded sample", ""));
         engine.SampleReflections.Add("s");
@@ -74,7 +75,8 @@ public class ExportReflectionsTest
         export.ChosenTo = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
         Assert.Equal("3 reflections, 3 Nov 2025 to 1 Sep 2026.", export.CountLine);
         export.ChosenTo = new DateTimeOffset(2026, 8, 31, 0, 0, 0, TimeSpan.Zero);
-        Assert.Equal("2 reflections, 3 Nov 2025 to 31 Aug 2026.", export.CountLine);  // b was 1 Sep in London
+        // b was 1 Sep in London
+        Assert.Equal("2 reflections, 3 Nov 2025 to 31 Aug 2026.", export.CountLine);
         Assert.Equal(["c", "d"], export.Chosen().Select(r => r.Id));
         Assert.True(export.PrimaryEnabled);
     }

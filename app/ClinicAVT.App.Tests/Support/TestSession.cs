@@ -8,7 +8,10 @@ namespace ClinicAVT.App.Tests.Support;
 
 internal static class TestSession
 {
-    /// <summary>The consultation over a fake engine that sends no notifications unprompted. Log lines go to the given log.</summary>
+    /// <summary>
+    /// The consultation over a fake engine that sends no notifications unprompted. Log lines go to
+    /// the given log.
+    /// </summary>
     public static TestShell Create(
         AppPreferences? preferences = null, FakeDialogService? dialogs = null,
         FakeEngineClient? engine = null, IReadOnlyList<ExampleCase>? exampleCases = null,

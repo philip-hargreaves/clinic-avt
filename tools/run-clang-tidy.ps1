@@ -4,7 +4,7 @@
 #   cmake --preset dev
 #   .\tools\run-clang-tidy.ps1 [-Tidy <clang-tidy.exe>] [-Filter <regex>] [-Jobs <n>]
 #
-# -Tidy defaults to the clang-tidy Visual Studio ships; CI pins its own version.
+# -Tidy defaults to the clang-tidy Visual Studio ships. CI pins its own version.
 [CmdletBinding()]
 param(
     [string]$Build = 'build\dev',

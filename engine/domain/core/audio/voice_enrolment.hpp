@@ -24,7 +24,7 @@ struct EnrolCapture {
 // Minimum speech for an enrolment. Less gives a poor voice print
 inline constexpr double kEnrolMinSpeechSeconds = 20.0;
 
-// Meters level, keeps VAD speech hops, calls stop once the window has elapsed
+// Meters the level and keeps VAD speech hops. Calls stop once the window has elapsed
 class EnrolmentSink : public IAudioSink {
    public:
     EnrolmentSink(IStreamingVad& vad, std::uint64_t window_frames, std::function<void()> stop,

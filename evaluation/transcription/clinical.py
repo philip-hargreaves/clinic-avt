@@ -61,8 +61,8 @@ def _run(text):
         else:
             c["pos_n"] += 1
     for c in out.values():
-        c["neg"] = c["neg_n"] > 0  # any negated mention
-        c["denied"] = c["neg_n"] > 0 and c["pos_n"] == 0  # every mention negated
+        c["neg"] = c["neg_n"] > 0
+        c["denied"] = c["neg_n"] > 0 and c["pos_n"] == 0
     return out, _lemmas(doc)
 
 @lru_cache(maxsize=256)

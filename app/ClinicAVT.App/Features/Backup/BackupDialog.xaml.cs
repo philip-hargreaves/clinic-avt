@@ -28,7 +28,7 @@ public sealed partial class BackupDialog : ContentDialog
         UiEvent.Run(() => ViewModel.PrimaryCommand.ExecuteAsync(null));
     }
 
-    // Covers the close button, Escape and a click outside
+    // Closing covers the close button, Escape and a click outside
     private void OnClosing(ContentDialog sender, ContentDialogClosingEventArgs args) =>
         args.Cancel = ViewModel.BlocksClose;
 

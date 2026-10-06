@@ -6,9 +6,9 @@ using ClinicAVT.App.Core.Ports;
 namespace ClinicAVT.App.Shell;
 
 /// <summary>
-/// Shuts down in order. It confirms if recording, saves review edits, releases the engine and
-/// closes the connection. The engine exits itself after any note model load, so nothing is killed
-/// mid-GPU.
+/// Confirms if recording, saves review edits, releases the engine and closes the connection,
+/// in that order. The engine exits on its own after any note model load, so no GPU work is
+/// killed.
 /// </summary>
 internal sealed class AppShutdown(
     IConsultation session, IDialogService dialogs, EngineConnection connection,

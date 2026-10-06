@@ -38,7 +38,7 @@ class RefusalFilter {
             const auto opening = strings::Trim(text);
             const auto n = std::min(opening.size(), kNotAConsultation.size());
             if (opening.substr(0, n) == kNotAConsultation.substr(0, n)) {
-                if (opening.size() < kNotAConsultation.size()) return;  // still could be
+                if (opening.size() < kNotAConsultation.size()) return;  // may still be a refusal
                 refused_ = true;
                 return;
             }

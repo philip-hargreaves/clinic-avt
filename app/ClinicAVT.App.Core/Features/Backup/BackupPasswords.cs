@@ -6,7 +6,7 @@ public static class BackupPasswords
 {
     public const int MinimumLength = 8;
 
-    // Long enough to pass the length rule and still among the first tried
+    // Common passwords that meet the length rule and would be guessed early
     private static readonly HashSet<string> Common =
     [
         "password", "password1", "password12", "password123", "password1234", "passw0rd", "p@ssw0rd",

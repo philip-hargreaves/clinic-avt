@@ -6,8 +6,9 @@ using ClinicAVT.App.Features.Guidance;
 namespace ClinicAVT.App.Features.Documents;
 
 /// <summary>
-/// The review of one consultation. Wide, the documents and the references get a selector each.
-/// Narrow, all five views share one. Each page has its own instance because an element has one parent.
+/// The review of one consultation. A wide window gives the documents and the references a
+/// selector each. A narrow one puts all five views in one selector. Each page has its own
+/// instance because an element has one parent.
 /// </summary>
 public sealed partial class ReviewSurfaceView : UserControl
 {
@@ -107,7 +108,7 @@ public sealed partial class ReviewSurfaceView : UserControl
     private void OnSizeChanged(object sender, SizeChangedEventArgs e) =>
         Place(e.NewSize.Width >= WideThreshold);
 
-    // One set of views, moved between the layouts' slots
+    // Moves one set of views between the layouts' slots
     private void Place(bool wide)
     {
         if (_wide == wide)

@@ -40,7 +40,7 @@ std::optional<AnchorRecord> ParseAnchor(std::span<const std::uint8_t> plain);
 class AnchorStore {
    public:
     // An enrolment counts as this many consultations, so the first few
-    // sessions refine it rather than replace it
+    // sessions do not replace it
     static constexpr std::uint64_t kEnrolWeight = 3;
 
     // model identifies the speaker embedding model. Empty when none is staged, and then a

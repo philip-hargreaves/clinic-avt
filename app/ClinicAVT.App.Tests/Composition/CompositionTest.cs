@@ -2,7 +2,9 @@ using ClinicAVT.App.Tests.Support;
 
 namespace ClinicAVT.App.Tests.Composition;
 
-/// <summary>The app's view-model graph over fakes, so a new constructor parameter fails here before launch.</summary>
+/// <summary>
+/// The app's view-model graph over fakes, so a new constructor parameter fails here before launch.
+/// </summary>
 public class CompositionTest
 {
     [Fact]

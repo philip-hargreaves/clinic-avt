@@ -17,8 +17,8 @@ OUT = os.path.join(score_gate.HERE, f"readability-{TAGS[0]}-vs-{TAGS[1]}.json")
 
 
 def broken_bigrams(ref_words, hyp_words):
-    # Adjacent displayed word pairs absent from the reference (multiset). Fires on
-    # scrambling and fragment stitching; read as a delta between arms, never absolute
+    # Adjacent displayed word pairs absent from the reference (multiset). Rises with
+    # scrambling and fragment stitching. Compare between arms only
     if len(hyp_words) < 2:
         return 0.0
     ref_bg = Counter(zip(ref_words, ref_words[1:]))

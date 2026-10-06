@@ -4,7 +4,9 @@ using ClinicAVT.App.Core.Ports;
 
 namespace ClinicAVT.App.Composition;
 
-/// <summary>Runs a stage's tasks in registration order. A failed task is logged and the rest still run.</summary>
+/// <summary>
+/// Runs a stage's tasks in registration order. A failed task is logged and the rest still run.
+/// </summary>
 internal sealed class StartupRunner(IEnumerable<IStartupTask> tasks, ILogger<StartupRunner> logger)
 {
     public void Run(StartupStage stage)

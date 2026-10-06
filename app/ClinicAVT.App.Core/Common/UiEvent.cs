@@ -24,7 +24,7 @@ public static class UiEvent
         await RunAsync(work, Logger, $"{Path.GetFileName(file).Split('.')[0]}.{handler}")
             .ConfigureAwait(true);
 
-    /// <summary>Runs the work and logs a failure instead of throwing it.</summary>
+    /// <summary>Runs the work and logs any failure without throwing.</summary>
     public static async Task RunAsync(Func<Task> work, ILogger? logger, string handler)
     {
         try

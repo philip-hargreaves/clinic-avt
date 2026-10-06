@@ -464,7 +464,7 @@ TEST(SessionStore, RewritingOrRecreatingADocumentNeverReusesAnIv) {
     EXPECT_EQ(store.ReadDocument(id, DocumentKind::kReflection).text, "second");
 }
 
-// While the store is open its writes sit in the WAL; closing folds them into the file.
+// While the store is open its writes are in the WAL. Closing moves them into the file.
 // Both files are scanned at both points
 TEST(SessionStore, NoContentIsPlaintextAtRest) {
     TempRoot root;
@@ -500,7 +500,7 @@ TEST(SessionStore, NoContentIsPlaintextAtRest) {
         store.Abandon(abandoned);  // recoverable, so the audio is on disk
         ASSERT_EQ(store.ReadAudio(abandoned), audio);
 
-        // The scan must see the stored ciphertext, or finding nothing proves nothing
+        // Finding nothing proves nothing unless the scan has the stored ciphertext to look for
         std::vector<std::uint8_t> sealed_turn;
         {
             Db db(root.DbPath());
@@ -661,7 +661,7 @@ TEST(SessionStore, ARecordMovesWholeIntoAnotherStoreUnderAFreshKeyAndOnlyOnce) {
             << "the target sealed under its own key";
     }
 
-    // An id already stored wins: nothing is overwritten or added
+    // An id already stored is kept and nothing is overwritten or added
     SessionRecord changed = record;
     changed.documents[0].document.text = "a different note";
     changed.turns.pop_back();
@@ -872,7 +872,7 @@ TEST(SessionStore, AFullDiskHoldsTheAudioThenDropsTheOldestAndKeepsTheTimeline) 
         return !faults.empty();
     }));
     store.Append(id, std::span(audio).subspan(16000), 0);
-    std::this_thread::sleep_for(150ms);  // several failing ticks: one trims the oldest second
+    std::this_thread::sleep_for(150ms);  // several failing ticks, and one trims the oldest second
     {
         std::lock_guard<std::mutex> lock(mutex);
         ASSERT_EQ(faults.size(), 1u) << "announced once per episode";

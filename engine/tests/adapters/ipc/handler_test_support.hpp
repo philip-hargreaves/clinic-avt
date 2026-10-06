@@ -248,7 +248,7 @@ class WireShell {
         if (engine_.joinable()) engine_.join();
     }
 
-    // Once the methods are registered
+    // Call after the methods are registered
     void Connect() {
         engine_ = std::thread([this] {
             if (server.AwaitClient(std::chrono::seconds(5)) == PipeServer::Accept::kClient) {

@@ -29,7 +29,7 @@ public sealed partial class StatusLine : ObservableObject, IStatusLine
     [ObservableProperty]
     public partial string StorageFault { get; private set; } = "";
 
-    /// <summary>Log-only detail, to the file. The displayed status stays concise.</summary>
+    /// <summary>Writes the line to the log file without showing it.</summary>
     public void Log(string line) => _logger.Line(line);
 
     public void Append(string line, bool busy = false)

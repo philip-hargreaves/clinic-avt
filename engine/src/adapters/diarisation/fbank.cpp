@@ -21,7 +21,7 @@ FbankFeatures EmbedderFbank(std::span<const float> audio) {
     opts.frame_opts.snip_edges = true;
     opts.mel_opts.num_bins = static_cast<std::int32_t>(kMelBins);
     opts.mel_opts.low_freq = 20.0f;
-    opts.mel_opts.high_freq = 0.0f;  // offset from Nyquist: 8000 Hz
+    opts.mel_opts.high_freq = 0.0f;  // offset from Nyquist, so 8000 Hz
     opts.use_energy = false;
     opts.use_log_fbank = true;
     opts.use_power = true;

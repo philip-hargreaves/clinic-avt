@@ -266,8 +266,8 @@ public sealed partial class NoteModelSettings : ObservableObject
 
                 _revertTier = null;
                 NoteModelEnabled = _tiers.Count > 1;
-                // The engine is authoritative about what is resident. Its own pick is shown,
-                // never saved as a choice
+                // The engine decides what is resident. Its own pick is shown and is not saved
+                // as a choice
                 _residentTier = tier;
                 if (Automatic)
                 {

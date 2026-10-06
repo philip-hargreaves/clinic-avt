@@ -9,7 +9,7 @@
 
 namespace clinicavt::ipc {
 
-// Client end of a private named pipe. Synchronous; callers serialise reads
+// Client end of a private named pipe. Synchronous, so callers serialise reads
 class PipeClient {
    public:
     PipeClient();

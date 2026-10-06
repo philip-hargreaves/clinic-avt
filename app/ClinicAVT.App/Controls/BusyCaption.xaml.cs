@@ -3,7 +3,9 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace ClinicAVT.App.Controls;
 
-/// <summary>A small progress ring beside a caption. Each part hides when it has nothing to show.</summary>
+/// <summary>
+/// A small progress ring beside a caption. Each part hides when it has nothing to show.
+/// </summary>
 public sealed partial class BusyCaption : UserControl
 {
     public static readonly DependencyProperty TextProperty = DependencyProperty.Register(

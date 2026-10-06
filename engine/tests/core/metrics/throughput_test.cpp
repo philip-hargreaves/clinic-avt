@@ -5,7 +5,7 @@
 namespace clinicavt::metrics {
 namespace {
 
-// A zero span must read as 0, never inf or NaN on the wire
+// A zero span must read as 0 so no inf or NaN reaches the wire
 TEST(Throughput, TheRateFollowsTheStreamAndTheAverageTheWholeGeneration) {
     ThroughputMeter meter;
     EXPECT_EQ(meter.Rate(1.0), 0);
@@ -15,7 +15,7 @@ TEST(Throughput, TheRateFollowsTheStreamAndTheAverageTheWholeGeneration) {
     EXPECT_EQ(meter.Average(), 0);
     ThroughputMeter same;
     same.Token(2.0);
-    same.Token(2.0);  // same stamp: no span
+    same.Token(2.0);  // same stamp, so no span
     EXPECT_EQ(same.Average(), 0);
 
     for (int i = 1; i <= 20; ++i) {
