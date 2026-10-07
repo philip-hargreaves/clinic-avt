@@ -139,7 +139,7 @@ TEST(NameRoles, AResemblingPrintDecidesAndAForeignPrintYieldsToContent) {
     EXPECT_EQ(foreign.role_of_cluster[0], "doctor");
 }
 
-// Finalise and speculation read the same transcript: a turn without text
+// Finalise and speculation read the same transcript. A turn without text
 // still counts as talk time but is not attributed
 TEST(NameTurns, AttributesTheTurnsWithTextUnderTheirRoles) {
     auto turns = Consultation();

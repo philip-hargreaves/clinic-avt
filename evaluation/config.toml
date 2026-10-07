@@ -2,7 +2,7 @@
 #
 # Relative paths are from the repo root. {name} expands to another [paths] entry.
 # Every [paths] entry can be overridden with an environment variable EVAL_<NAME>,
-# e.g. EVAL_PRIMOCK57=E:\primock57. Defaults point at the research SSD layout.
+# e.g. EVAL_PRIMOCK57=E:\primock57. External data defaults to data/ in the repo.
 
 [paths]
 out = "build/evaluation"                               # everything a run writes
@@ -11,19 +11,19 @@ prompts = "prompts"                                    # the app's prompts
 engine = "build/release/engine/clinicavt_engine.exe"
 diar_runner = "build/release/engine/tests/diar_eval_runner.exe"   # the engine diarisation, offline
 perf_loop = "build/perf-loop"                          # replay tracks, sealed transcripts, runs
-primock57 = "C:/dev/intelliscribe/data/primock57"      # audio/, transcripts/, consultation_checklists/
-mixed_audio = "C:/dev/intelliscribe/bench/transcription/mixed"   # transcription/mix.py output
+primock57 = "data/primock57"                           # audio/, transcripts/, consultation_checklists/
+mixed_audio = "data/mixed"                             # transcription/mix.py output
 summarisation = "{out}/summarisation"                  # prep/, notes/, runs/ (judge records), reps/
-research_bench = "C:/dev/intelliscribe/bench"          # banked research outputs, read for re-scoring
-research_models = "D:/dev/intelliscribe/ml-models"
-comparison_models = "D:/models-eval/openvino"
-asr_models = "D:/dev/intelliscribe/asr-ir"             # the exported Whisper suite (transcription/README.md: export)
-sample_consult = "C:/dev/intelliscribe/sample-consult-rheum.txt"   # decode bench input
-mts_dialog = "C:/dev/intelliscribe/Previous Work/ambience-new/conversation-data/mts_dialog_val.json"   # 100 validation pairs
-mt_root = "D:/ambient-mt"                              # translation candidates, test sets, results
-rag_candidates = "D:/ambient-rag/candidates"           # retrieval exports (rag/candidates holds a subset)
-rag_native = "D:/ambient-rag/native-build/Release/proof.exe"   # retrieval/native C++ parity proof
-rag = "rag"                                          # corpus, gold sets, results
+research_bench = "data/research-bench"                 # banked research outputs, read for re-scoring
+research_models = "data/research-models"
+comparison_models = "data/comparison-models"
+asr_models = "data/asr-ir"                             # the exported Whisper suite (transcription/README.md: export)
+sample_consult = "data/sample-consult-rheum.txt"       # decode bench input
+mts_dialog = "data/mts_dialog_val.json"                # 100 validation pairs
+mt_root = "data/mt"                                    # translation candidates, test sets, results
+rag_candidates = "data/rag-candidates"                 # retrieval exports (rag/candidates holds a subset)
+rag_native = "data/rag-native/proof.exe"               # retrieval/native C++ parity proof
+rag = "rag"                                            # corpus, gold sets, results
 guidelines_folder = "~/Documents/ClinicAVT guidelines" # the clinician's own folder, for the folder study
 
 # Note models. Each entry names a model folder and how to prompt it.

@@ -7,7 +7,7 @@ FetchContent_Declare(
 )
 set(BUILD_GMOCK OFF)
 set(INSTALL_GTEST OFF)
-# gtest defaults to the static CRT; this build is dynamic
+# gtest defaults to the static CRT and this build is dynamic
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 # googletest is not ours to keep warning-clean
 set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)
@@ -190,7 +190,7 @@ target_link_libraries(models_tests PRIVATE
     clinicavt_system clinicavt_transcription clinicavt_translate clinicavt_vad clinicavt_warnings
     nlohmann_json::nlohmann_json openvino::genai GTest::gtest_main)
 
-# Dev evaluation tool for the research acceptance scorer; never shipped
+# Dev evaluation tool for the research acceptance scorer. Not shipped
 add_executable(diar_eval_runner tools/diar_eval_runner.cpp)
 target_link_libraries(diar_eval_runner PRIVATE
     clinicavt_diarisation clinicavt_system clinicavt_transcription clinicavt_warnings)
@@ -202,7 +202,7 @@ add_dependencies(gpu_tests ov_test_runtime)
 add_dependencies(models_tests ov_test_runtime clinicavt_note_host)
 
 include(GoogleTest)
-# Cold CI runners can take >5 s (the default) just to start a fresh exe
+# Cold CI runners can take over the 5 s default to start a fresh exe
 gtest_discover_tests(core_tests DISCOVERY_TIMEOUT 60)
 gtest_discover_tests(engine_tests DISCOVERY_TIMEOUT 60)
 gtest_discover_tests(capture_tests DISCOVERY_TIMEOUT 60 PROPERTIES LABELS microphone)

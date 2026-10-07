@@ -56,7 +56,7 @@
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
     <rescap:Capability Name="unvirtualizedResources" />
-    <!-- Lists the app on the Settings microphone page; the engine enforces the toggle -->
+    <!-- Lists the app on the Settings microphone page. The engine enforces the toggle -->
     <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>

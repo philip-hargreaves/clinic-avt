@@ -75,3 +75,4 @@ __pycache__/
 !/rag/gold/primock-statements/
 !/rag/gold/negatives/
 !/rag/gold/synthetic-statements/
+!/rag/gold/st-georges-cases/

@@ -18,7 +18,7 @@ os.makedirs(perf_loop.LOGS, exist_ok=True)
 # Replay wav is the engine's fourth positional argument
 engine = perf_loop.Engine(9000, extra_args=[wav])
 try:
-    engine.wait_up()  # up, without waiting on the note model's compile cache
+    engine.wait_up()  # returns before the note model's compile cache is built
     engine.request("anchor/clear")
     before = engine.request("anchor/status")
     print("before:", before)

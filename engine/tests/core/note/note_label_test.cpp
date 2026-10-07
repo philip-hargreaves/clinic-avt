@@ -22,7 +22,7 @@ TEST(NoteLabel, LabelFromTakesTheFirstSentenceCappedAtAWord) {
          "Subjective: Swollen left elbow"},
         {"   \n  ", ""},
         {"", ""},
-        // Over the 80-character cap: cut at the last whole word
+        // Over the 80-character cap, so cut at the last whole word
         {"The patient, a 53-year-old male, presents with a swelling on the left elbow noticed "
          "about a week ago with no injury and no pain",
          "The patient, a 53-year-old male, presents with a swelling on the left elbow"},

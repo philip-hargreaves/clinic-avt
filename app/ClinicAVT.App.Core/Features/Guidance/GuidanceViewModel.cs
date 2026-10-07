@@ -8,7 +8,7 @@ using ClinicAVT.Client;
 namespace ClinicAVT.App.Core.Features.Guidance;
 
 /// <summary>
-/// Fed from the wire by the consultation view model. It never calls the engine itself.
+/// Fed engine events by the consultation view model. Makes no engine calls.
 /// </summary>
 public sealed partial class GuidanceViewModel : ObservableObject
 {

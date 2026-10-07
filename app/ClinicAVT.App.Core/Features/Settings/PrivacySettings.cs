@@ -38,7 +38,7 @@ public sealed partial class PrivacySettings : ObservableObject
         _dialogs = dialogs;
         _backups = backups;
         _restores = restores;
-        // Restoring saved values is not the clinician changing them
+        // Loading saved values, so setters skip their change handling
         _initialising = true;
         KeepConsultations = preferences.KeepConsultations;
         SeedDataEnabled = preferences.SeedDataEnabled;

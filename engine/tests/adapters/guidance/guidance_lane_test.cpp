@@ -102,8 +102,8 @@ struct Outcome {
     }
 };
 
-// One typed slot and one slot per session: a newer request replaces the one
-// still waiting in its slot, and waiting notes run before typed text
+// One typed slot and one per session. A newer request replaces the one still
+// waiting in its slot, and waiting notes run before typed text
 TEST(GuidanceLane, OnlyTheLatestWaitingSearchOfEachKindRunsAndNotesGoFirst) {
     FakeRetriever retriever;
     retriever.hold = true;

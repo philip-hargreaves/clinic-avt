@@ -1,5 +1,5 @@
 """Offline copy of engine/domain/core/diarisation/tidy_transcript.hpp, to score a tidied copy of a sweep
-against the original. The C++ is the source of truth; this copy can drift.
+against the original. The C++ is the source of truth and this copy can drift.
 
     python evaluation/diarisation/tidy_offline.py <in_tag> <out_tag>      e.g. F1S16 F1S16T
 """

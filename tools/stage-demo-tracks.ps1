@@ -3,9 +3,9 @@
 # weights pack; a checkout gets demo/ from fetch-models. Wavs never enter git.
 #
 #   stage-demo-tracks.ps1
-#   stage-demo-tracks.ps1 -Source D:\wavs -Root C:\out\demo
+#   stage-demo-tracks.ps1 -Source <wav folder> -Root <out folder>
 param(
-    [string]$Source = "C:\dev\intelliscribe\bench\transcription\mixed",
+    [string]$Source = (Join-Path (Split-Path $PSScriptRoot -Parent) "data\mixed"),
     [string]$Root = (Join-Path (Split-Path $PSScriptRoot -Parent) "demo")
 )
 $ErrorActionPreference = "Stop"

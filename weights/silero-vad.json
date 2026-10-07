@@ -24,7 +24,7 @@
       "device": "CPU"
     },
     "source": {
-      "path": "C:\\dev\\intelliscribe\\ml-models\\diarisation\\silero_vad_op18_ifless.onnx"
+      "path": "ml-models\\diarisation\\silero_vad_op18_ifless.onnx"
     },
     "files": {
       "model.onnx": "7671cd04b004e9076da0d4a7b1a5aec36adf161c39230c1cb94a4fd5db6bbd28"

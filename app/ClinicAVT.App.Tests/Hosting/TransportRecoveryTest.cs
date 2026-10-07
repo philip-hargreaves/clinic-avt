@@ -6,7 +6,7 @@ namespace ClinicAVT.App.Tests.Hosting;
 
 /// <summary>
 /// The supervisor, launcher and connection together against the real engine.
-/// A kill while idle must heal without a new client.
+/// An idle kill recovers without a new client.
 /// </summary>
 [Collection("engine")]
 [Trait("Requires", "Engine")]

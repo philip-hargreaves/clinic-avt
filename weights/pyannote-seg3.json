@@ -24,7 +24,7 @@
       "device": "CPU"
     },
     "source": {
-      "path": "C:\\dev\\intelliscribe\\ml-models\\diarisation\\pyannote-seg3.onnx"
+      "path": "ml-models\\diarisation\\pyannote-seg3.onnx"
     },
     "files": {
       "model.onnx": "5ddebfc5885930ad9b92c39d903e89c5170c9fc47533d885f416b1d360fa48dc"

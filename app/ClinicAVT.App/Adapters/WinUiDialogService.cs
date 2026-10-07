@@ -17,15 +17,14 @@ public sealed class WinUiDialogService(WindowAccessor window) : IDialogService
     // Cancel is the safe default in every confirmation
     public async Task<bool> ConfirmAsync(string title, string content, string primary, string cancel)
     {
-        var dialog = new ContentDialog
+        var dialog = Attach(new ContentDialog
         {
-            XamlRoot = window.XamlRoot,
             Title = title,
             Content = content,
             PrimaryButtonText = primary,
             CloseButtonText = cancel,
             DefaultButton = ContentDialogButton.Close,
-        };
+        });
         return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
@@ -34,9 +33,8 @@ public sealed class WinUiDialogService(WindowAccessor window) : IDialogService
         string title, string content, string tick, string primary, string cancel)
     {
         var box = new CheckBox { Content = tick };
-        var dialog = new ContentDialog
+        var dialog = Attach(new ContentDialog
         {
-            XamlRoot = window.XamlRoot,
             Title = title,
             Content = new ScrollViewer
             {
@@ -49,15 +47,27 @@ public sealed class WinUiDialogService(WindowAccessor window) : IDialogService
             PrimaryButtonText = primary,
             CloseButtonText = cancel,
             DefaultButton = ContentDialogButton.Close,
-        };
+        });
         return await dialog.ShowAsync() == ContentDialogResult.Primary ? box.IsChecked == true : null;
     }
 
     public async Task<bool> ShowAsync(object viewModel)
     {
-        var dialog = View(viewModel);
-        dialog.XamlRoot = window.XamlRoot;
+        var dialog = Attach(View(viewModel));
         return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    // A dialog opens in the popup layer, outside the page, so it takes the page's theme explicitly
+    // or it follows Windows instead of the app
+    private ContentDialog Attach(ContentDialog dialog)
+    {
+        dialog.XamlRoot = window.XamlRoot;
+        if (window.Window?.Content is FrameworkElement root)
+        {
+            dialog.RequestedTheme = root.ActualTheme;
+        }
+
+        return dialog;
     }
 
     private static ContentDialog View(object viewModel) => viewModel switch

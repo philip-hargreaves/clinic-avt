@@ -23,7 +23,7 @@ FormatStyle: none
 CheckOptions:
   # Allocation failure ends the process anyway (bad_alloc itself is ignored by default)
   bugprone-exception-escape.IgnoredExceptions: 'bad_array_new_length'
-  # A throw out of main ends that process loudly, which the hosts and tools want
+  # An uncaught throw from main should crash the host or tool
   bugprone-exception-escape.CheckMain: false
   # Google C++ style, as the engine is written
   readability-identifier-naming.NamespaceCase: lower_case

@@ -40,7 +40,7 @@ public sealed partial class AppearanceAndDiagnostics : ObservableObject
         _files = files;
         _theme = theme;
         _time = time;
-        // Restoring saved values is not the clinician changing them
+        // Loading saved values, so setters skip their change handling
         _initialising = true;
         NpuTranscription = preferences.NpuTranscription;
         CollectPerformanceData = preferences.CollectPerformanceData;

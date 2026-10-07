@@ -33,8 +33,8 @@ TEST(SpeechRegions, HysteresisPadsSplitsMergesAndDropsBlips) {
         {"open speech at the end closes at the total",
          {{5, 0.05f}, {20, 0.90f}},
          {{5 * kHop - kPadFrames, 25 * kHop}}},
-        // 0.30 sits between exit (0.25) and enter (0.40): not enough to open a region, enough to
-        // hold one open
+        // 0.30 is between exit (0.25) and enter (0.40), so it holds a region open but cannot
+        // open one
         {"a middling probability does not open a region",
          {{10, 0.05f}, {20, 0.30f}, {10, 0.05f}},
          {}},

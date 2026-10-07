@@ -270,7 +270,7 @@ void LlmNoteWriter::Prefill(const std::vector<asr::Turn>& transcript, const Note
         impl_->last_prefill = prompt;
     } catch (const std::exception& e) {
         impl_->last_prefill.clear();
-        // Rethrown so the host decides whether to exit
+        // Rethrown so the host can exit on a poisoned GPU context
         if (PoisonsGpuContext(e.what())) throw;
         log::Printf("clinicavt-note-host: prefill failed (%s)\n", e.what());
     }
@@ -316,7 +316,7 @@ std::string LlmNoteWriter::Generate(const std::string& prompt, const Progress& p
         }
         return ov::genai::StreamingStatus::RUNNING;
     };
-    // Holds the GPU lease; a recording started meanwhile decodes after it finishes
+    // Holds the GPU lease. A recording started meanwhile decodes after the note
     const system::AwakeRequest awake(L"ClinicAVT: writing the note");
     const auto lease = impl_->TakeGpu("note");
     if (lease.Waited() > 0.25) {

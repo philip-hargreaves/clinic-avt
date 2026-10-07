@@ -6,7 +6,7 @@
 
 namespace clinicavt::audio {
 
-// The pipeline's one format: 16 kHz mono float32
+// Pipeline format: 16 kHz mono float32
 inline constexpr int kSampleRate = 16000;
 
 enum class SourceEndReason {

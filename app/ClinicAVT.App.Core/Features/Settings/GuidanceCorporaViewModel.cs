@@ -21,7 +21,7 @@ public sealed partial class GuidanceCorporaViewModel : ObservableObject
         _preferences = preferences;
         _engine = engine;
         _status = status;
-        // Restoring saved values is not the clinician changing them
+        // Loading saved values, so setters skip their change handling
         _initialising = true;
         IncludeResearchGuidance = preferences.IncludeResearchGuidance;
         _initialising = false;

@@ -46,6 +46,7 @@ A candidate lists in `candidates.json` the languages it cannot translate; they a
 in the output. `judge.py tasks` keeps tasks already written, so existing verdicts stay matched to
 their letters, and builds a task from the candidates that cover a language when not all do.
 
-`run-24.ps1` in mt_root translates the languages added after the first study, at the original
-settings (4 threads, FLORES and TICO limited to 300 items), then scores and sets up the judge
-tasks. The judge sessions, `judge.py score`, `judge.py validity` and `summarise.py` follow.
+The languages added after the first study were translated with `translate.py` at the original
+settings (`--threads 4`, `--limit 300` for FLORES and TICO), then scored with `score.py` and set
+up with `judge.py tasks`. The judge sessions, `judge.py score`, `judge.py validity` and
+`summarise.py` follow.

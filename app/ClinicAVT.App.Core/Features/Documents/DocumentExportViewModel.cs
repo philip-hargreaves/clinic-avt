@@ -33,7 +33,7 @@ public sealed partial class DocumentExportViewModel(
         return text;
     }
 
-    // Export is the one action that writes outside the encrypted store
+    // Only export writes outside the encrypted store
     private async Task ExportAsync(string suggestedName, string text)
     {
         if (await picker.SaveTextAsync(files, suggestedName, "Text file", ".txt",

@@ -698,7 +698,7 @@ def main():
     info = machine()
     info["provenance"] = provenance()
     # LibreHardwareMonitor, run as administrator, logs temperatures, the iGPU clock and platform power
-    lhm = Path(os.environ.get("BENCH_LHM_DIR", r"C:\dev\tools\lhm"))
+    lhm = Path(os.environ.get("BENCH_LHM_DIR", "lhm"))
     info["lhm_dir"] = str(lhm) if any(lhm.glob("LibreHardwareMonitorLog-*.csv")) else None
     info["lhm_running"] = "librehardwaremonitor.exe" in set(process_pids({"librehardwaremonitor.exe"}).values())
     info.update({"started": datetime.now().isoformat(timespec="seconds"), "order": order,

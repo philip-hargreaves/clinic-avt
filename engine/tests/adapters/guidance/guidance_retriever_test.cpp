@@ -20,8 +20,8 @@ namespace {
 constexpr const char* kFixtureDir = CLINICAVT_GUIDANCE_FIXTURE_DIR;
 constexpr int kDim = 256;
 
-// Hashed bag of words, four letters and up, unit length: texts sharing words
-// score high, so the fixture notes find their guidelines without a model
+// Hashed bag of words, four letters and up, unit length. Shared words score
+// high, so the fixture notes find their guidelines without a model
 struct WordEmbedder : IEmbedder {
     EmbedderIdentity identity{"fx-words", "rev-a", kDim, 512};
     const EmbedderIdentity& Identity() const override {

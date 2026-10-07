@@ -15,7 +15,7 @@ public enum NotePipelineState
     NoteRefused,
 }
 
-/// <summary>Engine-reported progress. The view model only projects it.</summary>
+/// <summary>Engine-reported progress.</summary>
 public enum NotePipelineEvent
 {
     NoteWritingStarted,

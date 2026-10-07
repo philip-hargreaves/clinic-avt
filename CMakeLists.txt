@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-# The one version number, shared with the shell through Directory.Build.props
+# Version number, shared with the shell through Directory.Build.props
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" clinicavt_release_version LIMIT_COUNT 1)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 

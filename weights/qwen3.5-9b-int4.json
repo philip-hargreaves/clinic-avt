@@ -122,7 +122,7 @@
       "device": "GPU"
     },
     "source": {
-      "path": "C:\\dev\\intelliscribe\\ml-models\\summariser\\qwen3.5-9b-int4"
+      "path": "ml-models\\summariser\\qwen3.5-9b-int4"
     },
     "files": {
       "chat_template.jinja": "a92e1dd97cb1cb175c9b70c0828e146bea4371c2643319b661b777e89811972e",

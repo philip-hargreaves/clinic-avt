@@ -10,8 +10,7 @@
     AutomationProperties.Name="Page view"
     KeyDown="OnKeyDown">
 
-    <!-- The page stays white in both themes. Clinicians know the printed page, and
-         inverting it corrupts figures -->
+    <!-- White in both themes, as printed. Inverting it corrupts figures -->
     <Border Padding="16,12" Style="{StaticResource InnerCardSurface}">
         <Grid RowSpacing="10">
             <Grid.RowDefinitions>

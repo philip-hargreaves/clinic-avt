@@ -1,5 +1,5 @@
 """Role naming of the engine over the PriMock consultations (diar_eval_runner --roles). Passes on
-zero wrong names on either path: an abstention is fine, a wrong name corrupts a record.
+zero wrong names on either path. Abstaining is allowed, as only a wrong name corrupts a record.
 
   cold start  named right, abstained or named wrong against gold
   anchor      clinicians grouped by true-doctor voiceprint (cosine above 0.68); leave-one-out, the

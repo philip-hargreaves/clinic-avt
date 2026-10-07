@@ -5,7 +5,7 @@
     result = engine.request("session/list")
     engine.close()
 
-close() asks engine/exit and waits; it never kills, because a process stopped mid-GPU can wedge
+close() asks engine/exit and waits without killing, as a process stopped mid-GPU can wedge
 the graphics driver.
 """
 

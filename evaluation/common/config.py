@@ -1,4 +1,4 @@
-"""The suite's one configuration: evaluation/config.toml, with EVAL_<NAME> environment overrides.
+"""Loads evaluation/config.toml, with EVAL_<NAME> environment overrides.
 
     from common import config
     config.path("primock57")        # Path, override EVAL_PRIMOCK57

@@ -76,7 +76,7 @@ else()
     list(FILTER _tbb_dlls EXCLUDE REGEX "_debug")
     list(APPEND _ov_dlls ${_tbb_dlls})
 endif()
-# One deployment per output directory; targets there depend on the stamp
+# One deployment per output directory. Targets there depend on the stamp
 function(clinicavt_deploy_openvino stamp_target)
     add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ov.deployed"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_ov_dlls}
@@ -298,7 +298,7 @@ add_library(clinicavt_audio STATIC
 target_link_libraries(clinicavt_audio
     PUBLIC clinicavt_adapters_root
     PRIVATE clinicavt_system clinicavt_warnings ole32 advapi32 mfplat mfreadwrite mfuuid delayimp)
-# Windows N editions and Server may lack Media Foundation; the engine must still start there
+# Windows N editions and Server may lack Media Foundation. The engine must still start there
 target_link_options(clinicavt_audio INTERFACE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll)
 
 add_executable(clinicavt_engine
@@ -327,10 +327,11 @@ target_link_libraries(clinicavt_pdf
     PUBLIC clinicavt_adapters_root
     PRIVATE clinicavt_warnings pdfium nlohmann_json::nlohmann_json)
 
-# Out-of-process PDF parsing so a parser crash only fails that document
+# Out-of-process PDF parsing so a parser crash only fails that document. wer (Windows Error
+# Reporting) is for WerAddExcludedApplication
 add_executable(clinicavt_ingest_host src/ingest_host_main.cpp)
 target_link_libraries(clinicavt_ingest_host PRIVATE
-    clinicavt_pdf clinicavt_system wer clinicavt_warnings)  # wer is Windows Error Reporting, for WerAddExcludedApplication
+    clinicavt_pdf clinicavt_system wer clinicavt_warnings)
 add_custom_command(TARGET clinicavt_ingest_host POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_pdfium_root}/bin/pdfium.dll"
             "$<TARGET_FILE_DIR:clinicavt_ingest_host>"

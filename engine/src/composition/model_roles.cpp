@@ -156,7 +156,7 @@ std::unique_ptr<note::WorkerNoteWriter> BuildNoteWriter(
         }
         const auto host = system::ExeDir() / system::kNoteHostExe;
         if (!std::filesystem::exists(host)) {
-            // Never generate in-process, because that is the configuration the driver fault
+            // No in-process fallback, since that is the configuration the driver fault
             // corrupts
             log::Printf("clinicavt-engine: note DISABLED, %s is missing\n", host.string().c_str());
             return nullptr;

@@ -1,4 +1,4 @@
-"""Scores from the judge records in runs/<tag>/. Deterministic; nothing here calls a model.
+"""Scores from the judge records in runs/<tag>/. Deterministic, no model calls.
 
   notes <tag>...   per note and median: faithfulness = 1 - fabrications/claims (all judged
                    consults), completeness = present/items (the 20 with a checklist),
@@ -9,7 +9,7 @@
   bootstrap        paired bootstrap of the medians over the consults every model has, with
                    pairwise differences, for the [summarisation] bootstrap models
 
-Severity is reported as counts for comparison, not as a pass/fail gate. Intervals are
+Severity is reported as counts for comparison, with no pass/fail gate. Intervals are
 percentile bootstraps over consults, 5000 resamples, seed 12345.
 
     python evaluation/summarisation/score.py notes tier-default-concise

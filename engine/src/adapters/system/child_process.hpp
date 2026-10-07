@@ -54,7 +54,7 @@ class ChildProcess {
     // True once the process has ended, waiting up to `ms` for it
     bool WaitFor(unsigned long ms) const;
 
-    // Kills the whole job if any, else just the process
+    // Kills the whole job if any, else the process
     void Kill();
 
     unsigned long ExitCode() const;

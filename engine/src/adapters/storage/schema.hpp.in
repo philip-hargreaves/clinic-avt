@@ -1,7 +1,7 @@
 #pragma once
 
-// Generated at configure time from src/adapters/storage/schema/*.sql;
-// edit the .sql files, not this header
+// Generated at configure time from the .sql files under
+// src/adapters/storage/schema. Edit those
 
 namespace clinicavt::store {
 

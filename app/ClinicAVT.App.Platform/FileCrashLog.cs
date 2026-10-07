@@ -31,7 +31,7 @@ public sealed class FileCrashLog(string path) : ICrashLog
         }
         catch (Exception)
         {
-            // Logging must never take the app down
+            // A logging failure must not crash the app
         }
     }
 }

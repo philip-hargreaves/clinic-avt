@@ -160,7 +160,7 @@
       "device": "GPU"
     },
     "source": {
-      "path": "C:\\dev\\intelliscribe\\ml-models\\asr\\whisper-large-v3-turbo-int8"
+      "path": "ml-models\\asr\\whisper-large-v3-turbo-int8"
     },
     "files": {
       "added_tokens.json": "baa0435347ab385da4cc489ddf70daecd4d6832dc94b73e457dc83107641afd9",

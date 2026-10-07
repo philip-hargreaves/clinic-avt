@@ -71,7 +71,7 @@ DecodeFn MakeWhisperDecode(const models::ModelStore& store, models::OvRuntime& r
             const float clip_end = static_cast<float>(frames.size()) / audio::kSampleRate;
             for (const auto& chunk : *result.chunks) {
                 Turn turn;
-                // Stamps can overrun the clip (the window is padded to 30 s): clamp
+                // Stamps can overrun the clip, as the window is padded to 30 s
                 const float start = std::min(std::max(0.0f, chunk.start_ts), clip_end);
                 turn.first_frame =
                     first_frame + static_cast<std::uint64_t>(start * audio::kSampleRate);
@@ -255,7 +255,7 @@ void WhisperTranscriber::WorkerLoop() {
             }
             RecordDecode(clip.frames.size(), t0);
         };
-        // A failed decode loses only this clip's text; the audio is already stored
+        // A failed decode loses only this clip's text. The audio is already stored
         try {
             decode_clip();
         } catch (const std::exception& e) {

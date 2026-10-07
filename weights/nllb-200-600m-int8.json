@@ -155,7 +155,7 @@
       }
     },
     "source": {
-      "path": "C:\\dev\\ambient\\build\\nllb-export\\nllb-200-600m-int8"
+      "path": "build\\nllb-export\\nllb-200-600m-int8"
     },
     "files": {
       "config.json": "d5419920831d6c882ec652ec71f90e81158b3b77abe6a2a3fa96bbce17cedcd3",

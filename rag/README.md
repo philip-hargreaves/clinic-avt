@@ -7,6 +7,9 @@ rag/
 ├── gold/                        labelled evaluation sets
 │   ├── primock-statements/      sentences from the app's notes of PriMock57 consultations
 │   ├── synthetic-statements/    consultation extracts written for the project
+│   ├── st-georges-cases/        a consultant rheumatologist's teaching cases
+│   ├── ucl-triplets/            NICE statement triplets, not in git
+│   ├── folder-notes/            notes and judgments for the guidelines folder study, not in git
 │   └── negatives/               inputs that should retrieve nothing
 ├── sources/                     guideline documents, not in git
 └── corpora/                     built corpora, not in git

@@ -500,7 +500,7 @@ TEST(SessionStore, NoContentIsPlaintextAtRest) {
         store.Abandon(abandoned);  // recoverable, so the audio is on disk
         ASSERT_EQ(store.ReadAudio(abandoned), audio);
 
-        // Finding nothing proves nothing unless the scan has the stored ciphertext to look for
+        // The stored ciphertext to scan for, or an empty scan would pass trivially
         std::vector<std::uint8_t> sealed_turn;
         {
             Db db(root.DbPath());
