@@ -119,7 +119,7 @@ public class NoteModelSettingsTest
         Assert.Equal(["Qwen3.5 9B"], settings.NoteModelOptions);
         Assert.Equal(0, settings.NoteModelIndex);
         Assert.False(settings.NoteModelEnabled);
-        Assert.Equal("Only one model installed", settings.NoteModelStatus);
+        Assert.Equal("This package includes one note model", settings.NoteModelStatus);
 
         var preferences = Preferences();
         preferences.NoteTier = "accuracy";
@@ -127,7 +127,7 @@ public class NoteModelSettingsTest
 
         Assert.Equal("auto", preferences.NoteTier);
         Assert.Equal(0, uninstalled.NoteModelIndex);
-        Assert.Contains("not installed", uninstalled.NoteModelStatus);
+        Assert.Equal("This package includes one note model", uninstalled.NoteModelStatus);
     }
 
     // A refused switch, as while a note is being written, keeps the resident model. Nothing is

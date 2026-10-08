@@ -260,6 +260,11 @@ public sealed class FakeEngineClient(bool autoNotify = true) : IEngineTransport
             {
                 tier = "default";  // the engine's own pick for this machine
             }
+            else if (tier != "default" && ExtraNoteModels.All(m => m.Tier != tier))
+            {
+                // As the engine refuses a tier its store does not hold
+                throw new InvalidOperationException($"no model for note/{tier}");
+            }
 
             // The loaded tier answers ready, as a warm engine does. A new one starts loading
             var state = tier == NoteTier ? "ready" : "loading";

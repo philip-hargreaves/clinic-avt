@@ -23,6 +23,7 @@ public sealed partial class GuidanceViewModel : ObservableObject
     private readonly IStatusLine _status;
     private readonly IDocumentPages _pages;
     private readonly TimeProvider _time;
+    private readonly IGuidelineIndexing _indexing;
     // When the note's search started, null once its time is shown
     private long? _noteSearchStarted;
     private List<GuidanceRecommendation> _noteResults = [];
@@ -31,8 +32,14 @@ public sealed partial class GuidanceViewModel : ObservableObject
 
     public GuidanceViewModel(
         GuidanceAvailability availability, ILauncher launcher, IClipboard clipboard, IStatusLine status,
-        IDocumentPages pages, IEngineEvents events, TimeProvider time)
+        IDocumentPages pages, IEngineEvents events, TimeProvider time, IGuidelineIndexing indexing)
     {
+        _indexing = indexing;
+        indexing.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(StateCaption));
+            OnPropertyChanged(nameof(CaptionVisible));
+        };
         _availability = availability;
         _launcher = launcher;
         _clipboard = clipboard;
@@ -147,6 +154,9 @@ public sealed partial class GuidanceViewModel : ObservableObject
     public string StateCaption => Section switch
     {
         GuidanceSection.Hidden or GuidanceSection.Results => "",
+        // Documents still being read, as on first launch, are searched again once they finish
+        GuidanceSection.NothingMatched or GuidanceSection.NoCorpusAtSearch when _indexing.Indexing =>
+            "Guideline documents are still being prepared. Matches will appear here as they finish.",
         GuidanceSection.NothingMatched =>
             "No guidance matched this note. Try searching for a condition or treatment.",
         GuidanceSection.NoCorpusAtSearch =>

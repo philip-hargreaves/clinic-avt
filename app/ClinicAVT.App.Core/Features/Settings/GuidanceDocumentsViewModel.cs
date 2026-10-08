@@ -11,7 +11,7 @@ namespace ClinicAVT.App.Core.Features.Settings;
 /// <summary>
 /// The clinician's own documents in the guidelines folder, which guidance also searches.
 /// </summary>
-public sealed partial class GuidanceDocumentsViewModel : ObservableObject
+public sealed partial class GuidanceDocumentsViewModel : ObservableObject, IGuidelineIndexing
 {
     private readonly IGuidanceApi _engine;
     private readonly IStatusLine _status;
@@ -58,6 +58,8 @@ public sealed partial class GuidanceDocumentsViewModel : ObservableObject
     public partial string DocumentsCaption { get; set; } = "";
 
     public bool DocumentsCaptionVisible => DocumentsCaption.Length > 0;
+
+    public bool Indexing => Documents.Any(r => r.Working);
 
     /// <summary>"32 documents", then what is still being read or could not be.</summary>
     public string DocumentsSummary
@@ -250,6 +252,7 @@ public sealed partial class GuidanceDocumentsViewModel : ObservableObject
     private void RefreshBatch()
     {
         OnPropertyChanged(nameof(DocumentsSummary));
+        OnPropertyChanged(nameof(Indexing));
         var attention = Documents.Any(r => r.Failed);
         if (attention && !_documentsNeededAttention && !DocumentsExpanded)
         {

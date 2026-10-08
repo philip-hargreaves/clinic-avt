@@ -50,11 +50,13 @@ public sealed partial class ConsultationReadiness : ObservableObject
     }
 
     /// <summary>
-    /// False only while first-time model compiles run. Blocks recording so the first one avoids
-    /// the slow path. Warm launches are never gated.
+    /// False until the engine's first readiness reply, and while first-time model compiles run.
+    /// Blocks recording so the first one avoids the slow path.
     /// </summary>
     [ObservableProperty]
-    public partial bool ModelsReady { get; private set; } = true;
+    public partial bool ModelsReady { get; private set; }
+
+    private bool _settingUp;
 
     public void Connected()
     {
@@ -103,21 +105,37 @@ public sealed partial class ConsultationReadiness : ObservableObject
 
         if (model.State == ModelState.Loading && model.FirstUse)
         {
-            ModelsReady = false;
-            _models.SetSettingUp(true);
+            BeginSetup();
         }
-        else if (model.State is ModelState.Ready or ModelState.Failed)
+        else if (model.State is (ModelState.Ready or ModelState.Failed) && _settingUp)
         {
             GateLifted();
         }
     }
 
-    private void GateLifted()
+    private void BeginSetup()
     {
-        if (!ModelsReady)
+        ModelsReady = false;
+        if (!_settingUp)
         {
-            ModelsReady = true;
+            _settingUp = true;
+            _models.SetSettingUp(true);
+        }
+    }
+
+    // Also clears activity an engine restart interrupted. A resumed recording or a readiness
+    // warning keeps its own line
+    private void GateLifted(bool announce = true)
+    {
+        ModelsReady = true;
+        if (_settingUp)
+        {
+            _settingUp = false;
             _models.SetSettingUp(false);
+        }
+
+        if (announce && _recorder.State == SessionState.Idle)
+        {
             _status.Append("Ready");
         }
     }
@@ -149,12 +167,33 @@ public sealed partial class ConsultationReadiness : ObservableObject
             // Use the reply's model state, since the shell may reconnect mid-load
             await EngineCall.TryAsync(_status, "note/tier", async () =>
             {
-                var reply = await _engine.SetNoteTierAsync(_preferences.NoteTier).ConfigureAwait(true);
+                var tier = await InstalledNoteTierAsync().ConfigureAwait(true);
+                var reply = await _engine.SetNoteTierAsync(tier).ConfigureAwait(true);
                 _models.ApplyNoteModel(reply.State, firstUse: null, reply.Name);
             }).ConfigureAwait(true);
             await EngineCall.TryAsync(_status, "note/options",
                 () => _notes.SetNoteOptionsAsync(_note.Style, _note.Detail)).ConfigureAwait(true);
         }
+    }
+
+    // The data folder outlives an uninstall, so a saved tier may not be installed. It goes back
+    // to automatic instead of being refused
+    private async Task<string> InstalledNoteTierAsync()
+    {
+        var tier = _preferences.NoteTier;
+        if (tier == AppPreferences.AutoNoteTier)
+        {
+            return tier;
+        }
+
+        var models = await _engine.ListModelsAsync().ConfigureAwait(true);
+        if (models.Any(m => m.Task == ModelTask.Note && m.Tier == tier))
+        {
+            return tier;
+        }
+
+        _preferences.Update(p => p.NoteTier = AppPreferences.AutoNoteTier);
+        return AppPreferences.AutoNoteTier;
     }
 
     // On first launch this polls until the one-off compiles finish. It fails open, so a
@@ -187,29 +226,18 @@ public sealed partial class ConsultationReadiness : ObservableObject
                         _status.Append($"Recording unavailable: {ModelNames.Missing(readiness.Missing)}");
                     }
 
-                    if (!readiness.FirstUse)
+                    var warned = readiness.StrayNoteHost || readiness.Missing.Count > 0;
+                    while (readiness.FirstUse && !readiness.Ready)
                     {
-                        ModelsReady = true;
-                        return;
-                    }
-
-                    while (!readiness.Ready)
-                    {
-                        if (ModelsReady)
-                        {
-                            ModelsReady = false;
-                            _models.SetSettingUp(true);
-                        }
-
+                        BeginSetup();
                         await Task.Delay(PollInterval, _time).ConfigureAwait(true);
                         readiness = await _engine.ReadinessAsync().ConfigureAwait(true);
                     }
 
-                    GateLifted();
+                    GateLifted(announce: !warned);
                 }).ConfigureAwait(true))
             {
-                ModelsReady = true;
-                _models.SetSettingUp(false);
+                GateLifted();
             }
         }
         finally

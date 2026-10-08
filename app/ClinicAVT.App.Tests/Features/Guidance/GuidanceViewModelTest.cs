@@ -7,6 +7,7 @@ using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
 using static ClinicAVT.App.Tests.Support.GuidanceRecords;
 using static ClinicAVT.App.Tests.Support.Waits;
+using static ClinicAVT.App.Tests.Support.Wire;
 
 namespace ClinicAVT.App.Tests.Features.Guidance;
 
@@ -298,6 +299,30 @@ public class GuidanceViewModelTest
         engine.RaiseNotification("guidance/ready", Ready("s1", [Result("fx100-1_1_1")]));
         Assert.Equal(GuidanceSection.Results, shell.Guidance.Section);
         Assert.False(shell.Guidance.Stale);
+    }
+
+    // On first launch the bundled documents are still being read when the first note is searched
+    [Fact]
+    public async Task AnEmptySearchWhileDocumentsAreStillIndexingSaysSoUntilTheyFinish()
+    {
+        var shell = await AfterNoteAsync();
+        var (_, engine, _) = shell;
+        var indexing = Settings.GuidanceDocumentsViewModelTest.Document(3, "BSR triage", "indexing");
+        engine.RaiseNotification("guidance/document", Params(indexing));
+
+        engine.RaiseNotification("guidance/ready", Ready("s1", []));
+        Assert.Equal(
+            "Guideline documents are still being prepared. Matches will appear here as they finish.",
+            shell.Guidance.StateCaption);
+        engine.RaiseNotification("guidance/ready", Ready("s1", [], searched: false));
+        Assert.StartsWith("Guideline documents are still being prepared", shell.Guidance.StateCaption);
+
+        engine.RaiseNotification("guidance/document",
+            Params(Settings.GuidanceDocumentsViewModelTest.Document(3, "BSR triage", "ready", chunks: 40)));
+        engine.RaiseNotification("guidance/ready", Ready("s1", []));
+        Assert.Equal(
+            "No guidance matched this note. Try searching for a condition or treatment.",
+            shell.Guidance.StateCaption);
     }
 
     // Sentence matches lead whole-note matches, both across cards and within one

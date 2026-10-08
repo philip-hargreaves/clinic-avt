@@ -125,12 +125,11 @@ public sealed partial class NoteModelSettings : ObservableObject
                 }
             }
 
-            NoteModelStatus = _tiers.Count <= 1 ? "Only one model installed" : "";
+            NoteModelStatus = _tiers.Count <= 1 ? "This package includes one note model" : "";
             // For a saved tier that is not staged the engine starts on its own pick, and the
             // choice goes back to automatic
             if (!Automatic && !_tiers.Contains(_noteTier))
             {
-                NoteModelStatus = "Saved model not installed; chose one for this computer";
                 _noteTier = AppPreferences.AutoNoteTier;
                 PersistTier();
             }

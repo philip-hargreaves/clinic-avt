@@ -1,6 +1,7 @@
 using ClinicAVT.App.Core.Features.Consultation;
 using ClinicAVT.App.Core.Features.Documents;
 using ClinicAVT.App.Core.Preferences;
+using ClinicAVT.App.Tests.Features.Settings;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using static ClinicAVT.App.Tests.Support.Wire;
@@ -22,7 +23,7 @@ public class NoteOptionsTest
             NoteTier = "accuracy",
         };
 
-        var shell = TestSession.Create(preferences);
+        var shell = TestSession.Create(preferences, engine: NoteModelSettingsTest.TieredEngine());
         var (_, engine, note) = shell;
 
         Assert.Equal("soap", note.Style);

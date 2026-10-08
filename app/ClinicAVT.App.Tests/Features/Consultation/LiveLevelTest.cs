@@ -14,10 +14,11 @@ public class LiveLevelTest
         var (session, engine, note) = shell;
 
         // A stray interruption while idle is ignored
+        var before = shell.Line.LatestActivity;
         engine.RaiseNotification(
             "session/interrupted", Params(new { reason = "failed", detail = "stray" }));
         Assert.Equal(SessionState.Idle, session.State);
-        Assert.Equal("", shell.Line.LatestActivity);
+        Assert.Equal(before, shell.Line.LatestActivity);
 
         await session.StartRecordingAsync();
         engine.RaiseNotification("audio.level", Params(new { level = 0.8, clipped = true }));

@@ -48,9 +48,7 @@ public sealed partial class ConsultationViewModel : ObservableObject, IConsultat
             }
             else
             {
-                // Whatever activity the restart interrupted, such as "switching
-                // transcription...", is over. Resume overwrites this
-                _status.Append("Ready");
+                // Readiness says "Ready" once the engine confirms the models are prepared
                 _readiness.Connected();
                 if (State == SessionState.Recording)
                 {

@@ -193,6 +193,31 @@ public class SessionCommandsTest
     }
 
     [Fact]
+    public async Task AFirstLaunchNeverSaysReadyBeforeSetupFinishes()
+    {
+        var log = new ListLogger();
+        var shell = TestSession.Create(
+            engine: new FakeEngineClient(autoNotify: false) { FirstUse = true, ModelsCompiled = false }, log: log);
+        var (session, engine, _) = shell;
+        var controls = shell.Get<SessionControlsViewModel>();
+
+        // The app connects once its views exist, as a launch does
+        engine.SetConnected(false);
+        log.Lines.Clear();
+        engine.SetConnected(true);
+
+        Assert.Equal("Getting ready", controls.StartLabel);
+        Assert.DoesNotContain(log.Lines, l => l == "Information: Ready");
+
+        engine.ModelsCompiled = true;
+        shell.Clock.Advance(TimeSpan.FromSeconds(2));
+        await WaitUntilAsync(() => session.ModelsReady);
+
+        Assert.Contains(log.Lines, l => l == "Information: Ready");
+        Assert.Equal("Ready to start", controls.StartLabel);
+    }
+
+    [Fact]
     public void AWarmLaunchAndAWarmNoteModelLoadNeverGateRecording()
     {
         var shell = TestSession.Create();

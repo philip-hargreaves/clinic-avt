@@ -110,6 +110,7 @@ public static class CoreServices
         services.AddSingleton<NoteModelSettings>();
         services.AddSingleton<GuidanceCorporaViewModel>();
         services.AddSingleton<GuidanceDocumentsViewModel>();
+        services.AddSingleton<IGuidelineIndexing>(sp => sp.GetRequiredService<GuidanceDocumentsViewModel>());
         services.AddSingleton<PrivacySettings>();
         services.AddSingleton<AppearanceAndDiagnostics>();
         services.AddSingleton<SettingsViewModel>();

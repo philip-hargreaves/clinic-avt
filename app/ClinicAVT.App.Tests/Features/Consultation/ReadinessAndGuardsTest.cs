@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ClinicAVT.App.Core.Features.Consultation;
+using ClinicAVT.App.Core.Preferences;
 using ClinicAVT.App.Tests.Support;
 using ClinicAVT.App.Tests.TestDoubles;
 using ClinicAVT.Client;
@@ -27,6 +28,22 @@ public class ReadinessAndGuardsTest
         Assert.Contains(log.Lines, line => line.Contains("stray note host"));
         Assert.Empty(shell.Patient.Languages);
         Assert.Contains(log.Lines, line => line.Contains("translate/languages failed"));
+    }
+
+    // A package with fewer note models keeps the data folder of one with more
+    [Fact]
+    public void ASavedNoteModelThatIsNotInstalledFallsBackToAutomaticWithoutAFailedStep()
+    {
+        var preferences = new AppPreferences(new MemoryPreferencesStore()) { NoteTier = "accuracy" };
+        var engine = new FakeEngineClient();
+        var log = new ListLogger();
+
+        var shell = TestSession.Create(preferences, engine: engine, log: log);
+
+        Assert.Equal("auto", preferences.NoteTier);
+        Assert.Contains("\"auto\"", engine.Requests.Single(r => r.Method == "note/tier").Params);
+        Assert.DoesNotContain(log.Lines, line => line.Contains("note/tier failed"));
+        Assert.DoesNotContain("A step failed", shell.Line.LatestActivity);
     }
 
     [Fact]
