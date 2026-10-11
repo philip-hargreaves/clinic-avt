@@ -176,7 +176,7 @@ public sealed partial class ConsultationReadiness : ObservableObject
         }
     }
 
-    // The data folder outlives an uninstall, so a saved tier may not be installed. It goes back
+    // Data carries over between packages, so a saved tier may not be installed. It goes back
     // to automatic instead of being refused
     private async Task<string> InstalledNoteTierAsync()
     {

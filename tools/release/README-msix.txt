@@ -11,5 +11,5 @@ of free disk space.
 
 To try it, select "Import the file" and choose an example consultation.
 
-Your data is in %LOCALAPPDATA%\ClinicAVT and Documents\ClinicAVT guidelines. Uninstalling
-leaves both folders.
+Consultations and settings stay on this computer and are removed when you uninstall. Your
+guideline documents are in Documents\ClinicAVT guidelines.

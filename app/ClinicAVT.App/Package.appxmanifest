@@ -4,8 +4,7 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
-  IgnorableNamespaces="uap rescap virtualization">
+  IgnorableNamespaces="uap rescap">
 
   <!-- The publisher is a placeholder. tools\pack-msix.ps1 -Publisher sets it and the display
        name. Version comes from the VERSION file -->
@@ -19,17 +18,9 @@
     <DisplayName>ClinicAVT</DisplayName>
     <PublisherDisplayName>ClinicAVT</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
-    <!-- Data, caches and logs are written to the real %LOCALAPPDATA%\ClinicAVT, as in the zip
-         build, so they are shared with it and survive uninstall -->
-    <virtualization:FileSystemWriteVirtualization>
-      <virtualization:ExcludedDirectories>
-        <virtualization:ExcludedDirectory>$(KnownFolder:LocalAppData)\ClinicAVT</virtualization:ExcludedDirectory>
-      </virtualization:ExcludedDirectories>
-    </virtualization:FileSystemWriteVirtualization>
   </Properties>
 
   <Dependencies>
-    <!-- ExcludedDirectories needs Windows 11 -->
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26200.0" />
   </Dependencies>
 
@@ -55,7 +46,6 @@
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
-    <rescap:Capability Name="unvirtualizedResources" />
     <!-- Lists the app on the Settings microphone page. The engine enforces the toggle -->
     <DeviceCapability Name="microphone" />
   </Capabilities>
