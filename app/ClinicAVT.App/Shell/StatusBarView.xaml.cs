@@ -15,6 +15,7 @@ public sealed partial class StatusBarView : UserControl
         ViewModel = viewModel;
         InitializeComponent();
         PartnerMarks.Attach(this, CreditsRow, credits.Marks);
+        CreditsRow.Visibility = credits.Marks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         Loaded += (_, _) => FitChips();
         // Chip text changes width, so refit after the bindings update
         ViewModel.Chips.PropertyChanged += (_, e) =>
@@ -52,7 +53,8 @@ public sealed partial class StatusBarView : UserControl
         Chips.Measure(Unbounded);
         State.Measure(Unbounded);
         CreditsRow.Measure(Unbounded);
-        var room = Bar.ActualWidth - State.DesiredSize.Width - CreditsRow.DesiredSize.Width - 3 * Bar.ColumnSpacing;
+        var marks = CreditsRow.Visibility == Visibility.Visible ? CreditsRow.DesiredSize.Width + ChipsAndMarks.Spacing : 0;
+        var room = Bar.ActualWidth - State.DesiredSize.Width - marks - 2 * Bar.ColumnSpacing;
         Chips.Visibility = Chips.DesiredSize.Width <= room ? Visibility.Visible : Visibility.Collapsed;
     }
 }

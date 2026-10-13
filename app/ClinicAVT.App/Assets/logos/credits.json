@@ -1,22 +1,3 @@
 {
-  "marks": [
-    {
-      "name": "Intel",
-      "light": "intel.png",
-      "dark": "intel-reversed.png",
-      "height": 18
-    },
-    {
-      "name": "UCL",
-      "light": "ucl.svg",
-      "dark": "ucl-reversed.svg",
-      "height": 18
-    },
-    {
-      "name": "NHS",
-      "light": "nhs.svg",
-      "height": 16,
-      "space": 4
-    }
-  ]
+  "marks": []
 }

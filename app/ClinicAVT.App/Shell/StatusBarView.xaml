@@ -15,7 +15,6 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <controls:BusyCaption
@@ -40,80 +39,85 @@
                 IsIndeterminate="True"
                 Visibility="{x:Bind ViewModel.ShowsSetup, Mode=OneWay}" />
 
-            <!-- Tabular figures keep changing digits from jittering -->
+            <!-- A hidden child leaves no gap, so the chips sit flush right without marks -->
             <StackPanel
-                x:Name="Chips"
+                x:Name="ChipsAndMarks"
                 Grid.Column="2"
                 Orientation="Horizontal"
-                Spacing="8"
+                Spacing="24"
                 VerticalAlignment="Center">
-                <Border
-                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                    Style="{StaticResource ChipBorder}"
-                    Visibility="{x:Bind ViewModel.Chips.AsrChipVisible, Mode=OneWay}">
-                    <!-- Colour pairs swap by visibility because a brush set in code would not
-                         follow a live theme change -->
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Ellipse
-                            Width="6"
-                            Height="6"
-                            VerticalAlignment="Center"
-                            Fill="{ThemeResource SystemFillColorSuccessBrush}"
-                            Visibility="{x:Bind ViewModel.Chips.AsrActive, Mode=OneWay}" />
-                        <Ellipse
-                            Width="6"
-                            Height="6"
-                            VerticalAlignment="Center"
-                            Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
-                            Visibility="{x:Bind ViewModel.Chips.AsrResting, Mode=OneWay}" />
+                <!-- Tabular figures keep changing digits from jittering -->
+                <StackPanel
+                    x:Name="Chips"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <Border
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        Style="{StaticResource ChipBorder}"
+                        Visibility="{x:Bind ViewModel.Chips.AsrChipVisible, Mode=OneWay}">
+                        <!-- Colour pairs swap by visibility because a brush set in code would not
+                             follow a live theme change -->
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse
+                                Width="6"
+                                Height="6"
+                                VerticalAlignment="Center"
+                                Fill="{ThemeResource SystemFillColorSuccessBrush}"
+                                Visibility="{x:Bind ViewModel.Chips.AsrActive, Mode=OneWay}" />
+                            <Ellipse
+                                Width="6"
+                                Height="6"
+                                VerticalAlignment="Center"
+                                Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
+                                Visibility="{x:Bind ViewModel.Chips.AsrResting, Mode=OneWay}" />
+                            <TextBlock
+                                Style="{StaticResource CaptionText}"
+                                Text="{x:Bind ViewModel.Chips.AsrChip, Mode=OneWay}"
+                                Typography.NumeralAlignment="Tabular" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        Style="{StaticResource ChipBorder}"
+                        Visibility="{x:Bind ViewModel.Chips.NoteChipVisible, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse
+                                Width="6"
+                                Height="6"
+                                VerticalAlignment="Center"
+                                Fill="{ThemeResource SystemFillColorSuccessBrush}"
+                                Visibility="{x:Bind ViewModel.Chips.NoteActive, Mode=OneWay}" />
+                            <Ellipse
+                                Width="6"
+                                Height="6"
+                                VerticalAlignment="Center"
+                                Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
+                                Visibility="{x:Bind ViewModel.Chips.NoteResting, Mode=OneWay}" />
+                            <TextBlock
+                                Style="{StaticResource CaptionText}"
+                                Text="{x:Bind ViewModel.Chips.NoteChip, Mode=OneWay}"
+                                Typography.NumeralAlignment="Tabular" />
+                        </StackPanel>
+                    </Border>
+                    <!-- Memory is a footprint with no activity, so it has no dot -->
+                    <Border
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        Style="{StaticResource ChipBorder}"
+                        Visibility="{x:Bind ViewModel.Chips.MemoryChipVisible, Mode=OneWay}">
                         <TextBlock
                             Style="{StaticResource CaptionText}"
-                            Text="{x:Bind ViewModel.Chips.AsrChip, Mode=OneWay}"
+                            Text="{x:Bind ViewModel.Chips.MemoryChip, Mode=OneWay}"
                             Typography.NumeralAlignment="Tabular" />
-                    </StackPanel>
-                </Border>
-                <Border
-                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                    Style="{StaticResource ChipBorder}"
-                    Visibility="{x:Bind ViewModel.Chips.NoteChipVisible, Mode=OneWay}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Ellipse
-                            Width="6"
-                            Height="6"
-                            VerticalAlignment="Center"
-                            Fill="{ThemeResource SystemFillColorSuccessBrush}"
-                            Visibility="{x:Bind ViewModel.Chips.NoteActive, Mode=OneWay}" />
-                        <Ellipse
-                            Width="6"
-                            Height="6"
-                            VerticalAlignment="Center"
-                            Fill="{ThemeResource ControlStrongFillColorDisabledBrush}"
-                            Visibility="{x:Bind ViewModel.Chips.NoteResting, Mode=OneWay}" />
-                        <TextBlock
-                            Style="{StaticResource CaptionText}"
-                            Text="{x:Bind ViewModel.Chips.NoteChip, Mode=OneWay}"
-                            Typography.NumeralAlignment="Tabular" />
-                    </StackPanel>
-                </Border>
-                <!-- Memory is a footprint with no activity, so it has no dot -->
-                <Border
-                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                    Style="{StaticResource ChipBorder}"
-                    Visibility="{x:Bind ViewModel.Chips.MemoryChipVisible, Mode=OneWay}">
-                    <TextBlock
-                        Style="{StaticResource CaptionText}"
-                        Text="{x:Bind ViewModel.Chips.MemoryChip, Mode=OneWay}"
-                        Typography.NumeralAlignment="Tabular" />
-                </Border>
-            </StackPanel>
+                    </Border>
+                </StackPanel>
 
-            <!-- The partner marks come from Assets/logos/credits.json -->
-            <StackPanel
-                x:Name="CreditsRow"
-                Grid.Column="3"
-                Margin="8,0,0,0"
-                Orientation="Horizontal"
-                Spacing="12" />
+                <!-- The partner marks come from Assets/logos/credits.json -->
+                <StackPanel
+                    x:Name="CreditsRow"
+                    Orientation="Horizontal"
+                    Spacing="12" />
+            </StackPanel>
         </Grid>
     </Border>
 </UserControl>
